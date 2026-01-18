@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8" />
+    <title>إدارة طلبات عائلة الزيدان</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { max-width: 100%; overflow-x: hidden; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #111827;
+        }
+        .page {
+            max-width: 1024px;
+            margin: 0 auto;
+            padding: 24px 16px 48px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            background: radial-gradient(circle at 30% 30%, #34d399, #047857);
+        }
+        .brand-text-main { font-weight: 800; font-size: 18px; }
+        .brand-text-sub { font-size: 12px; color: #6b7280; }
+        nav { display: flex; gap: 10px; flex-wrap: wrap; }
+        nav a {
+            color: #374151;
+            text-decoration: none;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 14px;
+        }
+        nav a:hover { background-color: #e5e7eb; }
+        .section { margin-top: 18px; }
+        .card {
+            background-color: #ffffff;
+            border-radius: 14px;
+            padding: 14px 12px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+        }
+        .section-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        .section-title { font-size: 16px; font-weight: 700; }
+        .hint { font-size: 12px; color: #6b7280; line-height: 1.7; }
+        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+        .field label { display: block; font-size: 12px; color: #374151; margin-bottom: 6px; }
+        .field input, .field select {
+            width: 100%;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+            outline: none;
+        }
+        .field input:focus, .field select:focus { border-color: #047857; box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.12); }
+        .btn {
+            border: none;
+            padding: 9px 16px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+            white-space: normal;
+        }
+        .btn-sm { padding: 7px 12px; font-size: 13px; }
+        .btn-primary { background-color: #047857; color: #ffffff; }
+        .btn-primary:hover { background-color: #065f46; }
+        .btn-outline { background-color: transparent; border: 1px solid #d1d5db; color: #111827; }
+        .btn-outline:hover { background-color: #e5e7eb; }
+        .alert {
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 13px;
+            line-height: 1.7;
+            display: none;
+            margin-bottom: 12px;
+        }
+        .alert-success { background-color: #ecfdf5; border: 1px solid rgba(16,185,129,0.35); color: #065f46; display: block; }
+        .alert-error { background-color: #fef2f2; border: 1px solid rgba(239,68,68,0.35); color: #991b1b; display: block; }
+        .requests { display: grid; gap: 10px; }
+        .request {
+            background-color: #ffffff;
+            border-radius: 14px;
+            padding: 12px;
+            border: 1px solid rgba(0,0,0,0.08);
+        }
+        .request-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .request-title { font-weight: 900; font-size: 14px; overflow-wrap: anywhere; }
+        .request-meta { font-size: 12px; color: #6b7280; margin-top: 8px; overflow-wrap: anywhere; line-height: 1.7; }
+        .request-message {
+            white-space: pre-wrap;
+            margin-top: 10px;
+            background: rgba(0,0,0,0.03);
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.7;
+            overflow-wrap: anywhere;
+        }
+        .request-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .table-wrap {
+            width: 100%;
+            overflow: auto;
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 14px;
+            background: #ffffff;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 920px;
+            font-size: 13px;
+        }
+        thead th {
+            text-align: right;
+            background: #f9fafb;
+            color: #111827;
+            font-weight: 800;
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            white-space: nowrap;
+        }
+        tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            vertical-align: top;
+            overflow-wrap: anywhere;
+        }
+        tbody tr:hover td { background: rgba(0,0,0,0.015); }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            border: 1px solid rgba(0,0,0,0.08);
+            white-space: nowrap;
+        }
+        .status-pending { background: #fff7ed; color: #9a3412; }
+        .status-approved { background: #ecfdf5; color: #065f46; }
+        .status-rejected { background: #fef2f2; color: #991b1b; }
+        .cell-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+        details.msg { max-width: 520px; }
+        details.msg > summary { cursor: pointer; color: #047857; font-weight: 800; list-style: none; }
+        details.msg > summary::-webkit-details-marker { display: none; }
+        details.msg > div { margin-top: 8px; white-space: pre-wrap; background: rgba(0,0,0,0.03); padding: 10px; border-radius: 12px; }
+        footer { margin-top: 24px; color: #6b7280; font-size: 12px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header>
+            <div class="brand">
+                <div class="logo"></div>
+                <div>
+                    <div class="brand-text-main">صفحة الإدارة</div>
+                    <div class="brand-text-sub">اعتماد ورفض الطلبات</div>
+                </div>
+            </div>
+            <nav>
+                <a href="index.html">الصفحة الرئيسية</a>
+                <a href="alzidan-tree.html" target="_blank" rel="noopener noreferrer">دخول المناديب</a>
+            </nav>
+        </header>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">تسجيل دخول الإدارة</div>
+            </div>
+            <div class="card">
+                <div id="alert" class="alert"></div>
+                <div class="grid" style="margin-bottom: 12px;">
+                    <div class="field">
+                        <label for="admin-username">اسم المستخدم</label>
+                        <input id="admin-username" type="text" placeholder="مثال: alshryhy" autocomplete="username" />
+                    </div>
+                    <div class="field">
+                        <label for="admin-password">كلمة المرور</label>
+                        <input id="admin-password" type="password" placeholder="••••••••" autocomplete="current-password" />
+                    </div>
+                    <div class="field">
+                        <label>&nbsp;</label>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button id="admin-login" class="btn btn-primary" type="button">دخول</button>
+                            <button id="admin-logout" class="btn btn-outline" type="button">تسجيل خروج</button>
+                            <button id="admin-refresh" class="btn btn-outline" type="button">تحديث</button>
+                            <button id="admin-forgot" class="btn btn-outline" type="button">نسيت كلمة المرور</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hint" style="margin: 0 0 12px;">
+                    الدخول يتم حسب جدول الإدارة في القاعدة. لا يوجد إنشاء حساب من هذه الصفحة.
+                </div>
+
+                <div class="grid" style="margin-bottom: 10px;">
+                    <div class="field">
+                        <label for="filter-kind">نوع الطلب</label>
+                        <select id="filter-kind">
+                            <option value="all">الكل</option>
+                            <option value="org_role">صندوق/جمعية</option>
+                            <option value="tree_delegate">مندوب الشجرة</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="filter-status">الحالة</label>
+                        <select id="filter-status">
+                            <option value="pending">انتظار</option>
+                            <option value="approved">قبول</option>
+                            <option value="rejected">رفض</option>
+                            <option value="all">الكل</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-wrap" aria-label="جدول الطلبات">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>رقم الطلب</th>
+                                <th>النوع</th>
+                                <th>الفرع</th>
+                                <th>الاسم</th>
+                                <th>الجوال</th>
+                                <th>البريد</th>
+                                <th>الحالة</th>
+                                <th>التاريخ</th>
+                                <th>البيانات</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="requests-body"></tbody>
+                    </table>
+                </div>
+
+                <div id="sb-status" class="hint" style="margin-top: 10px;"></div>
+            </div>
+        </section>
+
+        <footer>شجرة عائلة الزيدان — صفحة إدارة</footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        (function () {
+            const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
+            const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
+            let sbClient = null;
+            const sbStatus = document.getElementById("sb-status");
+
+            const alertEl = document.getElementById("alert");
+            const adminUsername = document.getElementById("admin-username");
+            const adminPassword = document.getElementById("admin-password");
+            const adminLoginBtn = document.getElementById("admin-login");
+            const adminLogoutBtn = document.getElementById("admin-logout");
+            const adminRefreshBtn = document.getElementById("admin-refresh");
+            const adminForgotBtn = document.getElementById("admin-forgot");
+
+            const filterKind = document.getElementById("filter-kind");
+            const filterStatus = document.getElementById("filter-status");
+            const requestsBody = document.getElementById("requests-body");
+            const ADMIN_TOKEN_KEY = "alzidan_admin_token_v1";
+            let adminToken = "";
+
+            function showAlert(type, text) {
+                if (!alertEl) return;
+                alertEl.className = "alert " + (type === "success" ? "alert-success" : "alert-error");
+                alertEl.textContent = text || "";
+                alertEl.style.display = "block";
+            }
+
+            function hideAlert() {
+                if (!alertEl) return;
+                alertEl.className = "alert";
+                alertEl.textContent = "";
+                alertEl.style.display = "none";
+            }
+
+            function setStatus(text) {
+                if (!sbStatus) return;
+                sbStatus.textContent = text || "";
+            }
+
+            function getClient() {
+                if (sbClient) return sbClient;
+                const url = String(SUPABASE_URL || "").trim();
+                const anonKey = String(SUPABASE_ANON_KEY || "").trim();
+                if (!url || !anonKey) return null;
+                if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+                sbClient = window.supabase.createClient(url, anonKey);
+                return sbClient;
+            }
+
+            function getAdminToken() {
+                return String(adminToken || "").trim();
+            }
+
+            function tokenFromRpcResult(data) {
+                if (!data) return "";
+                if (typeof data === "string") return data.trim();
+                if (typeof data === "object") return String(data.token || data.session_token || "").trim();
+                return "";
+            }
+
+            async function refreshAuthStatus() {
+                const sb = getClient();
+                if (!sb) {
+                    setStatus("الخدمة غير مُعدة داخل الكود.");
+                    return null;
+                }
+                const token = getAdminToken();
+                setStatus(token ? "تم تسجيل الدخول." : "غير مسجل الدخول.");
+                return token ? { token } : null;
+            }
+
+            function renderEmpty(text) {
+                if (!requestsBody) return;
+                requestsBody.innerHTML = "";
+                const tr = document.createElement("tr");
+                const td = document.createElement("td");
+                td.colSpan = 10;
+                td.className = "hint";
+                td.textContent = text;
+                tr.appendChild(td);
+                requestsBody.appendChild(tr);
+            }
+
+            function statusLabel(status) {
+                if (status === "pending") return "انتظار";
+                if (status === "approved") return "قبول";
+                if (status === "rejected") return "رفض";
+                return status || "";
+            }
+
+            function renderRequestRow(row) {
+                if (!requestsBody) return;
+                const tr = document.createElement("tr");
+
+                function tdText(text) {
+                    const td = document.createElement("td");
+                    td.textContent = text || "";
+                    return td;
+                }
+
+                tr.appendChild(tdText(row.request_id || ""));
+                tr.appendChild(tdText(row.kind || ""));
+                tr.appendChild(tdText(row.branch_key || ""));
+                tr.appendChild(tdText(row.name || ""));
+                tr.appendChild(tdText(row.phone || ""));
+                tr.appendChild(tdText(row.email || ""));
+
+                const tdStatus = document.createElement("td");
+                const pill = document.createElement("span");
+                pill.className =
+                    "status-pill " +
+                    (row.status === "approved" ? "status-approved" : row.status === "rejected" ? "status-rejected" : "status-pending");
+                pill.textContent = statusLabel(row.status);
+                tdStatus.appendChild(pill);
+                tr.appendChild(tdStatus);
+
+                const tdDate = document.createElement("td");
+                if (row.created_at) {
+                    try {
+                        tdDate.textContent = new Date(row.created_at).toLocaleString("ar-SA");
+                    } catch (e) {
+                        tdDate.textContent = String(row.created_at || "");
+                    }
+                } else {
+                    tdDate.textContent = "";
+                }
+                tr.appendChild(tdDate);
+
+                const tdMsg = document.createElement("td");
+                if (row.message) {
+                    const det = document.createElement("details");
+                    det.className = "msg";
+                    const sum = document.createElement("summary");
+                    sum.textContent = "عرض";
+                    const body = document.createElement("div");
+                    body.textContent = row.message;
+                    det.appendChild(sum);
+                    det.appendChild(body);
+                    tdMsg.appendChild(det);
+                } else {
+                    tdMsg.textContent = "";
+                }
+                tr.appendChild(tdMsg);
+
+                const tdActions = document.createElement("td");
+                const actions = document.createElement("div");
+                actions.className = "cell-actions";
+
+                const approveBtn = document.createElement("button");
+                approveBtn.type = "button";
+                approveBtn.className = "btn btn-primary btn-sm";
+                approveBtn.textContent = "قبول";
+
+                const rejectBtn = document.createElement("button");
+                rejectBtn.type = "button";
+                rejectBtn.className = "btn btn-outline btn-sm";
+                rejectBtn.textContent = "رفض";
+
+                const isPending = row.status === "pending";
+                approveBtn.disabled = !isPending;
+                rejectBtn.disabled = !isPending;
+
+                actions.appendChild(approveBtn);
+                actions.appendChild(rejectBtn);
+                tdActions.appendChild(actions);
+                tr.appendChild(tdActions);
+
+                approveBtn.addEventListener("click", async () => {
+                    hideAlert();
+                    const sb = getClient();
+                    if (!sb) {
+                        showAlert("error", "تعذر الاتصال.");
+                        return;
+                    }
+                    const token = getAdminToken();
+                    if (!token) {
+                        showAlert("error", "يلزم تسجيل الدخول أولاً.");
+                        return;
+                    }
+                    const { data, error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(row.id), p_status: "approved" });
+                    if (error) {
+                        showAlert("error", `تعذر اعتماد الطلب: ${error.message || "خطأ غير معروف"}`);
+                        return;
+                    }
+                    if (data === false) {
+                        showAlert("error", "تعذر اعتماد الطلب. انتهت الجلسة أو لا توجد صلاحية.");
+                        return;
+                    }
+                    showAlert("success", `تم قبول الطلب: ${row.request_id}`);
+                    await loadRequests();
+                });
+
+                rejectBtn.addEventListener("click", async () => {
+                    hideAlert();
+                    const sb = getClient();
+                    if (!sb) {
+                        showAlert("error", "تعذر الاتصال.");
+                        return;
+                    }
+                    const token = getAdminToken();
+                    if (!token) {
+                        showAlert("error", "يلزم تسجيل الدخول أولاً.");
+                        return;
+                    }
+                    const { data, error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(row.id), p_status: "rejected" });
+                    if (error) {
+                        showAlert("error", `تعذر رفض الطلب: ${error.message || "خطأ غير معروف"}`);
+                        return;
+                    }
+                    if (data === false) {
+                        showAlert("error", "تعذر رفض الطلب. انتهت الجلسة أو لا توجد صلاحية.");
+                        return;
+                    }
+                    showAlert("success", `تم رفض الطلب: ${row.request_id}`);
+                    await loadRequests();
+                });
+
+                requestsBody.appendChild(tr);
+            }
+
+            async function loadRequests() {
+                if (!requestsBody) return;
+                requestsBody.innerHTML = "";
+
+                const sb = getClient();
+                if (!sb) {
+                    renderEmpty("الخدمة غير مُعدة داخل الكود.");
+                    return;
+                }
+
+                const token = getAdminToken();
+                if (!token) {
+                    renderEmpty("سجل الدخول للإدارة لعرض الطلبات.");
+                    return;
+                }
+
+                const statusValue = String(filterStatus?.value || "pending");
+                const kindValue = String(filterKind?.value || "all");
+
+                const { data, error } = await sb.rpc("admin_list_requests", {
+                    p_token: token,
+                    p_status: statusValue === "all" ? null : statusValue,
+                    p_kind: kindValue === "all" ? null : kindValue,
+                    p_limit: 200
+                });
+                if (error) {
+                    renderEmpty(`تعذر جلب الطلبات: ${error.message || "خطأ غير معروف"}`);
+                    return;
+                }
+
+                const list = Array.isArray(data) ? data : [];
+                if (!list.length) {
+                    renderEmpty("لا توجد طلبات مطابقة للفلاتر الحالية.");
+                    return;
+                }
+                list.forEach((row) => renderRequestRow(row));
+            }
+
+            if (adminLoginBtn) {
+                adminLoginBtn.addEventListener("click", async () => {
+                    hideAlert();
+                    const sb = getClient();
+                    if (!sb) {
+                        showAlert("error", "تعذر الاتصال.");
+                        return;
+                    }
+                    const username = String(adminUsername?.value || "").trim();
+                    const password = String(adminPassword?.value || "").trim();
+                    if (!username || !password) {
+                        showAlert("error", "يرجى إدخال اسم المستخدم وكلمة المرور.");
+                        return;
+                    }
+                    const { data, error } = await sb.rpc("admin_login", { p_username: username, p_password: password });
+                    if (error) {
+                        showAlert("error", `تعذر تسجيل الدخول: ${error.message || "خطأ غير معروف"}`);
+                        return;
+                    }
+                    const token = tokenFromRpcResult(data);
+                    if (!token) {
+                        showAlert("error", "اسم المستخدم أو كلمة المرور غير صحيحة.");
+                        return;
+                    }
+                    adminToken = token;
+                    try {
+                        localStorage.setItem(ADMIN_TOKEN_KEY, token);
+                    } catch (e) {}
+                    showAlert("success", "تم تسجيل الدخول.");
+                    await refreshAuthStatus();
+                    await loadRequests();
+                });
+            }
+
+            if (adminLogoutBtn) {
+                adminLogoutBtn.addEventListener("click", async () => {
+                    hideAlert();
+                    adminToken = "";
+                    try {
+                        localStorage.removeItem(ADMIN_TOKEN_KEY);
+                    } catch (e) {}
+                    await refreshAuthStatus();
+                    await loadRequests();
+                });
+            }
+
+            if (adminRefreshBtn) {
+                adminRefreshBtn.addEventListener("click", async () => {
+                    hideAlert();
+                    await refreshAuthStatus();
+                    await loadRequests();
+                });
+            }
+
+            if (adminForgotBtn) {
+                adminForgotBtn.addEventListener("click", () => {
+                    showAlert("error", "إذا نسيت كلمة المرور: تواصل مع مدير النظام لإعادة تعيينها.");
+                });
+            }
+
+            if (filterKind) filterKind.addEventListener("change", loadRequests);
+            if (filterStatus) filterStatus.addEventListener("change", loadRequests);
+
+            (async function init() {
+                try {
+                    adminToken = String(localStorage.getItem(ADMIN_TOKEN_KEY) || "").trim();
+                } catch (e) {
+                    adminToken = "";
+                }
+                if (adminUsername && !String(adminUsername.value || "").trim()) {
+                    adminUsername.value = "alshryhy";
+                }
+                await refreshAuthStatus();
+                await loadRequests();
+            })();
+        })();
+    </script>
+</body>
+</html>

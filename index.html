@@ -1,0 +1,3894 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8" />
+    <title>شجرة عائلة الزيدان</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        html, body {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #111827;
+        }
+        .page {
+            max-width: 1024px;
+            margin: 0 auto;
+            padding: 24px 16px 48px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 260px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #064e3b, #065f46);
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+        }
+        .logo {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            background: radial-gradient(circle at 30% 30%, #34d399, #047857);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+        }
+        .logo svg {
+            width: 24px;
+            height: 24px;
+            fill: #ffffff;
+        }
+        .brand-text-main {
+            font-weight: 700;
+            font-size: 18px;
+            color: #ffffff;
+        }
+        .brand-text-sub {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.78);
+        }
+        nav {
+            display: flex;
+            gap: 12px;
+            font-size: 14px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        nav a {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #064e3b;
+            background: rgba(236, 253, 245, 0.9);
+            border: 1px solid rgba(4, 120, 87, 0.2);
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-weight: 700;
+        }
+        nav a:hover {
+            background: rgba(209, 250, 229, 0.95);
+            border-color: rgba(4, 120, 87, 0.3);
+        }
+        .news-ticker {
+            flex: 1;
+            min-width: 260px;
+            background: linear-gradient(135deg, rgba(236, 253, 245, 0.85), rgba(239, 246, 255, 0.85));
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 999px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow: hidden;
+        }
+        .news-ticker-label {
+            font-size: 12px;
+            font-weight: 800;
+            color: #064e3b;
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+        .news-ticker-viewport {
+            overflow: hidden;
+            flex: 1;
+            min-width: 120px;
+        }
+        .news-ticker-track {
+            display: inline-flex;
+            align-items: center;
+            gap: 18px;
+            white-space: nowrap;
+            will-change: transform;
+            animation: ticker 28s linear infinite;
+        }
+        .news-ticker-text {
+            font-size: 13px;
+            color: #374151;
+        }
+        .news-ticker-link {
+            color: inherit;
+            text-decoration: none;
+        }
+        .news-ticker-link:hover .news-ticker-text {
+            text-decoration: underline;
+        }
+        @keyframes ticker {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .news-ticker-track {
+                animation: none;
+                transform: none;
+            }
+        }
+        .hero {
+            background: linear-gradient(135deg, #ecfdf5, #eff6ff);
+            border-radius: 16px;
+            padding: 20px 16px;
+            margin-bottom: 20px;
+        }
+        .hero-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .hero-text {
+            font-size: 14px;
+            color: #4b5563;
+            margin-bottom: 12px;
+        }
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .btn {
+            border: none;
+            padding: 9px 16px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+            max-width: 100%;
+            white-space: normal;
+        }
+        .btn-primary {
+            background-color: #047857;
+            color: #ffffff;
+        }
+        .btn-primary:hover {
+            background-color: #065f46;
+        }
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid #d1d5db;
+            color: #111827;
+        }
+        .btn-outline:hover {
+            background-color: #e5e7eb;
+        }
+        .section {
+            margin-top: 24px;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 8px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .section-sub {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .branches-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .branch-icons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .branch-icon {
+            text-decoration: none;
+            color: #064e3b;
+            background: linear-gradient(135deg, #dcfce7, #ecfdf5);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            border-radius: 18px 60px 18px 60px;
+            padding: 14px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 74px;
+            transition: transform 160ms ease, box-shadow 160ms ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .branch-icon::before {
+            content: "";
+            position: absolute;
+            left: -60px;
+            top: -60px;
+            width: 160px;
+            height: 160px;
+            background: radial-gradient(circle at 30% 30%, rgba(34, 197, 94, 0.22), rgba(34, 197, 94, 0) 65%);
+            pointer-events: none;
+        }
+        .branch-icon:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+        .branch-icon:active {
+            transform: translateY(0px);
+        }
+        .branch-icon-badge {
+            width: 50px;
+            height: 50px;
+            border-radius: 14px;
+            background-color: #047857;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            box-shadow: 0 10px 20px rgba(4, 120, 87, 0.25);
+        }
+        .branch-icon-badge svg {
+            width: 24px;
+            height: 24px;
+        }
+        .branch-icon-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            flex: 1;
+        }
+        .branch-icon-title {
+            font-weight: 900;
+            font-size: 17px;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+        }
+        .branch-icon-sub {
+            font-size: 13px;
+            color: #065f46;
+            opacity: 0.9;
+            overflow-wrap: anywhere;
+        }
+        .branch-icon--wide {
+            grid-column: 1 / -1;
+        }
+        @media (max-width: 420px) {
+            .branch-icons {
+                grid-template-columns: 1fr;
+            }
+        }
+        .branch-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 14px 12px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            font-size: 14px;
+        }
+        .branch-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .branch-desc {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+        }
+        .events-list {
+            background-color: transparent;
+            border-radius: 0;
+            padding: 0;
+            box-shadow: none;
+            font-size: 13px;
+        }
+        .events-divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 12px 0;
+        }
+        .events-divider-line {
+            height: 1px;
+            background-color: #e5e7eb;
+            flex: 1;
+        }
+        .events-divider-text {
+            font-size: 12px;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+        .events-divider-happy .events-divider-text {
+            color: #065f46;
+            font-weight: 800;
+        }
+        .events-divider-sad .events-divider-text {
+            color: #6b7280;
+            font-weight: 700;
+        }
+        .event-item {
+            background-color: #f9fafb;
+            border: 1px solid #f3f4f6;
+            border-radius: 12px;
+            padding: 0;
+            margin-bottom: 10px;
+            position: relative;
+            border-right: 4px solid #e5e7eb;
+            transition: transform 160ms ease, box-shadow 160ms ease;
+        }
+        .event-item:last-child {
+            margin-bottom: 0;
+        }
+        .event-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+        .event-title {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-weight: 700;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+        .event-summary {
+            display: block;
+            cursor: pointer;
+            padding: 10px 36px 10px 10px;
+            list-style: none;
+            outline: none;
+            position: relative;
+            border-radius: 12px;
+        }
+        .event-summary::-webkit-details-marker {
+            display: none;
+        }
+        .event-summary::after {
+            content: "›";
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            color: #9ca3af;
+            font-size: 18px;
+            transform: rotate(0deg);
+            transition: transform 160ms ease;
+        }
+        .event-item[open] > .event-summary::after {
+            transform: rotate(90deg);
+        }
+        .event-body {
+            padding: 0 10px 10px;
+        }
+        .event-copy {
+            margin-top: 6px;
+            color: #374151;
+            line-height: 1.7;
+            overflow-wrap: anywhere;
+        }
+        .event-meta {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 6px;
+            overflow-wrap: anywhere;
+        }
+        .event-type {
+            font-size: 11px;
+            border-radius: 999px;
+            padding: 2px 6px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            position: relative;
+            overflow: hidden;
+        }
+        .event-kind-happy {
+            background: linear-gradient(135deg, rgba(236, 253, 245, 0.7), rgba(239, 246, 255, 0.6));
+        }
+        .event-kind-happy .event-title {
+            color: #064e3b;
+        }
+        .event-kind-happy .event-type::after {
+            content: "";
+            position: absolute;
+            top: -8px;
+            bottom: -8px;
+            width: 40px;
+            left: -60px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+            transform: skewX(-20deg);
+            animation: shine 2.6s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .event-kind-sad {
+            background-color: #111827;
+            color: #f3f4f6;
+        }
+        .event-kind-sad .event-title {
+            color: #f9fafb;
+        }
+        .event-kind-sad .event-copy {
+            color: #e5e7eb;
+        }
+        .event-kind-sad .event-meta {
+            color: #cbd5e1;
+        }
+        @keyframes shine {
+            0% { left: -60px; opacity: 0; }
+            20% { opacity: 1; }
+            60% { left: calc(100% + 60px); opacity: 0.3; }
+            100% { left: calc(100% + 60px); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .event-kind-happy .event-type::after {
+                animation: none;
+            }
+            .event-item {
+                transition: none;
+            }
+        }
+        .event-type-birth { background-color: #ecfdf5; color: #065f46; }
+        .event-type-engagement { background-color: #fdf2f8; color: #9d174d; }
+        .event-type-contract { background-color: #eef2ff; color: #3730a3; }
+        .event-type-marriage { background-color: #fff7ed; color: #9a3412; }
+        .event-type-graduation { background-color: #eff6ff; color: #1d4ed8; }
+        .event-type-success { background-color: #f0fdf4; color: #166534; }
+        .event-type-promotion { background-color: #f0f9ff; color: #0369a1; }
+        .event-type-new_house { background-color: #fefce8; color: #854d0e; }
+        .event-type-travel { background-color: #faf5ff; color: #6b21a8; }
+        .event-type-gathering { background-color: #f3f4f6; color: #374151; }
+        .event-type-discharge { background-color: #ecfeff; color: #155e75; }
+        .event-type-death { background-color: #1f2937; color: #fecaca; }
+        .event-type-sick { background-color: #1f2937; color: #e5e7eb; }
+        .event-item-birth { border-right-color: #34d399; }
+        .event-item-engagement { border-right-color: #f472b6; }
+        .event-item-contract { border-right-color: #818cf8; }
+        .event-item-marriage { border-right-color: #fb923c; }
+        .event-item-graduation { border-right-color: #60a5fa; }
+        .event-item-success { border-right-color: #4ade80; }
+        .event-item-promotion { border-right-color: #38bdf8; }
+        .event-item-new_house { border-right-color: #facc15; }
+        .event-item-travel { border-right-color: #c084fc; }
+        .event-item-gathering { border-right-color: #9ca3af; }
+        .event-item-discharge { border-right-color: #06b6d4; }
+        .event-item-death { border-right-color: #4b5563; }
+        .event-item-sick { border-right-color: #4b5563; }
+        .btn-sm {
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .event-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .event-actions .btn {
+            min-width: 0;
+            white-space: nowrap;
+        }
+        .event-kv {
+            display: grid;
+            grid-template-columns: 110px 1fr;
+            gap: 6px 10px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #374151;
+        }
+        .event-kv-key {
+            color: #6b7280;
+        }
+        @media (max-width: 420px) {
+            .event-kv {
+                grid-template-columns: 1fr;
+            }
+        }
+        .about-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 14px 12px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            font-size: 13px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .info-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 14px 12px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            font-size: 13px;
+        }
+        .info-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+        }
+        .info-card p {
+            margin: 0 0 10px 0;
+            color: #374151;
+            line-height: 1.6;
+        }
+        .info-card ul {
+            margin: 0;
+            padding: 0 18px 0 0;
+            color: #374151;
+            line-height: 1.7;
+        }
+        .info-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .founder-invite {
+            background: linear-gradient(135deg, #ecfdf5, #eff6ff);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .founder-invite-title {
+            font-weight: 900;
+            margin: 0 0 6px 0;
+            font-size: 14px;
+            color: #111827;
+        }
+        .founder-invite-text {
+            font-size: 13px;
+            color: #374151;
+            line-height: 1.7;
+            margin: 0;
+        }
+        .founder-form {
+            margin-top: 10px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+        }
+        .founder-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        .founder-field label {
+            display: block;
+            font-size: 13px;
+            color: #374151;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+        .founder-field input,
+        .founder-field select,
+        .founder-field textarea {
+            width: 100%;
+            padding: 9px 10px;
+            border-radius: 10px;
+            border: 1px solid #d1d5db;
+            font-size: 14px;
+            background-color: #ffffff;
+            color: #111827;
+        }
+        .founder-field textarea {
+            min-height: 84px;
+            resize: vertical;
+        }
+        .founder-alert {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            display: none;
+        }
+        .founder-alert-success {
+            background-color: #ecfdf5;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        .founder-alert-error {
+            background-color: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+        .conditions-block {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 14px;
+            padding: 14px 12px;
+        }
+        .conditions-title {
+            font-weight: 900;
+            font-size: 15px;
+            color: #111827;
+            margin: 0 0 6px 0;
+        }
+        .conditions-sub {
+            margin: 0 0 12px 0;
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+        .conditions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+        }
+        .condition-card {
+            background-color: #ffffff;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .condition-number {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            background-color: #047857;
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            flex: 0 0 auto;
+        }
+        .condition-text {
+            font-size: 13px;
+            color: #111827;
+            line-height: 1.7;
+            overflow-wrap: anywhere;
+        }
+        .note {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 10px;
+            line-height: 1.6;
+        }
+        .badge-warn {
+            background-color: #fffbeb;
+            color: #92400e;
+        }
+        .btn-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .toggle-card {
+            background-color: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            border: 1px solid rgba(15, 23, 42, 0.06);
+            overflow: hidden;
+        }
+        .toggle-summary {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 12px;
+            cursor: pointer;
+            list-style: none;
+            outline: none;
+            position: relative;
+        }
+        .toggle-summary::-webkit-details-marker {
+            display: none;
+        }
+        .toggle-summary::after {
+            content: "›";
+            position: absolute;
+            left: 12px;
+            top: 14px;
+            color: #9ca3af;
+            font-size: 22px;
+            transform: rotate(0deg);
+            transition: transform 160ms ease;
+        }
+        details.toggle-card[open] > .toggle-summary::after {
+            transform: rotate(90deg);
+        }
+        .toggle-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: linear-gradient(135deg, #ecfdf5, #eff6ff);
+        }
+        .toggle-icon svg {
+            width: 22px;
+            height: 22px;
+        }
+        .toggle-text {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            flex: 1;
+            padding-left: 26px;
+        }
+        .toggle-title {
+            font-weight: 800;
+            color: #111827;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+        .toggle-sub {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.5;
+            margin-top: 2px;
+            overflow-wrap: anywhere;
+        }
+        .toggle-badge {
+            flex: 0 0 auto;
+        }
+        .toggle-body {
+            padding: 0 12px 14px;
+        }
+        #fund .toggle-card {
+            background: linear-gradient(135deg, #f0fdf4, #ecfeff);
+            border-color: rgba(16, 185, 129, 0.22);
+        }
+        #fund .toggle-icon {
+            background: linear-gradient(135deg, #dcfce7, #ccfbf1);
+            border-color: rgba(16, 185, 129, 0.22);
+        }
+        #fund .toggle-body {
+            background-color: rgba(236, 253, 245, 0.7);
+            border-top: 1px solid rgba(16, 185, 129, 0.12);
+        }
+        #fund .founder-form {
+            background-color: rgba(255, 255, 255, 0.92);
+            border-color: rgba(16, 185, 129, 0.18);
+        }
+        #fund .info-card {
+            background-color: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(16, 185, 129, 0.14);
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+        }
+        #tarahum .toggle-card {
+            background: linear-gradient(135deg, #eef2ff, #eff6ff);
+            border-color: rgba(99, 102, 241, 0.22);
+        }
+        #tarahum .toggle-icon {
+            background: linear-gradient(135deg, #dbeafe, #ede9fe);
+            border-color: rgba(99, 102, 241, 0.22);
+        }
+        #tarahum .toggle-body {
+            background-color: rgba(238, 242, 255, 0.72);
+            border-top: 1px solid rgba(99, 102, 241, 0.12);
+        }
+        #tarahum .founder-form {
+            background-color: rgba(255, 255, 255, 0.92);
+            border-color: rgba(99, 102, 241, 0.18);
+        }
+        #tarahum .info-card {
+            background-color: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(99, 102, 241, 0.14);
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+        }
+        #events details.toggle-card[data-event-kind="happy"] {
+            background: linear-gradient(135deg, #fff7ed, #fdf2f8);
+            border-color: rgba(251, 146, 60, 0.22);
+        }
+        #events details.toggle-card[data-event-kind="happy"] .toggle-icon {
+            background: linear-gradient(135deg, #ffedd5, #fce7f3);
+            border-color: rgba(251, 146, 60, 0.22);
+        }
+        #events details.toggle-card[data-event-kind="happy"] .toggle-body {
+            background-color: rgba(255, 237, 213, 0.55);
+            border-top: 1px solid rgba(251, 146, 60, 0.12);
+        }
+        #events details.toggle-card[data-event-kind="sick"] {
+            background: linear-gradient(135deg, #111827, #1f2937);
+            border-color: rgba(148, 163, 184, 0.22);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .toggle-icon {
+            background: linear-gradient(135deg, #1f2937, #334155);
+            border-color: rgba(148, 163, 184, 0.22);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .toggle-body {
+            background-color: rgba(15, 23, 42, 0.26);
+            border-top: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        #events details.toggle-card[data-event-kind="death"] {
+            background: linear-gradient(135deg, #0b1220, #1f0a0a);
+            border-color: rgba(248, 113, 113, 0.2);
+        }
+        #events details.toggle-card[data-event-kind="death"] .toggle-icon {
+            background: linear-gradient(135deg, #111827, #2a0f10);
+            border-color: rgba(248, 113, 113, 0.2);
+        }
+        #events details.toggle-card[data-event-kind="death"] .toggle-body {
+            background-color: rgba(2, 6, 23, 0.32);
+            border-top: 1px solid rgba(248, 113, 113, 0.12);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .toggle-title,
+        #events details.toggle-card[data-event-kind="death"] .toggle-title {
+            color: #f8fafc;
+        }
+        #events details.toggle-card[data-event-kind="sick"] .toggle-sub,
+        #events details.toggle-card[data-event-kind="death"] .toggle-sub {
+            color: rgba(226, 232, 240, 0.78);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .toggle-summary::after,
+        #events details.toggle-card[data-event-kind="death"] .toggle-summary::after {
+            color: rgba(226, 232, 240, 0.7);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .toggle-icon svg {
+            stroke: #e2e8f0;
+        }
+        #events details.toggle-card[data-event-kind="death"] .toggle-icon svg {
+            stroke: #fecaca;
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-item,
+        #events details.toggle-card[data-event-kind="death"] .event-item {
+            background-color: rgba(15, 23, 42, 0.55);
+            border-color: rgba(148, 163, 184, 0.18);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-item {
+            background-color: rgba(30, 41, 59, 0.5);
+        }
+        #events details.toggle-card[data-event-kind="death"] .event-item {
+            border-right-color: rgba(248, 113, 113, 0.55);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-item {
+            border-right-color: rgba(148, 163, 184, 0.55);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-summary::after,
+        #events details.toggle-card[data-event-kind="death"] .event-summary::after {
+            color: rgba(226, 232, 240, 0.65);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-title,
+        #events details.toggle-card[data-event-kind="death"] .event-title {
+            color: #e2e8f0;
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-copy,
+        #events details.toggle-card[data-event-kind="death"] .event-copy {
+            color: rgba(226, 232, 240, 0.86);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-meta,
+        #events details.toggle-card[data-event-kind="death"] .event-meta {
+            color: rgba(226, 232, 240, 0.68);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-kv,
+        #events details.toggle-card[data-event-kind="death"] .event-kv {
+            color: rgba(226, 232, 240, 0.82);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-kv-key,
+        #events details.toggle-card[data-event-kind="death"] .event-kv-key {
+            color: rgba(226, 232, 240, 0.7);
+        }
+        #events details.toggle-card[data-event-kind="sick"] .event-type,
+        #events details.toggle-card[data-event-kind="death"] .event-type {
+            background-color: rgba(2, 6, 23, 0.5);
+            color: rgba(248, 250, 252, 0.92);
+            border-color: rgba(148, 163, 184, 0.22);
+        }
+        #events details.toggle-card[data-event-kind="death"] .event-type {
+            border-color: rgba(248, 113, 113, 0.25);
+        }
+        @media (max-width: 640px) {
+            .toggle-text {
+                padding-left: 22px;
+            }
+            .toggle-summary::after {
+                top: 16px;
+            }
+        }
+        footer {
+            margin-top: 24px;
+            font-size: 11px;
+            color: #9ca3af;
+            text-align: center;
+        }
+        @media (max-width: 640px) {
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .header-left {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                min-width: 0;
+            }
+            .news-ticker {
+                min-width: 0;
+                width: 100%;
+            }
+            nav {
+                width: 100%;
+                justify-content: flex-start;
+            }
+            .tree-parent-name {
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+        @media (max-width: 420px) {
+            .page {
+                padding: 18px 12px 40px;
+            }
+            .hero {
+                padding: 16px 12px;
+            }
+        }
+        .tree-branch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+        }
+        .tree-list {
+            margin-top: 10px;
+        }
+        .tree-hint {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.7;
+        }
+        .tree-alert {
+            margin-top: 10px;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 13px;
+            background-color: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+        .tree-parent-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background-color: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+        }
+        .tree-parent-name {
+            font-weight: 800;
+            color: #111827;
+            overflow-wrap: normal;
+            word-break: normal;
+            white-space: nowrap;
+        }
+        .tree-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            background-color: #dcfce7;
+            color: #065f46;
+            white-space: nowrap;
+        }
+        .tree-child-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 18px 56px 18px 56px;
+            border: 1px solid rgba(16, 185, 129, 0.26);
+            margin-bottom: 6px;
+            background: linear-gradient(135deg, #ecfdf5, #ffffff);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .tree-child-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex: 1;
+            overflow-wrap: normal;
+            word-break: normal;
+            white-space: nowrap;
+        }
+        .tree-child-loc {
+            font-size: 12px;
+            color: #6b7280;
+            overflow-wrap: anywhere;
+        }
+        .tree-node {
+            margin-bottom: 6px;
+        }
+        .tree-node,
+        .tree-child-row {
+            min-width: 150px;
+            flex: 0 0 auto;
+        }
+        .tree-node > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        .tree-node > summary::-webkit-details-marker {
+            display: none;
+        }
+        .tree-node-children {
+            margin-top: 6px;
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 8px;
+            padding-bottom: 4px;
+            scroll-snap-type: x proximity;
+        }
+        .tree-node-children > * {
+            scroll-snap-align: start;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header>
+            <div class="header-left">
+                <div class="brand">
+                    <div class="logo" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <path d="M32 6c-10.6 0-19.2 7.3-19.2 16.3 0 7 5 13 12.2 15.4-1.7 1.1-2.8 2.6-3.5 4.3h21c-.7-1.7-1.8-3.2-3.5-4.3 7.2-2.4 12.2-8.4 12.2-15.4C51.2 13.3 42.6 6 32 6z"></path>
+                            <path d="M30 34h4v24h-4z"></path>
+                            <path d="M22 58h20v-4H22z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="brand-text-main">شجرة عائلة الزيدان</div>
+                        <div class="brand-text-sub">ذرية مطلق بن زيدان</div>
+                    </div>
+                </div>
+                <div class="news-ticker" aria-label="آخر خبر في المناسبات" aria-live="polite">
+                    <div class="news-ticker-label">آخر خبر:</div>
+                    <div class="news-ticker-viewport">
+                        <a class="news-ticker-link" href="#events">
+                            <div class="news-ticker-track">
+                                <span id="top-banner-news" class="news-ticker-text">الحمد لله الذي بنعمته تتم الصالحات — تم بحمد الله اكتمال موقع عائلة الزيدان وسيكون في هذا الشريط أخبار العائلة</span>
+                                <span id="top-banner-news-clone" class="news-ticker-text" aria-hidden="true"></span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <nav>
+                <a href="#branches">
+                    فروع العائلة
+                </a>
+                <a href="#fund">
+                    صندوق تراحم عائلة الزيدان
+                </a>
+                <a href="#tarahum">
+                    جمعية وضوح الخيرية
+                </a>
+                <a href="#events">
+                    المناسبات
+                </a>
+                <a href="#about">
+                    عن الموقع
+                </a>
+                <a href="alzidan-tree.html?view=delegate" target="_blank" rel="noopener noreferrer">
+                    دخول المناديب
+                </a>
+                <a href="admin.html" target="_blank" rel="noopener noreferrer">
+                    الإدارة
+                </a>
+            </nav>
+        </header>
+
+        <section class="hero">
+            <div class="hero-title">أبناء مطلق بن زيدان في مكان واحد</div>
+            <div class="hero-text">
+                صفحة عامة للتعريف بفروع ذرية مطلق بن زيدان، مع قسم للمناسبات العائلية. صفحة إدخال البيانات مخصصة للمناديب.
+            </div>
+            <div class="hero-actions">
+                <a class="btn btn-primary" href="#branches">عرض فروع العائلة</a>
+                <a class="btn btn-primary" href="#fund">صندوق تراحم عائلة الزيدان</a>
+                <a class="btn btn-primary" href="#tarahum">جمعية وضوح الخيرية</a>
+                <a class="btn btn-primary" href="#events">مشاهدة المناسبات</a>
+                <a class="btn btn-primary" href="alzidan-tree.html?view=delegate" target="_blank" rel="noopener noreferrer">فتح صفحة المناديب</a>
+            </div>
+        </section>
+
+        <section id="branches" class="section">
+            <div class="section-header">
+                <div>
+                    <div class="section-title">فروع ذرية مطلق بن زيدان</div>
+                    <div class="section-sub">تقسيم عائلي من خمسة فروع رئيسية للأبناء: زيدان، مزيد، زايد، لاحم، ملحم.</div>
+                </div>
+            </div>
+            <div class="branch-icons" aria-label="فروع العائلة">
+                <a class="branch-icon" href="#tree" data-home-branch="زيدان">
+                    <span class="branch-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v8"></path>
+                            <path d="M7 10h10"></path>
+                            <path d="M12 10c-3 0-6 2-6 6 0 3 2 5 6 6"></path>
+                            <path d="M12 10c3 0 6 2 6 6 0 3-2 5-6 6"></path>
+                        </svg>
+                    </span>
+                    <span class="branch-icon-text">
+                        <span class="branch-icon-title">زيدان بن مطلق بن زيدان (رحمهم الله)</span>
+                    </span>
+                </a>
+                <a class="branch-icon" href="#tree" data-home-branch="زايد">
+                    <span class="branch-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v8"></path>
+                            <path d="M7 10h10"></path>
+                            <path d="M12 10c-3 0-6 2-6 6 0 3 2 5 6 6"></path>
+                            <path d="M12 10c3 0 6 2 6 6 0 3-2 5-6 6"></path>
+                        </svg>
+                    </span>
+                    <span class="branch-icon-text">
+                        <span class="branch-icon-title">زايد بن مطلق بن زيدان (رحمهم الله)</span>
+                    </span>
+                </a>
+                <a class="branch-icon" href="#tree" data-home-branch="مزيد">
+                    <span class="branch-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v8"></path>
+                            <path d="M7 10h10"></path>
+                            <path d="M12 10c-3 0-6 2-6 6 0 3 2 5 6 6"></path>
+                            <path d="M12 10c3 0 6 2 6 6 0 3-2 5-6 6"></path>
+                        </svg>
+                    </span>
+                    <span class="branch-icon-text">
+                        <span class="branch-icon-title">مزيد بن مطلق بن زيدان (رحمهم الله)</span>
+                    </span>
+                </a>
+                <a class="branch-icon" href="#tree" data-home-branch="لاحم">
+                    <span class="branch-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v8"></path>
+                            <path d="M7 10h10"></path>
+                            <path d="M12 10c-3 0-6 2-6 6 0 3 2 5 6 6"></path>
+                            <path d="M12 10c3 0 6 2 6 6 0 3-2 5-6 6"></path>
+                        </svg>
+                    </span>
+                    <span class="branch-icon-text">
+                        <span class="branch-icon-title">لاحم بن مطلق بن زيدان (رحمهم الله)</span>
+                    </span>
+                </a>
+                <a class="branch-icon branch-icon--wide" href="#tree" data-home-branch="ملحم">
+                    <span class="branch-icon-badge" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v8"></path>
+                            <path d="M7 10h10"></path>
+                            <path d="M12 10c-3 0-6 2-6 6 0 3 2 5 6 6"></path>
+                            <path d="M12 10c3 0 6 2 6 6 0 3-2 5-6 6"></path>
+                        </svg>
+                    </span>
+                    <span class="branch-icon-text">
+                        <span class="branch-icon-title">ملحم بن مطلق بن زيدان (رحمهم الله)</span>
+                    </span>
+                </a>
+            </div>
+        </section>
+
+        <section id="tree" class="section">
+            <div class="section-header">
+                <div class="section-title" id="home-tree-title" style="display:none;"></div>
+            </div>
+            <div id="home-tree-body" class="tree-list"></div>
+        </section>
+
+        <section id="fund" class="section">
+            <details class="toggle-card" data-accordion="initiatives">
+                <summary class="toggle-summary">
+                    <span class="toggle-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 7h18v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7Z"></path>
+                            <path d="M7 7V6a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1"></path>
+                            <path d="M3 12h18"></path>
+                        </svg>
+                    </span>
+                    <span class="toggle-text">
+                        <span class="toggle-title">صندوق تراحم عائلة الزيدان</span>
+                        <span class="toggle-sub">مبادرة أسرية لتنظيم التراحم والدعم والمساهمات والالتزامات المالية داخل العائلة.</span>
+                    </span>
+                    <span class="badge badge-warn toggle-badge">تحت التأسيس</span>
+                </summary>
+                <div class="toggle-body">
+                    <div class="conditions-block" aria-label="شروط المدير التنفيذي">
+                        <div class="conditions-title">شروط المدير التنفيذي</div>
+                        <p class="conditions-sub">لمن يرغب بالتقدم لإدارة صندوق تراحم عائلة الزيدان.</p>
+                        <div class="conditions-grid">
+                            <div class="condition-card"><div class="condition-number">1</div><div class="condition-text">سعودي الجنسية، كامل الأهلية، وحسن السيرة والسلوك.</div></div>
+                            <div class="condition-card"><div class="condition-number">2</div><div class="condition-text">العمر لا يقل عن 18 سنة.</div></div>
+                            <div class="condition-card"><div class="condition-number">3</div><div class="condition-text">المؤهل العلمي: بكالوريوس معتمد.</div></div>
+                            <div class="condition-card"><div class="condition-number">4</div><div class="condition-text">خبرة عملية لا تقل عن سنتين في الإدارة أو المالية أو العمل التنظيمي/التطوعي.</div></div>
+                            <div class="condition-card"><div class="condition-number">5</div><div class="condition-text">عدم وجود حكم سابق في جريمة مخلة بالشرف أو الأمانة (ما لم يُرد إليه اعتباره نظامًا).</div></div>
+                            <div class="condition-card"><div class="condition-number">6</div><div class="condition-text">عدم وجود تعارض مصالح، والإفصاح عن أي مصلحة شخصية أو مالية مرتبطة بالصندوق عند الحاجة.</div></div>
+                            <div class="condition-card"><div class="condition-number">7</div><div class="condition-text">الالتزام بتطبيق اللائحة الأساسية والحوكمة وقرارات مجلس الأمناء وعدم اتخاذ قرارات مالية خارج الصلاحيات.</div></div>
+                            <div class="condition-card"><div class="condition-number">8</div><div class="condition-text">القدرة على إعداد ورفع تقارير دورية (إدارية ومالية) للمجلس بموعد منتظم.</div></div>
+                            <div class="condition-card"><div class="condition-number">9</div><div class="condition-text">المحافظة على سرية بيانات أفراد العائلة وعدم مشاركة أي بيانات حساسة إلا بموافقة وصلاحية واضحة.</div></div>
+                            <div class="condition-card"><div class="condition-number">10</div><div class="condition-text">الالتزام بالشفافية وتوثيق جميع المعاملات وحفظ السجلات بشكل منظم.</div></div>
+                            <div class="condition-card"><div class="condition-number">11</div><div class="condition-text">الالتزام بحضور الاجتماعات والرد على المراسلات خلال مدة محددة.</div></div>
+                            <div class="condition-card"><div class="condition-number">12</div><div class="condition-text">إجادة استخدام الأنظمة الإلكترونية الأساسية (نماذج، جداول، بريد إلكتروني، حفظ وأرشفة ملفات).</div></div>
+                        </div>
+                    </div>
+                    <div class="conditions-block" aria-label="شروط ومتطلبات المؤسس" style="margin-top: 12px;">
+                        <div class="conditions-title">شروط ومتطلبات المؤسس</div>
+                        <p class="conditions-sub">لمن يرغب بالتقدم كمؤسس لصندوق تراحم عائلة الزيدان.</p>
+                        <div class="conditions-grid">
+                            <div class="condition-card"><div class="condition-number">1</div><div class="condition-text">سعودي الجنسية.</div></div>
+                            <div class="condition-card"><div class="condition-number">2</div><div class="condition-text">العمر لا يقل عن 18 سنة.</div></div>
+                            <div class="condition-card"><div class="condition-number">3</div><div class="condition-text">حسن السيرة والسلوك وكامل الأهلية.</div></div>
+                            <div class="condition-card"><div class="condition-number">4</div><div class="condition-text">وجود صلة قرابة/مصاهرة مع الشخص الذي باسم الصندوق.</div></div>
+                            <div class="condition-card"><div class="condition-number">5</div><div class="condition-text">توفر البيانات الأساسية: الاسم الرباعي، رقم الهوية، تاريخ الميلاد.</div></div>
+                            <div class="condition-card"><div class="condition-number">6</div><div class="condition-text">بيانات التواصل: رقم جوال مفعل وبريد إلكتروني.</div></div>
+                            <div class="condition-card"><div class="condition-number">7</div><div class="condition-text">تحديد صلة القرابة (ابن/ابنة/حفيد/قريب/أخرى) حسب الواقع.</div></div>
+                            <div class="condition-card"><div class="condition-number">8</div><div class="condition-text">الإقرار بالموافقة على اللائحة الأساسية للصندوق وأحكام الحوكمة.</div></div>
+                        </div>
+                    </div>
+                    <div class="conditions-block" aria-label="التقديم" style="margin-top: 12px;">
+                        <div class="conditions-title">التقديم</div>
+                        <p class="conditions-sub">لمن يرغب بالتقدم، الرجاء تعبئة النموذج المناسب.</p>
+                        <div class="info-actions">
+                            <button class="btn btn-primary" type="button" data-apply-toggle="fund-exec">تسجيل مدير تنفيذي</button>
+                            <button class="btn btn-outline" type="button" data-apply-toggle="fund-founder">تسجيل كمؤسس</button>
+                        </div>
+
+                        <form class="founder-form" data-apply-form="fund-exec" hidden>
+                            <div class="founder-grid">
+                                <div class="founder-field">
+                                    <label for="apply-name-fund-exec">الاسم</label>
+                                    <input id="apply-name-fund-exec" name="name" type="text" autocomplete="name" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-phone-fund-exec">رقم الجوال</label>
+                                    <input id="apply-phone-fund-exec" name="phone" type="tel" inputmode="tel" placeholder="05xxxxxxxx" autocomplete="tel" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-email-fund-exec">البريد الإلكتروني</label>
+                                    <input id="apply-email-fund-exec" name="email" type="email" inputmode="email" autocomplete="email" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-exp-fund-exec">سنوات الخبرة</label>
+                                    <input id="apply-exp-fund-exec" name="yearsExp" type="number" min="0" step="1" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-city-fund-exec">المدينة</label>
+                                    <input id="apply-city-fund-exec" name="city" type="text" autocomplete="address-level2" />
+                                </div>
+                                <div class="founder-field" style="grid-column: 1 / -1;">
+                                    <label for="apply-notes-fund-exec">ملاحظات (اختياري)</label>
+                                    <textarea id="apply-notes-fund-exec" name="notes"></textarea>
+                                </div>
+                            </div>
+                            <div class="info-actions">
+                                <button class="btn btn-primary" type="submit">إرسال طلب</button>
+                                <button class="btn btn-outline" type="button" data-apply-cancel="fund-exec">إلغاء</button>
+                            </div>
+                            <div class="note">هذا طلب تسجيل. سيتم التحقق من الهوية ثم قبول الطلب أو رفضه.</div>
+                            <div class="founder-alert" data-apply-alert="fund-exec"></div>
+                        </form>
+
+                        <form class="founder-form" data-apply-form="fund-founder" hidden>
+                            <div class="founder-grid">
+                                <div class="founder-field">
+                                    <label for="apply-name-fund-founder">الاسم الرباعي</label>
+                                    <input id="apply-name-fund-founder" name="name" type="text" autocomplete="name" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-nid-fund-founder">رقم الهوية</label>
+                                    <input id="apply-nid-fund-founder" name="nationalId" type="text" inputmode="numeric" placeholder="10 أرقام" autocomplete="off" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-dob-fund-founder">تاريخ الميلاد</label>
+                                    <input id="apply-dob-fund-founder" name="dob" type="date" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-relation-fund-founder">صلة القرابة</label>
+                                    <select id="apply-relation-fund-founder" name="relation">
+                                        <option value="">اختر صلة القرابة</option>
+                                        <option value="ابن">ابن</option>
+                                        <option value="ابنة">ابنة</option>
+                                        <option value="حفيد">حفيد</option>
+                                        <option value="قريب">قريب</option>
+                                        <option value="أخرى">أخرى</option>
+                                    </select>
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-phone-fund-founder">رقم الجوال</label>
+                                    <input id="apply-phone-fund-founder" name="phone" type="tel" inputmode="tel" placeholder="05xxxxxxxx" autocomplete="tel" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-email-fund-founder">البريد الإلكتروني</label>
+                                    <input id="apply-email-fund-founder" name="email" type="email" inputmode="email" autocomplete="email" />
+                                </div>
+                                <div class="founder-field" style="grid-column: 1 / -1;">
+                                    <label for="apply-notes-fund-founder">ملاحظات (اختياري)</label>
+                                    <textarea id="apply-notes-fund-founder" name="notes"></textarea>
+                                </div>
+                            </div>
+                            <div class="info-actions">
+                                <button class="btn btn-primary" type="submit">إرسال طلب</button>
+                                <button class="btn btn-outline" type="button" data-apply-cancel="fund-founder">إلغاء</button>
+                            </div>
+                            <div class="note">هذا طلب تسجيل. سيتم التحقق من الهوية ثم قبول الطلب أو رفضه.</div>
+                            <div class="founder-alert" data-apply-alert="fund-founder"></div>
+                        </form>
+                    </div>
+                </div>
+            </details>
+        </section>
+
+        <section id="tarahum" class="section">
+            <details class="toggle-card" data-accordion="initiatives">
+                <summary class="toggle-summary">
+                    <span class="toggle-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16.5 7.5a4.5 4.5 0 0 1 4.5 4.5c0 5-9 10-9 10S3 17 3 12a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 16.5 7.5Z"></path>
+                        </svg>
+                    </span>
+                    <span class="toggle-text">
+                        <span class="toggle-title">جمعية وضوح الخيرية</span>
+                        <span class="toggle-sub">مبادرة اجتماعية لدعم التكافل والزيارة ورعاية المحتاجين والمرضى.</span>
+                    </span>
+                    <span class="badge badge-warn toggle-badge">تحت التأسيس</span>
+                </summary>
+                <div class="toggle-body">
+                    <div class="conditions-block" aria-label="شروط المدير التنفيذي">
+                        <div class="conditions-title">شروط المدير التنفيذي</div>
+                        <p class="conditions-sub">لمن يرغب بالتقدم لإدارة جمعية وضوح الخيرية.</p>
+                        <div class="conditions-grid">
+                            <div class="condition-card"><div class="condition-number">1</div><div class="condition-text">سعودي الجنسية، كامل الأهلية، وحسن السيرة والسلوك.</div></div>
+                            <div class="condition-card"><div class="condition-number">2</div><div class="condition-text">العمر لا يقل عن 18 سنة.</div></div>
+                            <div class="condition-card"><div class="condition-number">3</div><div class="condition-text">المؤهل العلمي: بكالوريوس معتمد.</div></div>
+                            <div class="condition-card"><div class="condition-number">4</div><div class="condition-text">خبرة عملية لا تقل عن سنتين في الإدارة أو المالية أو العمل التنظيمي/التطوعي.</div></div>
+                            <div class="condition-card"><div class="condition-number">5</div><div class="condition-text">عدم وجود حكم سابق في جريمة مخلة بالشرف أو الأمانة (ما لم يُرد إليه اعتباره نظامًا).</div></div>
+                            <div class="condition-card"><div class="condition-number">6</div><div class="condition-text">عدم وجود تعارض مصالح، والإفصاح عن أي مصلحة شخصية أو مالية مرتبطة بالجمعية عند الحاجة.</div></div>
+                            <div class="condition-card"><div class="condition-number">7</div><div class="condition-text">الالتزام بتطبيق اللوائح والحوكمة وقرارات مجلس الإدارة وعدم اتخاذ قرارات مالية خارج الصلاحيات.</div></div>
+                            <div class="condition-card"><div class="condition-number">8</div><div class="condition-text">القدرة على إعداد ورفع تقارير دورية (إدارية ومالية) للمجلس بموعد منتظم.</div></div>
+                            <div class="condition-card"><div class="condition-number">9</div><div class="condition-text">المحافظة على سرية بيانات أفراد العائلة وعدم مشاركة أي بيانات حساسة إلا بموافقة وصلاحية واضحة.</div></div>
+                            <div class="condition-card"><div class="condition-number">10</div><div class="condition-text">الالتزام بالشفافية وتوثيق جميع المعاملات وحفظ السجلات بشكل منظم.</div></div>
+                            <div class="condition-card"><div class="condition-number">11</div><div class="condition-text">الالتزام بحضور الاجتماعات والرد على المراسلات خلال مدة محددة.</div></div>
+                            <div class="condition-card"><div class="condition-number">12</div><div class="condition-text">إجادة استخدام الأنظمة الإلكترونية الأساسية (نماذج، جداول، بريد إلكتروني، حفظ وأرشفة ملفات).</div></div>
+                        </div>
+                    </div>
+                    <div class="conditions-block" aria-label="شروط ومتطلبات المؤسس" style="margin-top: 12px;">
+                        <div class="conditions-title">شروط ومتطلبات المؤسس</div>
+                        <p class="conditions-sub">لمن يرغب بالتقدم كمؤسس لجمعية وضوح الخيرية.</p>
+                        <div class="conditions-grid">
+                            <div class="condition-card"><div class="condition-number">1</div><div class="condition-text">سعودي الجنسية.</div></div>
+                            <div class="condition-card"><div class="condition-number">2</div><div class="condition-text">العمر لا يقل عن 18 سنة.</div></div>
+                            <div class="condition-card"><div class="condition-number">3</div><div class="condition-text">حسن السيرة والسلوك وكامل الأهلية.</div></div>
+                            <div class="condition-card"><div class="condition-number">4</div><div class="condition-text">وجود صلة قرابة/مصاهرة مع العائلة.</div></div>
+                            <div class="condition-card"><div class="condition-number">5</div><div class="condition-text">توفر البيانات الأساسية: الاسم الرباعي، رقم الهوية، تاريخ الميلاد.</div></div>
+                            <div class="condition-card"><div class="condition-number">6</div><div class="condition-text">بيانات التواصل: رقم جوال مفعل وبريد إلكتروني.</div></div>
+                            <div class="condition-card"><div class="condition-number">7</div><div class="condition-text">تحديد صلة القرابة (ابن/ابنة/حفيد/قريب/أخرى) حسب الواقع.</div></div>
+                            <div class="condition-card"><div class="condition-number">8</div><div class="condition-text">الإقرار بالموافقة على لوائح الجمعية وأحكام الحوكمة.</div></div>
+                        </div>
+                    </div>
+                    <div class="conditions-block" aria-label="التقديم" style="margin-top: 12px;">
+                        <div class="conditions-title">التقديم</div>
+                        <p class="conditions-sub">لمن يرغب بالتقدم، الرجاء تعبئة النموذج المناسب.</p>
+                        <div class="info-actions">
+                            <button class="btn btn-primary" type="button" data-apply-toggle="tarahum-exec">تسجيل مدير تنفيذي</button>
+                            <button class="btn btn-outline" type="button" data-apply-toggle="tarahum-founder">تسجيل كمؤسس</button>
+                        </div>
+
+                        <form class="founder-form" data-apply-form="tarahum-exec" hidden>
+                            <div class="founder-grid">
+                                <div class="founder-field">
+                                    <label for="apply-name-tarahum-exec">الاسم</label>
+                                    <input id="apply-name-tarahum-exec" name="name" type="text" autocomplete="name" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-phone-tarahum-exec">رقم الجوال</label>
+                                    <input id="apply-phone-tarahum-exec" name="phone" type="tel" inputmode="tel" placeholder="05xxxxxxxx" autocomplete="tel" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-email-tarahum-exec">البريد الإلكتروني</label>
+                                    <input id="apply-email-tarahum-exec" name="email" type="email" inputmode="email" autocomplete="email" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-exp-tarahum-exec">سنوات الخبرة</label>
+                                    <input id="apply-exp-tarahum-exec" name="yearsExp" type="number" min="0" step="1" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-city-tarahum-exec">المدينة</label>
+                                    <input id="apply-city-tarahum-exec" name="city" type="text" autocomplete="address-level2" />
+                                </div>
+                                <div class="founder-field" style="grid-column: 1 / -1;">
+                                    <label for="apply-notes-tarahum-exec">ملاحظات (اختياري)</label>
+                                    <textarea id="apply-notes-tarahum-exec" name="notes"></textarea>
+                                </div>
+                            </div>
+                            <div class="info-actions">
+                                <button class="btn btn-primary" type="submit">إرسال طلب</button>
+                                <button class="btn btn-outline" type="button" data-apply-cancel="tarahum-exec">إلغاء</button>
+                            </div>
+                            <div class="note">هذا طلب تسجيل. سيتم التحقق من الهوية ثم قبول الطلب أو رفضه.</div>
+                            <div class="founder-alert" data-apply-alert="tarahum-exec"></div>
+                        </form>
+
+                        <form class="founder-form" data-apply-form="tarahum-founder" hidden>
+                            <div class="founder-grid">
+                                <div class="founder-field">
+                                    <label for="apply-name-tarahum-founder">الاسم الرباعي</label>
+                                    <input id="apply-name-tarahum-founder" name="name" type="text" autocomplete="name" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-nid-tarahum-founder">رقم الهوية</label>
+                                    <input id="apply-nid-tarahum-founder" name="nationalId" type="text" inputmode="numeric" placeholder="10 أرقام" autocomplete="off" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-dob-tarahum-founder">تاريخ الميلاد</label>
+                                    <input id="apply-dob-tarahum-founder" name="dob" type="date" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-relation-tarahum-founder">صلة القرابة</label>
+                                    <select id="apply-relation-tarahum-founder" name="relation">
+                                        <option value="">اختر صلة القرابة</option>
+                                        <option value="ابن">ابن</option>
+                                        <option value="ابنة">ابنة</option>
+                                        <option value="حفيد">حفيد</option>
+                                        <option value="قريب">قريب</option>
+                                        <option value="أخرى">أخرى</option>
+                                    </select>
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-phone-tarahum-founder">رقم الجوال</label>
+                                    <input id="apply-phone-tarahum-founder" name="phone" type="tel" inputmode="tel" placeholder="05xxxxxxxx" autocomplete="tel" />
+                                </div>
+                                <div class="founder-field">
+                                    <label for="apply-email-tarahum-founder">البريد الإلكتروني</label>
+                                    <input id="apply-email-tarahum-founder" name="email" type="email" inputmode="email" autocomplete="email" />
+                                </div>
+                                <div class="founder-field" style="grid-column: 1 / -1;">
+                                    <label for="apply-notes-tarahum-founder">ملاحظات (اختياري)</label>
+                                    <textarea id="apply-notes-tarahum-founder" name="notes"></textarea>
+                                </div>
+                            </div>
+                            <div class="info-actions">
+                                <button class="btn btn-primary" type="submit">إرسال طلب</button>
+                                <button class="btn btn-outline" type="button" data-apply-cancel="tarahum-founder">إلغاء</button>
+                            </div>
+                            <div class="note">هذا طلب تسجيل. سيتم التحقق من الهوية ثم قبول الطلب أو رفضه.</div>
+                            <div class="founder-alert" data-apply-alert="tarahum-founder"></div>
+                        </form>
+                    </div>
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <h3>مجالات العمل</h3>
+                            <ul>
+                                <li>متابعة الحالات المرضية والاحتياجات العاجلة.</li>
+                                <li>الدعم الغذائي والدوائي حسب الحاجة.</li>
+                                <li>التنسيق للزيارات وصلة الرحم وبرامج اجتماعية للعائلة.</li>
+                            </ul>
+                        </div>
+                        <div class="info-card">
+                            <h3>كيف نشارك؟</h3>
+                            <p>الجمعية في مرحلة التأسيس. سيتم قريبًا اعتماد قنوات رسمية للتطوع والدعم والإبلاغ عن الحالات.</p>
+                            <div class="info-actions">
+                                <a class="btn btn-primary btn-disabled" href="#" aria-disabled="true">قنوات التواصل قريبًا</a>
+                                <a class="btn btn-outline" href="#events">آخر المستجدات</a>
+                            </div>
+                            <div class="note">بعد اكتمال التأسيس سيتم إضافة أسماء اللجنة وطرق التواصل الرسمية داخل هذه الصفحة.</div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </section>
+
+        <section id="events" class="section">
+            <div class="section-header">
+                <div>
+                    <div class="section-title">المناسبات العائلية</div>
+                    <div class="section-sub">أخبار مختصرة عن مناسبات العائلة المختلفة.</div>
+                </div>
+            </div>
+            <div style="display: grid; gap: 12px;">
+                <details class="toggle-card" data-accordion="events" data-event-kind="happy">
+                    <summary class="toggle-summary">
+                        <span class="toggle-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#065f46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2l1.5 5.3L19 9l-5.5 1.7L12 16l-1.5-5.3L5 9l5.5-1.7L12 2z"></path>
+                                <path d="M5 15l.9 3.1L9 19l-3.1.9L5 23l-.9-3.1L1 19l3.1-.9L5 15z"></path>
+                            </svg>
+                        </span>
+                        <span class="toggle-text">
+                            <span class="toggle-title">الأفراح</span>
+                            <span class="toggle-sub">مناسبات سعيدة مثل: مولود، خطوبة، زواج، تخرّج…</span>
+                        </span>
+                    </summary>
+                    <div class="toggle-body">
+                        <div class="events-list">
+                            <details class="event-item event-item-gathering event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-gathering">اجتماع عائلي</span>
+                                        <span>لمة على خير</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">لقاء عائلي قريب — حضوركم يسعدنا ويقوّي صلة الرحم ويزيد المحبة.</div>
+                                    <div class="event-meta">الفرع: جميع الفروع – التاريخ: 10/01/2026</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-birth event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-birth">مولود جديد</span>
+                                        <span>ألف مبروك لفلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">قدوم المولود فرحة تملأ البيت… جعله الله قرة عين لوالديه ومن مواليد السعادة.</div>
+                                    <div class="event-meta">الفرع: مزيد بن مطلق بن زيدان – التاريخ: 27/01/2026</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-engagement event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-engagement">خطوبة</span>
+                                        <span>خطوبة مباركة لفلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">عسى الفرح يدوم وتتم الأفراح على خير… وجمع الله بين القلوب على مودة ورضا.</div>
+                                    <div class="event-meta">الفرع: زايد بن مطلق بن زيدان – التاريخ: 02/02/2026</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-contract event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-contract">عقد قران</span>
+                                        <span>ألف مبروك لفلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">بارك الله لهما وبارك عليهما وجمع بينهما على خير… وجعل أيامهما سكينة ورضا.</div>
+                                    <div class="event-meta">الفرع: لاحم بن مطلق بن زيدان – التاريخ: 03/02/2026</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-marriage event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-marriage">زواج</span>
+                                        <span>ليلة فرح لفلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">جعلها الله بداية عمرٍ مليان مودة وطمأنينة… وعسى السعادة تسكن بيتهم.</div>
+                                    <div class="event-meta">الفرع: زيدان بن مطلق بن زيدان – التاريخ: 05/02/2026</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-graduation event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-graduation">تخرّج</span>
+                                        <span>تخرّج مبارك لفلانة بنت فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">نجاح يفتح أبوابًا أجمل بإذن الله… ومنها للأعلى يا رب.</div>
+                                    <div class="event-meta">الفرع: زيدان بن مطلق بن زيدان – التاريخ: 15/10/2025</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-success event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-success">نجاح / تفوق</span>
+                                        <span>تفوق يرفع الرأس لفلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">رفعت الرأس… وعقبال القمم، الله يبارك لك ويزيدك من فضله.</div>
+                                    <div class="event-meta">الفرع: ملحم بن مطلق بن زيدان – التاريخ: 20/06/2025</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-promotion event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-promotion">ترقية / وظيفة</span>
+                                        <span>خبر يفرّح القلب لفلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">ألف مبروك الترقية/الوظيفة الجديدة… ومنها للأعلى بإذن الله.</div>
+                                    <div class="event-meta">الفرع: مزيد بن مطلق بن زيدان – التاريخ: 01/03/2025</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-new_house event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-new_house">منزل جديد</span>
+                                        <span>منزل مبارك لفلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">جعله الله دار فرح وراحة وسعة… وعمارًا بالطاعة والسكينة.</div>
+                                    <div class="event-meta">الفرع: زايد بن مطلق بن زيدان – التاريخ: 12/11/2025</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-travel event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-travel">سفر</span>
+                                        <span>في حفظ الله يا فلان بن فلان</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">سفر سعيد وعودة سالمة إن شاء الله… وربي ييسر لك كل خطوة.</div>
+                                    <div class="event-meta">الفرع: لاحم بن مطلق بن زيدان – التاريخ: 18/09/2025</div>
+                                </div>
+                            </details>
+                            <details class="event-item event-item-discharge event-kind-happy">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-discharge">خروج من المستشفى</span>
+                                        <span>الحمد لله على السلامة</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">تم بحمد الله خروج (فلان بن فلان) من المستشفى… الله يتمم عليه الصحة والعافية.</div>
+                                    <div class="event-kv" aria-label="تفاصيل الخروج من المستشفى">
+                                        <div class="event-kv-key">وقت الزيارة</div>
+                                        <div>مثال: بعد صلاة المغرب إلى 10 مساءً</div>
+                                        <div class="event-kv-key">بدائل الزيارة</div>
+                                        <div>اتصال أو رسالة واتساب حسب رغبة أهل المريض</div>
+                                    </div>
+                                    <div class="event-actions" aria-label="وسائل التواصل">
+                                        <a class="btn btn-outline btn-sm" href="tel:+966500000000">اتصال</a>
+                                        <a class="btn btn-outline btn-sm" href="https://wa.me/966500000000?text=%D8%A7%D9%84%D8%AD%D9%85%D8%AF%20%D9%84%D9%84%D9%87%20%D8%B9%D9%84%D9%89%20%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%D8%A9" target="_blank" rel="noopener noreferrer">واتساب</a>
+                                    </div>
+                                    <div class="event-meta">الفرع: زايد بن مطلق بن زيدان – التاريخ: 16/01/2026</div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="toggle-card" data-accordion="events" data-event-kind="sick">
+                    <summary class="toggle-summary">
+                        <span class="toggle-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 21s-7-4.6-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.4-7 10-7 10z"></path>
+                                <path d="M12 7v6"></path>
+                                <path d="M9 10h6"></path>
+                            </svg>
+                        </span>
+                        <span class="toggle-text">
+                            <span class="toggle-title">المرضى</span>
+                            <span class="toggle-sub">وقت الزيارة وبدائلها مع أرقام التواصل.</span>
+                        </span>
+                    </summary>
+                    <div class="toggle-body">
+                        <div class="events-list">
+                            <details class="event-item event-item-sick event-kind-sad">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-sick">مريض / تنويم</span>
+                                        <span>لا بأس طهور إن شاء الله</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">نسأل الله الشفاء العاجل لفلان بن فلان، ونسألكم الدعاء له بظهر الغيب.</div>
+                                    <div class="event-kv" aria-label="تفاصيل الزيارة">
+                                        <div class="event-kv-key">وقت الزيارة</div>
+                                        <div>مثال: يوميًا 6–9 مساءً</div>
+                                        <div class="event-kv-key">ملاحظة</div>
+                                        <div>في حال تعذر الزيارة: اتصال أو واتساب</div>
+                                    </div>
+                                    <div class="event-actions" aria-label="وسائل التواصل">
+                                        <a class="btn btn-outline btn-sm" href="tel:+966500000003">اتصال</a>
+                                        <a class="btn btn-outline btn-sm" href="https://wa.me/966500000003?text=%D9%84%D8%A7%20%D8%A8%D8%A3%D8%B3%20%D8%B7%D9%87%D9%88%D8%B1%20%D8%A5%D9%86%20%D8%B4%D8%A7%D8%A1%20%D8%A7%D9%84%D9%84%D9%87" target="_blank" rel="noopener noreferrer">واتساب</a>
+                                    </div>
+                                    <div class="event-meta">الفرع: لاحم بن مطلق بن زيدان – التاريخ: 03/05/2025</div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="toggle-card" data-accordion="events" data-event-kind="death">
+                    <summary class="toggle-summary">
+                        <span class="toggle-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3v18"></path>
+                                <path d="M7 8h10"></path>
+                                <path d="M7 16h10"></path>
+                                <path d="M8 21h8"></path>
+                            </svg>
+                        </span>
+                        <span class="toggle-text">
+                            <span class="toggle-title">الوفيات</span>
+                            <span class="toggle-sub">موقع ووقت العزاء مع أرقام التواصل.</span>
+                        </span>
+                    </summary>
+                    <div class="toggle-body">
+                        <div class="events-list">
+                            <details class="event-item event-item-death event-kind-sad">
+                                <summary class="event-summary">
+                                    <div class="event-title">
+                                        <span class="event-type event-type-death">عزاء</span>
+                                        <span>عظم الله أجركم</span>
+                                    </div>
+                                </summary>
+                                <div class="event-body">
+                                    <div class="event-copy">العزاء في (فلان)، نسأل الله له الرحمة والمغفرة، وأن يلهم أهله الصبر والسلوان.</div>
+                                    <div class="event-kv" aria-label="تفاصيل العزاء">
+                                        <div class="event-kv-key">موقع العزاء</div>
+                                        <div>مثال: قاعة (اسم القاعة) – (المدينة/الحي)</div>
+                                        <div class="event-kv-key">وقت العزاء</div>
+                                        <div>مثال: من بعد صلاة العشاء إلى 11 مساءً</div>
+                                        <div class="event-kv-key">التواصل</div>
+                                        <div>اتصال/واتساب للاستفسار</div>
+                                    </div>
+                                    <div class="event-actions" aria-label="أرقام التواصل">
+                                        <a class="btn btn-outline btn-sm" href="tel:+966500000001">اتصال 1</a>
+                                        <a class="btn btn-outline btn-sm" href="https://wa.me/966500000001?text=%D8%B9%D8%B8%D9%85%20%D8%A7%D9%84%D9%84%D9%87%20%D8%A3%D8%AC%D8%B1%D9%83%D9%85" target="_blank" rel="noopener noreferrer">واتساب 1</a>
+                                        <a class="btn btn-outline btn-sm" href="tel:+966500000002">اتصال 2</a>
+                                        <a class="btn btn-outline btn-sm" href="https://wa.me/966500000002?text=%D8%B9%D8%B8%D9%85%20%D8%A7%D9%84%D9%84%D9%87%20%D8%A3%D8%AC%D8%B1%D9%83%D9%85" target="_blank" rel="noopener noreferrer">واتساب 2</a>
+                                    </div>
+                                    <div class="event-meta">الفرع: زيدان بن مطلق بن زيدان – التاريخ: 28/04/2025</div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <section id="about" class="section">
+            <div class="section-header">
+                <div class="section-title">عن الموقع</div>
+            </div>
+            <div class="about-card">
+                <p>
+                    يهدف هذا الموقع إلى توثيق شجرة عائلة الزيدان، وتنظيم فروع ذرية مطلق بن زيدان بطريقة عصرية
+                    تحافظ على صلة الرحم وتسهّل معرفة أبناء العمومة وأماكن إقامتهم.
+                </p>
+                <p>
+                    يركّز الموقع على عرض بيانات الأبناء فقط، مثل الاسم والعمر التقريبي وعدد الأبناء،
+                    دون إظهار أرقام الجوال أو أي معلومات حساسة، احترامًا لخصوصية العائلة.
+                </p>
+                <p>
+                    يتم تحديث بيانات الشجرة والمناسبات عن طريق مناديب معتمدين من كل فرع.
+                </p>
+            </div>
+        </section>
+
+        <footer>
+            شجرة عائلة الزيدان – صفحة عامة مستقلة. 
+        </footer>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        (function () {
+            const isMobile = window.matchMedia && window.matchMedia("(max-width: 640px)").matches;
+            if (!isMobile) return;
+            const eventGroups = Array.from(document.querySelectorAll('#events details.toggle-card[data-accordion="events"]'));
+            eventGroups.forEach((el) => el.removeAttribute("open"));
+            eventGroups.forEach((el) => {
+                el.addEventListener("toggle", () => {
+                    if (!el.open) return;
+                    eventGroups.forEach((other) => {
+                        if (other !== el) other.open = false;
+                    });
+                });
+            });
+
+            const items = Array.from(document.querySelectorAll("#events details.event-item"));
+            items.forEach((el) => el.removeAttribute("open"));
+            items.forEach((el) => {
+                el.addEventListener("toggle", () => {
+                    if (!el.open) return;
+                    items.forEach((other) => {
+                        if (other !== el) other.open = false;
+                    });
+                });
+            });
+
+            const initiativeItems = Array.from(document.querySelectorAll('details.toggle-card[data-accordion="initiatives"]'));
+            initiativeItems.forEach((el) => el.removeAttribute("open"));
+            initiativeItems.forEach((el) => {
+                el.addEventListener("toggle", () => {
+                    if (!el.open) return;
+                    initiativeItems.forEach((other) => {
+                        if (other !== el) other.open = false;
+                    });
+                });
+            });
+        })();
+        (function () {
+            const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
+            const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
+            let sbClient = null;
+
+            function setAlert(kind, type, text) {
+                const alertEl = document.querySelector(`[data-founder-alert="${kind}"]`);
+                if (!alertEl) return;
+                alertEl.className = "founder-alert " + (type === "success" ? "founder-alert-success" : "founder-alert-error");
+                alertEl.textContent = text;
+                alertEl.style.display = "block";
+            }
+
+            function hideAlert(kind) {
+                const alertEl = document.querySelector(`[data-founder-alert="${kind}"]`);
+                if (!alertEl) return;
+                alertEl.style.display = "none";
+                alertEl.textContent = "";
+                alertEl.className = "founder-alert";
+            }
+
+            function normalizePhone(v) {
+                return String(v || "").replace(/[^\d+]/g, "").trim();
+            }
+
+            function getSupabaseClient() {
+                if (sbClient) return sbClient;
+                const url = String(SUPABASE_URL || "").trim();
+                const anonKey = String(SUPABASE_ANON_KEY || "").trim();
+                if (!url || !anonKey) return null;
+                if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+                sbClient = window.supabase.createClient(url, anonKey);
+                return sbClient;
+            }
+
+            function makeRequestId() {
+                const part1 = Math.random().toString(36).slice(2, 6).toUpperCase();
+                const part2 = Math.random().toString(36).slice(2, 6).toUpperCase();
+                return "REQ-" + part1 + "-" + part2;
+            }
+
+            function fallbackCopyText(text) {
+                const el = document.createElement("textarea");
+                el.value = text;
+                el.setAttribute("readonly", "");
+                el.style.position = "fixed";
+                el.style.opacity = "0";
+                el.style.left = "-9999px";
+                document.body.appendChild(el);
+                el.select();
+                try {
+                    document.execCommand("copy");
+                } catch (e) {}
+                document.body.removeChild(el);
+            }
+
+            async function copyText(text) {
+                try {
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    }
+                } catch (e) {}
+                fallbackCopyText(text);
+                return true;
+            }
+
+            function toggleForm(kind, open) {
+                const form = document.querySelector(`[data-founder-form="${kind}"]`);
+                if (!form) return;
+                const shouldOpen = typeof open === "boolean" ? open : form.hasAttribute("hidden");
+                hideAlert(kind);
+                if (shouldOpen) {
+                    form.removeAttribute("hidden");
+                } else {
+                    form.setAttribute("hidden", "");
+                }
+            }
+
+            document.querySelectorAll("[data-founder-toggle]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    toggleForm(btn.getAttribute("data-founder-toggle"), true);
+                });
+            });
+
+            document.querySelectorAll("[data-founder-cancel]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    toggleForm(btn.getAttribute("data-founder-cancel"), false);
+                });
+            });
+
+            document.querySelectorAll("[data-founder-form]").forEach((form) => {
+                const kind = form.getAttribute("data-founder-form");
+                form.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    hideAlert(kind);
+                    const nameEl = document.getElementById(`founder-name-${kind}`);
+                    const phoneEl = document.getElementById(`founder-phone-${kind}`);
+                    const branchEl = document.getElementById(`founder-branch-${kind}`);
+                    const roleEl = document.getElementById(`founder-role-${kind}`);
+                    const notesEl = document.getElementById(`founder-notes-${kind}`);
+
+                    const name = (nameEl ? nameEl.value : "").trim();
+                    const phone = normalizePhone(phoneEl ? phoneEl.value : "");
+                    const branch = (branchEl ? branchEl.value : "").trim();
+                    const role = (roleEl ? roleEl.value : "").trim();
+                    const notes = (notesEl ? notesEl.value : "").trim();
+
+                    if (!name || !phone || !branch) {
+                        setAlert(kind, "error", "يرجى إدخال الاسم ورقم الجوال واختيار الفرع.");
+                        return;
+                    }
+                    if (phone.length < 9) {
+                        setAlert(kind, "error", "يرجى إدخال رقم جوال صحيح.");
+                        return;
+                    }
+
+                    const sb = getSupabaseClient();
+                    if (!sb) {
+                        setAlert(kind, "error", "تعذر إرسال الطلب لأن الربط غير مُعد.");
+                        return;
+                    }
+
+                    const payload = {
+                        requestId: makeRequestId(),
+                        createdAt: new Date().toISOString()
+                    };
+
+                    const msg = [
+                        "طلب تسجيل (مؤسس/مشارك)",
+                        "رقم الطلب: " + payload.requestId,
+                        "الاسم: " + name,
+                        "الجوال: " + phone,
+                        "الفرع: " + branch,
+                        "الدور: " + (role || ""),
+                        "ملاحظات: " + (notes || ""),
+                        "التاريخ: " + new Date(payload.createdAt).toLocaleString("ar-SA")
+                    ].join("\n");
+
+                    const row = {
+                        request_id: payload.requestId,
+                        kind: "tree_founder",
+                        branch_key: branch,
+                        name,
+                        phone,
+                        email: null,
+                        message: msg,
+                        status: "pending",
+                        created_at: payload.createdAt
+                    };
+                    const { error } = await sb.from("approval_requests").insert(row);
+                    await copyText(msg);
+                    if (error) {
+                        setAlert(kind, "error", `تعذر إرسال الطلب: ${error.message || "خطأ غير معروف"}`);
+                        return;
+                    }
+
+                    if (nameEl) nameEl.value = "";
+                    if (phoneEl) phoneEl.value = "";
+                    if (branchEl) branchEl.value = "";
+                    if (roleEl) roleEl.value = "";
+                    if (notesEl) notesEl.value = "";
+
+                    setAlert(kind, "success", `تم تسجيل طلبك للمراجعة (رقم الطلب: ${payload.requestId}). تم نسخ نص الطلب.`);
+                });
+            });
+        })();
+        (function () {
+            function normalizeDigits(v) {
+                return String(v || "").replace(/[^\d]/g, "").trim();
+            }
+
+            function normalizePhone(v) {
+                return String(v || "").replace(/[^\d+]/g, "").trim();
+            }
+
+            function isLikelyEmail(v) {
+                const s = String(v || "").trim();
+                return s.includes("@") && s.includes(".") && s.length >= 6;
+            }
+
+            function makeRequestId() {
+                const part1 = Math.random().toString(36).slice(2, 6).toUpperCase();
+                const part2 = Math.random().toString(36).slice(2, 6).toUpperCase();
+                return "REQ-" + part1 + "-" + part2;
+            }
+
+            function formatApplyKind(kind) {
+                if (kind === "fund-exec") return { org: "صندوق تراحم عائلة الزيدان", role: "مدير تنفيذي" };
+                if (kind === "fund-founder") return { org: "صندوق تراحم عائلة الزيدان", role: "مؤسس" };
+                if (kind === "tarahum-exec") return { org: "جمعية وضوح الخيرية", role: "مدير تنفيذي" };
+                if (kind === "tarahum-founder") return { org: "جمعية وضوح الخيرية", role: "مؤسس" };
+                return { org: "غير محدد", role: "غير محدد" };
+            }
+
+            function buildRequestMessage(kind, payload) {
+                const info = formatApplyKind(kind);
+                const lines = [];
+                lines.push("طلب تسجيل (" + info.role + ")");
+                lines.push("الجهة: " + info.org);
+                lines.push("رقم الطلب: " + payload.requestId);
+                lines.push("الاسم: " + (payload.name || ""));
+                lines.push("الجوال: " + (payload.phone || ""));
+                lines.push("البريد: " + (payload.email || ""));
+                if (payload.city) lines.push("المدينة: " + payload.city);
+                if (payload.yearsExp !== undefined && payload.yearsExp !== null && payload.yearsExp !== "") lines.push("سنوات الخبرة: " + String(payload.yearsExp));
+                if (payload.relation) lines.push("صلة القرابة: " + payload.relation);
+                if (payload.dob) lines.push("تاريخ الميلاد: " + payload.dob);
+                if (payload.nationalId) lines.push("رقم الهوية: " + payload.nationalId);
+                if (payload.notes) lines.push("ملاحظات: " + payload.notes);
+                lines.push("التاريخ: " + new Date(payload.createdAt).toLocaleString("ar-SA"));
+                return lines.join("\n");
+            }
+
+            function fallbackCopyText(text) {
+                const el = document.createElement("textarea");
+                el.value = text;
+                el.setAttribute("readonly", "");
+                el.style.position = "fixed";
+                el.style.opacity = "0";
+                el.style.left = "-9999px";
+                document.body.appendChild(el);
+                el.select();
+                try {
+                    document.execCommand("copy");
+                } catch (e) {}
+                document.body.removeChild(el);
+            }
+
+            async function copyText(text) {
+                try {
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    }
+                } catch (e) {}
+                fallbackCopyText(text);
+                return true;
+            }
+
+            function setApplyAlert(kind, type, text) {
+                const el = document.querySelector(`[data-apply-alert="${kind}"]`);
+                if (!el) return;
+                el.className = "founder-alert " + (type === "success" ? "founder-alert-success" : "founder-alert-error");
+                el.textContent = text;
+                el.style.display = "block";
+            }
+
+            function hideApplyAlert(kind) {
+                const el = document.querySelector(`[data-apply-alert="${kind}"]`);
+                if (!el) return;
+                el.style.display = "none";
+                el.textContent = "";
+                el.className = "founder-alert";
+            }
+
+            function closeAllApplyForms() {
+                document.querySelectorAll("[data-apply-form]").forEach((f) => f.setAttribute("hidden", ""));
+                document.querySelectorAll("[data-apply-alert]").forEach((a) => {
+                    a.style.display = "none";
+                    a.textContent = "";
+                    a.className = "founder-alert";
+                });
+            }
+
+            document.querySelectorAll("[data-apply-toggle]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const kind = btn.getAttribute("data-apply-toggle");
+                    const form = document.querySelector(`[data-apply-form="${kind}"]`);
+                    if (!form) return;
+                    closeAllApplyForms();
+                    form.removeAttribute("hidden");
+                });
+            });
+
+            document.querySelectorAll("[data-apply-cancel]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const kind = btn.getAttribute("data-apply-cancel");
+                    const form = document.querySelector(`[data-apply-form="${kind}"]`);
+                    if (!form) return;
+                    hideApplyAlert(kind);
+                    form.setAttribute("hidden", "");
+                });
+            });
+
+            document.querySelectorAll("[data-apply-form]").forEach((form) => {
+                const kind = form.getAttribute("data-apply-form");
+                form.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    hideApplyAlert(kind);
+
+                    const name = (form.querySelector('[name="name"]')?.value || "").trim();
+                    const phone = normalizePhone(form.querySelector('[name="phone"]')?.value || "");
+                    const email = (form.querySelector('[name="email"]')?.value || "").trim();
+                    const notes = (form.querySelector('[name="notes"]')?.value || "").trim();
+
+                    if (!name || !phone || !email) {
+                        setApplyAlert(kind, "error", "يرجى إدخال الاسم ورقم الجوال والبريد الإلكتروني.");
+                        return;
+                    }
+                    if (phone.length < 9) {
+                        setApplyAlert(kind, "error", "يرجى إدخال رقم جوال صحيح.");
+                        return;
+                    }
+                    if (!isLikelyEmail(email)) {
+                        setApplyAlert(kind, "error", "يرجى إدخال بريد إلكتروني صحيح.");
+                        return;
+                    }
+
+                    const payload = {
+                        requestId: makeRequestId(),
+                        status: "pending",
+                        kind,
+                        name,
+                        phone,
+                        email,
+                        notes,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    if (kind === "fund-exec") {
+                        const yearsExpRaw = (form.querySelector('[name="yearsExp"]')?.value || "").trim();
+                        const yearsExp = yearsExpRaw ? Number(yearsExpRaw) : null;
+                        const city = (form.querySelector('[name="city"]')?.value || "").trim();
+                        if (yearsExp !== null && (!Number.isFinite(yearsExp) || yearsExp < 0)) {
+                            setApplyAlert(kind, "error", "يرجى إدخال سنوات خبرة صحيحة.");
+                            return;
+                        }
+                        payload.yearsExp = yearsExp;
+                        payload.city = city;
+                    }
+
+                    if (kind === "fund-founder") {
+                        const nationalId = normalizeDigits(form.querySelector('[name="nationalId"]')?.value || "");
+                        const dob = (form.querySelector('[name="dob"]')?.value || "").trim();
+                        const relation = (form.querySelector('[name="relation"]')?.value || "").trim();
+                        if (!nationalId || !dob || !relation) {
+                            setApplyAlert(kind, "error", "يرجى إدخال رقم الهوية وتاريخ الميلاد وصلة القرابة.");
+                            return;
+                        }
+                        if (nationalId.length !== 10) {
+                            setApplyAlert(kind, "error", "رقم الهوية يجب أن يكون 10 أرقام.");
+                            return;
+                        }
+                        payload.nationalId = nationalId;
+                        payload.dob = dob;
+                        payload.relation = relation;
+                    }
+
+                    form.querySelectorAll("input, textarea, select").forEach((el) => {
+                        if (el.tagName === "SELECT") el.value = "";
+                        else el.value = "";
+                    });
+
+                    const msg = buildRequestMessage(kind, payload);
+                    const pushed = await pushApprovalRequestToSupabase(kind, payload, msg);
+                    await copyText(msg);
+                    if (pushed.ok) {
+                        setApplyAlert(kind, "success", `تم تسجيل طلبك للمراجعة (رقم الطلب: ${payload.requestId}). سيتم التحقق من الهوية ثم قبول الطلب أو رفضه. تم نسخ نص الطلب.`);
+                    } else if (pushed.reason === "not_configured") {
+                        setApplyAlert(kind, "error", "تعذر إرسال الطلب لأن الربط غير مُعد.");
+                    } else {
+                        setApplyAlert(kind, "error", "تعذر إرسال الطلب حاليًا. تم نسخ نص الطلب.");
+                    }
+                });
+            });
+
+            const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
+            const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
+            let sbClient = null;
+
+            function getSupabaseClient() {
+                if (sbClient) return sbClient;
+                const url = String(SUPABASE_URL || "").trim();
+                const anonKey = String(SUPABASE_ANON_KEY || "").trim();
+                if (!url || !anonKey) return null;
+                if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+                sbClient = window.supabase.createClient(url, anonKey);
+                return sbClient;
+            }
+
+            function mapOrgRoleFromKind(kind) {
+                if (kind === "fund-exec") return { org: "fund", role: "exec" };
+                if (kind === "fund-founder") return { org: "fund", role: "founder" };
+                if (kind === "tarahum-exec") return { org: "charity", role: "exec" };
+                if (kind === "tarahum-founder") return { org: "charity", role: "founder" };
+                return { org: null, role: null };
+            }
+
+            async function pushApprovalRequestToSupabase(kind, payload, msg) {
+                const sb = getSupabaseClient();
+                if (!sb) return { ok: false, reason: "not_configured" };
+                const mapped = mapOrgRoleFromKind(kind);
+                const row = {
+                    request_id: payload.requestId,
+                    kind: "org_role",
+                    org: mapped.org,
+                    role: mapped.role,
+                    name: payload.name,
+                    phone: payload.phone,
+                    email: payload.email,
+                    message: msg,
+                    status: "pending",
+                    created_at: payload.createdAt
+                };
+                const { error } = await sb.from("approval_requests").insert(row);
+                if (error) return { ok: false, reason: "error", error };
+                return { ok: true };
+            }
+        })();
+
+        (function () {
+            const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
+            const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
+            const FAMILY_TREE_CHILDREN_TABLE = "tree_children";
+            let sbClient = null;
+
+            const parentsByBranch = {
+                "زيدان": ["خميس", "عبدالله"],
+                "مزيد": ["خميس", "صلف", "صلال"],
+                "زايد": [],
+                "لاحم": [],
+                "ملحم": []
+            };
+
+            function getSupabaseClient() {
+                if (sbClient) return sbClient;
+                const url = String(SUPABASE_URL || "").trim();
+                const anonKey = String(SUPABASE_ANON_KEY || "").trim();
+                if (!url || !anonKey) return null;
+                if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+                sbClient = window.supabase.createClient(url, anonKey);
+                return sbClient;
+            }
+
+            function normalizePersonName(v) {
+                const s = String(v || "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+                if (!s) return "";
+                const parts = s.split(" ").map((p) => p.trim()).filter(Boolean);
+                if (parts.length >= 3 && parts.every((p) => p.length === 1 && /^[\u0600-\u06FF]$/.test(p))) {
+                    return parts.join("");
+                }
+                return s;
+            }
+
+            function parseTruthyValue(v) {
+                if (v === true) return true;
+                if (v === false || v == null) return false;
+                if (typeof v === "number") return v === 1;
+                const s = String(v).trim().toLowerCase();
+                if (!s) return false;
+                if (s === "true" || s === "t" || s === "1" || s === "yes" || s === "y" || s === "on") return true;
+                if (s === "نعم" || s === "متوفي" || s === "متوفى" || s === "متوفاة" || s === "متوفاه") return true;
+                return false;
+            }
+
+            function getBranchRootName(branchKey) {
+                const k = normalizePersonName(branchKey);
+                if (!k) return "";
+                return k + " بن مطلق بن زيدان";
+            }
+
+            function getLeafBaseNameFromNodeId(nodeId) {
+                const id = normalizePersonName(nodeId || "");
+                if (!id) return "";
+                const leaf = id.includes("/") ? (id.split("/").map((p) => normalizePersonName(p)).filter(Boolean).slice(-1)[0] || id) : id;
+                return normalizePersonBaseName(leaf);
+            }
+
+            function getForcedRahmaSuffix(nodeId) {
+                const base = normalizePersonName(getLeafBaseNameFromNodeId(nodeId));
+                if (base === "صلف") return " (رحمة الله)";
+                if (base === "صلال") return " (رحمه الله)";
+                if (base === "عرفج" || base === "دليميك") return " (رحمه الله)";
+                return "";
+            }
+
+            function normalizeParentName(v, branchKey) {
+                const raw = normalizePersonName(v || "");
+                const cleaned = raw.replace(/^أصل الفرع:\s*/i, "").trim();
+                if (!cleaned) return "";
+                if (/بن\s+مطلق\s+بن\s+زيدان/.test(cleaned)) return cleaned;
+                if (Object.prototype.hasOwnProperty.call(parentsByBranch, cleaned)) return cleaned + " بن مطلق بن زيدان";
+                if (branchKey && normalizePersonName(branchKey) === cleaned) return cleaned + " بن مطلق بن زيدان";
+                return cleaned;
+            }
+
+            function parseISODate(v) {
+                const s = String(v || "").trim();
+                const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+                if (!m) return null;
+                const y = parseInt(m[1], 10);
+                const mo = parseInt(m[2], 10);
+                const d = parseInt(m[3], 10);
+                if (!y || !mo || !d) return null;
+                if (mo < 1 || mo > 12) return null;
+                if (d < 1 || d > 31) return null;
+                return { y, mo, d };
+            }
+
+            const umalquraFormatter = (function () {
+                try {
+                    return new Intl.DateTimeFormat("en-US-u-ca-islamic-umalqura", {
+                        timeZone: "UTC",
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit"
+                    });
+                } catch (e) {
+                    return null;
+                }
+            })();
+
+            function umalquraHijriPartsFromDate(date) {
+                if (!umalquraFormatter || !date) return null;
+                const parts = umalquraFormatter.formatToParts(date);
+                const get = (t) => {
+                    const p = parts.find((x) => x.type === t);
+                    return p ? p.value : "";
+                };
+                const y = parseInt(get("year"), 10);
+                const mo = parseInt(get("month"), 10);
+                const d = parseInt(get("day"), 10);
+                if (!y || !mo || !d) return null;
+                return { y, mo, d };
+            }
+
+            function pad2(v) {
+                return String(v).padStart(2, "0");
+            }
+
+            function formatISODate(parts) {
+                if (!parts) return "";
+                const y = String(parts.y || "").padStart(4, "0");
+                const mo = pad2(parts.mo);
+                const d = pad2(parts.d);
+                if (!y || !mo || !d) return "";
+                return y + "-" + mo + "-" + d;
+            }
+
+            function ageYearsFromGregorianDate(dateISO) {
+                const parsed = parseISODate(dateISO);
+                if (!parsed) return null;
+                const now = new Date();
+                let age = now.getFullYear() - parsed.y;
+                const month = now.getMonth() + 1;
+                const day = now.getDate();
+                if (month < parsed.mo || (month === parsed.mo && day < parsed.d)) age -= 1;
+                if (age < 0 || age > 120) return null;
+                return age;
+            }
+
+            function gregorianToJdn(y, m, d) {
+                const a = Math.floor((14 - m) / 12);
+                const y2 = y + 4800 - a;
+                const m2 = m + 12 * a - 3;
+                return (
+                    d +
+                    Math.floor((153 * m2 + 2) / 5) +
+                    365 * y2 +
+                    Math.floor(y2 / 4) -
+                    Math.floor(y2 / 100) +
+                    Math.floor(y2 / 400) -
+                    32045
+                );
+            }
+
+            function jdnToGregorian(jdn) {
+                const a = jdn + 32044;
+                const b = Math.floor((4 * a + 3) / 146097);
+                const c = a - Math.floor((146097 * b) / 4);
+                const d = Math.floor((4 * c + 3) / 1461);
+                const e = c - Math.floor((1461 * d) / 4);
+                const m = Math.floor((5 * e + 2) / 153);
+                const day = e - Math.floor((153 * m + 2) / 5) + 1;
+                const month = m + 3 - 12 * Math.floor(m / 10);
+                const year = 100 * b + d - 4800 + Math.floor(m / 10);
+                return { y: year, mo: month, d: day };
+            }
+
+            function parseHijriISO(v) {
+                const s = String(v || "").trim();
+                const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+                if (!m) return null;
+                const y = parseInt(m[1], 10);
+                const mo = parseInt(m[2], 10);
+                const d = parseInt(m[3], 10);
+                if (!y || !mo || !d) return null;
+                if (mo < 1 || mo > 12) return null;
+                if (d < 1 || d > 30) return null;
+                if (y < 1200 || y > 1700) return null;
+                return { y, mo, d };
+            }
+
+            function hijriToJdn(y, m, d) {
+                return (
+                    d +
+                    Math.ceil(29.5 * (m - 1)) +
+                    (y - 1) * 354 +
+                    Math.floor((3 + 11 * y) / 30) +
+                    1948439 -
+                    1
+                );
+            }
+
+            function jdnToHijri(jdn) {
+                const y = Math.floor((30 * (jdn - 1948439) + 10646) / 10631);
+                const firstDay = hijriToJdn(y, 1, 1);
+                let m = Math.min(12, Math.ceil((jdn - firstDay + 1) / 29.5) + 1);
+                if (m < 1) m = 1;
+                if (m > 12) m = 12;
+                let d = jdn - hijriToJdn(y, m, 1) + 1;
+                if (d < 1) {
+                    m = Math.max(1, m - 1);
+                    d = jdn - hijriToJdn(y, m, 1) + 1;
+                }
+                if (d > 30) d = 30;
+                return { y, mo: m, d };
+            }
+
+            function hijriToGregorianISO(hijriISO) {
+                const h = parseHijriISO(hijriISO);
+                if (!h) return "";
+                const approx = jdnToGregorian(hijriToJdn(h.y, h.mo, h.d));
+                if (umalquraFormatter && approx) {
+                    const base = Date.UTC(approx.y, approx.mo - 1, approx.d, 12, 0, 0);
+                    const match = (date) => {
+                        const got = umalquraHijriPartsFromDate(date);
+                        return got && got.y === h.y && got.mo === h.mo && got.d === h.d;
+                    };
+                    for (let delta = -10; delta <= 10; delta++) {
+                        const date = new Date(base + delta * 86400000);
+                        if (!match(date)) continue;
+                        return formatISODate({ y: date.getUTCFullYear(), mo: date.getUTCMonth() + 1, d: date.getUTCDate() });
+                    }
+                }
+                return formatISODate(approx);
+            }
+
+            function ageYearsFromYear(year) {
+                const y = parseInt(year, 10);
+                if (!y) return null;
+                const currentYear = new Date().getFullYear();
+                const isHijriLikely = y >= 1200 && y <= 1700;
+                const gYear = isHijriLikely ? (parseISODate(hijriToGregorianISO(String(y) + "-01-01"))?.y ?? jdnToGregorian(hijriToJdn(y, 1, 1)).y) : y;
+                const age = currentYear - gYear;
+                if (age < 0 || age > 120) return null;
+                return age;
+            }
+
+            function getParentShortNameForDisambiguation(parentName) {
+                const n = normalizePersonName(parentName || "");
+                const cleaned = n.replace(/^أصل الفرع:\s*/i, "").trim();
+                if (!cleaned) return "";
+                const first = cleaned.split(" ")[0];
+                return first || cleaned;
+            }
+
+            function normalizePersonBaseName(v) {
+                const n = normalizePersonName(v || "");
+                if (!n) return "";
+                const m = n.match(/^(.*)\s*\((?:ابن|مواليد)\s+[^)]+\)\s*$/);
+                if (m && m[1]) return normalizePersonName(m[1]);
+                return n;
+            }
+
+            function tokenizeLineageInput(v) {
+                const s = normalizePersonName(v || "");
+                if (!s) return [];
+                return s
+                    .split(/\s+/g)
+                    .map((w) => normalizePersonName(w))
+                    .filter(Boolean)
+                    .filter((w) => !["بن", "ابن", "بنت"].includes(w));
+            }
+
+            function getDisplayNameForNodeId(nodeId, branchRoot) {
+                const id = normalizePersonName(nodeId || "");
+                if (!id) return "";
+                if (branchRoot && id === branchRoot) return id;
+                const leaf = id.includes("/")
+                    ? (id.split("/").map((p) => normalizePersonName(p)).filter(Boolean).slice(-1)[0] || id)
+                    : id;
+                const tokens = tokenizeLineageInput(normalizePersonBaseName(leaf));
+                return tokens.length ? tokens[0] : leaf;
+            }
+
+            function addOrMergeChildById(byParent, parentId, child) {
+                const parent = normalizePersonName(parentId || "");
+                const name = normalizePersonName(child && child.name ? child.name : "");
+                if (!parent || !name) return;
+                if (!byParent[parent]) byParent[parent] = [];
+                const list = byParent[parent];
+                const idx = (Array.isArray(list) ? list : []).findIndex((c) => normalizePersonName(c && c.name ? c.name : "") === name);
+                const merged = {
+                    name,
+                    year: child && child.year ? String(child.year) : "",
+                    gdate: child && child.gdate ? String(child.gdate) : "",
+                    hdate: child && child.hdate ? String(child.hdate) : "",
+                    city: child && child.city ? String(child.city) : "",
+                    area: child && child.area ? String(child.area) : "",
+                    deceased: !!(child && child.deceased)
+                };
+                if (idx < 0) {
+                    list.push(merged);
+                    return;
+                }
+                const prev = list[idx];
+                if (prev) {
+                    if (!prev.year && merged.year) prev.year = merged.year;
+                    if (!prev.gdate && merged.gdate) prev.gdate = merged.gdate;
+                    if (!prev.hdate && merged.hdate) prev.hdate = merged.hdate;
+                    if (!prev.city && merged.city) prev.city = merged.city;
+                    if (!prev.area && merged.area) prev.area = merged.area;
+                    if (!prev.deceased && merged.deceased) prev.deceased = true;
+                }
+            }
+
+            function groupChildrenRows(rows, branchKey) {
+                const key = normalizePersonName(branchKey || "");
+                const branchRoot = key ? getBranchRootName(key) : "";
+                const byParent = {};
+                const idsByBase = new Map();
+
+                const buildChildId = (parentId, baseName) => {
+                    const p = normalizePersonName(parentId || "");
+                    const b = normalizePersonName(baseName || "");
+                    if (!p || !b) return "";
+                    return p + "/" + b;
+                };
+
+                const indexKnownId = (nodeId) => {
+                    const id = normalizePersonName(nodeId || "");
+                    if (!id) return;
+                    const parts = id.split("/").map((p) => normalizePersonName(p)).filter(Boolean);
+                    const base = parts.length ? parts[parts.length - 1] : id;
+                    if (!base) return;
+                    const existing = idsByBase.get(base);
+                    if (existing) {
+                        existing.add(id);
+                        return;
+                    }
+                    idsByBase.set(base, new Set([id]));
+                };
+
+                const addOrMergeChildAndIndex = (parentId, child) => {
+                    addOrMergeChildById(byParent, parentId, child);
+                    const parent = normalizePersonName(parentId || "");
+                    if (parent) indexKnownId(parent);
+                    const name = normalizePersonName(child && child.name ? child.name : "");
+                    if (name) indexKnownId(name);
+                };
+
+                const ensureParentId = (rawParent) => {
+                    const raw = normalizePersonName(rawParent || "");
+                    if (!raw) return "";
+                    if (raw.includes("/")) return raw;
+                    if (branchRoot && (raw === branchRoot || raw === key)) return branchRoot;
+                    const candidates = idsByBase.get(raw);
+                    if (candidates && candidates.size === 1) return Array.from(candidates)[0];
+                    if (branchRoot) {
+                        const parentId = buildChildId(branchRoot, raw);
+                        if (parentId) addOrMergeChildAndIndex(branchRoot, { name: parentId, year: "", gdate: "", hdate: "", city: "", area: "" });
+                        return parentId;
+                    }
+                    return raw;
+                };
+
+                const stripBranchSuffix = (tokens) => {
+                    const t = Array.isArray(tokens) ? tokens.map((x) => normalizePersonName(x)).filter(Boolean) : [];
+                    if (!key) return t;
+                    if (t.length >= 3) {
+                        const a = normalizePersonName(t[t.length - 3] || "");
+                        const b = normalizePersonName(t[t.length - 2] || "");
+                        const c = normalizePersonName(t[t.length - 1] || "");
+                        if (a === key && b === "مطلق" && c === "زيدان") return t.slice(0, -3);
+                    }
+                    if (t.length >= 2) {
+                        const b = normalizePersonName(t[t.length - 2] || "");
+                        const c = normalizePersonName(t[t.length - 1] || "");
+                        if (b === key && c === "مطلق") return t.slice(0, -2);
+                    }
+                    if (t.length >= 1 && normalizePersonName(t[t.length - 1] || "") === key) return t.slice(0, -1);
+                    return t;
+                };
+
+                const normalizeChildId = (rawChildId, parentId) => {
+                    const c = normalizePersonName(rawChildId || "");
+                    if (!c || !c.includes("/")) return c;
+                    const p = normalizePersonName(parentId || "");
+                    if (!p) return c;
+                    if (c === p || c.startsWith(p + "/")) return c;
+                    if (branchRoot && (c === branchRoot || c.startsWith(branchRoot + "/"))) return c;
+                    const base = p.split("/").map((x) => normalizePersonName(x)).filter(Boolean).slice(-1)[0] || "";
+                    if (base && c.startsWith(base + "/")) return p + "/" + c.slice((base + "/").length);
+                    return c;
+                };
+
+                const addChain = (anchorParentId, basesOldestToYoungest, leafMeta) => {
+                    const anchor = normalizePersonName(anchorParentId || "");
+                    const chain = Array.isArray(basesOldestToYoungest)
+                        ? basesOldestToYoungest.map((x) => normalizePersonName(x)).filter(Boolean)
+                        : [];
+                    if (!anchor || !chain.length) return;
+                    let current = anchor;
+                    indexKnownId(current);
+                    for (let i = 0; i < chain.length; i++) {
+                        const base = chain[i];
+                        const childId = buildChildId(current, base);
+                        if (!childId) return;
+                        const isLeaf = i === chain.length - 1;
+                        addOrMergeChildAndIndex(
+                            current,
+                            isLeaf
+                                ? { ...(leafMeta || {}), name: childId }
+                                : { name: childId, year: "", gdate: "", hdate: "", city: "", area: "" }
+                        );
+                        current = childId;
+                    }
+                };
+
+                (Array.isArray(rows) ? rows : []).forEach((r) => {
+                    let parentRaw = normalizeParentName(r.parent_name || r.parent || "", key);
+                    let childRaw = normalizePersonName(r.child_name || r.name || "");
+                    if (!parentRaw || !childRaw) return;
+
+                    const meta = {
+                        name: "",
+                        year: r.birth_year == null ? "" : String(r.birth_year),
+                        gdate: normalizePersonName(r.birth_date_g || r.birth_date || ""),
+                        hdate: normalizePersonName(r.birth_date_h || ""),
+                        city: normalizePersonName(r.city || ""),
+                        area: normalizePersonName(r.area || ""),
+                        deceased:
+                            parseTruthyValue(r.is_deceased) ||
+                            parseTruthyValue(r.deceased) ||
+                            parseTruthyValue(r.is_dead) ||
+                            parseTruthyValue(r.dead) ||
+                            parseTruthyValue(r.isDead)
+                    };
+
+                    const parentId = ensureParentId(parentRaw);
+                    if (!parentId) return;
+
+                    if (childRaw.includes("/")) {
+                        addOrMergeChildAndIndex(parentId, { ...meta, name: normalizeChildId(childRaw, parentId) });
+                        return;
+                    }
+
+                    const rawTokens = tokenizeLineageInput(normalizePersonBaseName(childRaw));
+                    const tokens = stripBranchSuffix(rawTokens);
+                    if (!tokens.length) return;
+
+                    const hadBranchSuffix = tokens.length !== rawTokens.length;
+                    if (hadBranchSuffix && branchRoot) {
+                        const chainOldest = tokens.slice().reverse();
+                        addChain(branchRoot, chainOldest, meta);
+                        return;
+                    }
+
+                    if (tokens.length > 1) {
+                        const chainOldest = tokens.slice().reverse();
+                        const parentDisplay = getDisplayNameForNodeId(parentId, branchRoot);
+                        if (chainOldest.length && parentDisplay && chainOldest[0] === parentDisplay) chainOldest.shift();
+                        addChain(parentId, chainOldest, meta);
+                        return;
+                    }
+
+                    addChain(parentId, [tokens[0]], meta);
+                });
+
+                return byParent;
+            }
+
+            async function loadChildrenQuery(sb, branchKey, fields) {
+                const raw = String(fields || "*");
+                const cleaned = raw
+                    .split(",")
+                    .map((x) => String(x || "").trim())
+                    .filter(Boolean)
+                    .filter((x) => x !== "created_at")
+                    .join(",");
+                return await sb
+                    .from(FAMILY_TREE_CHILDREN_TABLE)
+                    .select(cleaned || "*")
+                    .eq("branch_key", branchKey)
+                    .limit(2000);
+            }
+
+            async function loadChildrenForBranch(branchKey) {
+                const sb = getSupabaseClient();
+                if (!sb) return { ok: false, reason: "not_configured" };
+                const key = normalizePersonName(branchKey);
+                if (!key) return { ok: false, reason: "missing_branch" };
+                const fieldAttempts = [
+                    "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,parent,child_name,name,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,child_name,name,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,child_name,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,name,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent,name,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent,child_name,birth_year,city,area,is_deceased,deceased,created_at",
+                    "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at",
+                    "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at",
+                    "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at",
+                    "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at",
+                    "parent,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at",
+                    "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at",
+                    "parent_name,parent,child_name,name,birth_year,city,area,deceased,created_at",
+                    "parent_name,child_name,name,birth_year,city,area,deceased,created_at",
+                    "parent_name,child_name,birth_year,city,area,deceased,created_at",
+                    "parent_name,name,birth_year,city,area,deceased,created_at",
+                    "parent,name,birth_year,city,area,deceased,created_at",
+                    "parent,child_name,birth_year,city,area,deceased,created_at",
+                    "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at",
+                    "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at",
+                    "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at",
+                    "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at",
+                    "parent,name,birth_date_g,birth_date_h,birth_year,city,area,created_at",
+                    "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at",
+                    "parent_name,parent,child_name,name,birth_year,city,area,created_at",
+                    "parent_name,child_name,name,birth_year,city,area,created_at",
+                    "parent_name,child_name,birth_year,city,area,created_at",
+                    "parent_name,name,birth_year,city,area,created_at",
+                    "parent,name,birth_year,city,area,created_at",
+                    "parent,child_name,birth_year,city,area,created_at"
+                ];
+                let lastError = null;
+                let deceasedFallbackHint = "";
+                for (let i = 0; i < fieldAttempts.length; i++) {
+                    const usedFields = fieldAttempts[i];
+                    const res = await loadChildrenQuery(sb, key, usedFields);
+                    if (!res.error) {
+                        const supportsDeceased = usedFields.includes("is_deceased") || usedFields.includes("deceased");
+                        return {
+                            ok: true,
+                            map: groupChildrenRows(res.data, key),
+                            rows: res.data || [],
+                            capabilities: { deceased: supportsDeceased, deceased_hint: supportsDeceased ? "" : deceasedFallbackHint }
+                        };
+                    }
+                    if (!deceasedFallbackHint && (usedFields.includes("is_deceased") || usedFields.includes("deceased"))) {
+                        deceasedFallbackHint = classifyTreeChildrenDbError(res.error);
+                    }
+                    const msg = String(res.error.message || "").toLowerCase();
+                    const isColumnMissing = msg.includes("column") && msg.includes("does not exist");
+                    const isSchemaCacheMissingColumn = msg.includes("schema cache") && msg.includes("could not find") && msg.includes("column");
+                    const canRetry = isColumnMissing || isSchemaCacheMissingColumn;
+                    if (!canRetry) return { ok: false, reason: "error", error: res.error };
+                    lastError = res.error;
+                }
+                return { ok: false, reason: "error", error: lastError };
+            }
+
+            const TREE_CHILDREN_CACHE_KEY_PREFIX = "alzidan_tree_children_cache_v1:";
+            const TREE_CHILDREN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+            function getTreeChildrenCacheKey(branchKey) {
+                const key = normalizePersonName(branchKey);
+                return TREE_CHILDREN_CACHE_KEY_PREFIX + key;
+            }
+
+            function readTreeChildrenCache(branchKey) {
+                try {
+                    const k = getTreeChildrenCacheKey(branchKey);
+                    const raw = localStorage.getItem(k);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || typeof parsed !== "object") return null;
+                    if (!Array.isArray(parsed.rows)) return null;
+                    const ts = typeof parsed.ts === "number" ? parsed.ts : 0;
+                    if (!ts || (Date.now() - ts) > TREE_CHILDREN_CACHE_TTL_MS) return null;
+                    return parsed.rows;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function writeTreeChildrenCache(branchKey, rows) {
+                try {
+                    const k = getTreeChildrenCacheKey(branchKey);
+                    const payload = { ts: Date.now(), rows: Array.isArray(rows) ? rows : [] };
+                    localStorage.setItem(k, JSON.stringify(payload));
+                } catch (e) {}
+            }
+
+            function clearTreeChildrenCache(branchKey) {
+                try {
+                    const k = getTreeChildrenCacheKey(branchKey);
+                    localStorage.removeItem(k);
+                } catch (e) {}
+            }
+
+            function classifyTreeChildrenDbError(err) {
+                const msgRaw = err && err.message != null ? String(err.message) : "";
+                const detailsRaw = err && err.details != null ? String(err.details) : "";
+                const lowMsg = msgRaw.trim().toLowerCase();
+                const lowDetails = detailsRaw.trim().toLowerCase();
+
+                const isSchemaCache =
+                    lowMsg.includes("schema cache") || lowMsg.includes("could not find the table") || lowDetails.includes("schema cache");
+                if (isSchemaCache) return "schema_cache";
+
+                const isRls =
+                    lowMsg.includes("row-level security") ||
+                    lowDetails.includes("row-level security") ||
+                    lowMsg.includes("violates row-level security");
+                if (isRls) return "rls";
+
+                const isPermission = lowMsg.includes("permission denied") || lowDetails.includes("permission denied");
+                if (isPermission) return "permission";
+
+                const isColumnMissing = lowMsg.includes("column") && lowMsg.includes("does not exist");
+                const isSchemaCacheMissingColumn = lowMsg.includes("schema cache") && lowMsg.includes("could not find") && lowMsg.includes("column");
+                if (isColumnMissing || isSchemaCacheMissingColumn) return "missing_column";
+
+                return "other";
+            }
+
+            function formatTreeChildrenDbError(err) {
+                const codeRaw = err && err.code != null ? String(err.code) : "";
+                const msgRaw = err && err.message != null ? String(err.message) : "";
+                const detailsRaw = err && err.details != null ? String(err.details) : "";
+                const lowCode = codeRaw.trim().toLowerCase();
+                const lowMsg = msgRaw.trim().toLowerCase();
+                const lowDetails = detailsRaw.trim().toLowerCase();
+                const tableName = "tree_children";
+
+                const isSchemaCache =
+                    lowMsg.includes("schema cache") || lowMsg.includes("could not find the table") || lowDetails.includes("schema cache");
+                if (isSchemaCache) {
+                    return `تعذر تحميل بيانات الأبناء لأن Supabase لم يُحدّث المخطط بعد. إذا كان جدول tree_children موجودًا، نفّذ هذا الأمر في SQL Editor: NOTIFY pgrst, 'reload schema'; ثم أعد المحاولة. إذا استمر الخطأ بعد ذلك، فالغالب أن دور anon لا يملك صلاحيات على جدول tree_children أو أن RLS تمنع الوصول.`;
+                }
+
+                const isMissingTable =
+                    lowCode === "42p01" ||
+                    (lowMsg.includes("relation") && lowMsg.includes("does not exist")) ||
+                    (lowDetails.includes("relation") && lowDetails.includes("does not exist"));
+                if (isMissingTable) return `يلزم إنشاء جدول ${tableName} في Supabase لعرض الأبناء.`;
+
+                const isRls =
+                    lowMsg.includes("row-level security") ||
+                    lowDetails.includes("row-level security") ||
+                    lowMsg.includes("violates row-level security");
+                if (isRls) {
+                    return `تعذر تحميل بيانات الأبناء بسبب صلاحيات الجدول (RLS). فعّل سياسة SELECT على جدول ${tableName} لدور anon.`;
+                }
+
+                const isPermission = lowMsg.includes("permission denied") || lowDetails.includes("permission denied") || lowCode === "42501";
+                if (isPermission) {
+                    return `تعذر تحميل بيانات الأبناء بسبب عدم وجود صلاحية على جدول ${tableName}. امنح صلاحية SELECT لدور anon أو عدّل RLS.`;
+                }
+
+                const isSchemaMismatch = lowMsg.includes("column") && lowMsg.includes("does not exist");
+                if (isSchemaMismatch) {
+                    return `تعذر تحميل بيانات الأبناء لأن أعمدة جدول ${tableName} غير مطابقة.`;
+                }
+
+                return msgRaw || "خطأ غير معروف";
+            }
+
+            function renderError(target, text, opts) {
+                target.innerHTML = "";
+                const err = document.createElement("div");
+                err.className = "tree-alert";
+                err.textContent = text || "تعذر تحميل بيانات الشجرة.";
+                target.appendChild(err);
+
+                const actions = opts && Array.isArray(opts.actions) ? opts.actions : [];
+                if (!actions.length) return;
+
+                const actionsWrap = document.createElement("div");
+                actionsWrap.style.display = "flex";
+                actionsWrap.style.flexWrap = "wrap";
+                actionsWrap.style.gap = "8px";
+                actionsWrap.style.marginTop = "10px";
+
+                actions.forEach((a) => {
+                    const label = a && a.text != null ? String(a.text) : "";
+                    if (!label) return;
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    const kind = a && a.kind ? String(a.kind) : "outline";
+                    btn.className = kind === "primary" ? "btn btn-primary btn-small" : "btn btn-outline btn-small";
+                    btn.textContent = label;
+                    btn.addEventListener("click", () => {
+                        if (a && typeof a.onClick === "function") a.onClick();
+                    });
+                    actionsWrap.appendChild(btn);
+                });
+
+                target.appendChild(actionsWrap);
+            }
+
+            function renderBranchTree(branchKey, target, opts) {
+                const key = normalizePersonName(branchKey);
+                const requestedFocus = normalizePersonName(opts && opts.focus ? String(opts.focus) : "");
+                target.innerHTML = "";
+                const hint = document.createElement("div");
+                hint.className = "tree-hint";
+                hint.textContent = "جاري تحميل بيانات الأبناء...";
+                target.appendChild(hint);
+                let supportsDeceasedColumn = true;
+                let deceasedSupportHint = "";
+
+                const renderFromMap = (byParentInput) => {
+                    const byParent = byParentInput || {};
+                    const branchRoot = getBranchRootName(key);
+                    const metaById = new Map();
+                    Object.values(byParent || {}).forEach((list) => {
+                        const items = Array.isArray(list) ? list : [];
+                        items.forEach((c) => {
+                            const id = normalizePersonName(c && c.name ? c.name : "");
+                            if (!id) return;
+                            const prev = metaById.get(id);
+                            if (!prev) {
+                                metaById.set(id, { ...(c || {}), name: id });
+                                return;
+                            }
+                            const merged = { ...(prev || {}), name: id };
+                            if (!merged.year && c && c.year) merged.year = String(c.year);
+                            if (!merged.gdate && c && c.gdate) merged.gdate = String(c.gdate);
+                            if (!merged.hdate && c && c.hdate) merged.hdate = String(c.hdate);
+                            if (!merged.city && c && c.city) merged.city = String(c.city);
+                            if (!merged.area && c && c.area) merged.area = String(c.area);
+                            if (!merged.deceased && c && c.deceased) merged.deceased = true;
+                            metaById.set(id, merged);
+                        });
+                    });
+
+                    const nodeExistsInTree = (nodeId) => {
+                        const n = normalizePersonName(nodeId);
+                        if (!n) return false;
+                        if (Object.prototype.hasOwnProperty.call(byParent, n)) return true;
+                        const lists = Object.values(byParent || {});
+                        for (let i = 0; i < lists.length; i++) {
+                            const list = Array.isArray(lists[i]) ? lists[i] : [];
+                            for (let j = 0; j < list.length; j++) {
+                                const cid = normalizePersonName(list[j] && list[j].name ? list[j].name : "");
+                                if (cid === n) return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    const focusId = requestedFocus && nodeExistsInTree(requestedFocus) ? requestedFocus : "";
+
+                    target.innerHTML = "";
+                    if (supportsDeceasedColumn === false) {
+                        const warn = document.createElement("div");
+                        warn.className = "tree-alert";
+                        if (deceasedSupportHint === "schema_cache") {
+                            warn.textContent =
+                                "تعذر تحميل حالة الوفاة لأن Supabase لم يُحدّث المخطط بعد. إذا كان جدول tree_children موجودًا، نفّذ في SQL Editor: NOTIFY pgrst, 'reload schema'; ثم اضغط (إعادة المحاولة).";
+                        } else if (deceasedSupportHint === "rls") {
+                            warn.textContent =
+                                "تعذر تحميل حالة الوفاة لأن RLS تمنع القراءة من جدول tree_children. فعّل سياسة SELECT لدور anon ثم اضغط (إعادة المحاولة).";
+                        } else if (deceasedSupportHint === "permission") {
+                            warn.textContent =
+                                "تعذر تحميل حالة الوفاة لأن دور anon لا يملك صلاحية SELECT على جدول tree_children. امنح الصلاحية ثم اضغط (إعادة المحاولة).";
+                        } else {
+                            warn.textContent =
+                                "لن تظهر حالة (رحمه الله) لأن جدول tree_children في Supabase لا يحتوي على عمود is_deceased أو أن المخطط لم يُحدّث بعد. أضف العمود ثم نفّذ: NOTIFY pgrst, 'reload schema'; ثم اضغط (إعادة المحاولة).";
+                        }
+                        target.appendChild(warn);
+
+                        const actions = document.createElement("div");
+                        actions.style.display = "flex";
+                        actions.style.flexWrap = "wrap";
+                        actions.style.gap = "8px";
+                        actions.style.marginTop = "10px";
+
+                        const retryBtn = document.createElement("button");
+                        retryBtn.type = "button";
+                        retryBtn.className = "btn btn-outline btn-small";
+                        retryBtn.textContent = "إعادة المحاولة";
+                        retryBtn.addEventListener("click", () => {
+                            clearTreeChildrenCache(key);
+                            renderBranchTree(key, target, { focus: requestedFocus });
+                        });
+                        actions.appendChild(retryBtn);
+                        target.appendChild(actions);
+                    }
+                    if (focusId) {
+                        const backRow = document.createElement("div");
+                        backRow.className = "tree-parent-row";
+                        const backName = document.createElement("div");
+                        backName.className = "tree-parent-name";
+                        backName.textContent = "عرض الفرع كامل";
+                        backRow.appendChild(backName);
+
+                        const backLink = document.createElement("a");
+                        backLink.className = "btn btn-outline btn-small";
+                        backLink.href = "#tree&branch=" + encodeURIComponent(key);
+                        backLink.textContent = "رجوع";
+                        backLink.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            selectBranch(key, { force: true, scroll: false, updateUrl: true, urlMode: "push", focus: "" });
+                        });
+                        backRow.appendChild(backLink);
+                        target.appendChild(backRow);
+                    }
+
+                    const renderNode = (nodeId, meta, depth, pathSet, mountEl) => {
+                        const rawId = normalizePersonName(nodeId);
+                        if (!rawId) return;
+                        const mount = mountEl || target;
+                        const depthPx = Math.min(96, Math.max(0, depth) * 18);
+                        const hasCycle = pathSet && pathSet.has(rawId);
+                        const children = byParent[rawId] || [];
+                        const canExpand = !hasCycle && Array.isArray(children) && children.length;
+                        const effectiveMeta = meta || metaById.get(rawId) || null;
+
+                        const host = canExpand ? document.createElement("details") : null;
+                        if (host) {
+                            host.className = "tree-node";
+                            if (depthPx) host.style.marginRight = depthPx + "px";
+                            if (depth === 0 && focusId && rawId === focusId) host.open = true;
+                        }
+
+                        const wrap = document.createElement("div");
+                        wrap.className = "tree-child-text";
+                        const main = document.createElement("div");
+                        if (depth === 0) main.className = "tree-parent-name";
+
+                        const displayName = getDisplayNameForNodeId(rawId, branchRoot);
+                        const isBranchRootNode = branchRoot && rawId === normalizePersonName(branchRoot);
+                        const forcedSuffix = getForcedRahmaSuffix(rawId);
+                        const suffix = isBranchRootNode ? " (رحمهم الله)" : forcedSuffix ? forcedSuffix : (effectiveMeta && effectiveMeta.deceased) ? " (رحمه الله)" : "";
+                        main.textContent = displayName + suffix;
+                        wrap.appendChild(main);
+
+                        const headerRow = document.createElement("div");
+                        headerRow.className = "tree-child-row";
+                        headerRow.appendChild(wrap);
+                        headerRow.style.cursor = "pointer";
+                        headerRow.addEventListener("click", (e) => {
+                            if (e && typeof e.preventDefault === "function") e.preventDefault();
+                            if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+                            if (e && e.target && typeof e.target.closest === "function") {
+                                if (e.target.closest("a,button")) return;
+                            }
+                            selectBranch(key, { force: true, scroll: false, updateUrl: true, urlMode: "push", focus: rawId });
+                        });
+
+                        const ageYears =
+                            ageYearsFromGregorianDate(effectiveMeta && effectiveMeta.gdate ? String(effectiveMeta.gdate) : "") ??
+                            ageYearsFromGregorianDate(hijriToGregorianISO(effectiveMeta && effectiveMeta.hdate ? String(effectiveMeta.hdate) : "")) ??
+                            ageYearsFromYear(effectiveMeta && effectiveMeta.year ? String(effectiveMeta.year) : "");
+                        const metaParts = [];
+                        if (ageYears != null) metaParts.push("العمر " + String(ageYears));
+                        metaParts.push("الأبناء " + String(Array.isArray(children) ? children.length : 0));
+                        if (metaParts.length) {
+                            const badge = document.createElement("span");
+                            badge.className = "tree-badge";
+                            badge.textContent = metaParts.join(" ");
+                            headerRow.appendChild(badge);
+                        }
+
+                        if (canExpand) {
+                            const summary = document.createElement("summary");
+                            summary.appendChild(headerRow);
+                            host.appendChild(summary);
+
+                            const childrenWrap = document.createElement("div");
+                            childrenWrap.className = "tree-node-children";
+                            host.appendChild(childrenWrap);
+
+                            const nextPath = new Set(pathSet ? Array.from(pathSet) : []);
+                            nextPath.add(rawId);
+                            children.forEach((child) => {
+                                const childName = normalizePersonName(child && child.name ? child.name : "");
+                                if (!childName) return;
+                                renderNode(childName, child, depth + 1, nextPath, childrenWrap);
+                            });
+                            mount.appendChild(host);
+                        } else {
+                            if (depthPx) headerRow.style.marginRight = depthPx + "px";
+                            mount.appendChild(headerRow);
+                        }
+                    };
+
+                    if (focusId) {
+                        renderNode(focusId, null, 0, new Set(), target);
+                    } else if (branchRoot) {
+                        renderNode(branchRoot, null, 0, new Set(), target);
+                    }
+                };
+
+                const cachedRows = readTreeChildrenCache(key);
+                const hasCache = Array.isArray(cachedRows) && cachedRows.length;
+                if (hasCache) {
+                    const cachedMap = groupChildrenRows(cachedRows, key);
+                    renderFromMap(cachedMap);
+                }
+
+                loadChildrenForBranch(key)
+                    .then((res) => {
+                        if (!res.ok) {
+                            if (hasCache) return;
+                            if (res.reason === "not_configured") {
+                                renderError(target, "تعذر تحميل بيانات الشجرة لأن الربط غير مُعد.", {
+                                    actions: [
+                                        {
+                                            text: "إعادة المحاولة",
+                                            kind: "outline",
+                                            onClick: () => renderBranchTree(key, target, { focus: requestedFocus })
+                                        }
+                                    ]
+                                });
+                                return;
+                            }
+                            const detail = res.error ? formatTreeChildrenDbError(res.error) : "تعذر تحميل بيانات الشجرة من قاعدة البيانات.";
+                            renderError(target, "تعذر تحميل بيانات الشجرة: " + detail, {
+                                actions: [
+                                    {
+                                        text: "إعادة المحاولة",
+                                        kind: "primary",
+                                        onClick: () => renderBranchTree(key, target, { focus: requestedFocus })
+                                    }
+                                ]
+                            });
+                            return;
+                        }
+                        supportsDeceasedColumn = !(res.capabilities && res.capabilities.deceased === false);
+                        deceasedSupportHint = res.capabilities && res.capabilities.deceased_hint ? String(res.capabilities.deceased_hint) : "";
+                        if (Array.isArray(res.rows) && res.rows.length) writeTreeChildrenCache(key, res.rows);
+                        renderFromMap(res.map || {});
+                    })
+                    .catch(() => {
+                        if (hasCache) return;
+                        renderError(target, "تعذر تحميل بيانات الشجرة من قاعدة البيانات.", {
+                            actions: [
+                                {
+                                    text: "إعادة المحاولة",
+                                    kind: "primary",
+                                    onClick: () => renderBranchTree(key, target, { focus: requestedFocus })
+                                }
+                            ]
+                        });
+                    });
+            }
+
+            const treeTitle = document.getElementById("home-tree-title");
+            const treeBody = document.getElementById("home-tree-body");
+            const treeSection = document.getElementById("tree");
+
+            if (!treeTitle || !treeBody || !treeSection) return;
+
+            let lastRenderedKey = "";
+
+            function resolveBranchKey(raw) {
+                const key = normalizePersonName(raw);
+                if (!key) return "";
+                if (!Object.prototype.hasOwnProperty.call(parentsByBranch, key)) return "";
+                return key;
+            }
+
+            function getTreeSelectionFromHash() {
+                const hashRaw = String(window.location.hash || "");
+                const hash = hashRaw.startsWith("#") ? hashRaw.slice(1) : hashRaw;
+                if (!hash) return { branch: "", focus: "" };
+
+                const firstSplit = hash.split(/[&?]/);
+                const head = String(firstSplit[0] || "").trim();
+                const tail = firstSplit.slice(1).join("&");
+
+                if (head.startsWith("tree/")) {
+                    return { branch: decodeURIComponent(head.slice("tree/".length)), focus: "" };
+                }
+                if (head.startsWith("tree-")) {
+                    return { branch: decodeURIComponent(head.slice("tree-".length)), focus: "" };
+                }
+                if (head === "tree" && tail) {
+                    const params = new URLSearchParams(tail);
+                    return { branch: params.get("branch") || params.get("b") || "", focus: params.get("focus") || params.get("f") || "" };
+                }
+                return { branch: "", focus: "" };
+            }
+
+            function updateHashForBranch(branchKey, focusId, opts) {
+                const mode = opts && opts.mode ? String(opts.mode) : "replace";
+                const base = String(window.location.href || "").split("#")[0];
+                const focus = normalizePersonName(focusId);
+                const hash = branchKey
+                    ? ("#tree&branch=" + encodeURIComponent(branchKey) + (focus ? ("&focus=" + encodeURIComponent(focus)) : ""))
+                    : "#tree";
+                if (mode === "push") history.pushState(null, "", base + hash);
+                else history.replaceState(null, "", base + hash);
+            }
+
+            function selectBranch(branchKey, opts) {
+                const branch = resolveBranchKey(branchKey);
+                if (!branch) return;
+                const focus = normalizePersonName(opts && opts.focus ? String(opts.focus) : "");
+                const renderKey = branch + "|" + focus;
+
+                const shouldForce = !!(opts && opts.force);
+                if (!shouldForce && renderKey === lastRenderedKey) {
+                    if (opts && opts.scroll) treeSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                    if (opts && opts.updateUrl) updateHashForBranch(branch, focus, { mode: opts.urlMode || "replace" });
+                    return;
+                }
+
+                lastRenderedKey = renderKey;
+                treeTitle.style.display = "block";
+                const focusDisplay = focus ? getDisplayNameForNodeId(focus, getBranchRootName(branch)) : "";
+                const focusSuffix = focus ? getForcedRahmaSuffix(focus) : "";
+                treeTitle.textContent = focus
+                    ? ("شجرة " + focusDisplay + focusSuffix)
+                    : ("شجرة فرع " + branch + " بن مطلق بن زيدان (رحمهم الله)");
+
+                if (opts && opts.updateUrl) updateHashForBranch(branch, focus, { mode: opts.urlMode || "replace" });
+                if (opts && opts.scroll) treeSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                renderBranchTree(branch, treeBody, { focus });
+            }
+
+            const branchLinks = Array.from(document.querySelectorAll("[data-home-branch]"));
+            branchLinks.forEach((linkEl) => {
+                linkEl.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    const branchKey = linkEl.getAttribute("data-home-branch") || "";
+                    selectBranch(branchKey, { force: false, scroll: true, updateUrl: true, urlMode: "push" });
+                });
+            });
+
+            function applyUrlSelection() {
+                const selection = getTreeSelectionFromHash();
+                const selected = resolveBranchKey(selection.branch);
+                if (selected) {
+                    selectBranch(selected, { force: true, scroll: true, updateUrl: false, focus: selection.focus });
+                    return;
+                }
+                if (String(window.location.hash || "") === "#tree") {
+                    treeSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+            }
+
+            window.addEventListener("hashchange", applyUrlSelection);
+            window.addEventListener("popstate", applyUrlSelection);
+            applyUrlSelection();
+        })();
+
+        (function () {
+            const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
+            const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
+            let sbClient = null;
+
+            function getSupabaseClient() {
+                if (sbClient) return sbClient;
+                const url = String(SUPABASE_URL || "").trim();
+                const anonKey = String(SUPABASE_ANON_KEY || "").trim();
+                if (!url || !anonKey) return null;
+                if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+                sbClient = window.supabase.createClient(url, anonKey);
+                return sbClient;
+            }
+
+            function setListMessage(container, text) {
+                if (!container) return;
+                container.innerHTML = "";
+                const el = document.createElement("div");
+                el.className = "event-meta";
+                el.textContent = text;
+                container.appendChild(el);
+            }
+
+            function normalizePhoneDigits(v) {
+                return String(v || "").replace(/[^\d]/g, "").trim();
+            }
+
+            function toIntlKsaPhone(v) {
+                const d = normalizePhoneDigits(v);
+                if (!d) return "";
+                if (d.startsWith("966") && d.length === 12 && d[3] === "5") return d;
+                if (d.startsWith("05") && d.length === 10) return "966" + d.slice(1);
+                if (d.startsWith("5") && d.length === 9) return "966" + d;
+                return d;
+            }
+
+            function safeParseJson(v) {
+                try {
+                    if (v == null) return null;
+                    const s = String(v || "").trim();
+                    if (!s) return null;
+                    return JSON.parse(s);
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function parseEventEnvelope(row) {
+                const parsed = safeParseJson(row && row.details != null ? row.details : null);
+                if (parsed && typeof parsed === "object") return parsed;
+                return null;
+            }
+
+            function getRowPkKeys(row) {
+                const keys = [];
+                if (row && row.id != null) keys.push("id:" + String(row.id));
+                if (row && row.created_at != null) keys.push("created_at:" + String(row.created_at));
+                return keys;
+            }
+
+            function addEnvelopePkRefsToSet(refOrRefs, set) {
+                if (!set) return;
+                const addOne = (ref) => {
+                    if (!ref || !ref.col || ref.value == null) return;
+                    set.add(String(ref.col) + ":" + String(ref.value));
+                };
+                if (Array.isArray(refOrRefs)) {
+                    refOrRefs.forEach((r) => addOne(r));
+                    return;
+                }
+                addOne(refOrRefs);
+            }
+
+            function normalizeText(v) {
+                return String(v || "")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            }
+
+            function branchLabelFromKey(branchKey) {
+                const k = normalizeText(branchKey);
+                if (!k) return "";
+                if (/بن\s+مطلق\s+بن\s+زيدان/.test(k)) return k;
+                return k + " بن مطلق بن زيدان";
+            }
+
+            function addKvRow(kv, key, value) {
+                const v = normalizeText(value);
+                if (!v) return;
+                const kEl = document.createElement("div");
+                kEl.className = "event-kv-key";
+                kEl.textContent = key;
+                const vEl = document.createElement("div");
+                vEl.textContent = v;
+                kv.appendChild(kEl);
+                kv.appendChild(vEl);
+            }
+
+            function createActionButton(label, href, isExternal) {
+                const a = document.createElement("a");
+                a.className = "btn btn-outline btn-sm";
+                a.textContent = label;
+                a.href = href;
+                if (isExternal) {
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
+                }
+                return a;
+            }
+
+            function parseDeathDetails(row) {
+                const parsed = safeParseJson(row && row.details != null ? row.details : null);
+                if (parsed && typeof parsed === "object" && parsed.kind === "death_notice" && parsed.v === 1) {
+                    const phones = Array.isArray(parsed.phones) ? parsed.phones : [];
+                    return {
+                        prayerPlace: normalizeText(parsed.prayerPlace),
+                        prayerTime: normalizeText(parsed.prayerTime),
+                        burialPlace: normalizeText(parsed.burialPlace),
+                        burialTime: normalizeText(parsed.burialTime),
+                        condolencePlace: normalizeText(parsed.condolencePlace),
+                        condolenceTime: normalizeText(parsed.condolenceTime),
+                        phones: phones.map((p) => normalizeText(p)).filter(Boolean),
+                        notes: normalizeText(parsed.notes)
+                    };
+                }
+                return {
+                    prayerPlace: "",
+                    prayerTime: "",
+                    burialPlace: "",
+                    burialTime: "",
+                    condolencePlace: "",
+                    condolenceTime: "",
+                    phones: [],
+                    notes: normalizeText(row && row.details != null ? row.details : "")
+                };
+            }
+
+            function parseHealthDetails(row) {
+                const parsed = safeParseJson(row && row.details != null ? row.details : null);
+                if (parsed && typeof parsed === "object" && parsed.kind === "health_notice" && parsed.v === 1) {
+                    const place = normalizeText(parsed.place) === "home" ? "home" : "hospital";
+                    return {
+                        place,
+                        homeCity: normalizeText(parsed.homeCity),
+                        homeArea: normalizeText(parsed.homeArea),
+                        notes: normalizeText(parsed.notes),
+                        hospitalName: normalizeText(parsed.hospitalName),
+                        hospitalDept: normalizeText(parsed.hospitalDept)
+                    };
+                }
+                return {
+                    place: "hospital",
+                    homeCity: "",
+                    homeArea: "",
+                    notes: normalizeText(row && row.details != null ? row.details : ""),
+                    hospitalName: "",
+                    hospitalDept: ""
+                };
+            }
+
+            function parseHappyDetails(row) {
+                const parsed = safeParseJson(row && row.details != null ? row.details : null);
+                if (parsed && typeof parsed === "object" && parsed.kind === "happy_notice" && parsed.v === 1) {
+                    return { text: normalizeText(parsed.text), extra: normalizeText(parsed.extra) };
+                }
+                return { text: normalizeText(row && row.details != null ? row.details : ""), extra: "" };
+            }
+
+            function formatHappyAutoCopy(type, person) {
+                const name = normalizeText(person);
+                if (!name) return "خبر سعيد.";
+                if (type === "birth") return "ألف مبروك لـ " + name + " بمولود جديد، جعله الله من مواليد السعادة.";
+                if (type === "engagement") return "ألف مبروك لـ " + name + " الخطوبة، ونسأل الله تمام الفرح.";
+                if (type === "contract") return "ألف مبروك لـ " + name + " عقد القران، وبارك الله لهما وبارك عليهما.";
+                if (type === "marriage") return "ألف مبروك لـ " + name + " الزواج، بارك الله لهما وبارك عليهما وجمع بينهما في خير.";
+                if (type === "graduation") return "ألف مبروك لـ " + name + " التخرّج، ومنها للأعلى بإذن الله.";
+                if (type === "success") return "ألف مبروك لـ " + name + " التفوق، جعلها الله فاتحة خير.";
+                if (type === "promotion") return "ألف مبروك لـ " + name + " الترقية/الوظيفة الجديدة، الله يبارك لك ويوفقك.";
+                if (type === "new_house") return "ألف مبروك لـ " + name + " المنزل الجديد، جعله الله منزلًا مباركًا.";
+                if (type === "travel") return "نبارك لـ " + name + " السفر، رحلة موفقة وعودة سالمة بإذن الله.";
+                if (type === "gathering") return "خبر سعيد يخص " + name + ".";
+                return "ألف مبروك لـ " + name + ".";
+            }
+
+            function formatEventTypeLabel(type) {
+                if (type === "birth") return "مولود جديد";
+                if (type === "engagement") return "خطوبة";
+                if (type === "contract") return "عقد قران";
+                if (type === "marriage") return "زواج";
+                if (type === "graduation") return "تخرّج";
+                if (type === "success") return "نجاح / تفوق";
+                if (type === "promotion") return "ترقية / وظيفة";
+                if (type === "new_house") return "منزل جديد";
+                if (type === "travel") return "سفر";
+                if (type === "gathering") return "اجتماع عائلي";
+                if (type === "sick") return "مريض / تنويم";
+                if (type === "operation") return "عملية / تنويم";
+                if (type === "discharge") return "خروج من المستشفى";
+                if (type === "death") return "عزاء";
+                return "مناسبة";
+            }
+
+            function formatEventTitle(type, person) {
+                const name = normalizeText(person);
+                if (!name) return type === "death" ? "عظم الله أجركم" : "خبر جديد";
+                if (type === "death") return "عظم الله أجركم في " + name;
+                if (type === "sick" || type === "operation") return "لا بأس طهور — " + name;
+                if (type === "discharge") return "الحمد لله على السلامة — " + name;
+                return name;
+            }
+
+            function formatEventCopy(type, person, row) {
+                const name = normalizeText(person);
+                if (type === "death") {
+                    const d = parseDeathDetails(row || {});
+                    if (d.notes) return d.notes;
+                    return name
+                        ? ("انتقل إلى رحمة الله " +
+                              name +
+                              "، عظم الله أجركم وأحسن الله عزاءكم. اللهم اغفر له وارحمه واجعل قبره روضة من رياض الجنة.")
+                        : "عظم الله أجركم وأحسن الله عزاءكم. اللهم اغفر له وارحمه واجعل قبره روضة من رياض الجنة.";
+                }
+                if (type === "sick" || type === "operation" || type === "discharge") {
+                    const h = parseHealthDetails(row || {});
+                    if (h.notes) return h.notes;
+                }
+                if (type === "sick")
+                    return name
+                        ? ("نسأل الله الشفاء العاجل لـ " +
+                              name +
+                              "، لا بأس طهور إن شاء الله. اللهم رب الناس أذهب البأس واشفِ أنت الشافي.")
+                        : "نسأل الله الشفاء العاجل. اللهم رب الناس أذهب البأس واشفِ أنت الشافي.";
+                if (type === "operation")
+                    return name
+                        ? ("نسأل الله الشفاء لـ " + name + " بعد العملية، ونسألكم الدعاء له. اللهم ألبسه ثوب الصحة والعافية.")
+                        : "نسأل الله الشفاء ونسألكم الدعاء. اللهم ألبسهم ثوب الصحة والعافية.";
+                if (type === "discharge")
+                    return name
+                        ? ("الحمد لله على سلامة " + name + " وخروجه من المستشفى، طهور إن شاء الله. جعلها الله كفارة ورفعة.")
+                        : "الحمد لله على السلامة. جعلها الله كفارة ورفعة.";
+                const happy = parseHappyDetails(row || {});
+                const t = normalizeText(happy.text);
+                const extra = normalizeText(happy.extra);
+                const looksLikeOnlyPlace = !extra && t && t.length <= 24 && !t.includes(" ") && !/[.!،]/.test(t);
+                const place = looksLikeOnlyPlace ? t : extra;
+                const base = formatHappyAutoCopy(type, name);
+                if (t && !looksLikeOnlyPlace) return place ? t + " — " + place : t;
+                return place ? base + " — " + place : base;
+            }
+
+            function makeWhatsAppUrl(intlDigits, text) {
+                const d = normalizePhoneDigits(intlDigits);
+                if (!d) return "";
+                const msg = encodeURIComponent(String(text || "").trim());
+                return "https://wa.me/" + d + (msg ? ("?text=" + msg) : "");
+            }
+
+            const bannerNewsEl = document.getElementById("top-banner-news");
+            const bannerNewsCloneEl = document.getElementById("top-banner-news-clone");
+
+            function truncateText(v, maxLen) {
+                const s = normalizeText(v);
+                const n = Math.max(0, Number(maxLen || 0));
+                if (!s || !n) return "";
+                if (s.length <= n) return s;
+                if (n <= 1) return "…";
+                return s.slice(0, n - 1) + "…";
+            }
+
+            function formatBannerTextFromRow(row) {
+                const baseText = "الحمد لله الذي بنعمته تتم الصالحات — تم بحمد الله اكتمال موقع عائلة الزيدان وسيكون في هذا الشريط أخبار العائلة";
+                if (!row) return baseText;
+                const type = normalizeText(row && row.type ? row.type : "");
+                const person = normalizeText(row && row.person ? row.person : "");
+                const typeLabel = formatEventTypeLabel(type);
+                const title = formatEventTitle(type, person);
+                const copy = truncateText(formatEventCopy(type, person, row), 90);
+                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const parts = [];
+                if (typeLabel) parts.push(typeLabel);
+                if (title) parts.push(title);
+                let out = parts.join(" — ");
+                if (copy) out += (out ? ": " : "") + copy;
+                if (dateLabel) out += " (" + dateLabel + ")";
+                return baseText + " — " + (out || "خبر جديد.");
+            }
+
+            function createEventItem(row, opts) {
+                const type = normalizeText(row && row.type ? row.type : "");
+                const person = normalizeText(row && row.person ? row.person : "");
+                const kind = (opts && opts.kind) || "happy";
+                const kindClass = kind === "happy" ? "event-kind-happy" : "event-kind-sad";
+
+                const detailsEl = document.createElement("details");
+                detailsEl.className = "event-item event-item-" + (type || "unknown") + " " + kindClass;
+
+                const summary = document.createElement("summary");
+                summary.className = "event-summary";
+                const title = document.createElement("div");
+                title.className = "event-title";
+                const typeBadge = document.createElement("span");
+                typeBadge.className = "event-type event-type-" + (type || "unknown");
+                typeBadge.textContent = formatEventTypeLabel(type);
+                const titleText = document.createElement("span");
+                titleText.textContent = formatEventTitle(type, person);
+                title.appendChild(typeBadge);
+                title.appendChild(titleText);
+                summary.appendChild(title);
+                detailsEl.appendChild(summary);
+
+                const body = document.createElement("div");
+                body.className = "event-body";
+
+                const copy = document.createElement("div");
+                copy.className = "event-copy";
+                copy.textContent = formatEventCopy(type, person, row);
+                body.appendChild(copy);
+
+                const kv = document.createElement("div");
+                kv.className = "event-kv";
+
+                const actions = document.createElement("div");
+                actions.className = "event-actions";
+
+                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const branchLabel = branchLabelFromKey(row && (row.branch_key || row.branchKey) ? (row.branch_key || row.branchKey) : "");
+
+                if (type === "sick" || type === "operation" || type === "discharge") {
+                    const h = parseHealthDetails(row || {});
+                    const hospitalName = normalizeText(
+                        row && (row.hospital_name || row.hospitalName) ? (row.hospital_name || row.hospitalName) : h.hospitalName
+                    );
+                    const hospitalDept = normalizeText(
+                        row && (row.hospital_dept || row.hospitalDept) ? (row.hospital_dept || row.hospitalDept) : h.hospitalDept
+                    );
+                    if (h.place === "home") {
+                        addKvRow(kv, "المكان", "المنزل");
+                        addKvRow(kv, "المدينة", h.homeCity);
+                        addKvRow(kv, "الموقع", h.homeArea);
+                    } else {
+                        addKvRow(kv, "المكان", "المستشفى");
+                        addKvRow(kv, "المستشفى", hospitalName);
+                        addKvRow(kv, "القسم", hospitalDept);
+                    }
+                    const method = normalizeText(row && (row.contact_method || row.contactMethod) ? (row.contact_method || row.contactMethod) : "");
+                    const phone = normalizeText(row && (row.contact_phone || row.contactPhone) ? (row.contact_phone || row.contactPhone) : "");
+                    const visitDateFrom = normalizeText(row && (row.visit_date_from || row.visitDateFromLabel) ? (row.visit_date_from || row.visitDateFromLabel) : "");
+                    const visitDateTo = normalizeText(row && (row.visit_date_to || row.visitDateToLabel) ? (row.visit_date_to || row.visitDateToLabel) : "");
+                    const visitTimeFrom = normalizeText(row && (row.visit_time_from || row.visitTimeFrom) ? (row.visit_time_from || row.visitTimeFrom) : "");
+                    const visitTimeTo = normalizeText(row && (row.visit_time_to || row.visitTimeTo) ? (row.visit_time_to || row.visitTimeTo) : "");
+
+                    if (method === "visit") {
+                        const visitParts = [];
+                        if (visitDateFrom || visitDateTo) {
+                            if (visitDateFrom && visitDateTo) visitParts.push("من " + visitDateFrom + " إلى " + visitDateTo);
+                            else if (visitDateFrom) visitParts.push("من " + visitDateFrom);
+                            else visitParts.push("إلى " + visitDateTo);
+                        }
+                        if (visitTimeFrom || visitTimeTo) {
+                            if (visitTimeFrom && visitTimeTo) visitParts.push("من " + visitTimeFrom + " إلى " + visitTimeTo);
+                            else if (visitTimeFrom) visitParts.push("من " + visitTimeFrom);
+                            else visitParts.push("إلى " + visitTimeTo);
+                        }
+                        if (visitParts.length) addKvRow(kv, "وقت الزيارة", visitParts.join(" – "));
+                    } else if (method === "call" || method === "whatsapp") {
+                        const label = method === "call" ? "اتصال" : "واتساب";
+                        addKvRow(kv, "بديل الزيارة", phone ? (label + " — " + phone) : label);
+                    }
+
+                    if (phone && (method === "call" || method === "whatsapp")) {
+                        const intl = toIntlKsaPhone(phone);
+                        const msg = type === "discharge" ? "الحمد لله على السلامة" : "لا بأس طهور إن شاء الله";
+                        if (intl) {
+                            actions.appendChild(createActionButton("اتصال", "tel:+" + intl, false));
+                            actions.appendChild(createActionButton("واتساب", makeWhatsAppUrl(intl, msg), true));
+                        }
+                    }
+                } else if (type === "death") {
+                    const d = parseDeathDetails(row || {});
+                    addKvRow(kv, "مكان الصلاة", d.prayerPlace);
+                    addKvRow(kv, "وقت الصلاة", d.prayerTime);
+                    addKvRow(kv, "مكان الدفن", d.burialPlace);
+                    addKvRow(kv, "وقت الدفن", d.burialTime);
+                    addKvRow(kv, "موقع العزاء", d.condolencePlace);
+                    addKvRow(kv, "وقت العزاء", d.condolenceTime);
+                    if (d.phones && d.phones.length) addKvRow(kv, "التواصل", d.phones.join(" / "));
+
+                    const msg = "عظم الله أجركم";
+                    (d.phones || []).slice(0, 3).forEach((p, idx) => {
+                        const intl = toIntlKsaPhone(p);
+                        if (!intl) return;
+                        const n = idx + 1;
+                        actions.appendChild(createActionButton("اتصال " + String(n), "tel:+" + intl, false));
+                        actions.appendChild(createActionButton("واتساب " + String(n), makeWhatsAppUrl(intl, msg), true));
+                    });
+                }
+
+                if (kv.childNodes.length) body.appendChild(kv);
+                if (actions.childNodes.length) body.appendChild(actions);
+
+                const meta = document.createElement("div");
+                meta.className = "event-meta";
+                const metaParts = [];
+                if (branchLabel) metaParts.push("الفرع: " + branchLabel);
+                if (dateLabel) metaParts.push("التاريخ: " + dateLabel);
+                meta.textContent = metaParts.join(" – ");
+                body.appendChild(meta);
+
+                detailsEl.appendChild(body);
+                return detailsEl;
+            }
+
+            function bindMobileAccordions() {
+                const isMobile = window.matchMedia && window.matchMedia("(max-width: 640px)").matches;
+                if (!isMobile) return;
+                const groups = Array.from(document.querySelectorAll('#events details.toggle-card[data-accordion="events"]'));
+                groups.forEach((el) => {
+                    if (el.dataset.boundMobileAccordion === "1") return;
+                    el.dataset.boundMobileAccordion = "1";
+                    el.removeAttribute("open");
+                    el.addEventListener("toggle", () => {
+                        if (!el.open) return;
+                        groups.forEach((other) => {
+                            if (other !== el) other.open = false;
+                        });
+                    });
+                });
+                const items = Array.from(document.querySelectorAll("#events details.event-item"));
+                items.forEach((el) => {
+                    if (el.dataset.boundMobileItem === "1") return;
+                    el.dataset.boundMobileItem = "1";
+                    el.removeAttribute("open");
+                    el.addEventListener("toggle", () => {
+                        if (!el.open) return;
+                        items.forEach((other) => {
+                            if (other !== el) other.open = false;
+                        });
+                    });
+                });
+            }
+
+            async function loadAndRender() {
+                const happyList = document.querySelector('#events details.toggle-card[data-event-kind="happy"] .events-list');
+                const sickList = document.querySelector('#events details.toggle-card[data-event-kind="sick"] .events-list');
+                const deathList = document.querySelector('#events details.toggle-card[data-event-kind="death"] .events-list');
+                if (!happyList || !sickList || !deathList) return;
+
+                setListMessage(happyList, "جاري تحميل الأفراح…");
+                setListMessage(sickList, "جاري تحميل المرضى…");
+                setListMessage(deathList, "جاري تحميل الوفيات…");
+
+                const sb = getSupabaseClient();
+                if (!sb) {
+                    setListMessage(happyList, "تعذر تحميل المناسبات لأن الربط غير مُعد.");
+                    setListMessage(sickList, "تعذر تحميل المناسبات لأن الربط غير مُعد.");
+                    setListMessage(deathList, "تعذر تحميل المناسبات لأن الربط غير مُعد.");
+                    return;
+                }
+
+                const { data, error } = await sb
+                    .from("family_events")
+                    .select("*")
+                    .order("created_at", { ascending: false })
+                    .limit(300);
+
+                if (error) {
+                    const msg = "تعذر تحميل المناسبات: " + (error.message || "خطأ غير معروف");
+                    setListMessage(happyList, msg);
+                    setListMessage(sickList, msg);
+                    setListMessage(deathList, msg);
+                    return;
+                }
+
+                const rowsRaw = Array.isArray(data) ? data : [];
+                const tombstonedKeys = new Set();
+                const replacedKeys = new Set();
+                rowsRaw.forEach((r) => {
+                    const env = parseEventEnvelope(r);
+                    if (env && env.kind === "event_tombstone") {
+                        addEnvelopePkRefsToSet(env.target, tombstonedKeys);
+                        addEnvelopePkRefsToSet(env.targetKeys, tombstonedKeys);
+                        return;
+                    }
+                    if (env && env.replaces) {
+                        addEnvelopePkRefsToSet(env.replaces, replacedKeys);
+                        addEnvelopePkRefsToSet(env.replacesKeys, replacedKeys);
+                    }
+                });
+                const rows = rowsRaw.filter((r) => {
+                    const env = parseEventEnvelope(r);
+                    if (env && env.kind === "event_tombstone") return false;
+                    const keys = getRowPkKeys(r);
+                    if (!keys.length) return true;
+                    if (keys.some((k) => tombstonedKeys.has(k))) return false;
+                    if (keys.some((k) => replacedKeys.has(k))) return false;
+                    return true;
+                });
+
+                const bannerText = formatBannerTextFromRow(rows && rows[0] ? rows[0] : null);
+                if (bannerNewsEl) bannerNewsEl.textContent = bannerText;
+                if (bannerNewsCloneEl) bannerNewsCloneEl.textContent = bannerText;
+                const happy = [];
+                const sick = [];
+                const death = [];
+                rows.forEach((r) => {
+                    const type = normalizeText(r && r.type ? r.type : "");
+                    if (!type) return;
+                    if (type === "death") death.push(r);
+                    else if (type === "sick" || type === "operation" || type === "discharge") sick.push(r);
+                    else happy.push(r);
+                });
+
+                const maxPer = 12;
+
+                happyList.innerHTML = "";
+                sickList.innerHTML = "";
+                deathList.innerHTML = "";
+
+                if (!happy.length) setListMessage(happyList, "لا توجد أفراح مسجلة حاليًا.");
+                else happy.slice(0, maxPer).forEach((r) => happyList.appendChild(createEventItem(r, { kind: "happy" })));
+
+                if (!sick.length) setListMessage(sickList, "لا توجد حالات مرضية مسجلة حاليًا.");
+                else sick.slice(0, maxPer).forEach((r) => sickList.appendChild(createEventItem(r, { kind: "sick" })));
+
+                if (!death.length) setListMessage(deathList, "لا توجد وفيات مسجلة حاليًا.");
+                else death.slice(0, maxPer).forEach((r) => deathList.appendChild(createEventItem(r, { kind: "death" })));
+
+                bindMobileAccordions();
+            }
+
+            const EVENTS_REFRESH_KEY = "alzidan_events_refresh_v1";
+            let lastRefreshToken = "";
+            let pollTimer = null;
+
+            function maybeRefreshFromStorage() {
+                let token = "";
+                try {
+                    token = localStorage.getItem(EVENTS_REFRESH_KEY) || "";
+                } catch (e) {}
+                if (!token || token === lastRefreshToken) return;
+                lastRefreshToken = token;
+                loadAndRender().catch(() => {});
+            }
+
+            function startPolling() {
+                if (pollTimer) return;
+                pollTimer = setInterval(() => {
+                    if (document.visibilityState !== "visible") return;
+                    loadAndRender().catch(() => {});
+                }, 20000);
+            }
+
+            function stopPolling() {
+                if (!pollTimer) return;
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+
+            window.addEventListener("storage", (e) => {
+                if (!e || e.key !== EVENTS_REFRESH_KEY) return;
+                maybeRefreshFromStorage();
+            });
+            window.addEventListener("focus", () => maybeRefreshFromStorage());
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible") {
+                    maybeRefreshFromStorage();
+                    startPolling();
+                } else {
+                    stopPolling();
+                }
+            });
+
+            loadAndRender()
+                .then(() => {
+                    maybeRefreshFromStorage();
+                    startPolling();
+                })
+                .catch(() => {});
+        })();
+
+    </script>
+</body>
+</html>
