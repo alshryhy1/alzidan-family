@@ -208,6 +208,7 @@
                             <button id="admin-login" class="btn btn-primary" type="button">دخول</button>
                             <button id="admin-logout" class="btn btn-outline" type="button">تسجيل خروج</button>
                             <button id="admin-refresh" class="btn btn-outline" type="button">تحديث</button>
+                            <button id="admin-enable-notifs" class="btn btn-outline" type="button">تفعيل إشعارات الطلبات</button>
                             <button id="admin-forgot" class="btn btn-outline" type="button">نسيت كلمة المرور</button>
                         </div>
                     </div>
@@ -217,49 +218,199 @@
                     الدخول يتم حسب جدول الإدارة في القاعدة. لا يوجد إنشاء حساب من هذه الصفحة.
                 </div>
 
-                <div class="grid" style="margin-bottom: 10px;">
-                    <div class="field">
-                        <label for="filter-kind">نوع الطلب</label>
-                        <select id="filter-kind">
-                            <option value="all">الكل</option>
-                            <option value="org_role">صندوق/جمعية</option>
-                            <option value="tree_delegate">مندوب الشجرة</option>
-                        </select>
-                    </div>
-                    <div class="field">
-                        <label for="filter-status">الحالة</label>
-                        <select id="filter-status">
-                            <option value="pending">انتظار</option>
-                            <option value="approved">قبول</option>
-                            <option value="rejected">رفض</option>
-                            <option value="all">الكل</option>
-                        </select>
-                    </div>
+                <div id="admin-locked-hint" class="hint" style="margin: 0 0 10px;">
+                    الأقسام الإدارية مخفية حتى يتم تسجيل الدخول.
                 </div>
 
-                <div class="table-wrap" aria-label="جدول الطلبات">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>رقم الطلب</th>
-                                <th>النوع</th>
-                                <th>الفرع</th>
-                                <th>الاسم</th>
-                                <th>الجوال</th>
-                                <th>البريد</th>
-                                <th>الحالة</th>
-                                <th>التاريخ</th>
-                                <th>البيانات</th>
-                                <th>إجراء</th>
-                            </tr>
-                        </thead>
-                        <tbody id="requests-body"></tbody>
-                    </table>
-                </div>
+                <div id="admin-protected-inline" style="display:none;">
+                    <div class="card" style="margin-bottom: 14px;">
+                        <div class="section-title" style="margin: 0 0 10px;">تنبيهات البريد للإدارة</div>
+                        <div class="grid">
+                            <div class="field">
+                                <label for="admin-notify-email">بريد الإدارة</label>
+                                <input id="admin-notify-email" type="email" placeholder="admin@example.com" />
+                                <div class="hint">يتم فتح مسودة بريد عبر mailto وقد يمنعها المتصفح إذا كانت تلقائية.</div>
+                            </div>
+                            <div class="field">
+                                <label>&nbsp;</label>
+                                <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center; min-height: 40px;">
+                                    <label style="display:flex; align-items:center; gap:8px; margin: 0;">
+                                        <input id="admin-email-notif-pending" type="checkbox" />
+                                        <span>تنبيه عند الطلبات الجديدة</span>
+                                    </label>
+                                    <label style="display:flex; align-items:center; gap:8px; margin: 0;">
+                                        <input id="admin-email-notif-audit" type="checkbox" />
+                                        <span>تنبيه عند تعديلات المندوب</span>
+                                    </label>
+                                    <label style="display:flex; align-items:center; gap:8px; margin: 0;">
+                                        <input id="admin-email-auto-open" type="checkbox" />
+                                        <span>فتح البريد تلقائياً</span>
+                                    </label>
+                                    <button id="admin-email-test" class="btn btn-outline btn-sm" type="button">إرسال اختبار</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="admin-email-status" class="hint"></div>
+                    </div>
+                    <div class="grid" style="margin-bottom: 10px;">
+                        <div class="field">
+                            <label for="filter-kind">نوع الطلب</label>
+                            <select id="filter-kind">
+                                <option value="all">الكل</option>
+                                <option value="org_role">صندوق/جمعية</option>
+                                <option value="tree_delegate">مندوب الشجرة</option>
+                                <option value="events_delegate">مندوب المناسبات</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="filter-status">الحالة</label>
+                            <select id="filter-status">
+                                <option value="pending">انتظار</option>
+                                <option value="approved">قبول</option>
+                                <option value="rejected">رفض</option>
+                                <option value="all">الكل</option>
+                            </select>
+                        </div>
+                    </div>
 
-                <div id="sb-status" class="hint" style="margin-top: 10px;"></div>
+                    <div class="table-wrap" aria-label="جدول الطلبات">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>رقم الطلب</th>
+                                    <th>النوع</th>
+                                    <th>الفرع</th>
+                                    <th>الاسم</th>
+                                    <th>الجوال</th>
+                                    <th>البريد</th>
+                                    <th>الحالة</th>
+                                    <th>التاريخ</th>
+                                    <th>البيانات</th>
+                                    <th>إجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requests-body"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="sb-status" class="hint" style="margin-top: 10px;"></div>
+                </div>
             </div>
         </section>
+
+        <div id="admin-protected-sections" style="display:none;">
+        <section id="delegate-audit" class="section">
+            <div class="section-header">
+                <div class="section-title">سجل تعديلات المناديب</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    يعرض هذا القسم جميع التعديلات التي نفذها مناديب الشجرة، مع التاريخ والوقت. (يلزم تنفيذ SQL الشجرة المحدث أولاً لتفعيل التسجيل).
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="refresh-delegate-audit" class="btn btn-outline btn-sm" type="button">تحديث السجل</button>
+                </div>
+                <div class="grid" style="margin-bottom: 10px;">
+                    <div class="field">
+                        <label>المناديب المعتمدون</label>
+                        <div id="delegates-list" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+                    </div>
+                    <div class="field">
+                        <label for="delegate-audit-select">عرض سجل مندوب</label>
+                        <select id="delegate-audit-select">
+                            <option value="">اختر مندوباً</option>
+                        </select>
+                        <div id="delegate-audit-status" class="hint" style="margin-top: 8px;"></div>
+                    </div>
+                </div>
+                <div class="field" style="margin-bottom: 10px;">
+                    <label>صلاحيات المندوب (الشجرة / المناسبات)</label>
+                    <div id="delegate-perms-status" class="hint"></div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top: 8px;">
+                        <button id="delegate-perms-tree" class="btn btn-outline btn-sm" type="button">الشجرة فقط</button>
+                        <button id="delegate-perms-events" class="btn btn-outline btn-sm" type="button">المناسبات فقط</button>
+                        <button id="delegate-perms-both" class="btn btn-outline btn-sm" type="button">كلاهما</button>
+                        <button id="delegate-perms-disable" class="btn btn-outline btn-sm" type="button" style="border-color: rgba(239, 68, 68, 0.35); color: #b91c1c;">تعطيل المندوب</button>
+                        <button id="delegate-delete-btn" class="btn btn-outline btn-sm" type="button" style="border-color: rgba(239, 68, 68, 0.55); color: #991b1b;">حذف نهائي</button>
+                    </div>
+                </div>
+                <div class="table-wrap" aria-label="سجل تعديلات المناديب">
+                    <table style="min-width: 860px;">
+                        <thead>
+                            <tr>
+                                <th>الوقت</th>
+                                <th>العملية</th>
+                                <th>الفرع</th>
+                                <th>الهدف</th>
+                                <th>التفاصيل</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delegate-audit-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">تهيئة Supabase للشجرة</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    انسخ هذا النص ثم الصقه في Supabase SQL Editor ونفّذه مرة واحدة لتفعيل الحفظ/التعديل/الحذف للمندوب.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="copy-tree-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
+                </div>
+                <textarea id="tree-sql" readonly style="width: 100%; min-height: 280px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">تهيئة Supabase للمناسبات وصلاحيات المناديب</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    نفّذ هذا النص مرة واحدة لتفعيل: (1) صلاحية مندوب المناسبات + (2) تسجيل تدقيق المناسبات + (3) دوال الحفظ/التعديل/الحذف عبر RPC.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="copy-delegates-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
+                </div>
+                <textarea id="delegates-sql" readonly style="width: 100%; min-height: 320px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">إحصاءات الزيارات</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    التتبع يتم عبر RPC لتجنب حفظ أي بيانات حساسة. بعد تنفيذ SQL أدناه، ستظهر الإحصاءات هنا.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="refresh-views-stats" class="btn btn-outline btn-sm" type="button">تحديث الإحصاءات</button>
+                </div>
+                <div id="views-stats" class="hint"></div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">تهيئة Supabase لإحصاءات الزيارات</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    انسخ هذا النص ثم الصقه في Supabase SQL Editor ونفّذه مرة واحدة لتفعيل تتبع المشاهدات وعرض الإحصاءات.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="copy-views-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
+                </div>
+                <textarea id="views-sql" readonly style="width: 100%; min-height: 240px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
+            </div>
+        </section>
+        </div>
 
         <footer>شجرة عائلة الزيدان — صفحة إدارة</footer>
     </div>
@@ -271,6 +422,9 @@
             const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
             let sbClient = null;
             const sbStatus = document.getElementById("sb-status");
+            const adminLockedHint = document.getElementById("admin-locked-hint");
+            const adminProtectedInline = document.getElementById("admin-protected-inline");
+            const adminProtectedSections = document.getElementById("admin-protected-sections");
 
             const alertEl = document.getElementById("alert");
             const adminUsername = document.getElementById("admin-username");
@@ -278,19 +432,1276 @@
             const adminLoginBtn = document.getElementById("admin-login");
             const adminLogoutBtn = document.getElementById("admin-logout");
             const adminRefreshBtn = document.getElementById("admin-refresh");
+            const adminEnableNotifsBtn = document.getElementById("admin-enable-notifs");
             const adminForgotBtn = document.getElementById("admin-forgot");
 
             const filterKind = document.getElementById("filter-kind");
             const filterStatus = document.getElementById("filter-status");
             const requestsBody = document.getElementById("requests-body");
             const ADMIN_TOKEN_KEY = "alzidan_admin_token_v1";
+            const ADMIN_TOKEN_SESSION_KEY = "alzidan_admin_token_session_v1";
             let adminToken = "";
+            const ADMIN_NOTIF_LAST_KEY = "alzidan_admin_notif_last_pending_v1";
+            const ADMIN_EMAIL_KEY = "alzidan_admin_notify_email_v1";
+            const ADMIN_EMAIL_PENDING_KEY = "alzidan_admin_email_pending_v1";
+            const ADMIN_EMAIL_AUDIT_KEY = "alzidan_admin_email_audit_v1";
+            const ADMIN_EMAIL_AUTO_OPEN_KEY = "alzidan_admin_email_auto_open_v1";
+            const ADMIN_EMAIL_LAST_AUDIT_KEY = "alzidan_admin_email_last_audit_v1";
+            let lastNotifiedPendingKey = "";
+            let lastEmailedAuditKey = "";
+            let didInitialPendingSync = false;
+            let didInitialAuditSync = false;
+            let pendingPollTimer = null;
+            const copyTreeSqlBtn = document.getElementById("copy-tree-sql");
+            const treeSqlEl = document.getElementById("tree-sql");
+            const refreshDelegateAuditBtn = document.getElementById("refresh-delegate-audit");
+            const delegatesListEl = document.getElementById("delegates-list");
+            const delegateAuditSelect = document.getElementById("delegate-audit-select");
+            const delegateAuditStatus = document.getElementById("delegate-audit-status");
+            const delegateAuditBody = document.getElementById("delegate-audit-body");
+            const delegatePermsStatus = document.getElementById("delegate-perms-status");
+            const delegatePermsTreeBtn = document.getElementById("delegate-perms-tree");
+            const delegatePermsEventsBtn = document.getElementById("delegate-perms-events");
+            const delegatePermsBothBtn = document.getElementById("delegate-perms-both");
+            const delegatePermsDisableBtn = document.getElementById("delegate-perms-disable");
+            const delegateDeleteBtn = document.getElementById("delegate-delete-btn");
+            const copyViewsSqlBtn = document.getElementById("copy-views-sql");
+            const viewsSqlEl = document.getElementById("views-sql");
+            const refreshViewsStatsBtn = document.getElementById("refresh-views-stats");
+            const viewsStatsEl = document.getElementById("views-stats");
+            const copyDelegatesSqlBtn = document.getElementById("copy-delegates-sql");
+            const delegatesSqlEl = document.getElementById("delegates-sql");
+            const adminNotifyEmail = document.getElementById("admin-notify-email");
+            const adminEmailNotifPending = document.getElementById("admin-email-notif-pending");
+            const adminEmailNotifAudit = document.getElementById("admin-email-notif-audit");
+            const adminEmailAutoOpen = document.getElementById("admin-email-auto-open");
+            const adminEmailTestBtn = document.getElementById("admin-email-test");
+            const adminEmailStatus = document.getElementById("admin-email-status");
+
+            const TREE_SETUP_SQL = `
+create table if not exists public.tree_children (
+  id bigserial primary key,
+  branch_key text not null,
+  parent_name text not null,
+  name text not null,
+  child_name text null,
+  parent text null,
+  birth_date_g date null,
+  birth_date_h text null,
+  birth_year int null,
+  city text null,
+  area text null,
+  is_deceased boolean null default false,
+  deceased boolean null default false,
+  created_at timestamptz not null default now(),
+  created_by uuid null
+);
+
+alter table public.tree_children add column if not exists id bigserial;
+alter table public.tree_children add column if not exists branch_key text;
+alter table public.tree_children add column if not exists parent_name text;
+alter table public.tree_children add column if not exists name text;
+alter table public.tree_children add column if not exists child_name text;
+alter table public.tree_children add column if not exists parent text;
+alter table public.tree_children add column if not exists birth_date_g date;
+alter table public.tree_children add column if not exists birth_date_h text;
+alter table public.tree_children add column if not exists birth_year int;
+alter table public.tree_children add column if not exists city text;
+alter table public.tree_children add column if not exists area text;
+alter table public.tree_children add column if not exists is_deceased boolean;
+alter table public.tree_children add column if not exists deceased boolean;
+alter table public.tree_children add column if not exists created_at timestamptz;
+alter table public.tree_children add column if not exists created_by uuid;
+
+alter table public.tree_children enable row level security;
+
+drop policy if exists "tree_children_select_all" on public.tree_children;
+create policy "tree_children_select_all" on public.tree_children for select using (true);
+
+revoke insert, update, delete on table public.tree_children from anon, authenticated;
+grant select on table public.tree_children to anon, authenticated;
+
+create or replace function public.tree_delegate_allowed_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+) returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.approval_requests r
+    where r.kind = 'tree_delegate'
+      and r.branch_key = p_branch_key
+      and r.phone = p_phone
+      and r.email = p_email
+      and r.status = 'approved'
+      and r.secret_hash = p_secret_hash
+    limit 1
+  )
+$$;
+
+create or replace function public.tree_audit_log_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_payload jsonb
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor_name text;
+  v_req_id text;
+begin
+  select r.name into v_actor_name
+  from public.approval_requests r
+  where r.kind = 'tree_delegate'
+    and r.branch_key = p_branch_key
+    and r.phone = p_phone
+    and r.email = p_email
+    and r.status = 'approved'
+    and r.secret_hash = p_secret_hash
+  order by r.created_at desc
+  limit 1;
+
+  v_req_id := 'AUD-' ||
+    upper(substr(md5(random()::text || clock_timestamp()::text), 1, 4)) ||
+    '-' ||
+    upper(substr(md5(random()::text || clock_timestamp()::text), 5, 4));
+
+  insert into public.approval_requests (
+    request_id,
+    kind,
+    branch_key,
+    name,
+    phone,
+    email,
+    secret_hash,
+    message,
+    status,
+    created_at
+  ) values (
+    v_req_id,
+    'tree_audit',
+    p_branch_key,
+    v_actor_name,
+    p_phone,
+    p_email,
+    p_secret_hash,
+    coalesce(p_payload, '{}'::jsonb)::text,
+    'approved',
+    now()
+  );
+exception
+  when others then
+    return;
+end;
+$$;
+
+create or replace function public.tree_children_insert_v1(
+  p_branch_key text,
+  p_parent_name text,
+  p_child_name text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_row jsonb
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id bigint;
+  v_deceased boolean;
+begin
+  if not public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  v_deceased := case
+    when p_row ? 'is_deceased' then (p_row->>'is_deceased')::boolean
+    when p_row ? 'deceased' then (p_row->>'deceased')::boolean
+    else null
+  end;
+
+  select c.id into v_id
+  from public.tree_children c
+  where c.branch_key = p_branch_key
+    and (c.parent_name = p_parent_name or c.parent = p_parent_name)
+    and (c.name = p_child_name or c.child_name = p_child_name)
+  order by c.id desc
+  limit 1;
+
+  if v_id is not null then
+    update public.tree_children c set
+      birth_date_g = nullif(p_row->>'birth_date_g', '')::date,
+      birth_date_h = nullif(p_row->>'birth_date_h', ''),
+      birth_year = nullif(p_row->>'birth_year', '')::int,
+      city = nullif(p_row->>'city', ''),
+      area = nullif(p_row->>'area', ''),
+      is_deceased = coalesce(v_deceased, c.is_deceased),
+      deceased = coalesce(v_deceased, c.deceased)
+    where c.id = v_id;
+    perform public.tree_audit_log_v1(
+      p_branch_key,
+      p_phone,
+      p_email,
+      p_secret_hash,
+      jsonb_build_object(
+        'v', 1,
+        'kind', 'tree_audit',
+        'op', 'upsert_update',
+        'branch_key', p_branch_key,
+        'parent_name', p_parent_name,
+        'child_name', p_child_name,
+        'row', coalesce(p_row, '{}'::jsonb),
+        'at', now()::timestamptz
+      )
+    );
+    return true;
+  end if;
+
+  insert into public.tree_children (
+    branch_key,
+    parent_name,
+    parent,
+    name,
+    child_name,
+    birth_date_g,
+    birth_date_h,
+    birth_year,
+    city,
+    area,
+    is_deceased,
+    deceased,
+    created_at
+  ) values (
+    p_branch_key,
+    p_parent_name,
+    p_parent_name,
+    p_child_name,
+    p_child_name,
+    nullif(p_row->>'birth_date_g', '')::date,
+    nullif(p_row->>'birth_date_h', ''),
+    nullif(p_row->>'birth_year', '')::int,
+    nullif(p_row->>'city', ''),
+    nullif(p_row->>'area', ''),
+    coalesce(v_deceased, false),
+    coalesce(v_deceased, false),
+    coalesce(nullif(p_row->>'created_at', '')::timestamptz, now())
+  );
+
+  perform public.tree_audit_log_v1(
+    p_branch_key,
+    p_phone,
+    p_email,
+    p_secret_hash,
+    jsonb_build_object(
+      'v', 1,
+      'kind', 'tree_audit',
+      'op', 'insert',
+      'branch_key', p_branch_key,
+      'parent_name', p_parent_name,
+      'child_name', p_child_name,
+      'row', coalesce(p_row, '{}'::jsonb),
+      'at', now()::timestamptz
+    )
+  );
+
+  return true;
+end;
+$$;
+
+create or replace function public.tree_children_update_v1(
+  p_branch_key text,
+  p_parent_name text,
+  p_child_name text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_patch jsonb
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deceased boolean;
+begin
+  if not public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  v_deceased := case
+    when p_patch ? 'is_deceased' then (p_patch->>'is_deceased')::boolean
+    when p_patch ? 'deceased' then (p_patch->>'deceased')::boolean
+    else null
+  end;
+
+  update public.tree_children c set
+    birth_date_g = case when p_patch ? 'birth_date_g' then nullif(p_patch->>'birth_date_g', '')::date else c.birth_date_g end,
+    birth_date_h = case when p_patch ? 'birth_date_h' then nullif(p_patch->>'birth_date_h', '') else c.birth_date_h end,
+    birth_year = case when p_patch ? 'birth_year' then nullif(p_patch->>'birth_year', '')::int else c.birth_year end,
+    city = case when p_patch ? 'city' then nullif(p_patch->>'city', '') else c.city end,
+    area = case when p_patch ? 'area' then nullif(p_patch->>'area', '') else c.area end,
+    is_deceased = coalesce(v_deceased, c.is_deceased),
+    deceased = coalesce(v_deceased, c.deceased)
+  where c.branch_key = p_branch_key
+    and (c.parent_name = p_parent_name or c.parent = p_parent_name)
+    and (c.name = p_child_name or c.child_name = p_child_name);
+
+  if found then
+    perform public.tree_audit_log_v1(
+      p_branch_key,
+      p_phone,
+      p_email,
+      p_secret_hash,
+      jsonb_build_object(
+        'v', 1,
+        'kind', 'tree_audit',
+        'op', 'update',
+        'branch_key', p_branch_key,
+        'parent_name', p_parent_name,
+        'child_name', p_child_name,
+        'patch', coalesce(p_patch, '{}'::jsonb),
+        'at', now()::timestamptz
+      )
+    );
+  end if;
+
+  return found;
+end;
+$$;
+
+create or replace function public.tree_children_delete_v1(
+  p_branch_key text,
+  p_parent_name text,
+  p_child_name text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  delete from public.tree_children c
+  where c.branch_key = p_branch_key
+    and (c.parent_name = p_parent_name or c.parent = p_parent_name)
+    and (c.name = p_child_name or c.child_name = p_child_name);
+
+  if found then
+    perform public.tree_audit_log_v1(
+      p_branch_key,
+      p_phone,
+      p_email,
+      p_secret_hash,
+      jsonb_build_object(
+        'v', 1,
+        'kind', 'tree_audit',
+        'op', 'delete',
+        'branch_key', p_branch_key,
+        'parent_name', p_parent_name,
+        'child_name', p_child_name,
+        'at', now()::timestamptz
+      )
+    );
+  end if;
+
+  return found;
+end;
+$$;
+
+drop function if exists public.tree_children_wipe_branch_v1(text, text, text, text);
+
+grant execute on function public.tree_delegate_allowed_v1(text, text, text, text) to anon, authenticated;
+grant execute on function public.tree_children_insert_v1(text, text, text, text, text, text, jsonb) to anon, authenticated;
+grant execute on function public.tree_children_update_v1(text, text, text, text, text, text, jsonb) to anon, authenticated;
+grant execute on function public.tree_children_delete_v1(text, text, text, text, text, text) to anon, authenticated;
+`.trim();
+
+            if (treeSqlEl) treeSqlEl.value = TREE_SETUP_SQL;
+            if (copyTreeSqlBtn) {
+                copyTreeSqlBtn.addEventListener("click", async () => {
+                    const ok = await copyText(TREE_SETUP_SQL);
+                    showAlert(ok ? "success" : "error", ok ? "تم نسخ SQL." : "تعذر النسخ.");
+                });
+            }
+
+            const VIEWS_SETUP_SQL = `
+create table if not exists public.site_view_counts (
+  day date not null,
+  path text not null,
+  count bigint not null default 0,
+  primary key (day, path)
+);
+
+alter table public.site_view_counts enable row level security;
+revoke all on table public.site_view_counts from anon, authenticated;
+
+create or replace function public.site_track_view_v1(p_path text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_path text;
+begin
+  v_path := nullif(trim(coalesce(p_path, '')), '');
+  if v_path is null then
+    v_path := '/';
+  end if;
+
+  insert into public.site_view_counts (day, path, count)
+  values (current_date, v_path, 1)
+  on conflict (day, path)
+  do update set count = public.site_view_counts.count + 1;
+
+  return true;
+end;
+$$;
+
+create or replace function public.site_view_summary_v1(p_days int default 30)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with base as (
+    select day, path, count
+    from public.site_view_counts
+    where day >= (current_date - greatest(coalesce(p_days, 30), 1) + 1)
+  ),
+  by_day as (
+    select day, sum(count) as total
+    from base
+    group by day
+    order by day desc
+  ),
+  by_path as (
+    select path, sum(count) as total
+    from base
+    group by path
+    order by total desc, path asc
+    limit 20
+  )
+  select jsonb_build_object(
+    'total', coalesce((select sum(count) from public.site_view_counts), 0),
+    'today', coalesce((select sum(count) from public.site_view_counts where day = current_date), 0),
+    'last_7', coalesce((select sum(count) from public.site_view_counts where day >= current_date - 6), 0),
+    'days', coalesce((select jsonb_agg(jsonb_build_object('day', day::text, 'total', total)) from by_day), '[]'::jsonb),
+    'paths', coalesce((select jsonb_agg(jsonb_build_object('path', path, 'total', total)) from by_path), '[]'::jsonb)
+  );
+$$;
+
+grant execute on function public.site_track_view_v1(text) to anon, authenticated;
+grant execute on function public.site_view_summary_v1(int) to anon, authenticated;
+`.trim();
+
+            if (viewsSqlEl) viewsSqlEl.value = VIEWS_SETUP_SQL;
+            if (copyViewsSqlBtn) {
+                copyViewsSqlBtn.addEventListener("click", async () => {
+                    const ok = await copyText(VIEWS_SETUP_SQL);
+                    showAlert(ok ? "success" : "error", ok ? "تم نسخ SQL." : "تعذر النسخ.");
+                });
+            }
+
+            const DELEGATES_SETUP_SQL = `
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'approval_requests'
+  ) then
+    begin
+      execute 'alter table public.approval_requests drop constraint if exists kind_check';
+      execute 'alter table public.approval_requests add constraint kind_check check (kind is null or length(btrim(kind)) > 0)';
+    exception
+      when others then
+        null;
+    end;
+  end if;
+end
+$$;
+
+create table if not exists public.family_events (
+  id bigserial primary key,
+  branch_key text not null,
+  type text null,
+  person text null,
+  date_label text null,
+  event_date date null,
+  details text null,
+  hospital_name text null,
+  hospital_dept text null,
+  contact_method text null,
+  contact_phone text null,
+  visit_date_from date null,
+  visit_date_to date null,
+  visit_time_from text null,
+  visit_time_to text null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.family_events add column if not exists id bigserial;
+alter table public.family_events add column if not exists branch_key text;
+alter table public.family_events add column if not exists type text;
+alter table public.family_events add column if not exists person text;
+alter table public.family_events add column if not exists date_label text;
+alter table public.family_events add column if not exists event_date date;
+alter table public.family_events add column if not exists details text;
+alter table public.family_events add column if not exists hospital_name text;
+alter table public.family_events add column if not exists hospital_dept text;
+alter table public.family_events add column if not exists contact_method text;
+alter table public.family_events add column if not exists contact_phone text;
+alter table public.family_events add column if not exists visit_date_from date;
+alter table public.family_events add column if not exists visit_date_to date;
+alter table public.family_events add column if not exists visit_time_from text;
+alter table public.family_events add column if not exists visit_time_to text;
+alter table public.family_events add column if not exists created_at timestamptz;
+
+alter table public.family_events enable row level security;
+
+drop policy if exists "family_events_select_all" on public.family_events;
+create policy "family_events_select_all" on public.family_events for select using (true);
+
+revoke insert, update, delete on table public.family_events from anon, authenticated;
+grant select on table public.family_events to anon, authenticated;
+
+create or replace function public.events_delegate_allowed_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+) returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.approval_requests r
+    where r.kind = 'events_delegate'
+      and r.branch_key = p_branch_key
+      and r.phone = p_phone
+      and r.email = p_email
+      and r.status = 'approved'
+      and r.secret_hash = p_secret_hash
+    limit 1
+  )
+$$;
+
+create or replace function public.check_events_delegate_access(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row record;
+  v_allowed boolean := false;
+begin
+  select r.request_id, r.status
+  into v_row
+  from public.approval_requests r
+  where r.kind = 'events_delegate'
+    and r.branch_key = p_branch_key
+    and r.phone = p_phone
+    and r.email = p_email
+  order by r.created_at desc
+  limit 1;
+
+  if v_row.request_id is null then
+    return jsonb_build_object('allowed', false, 'status', null, 'request_id', null);
+  end if;
+
+  if v_row.status = 'approved' and p_secret_hash is not null then
+    select public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) into v_allowed;
+  end if;
+
+  return jsonb_build_object('allowed', coalesce(v_allowed, false), 'status', v_row.status, 'request_id', v_row.request_id);
+end;
+$$;
+
+create or replace function public.events_audit_log_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_payload jsonb
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor_name text;
+  v_req_id text;
+begin
+  select r.name into v_actor_name
+  from public.approval_requests r
+  where r.kind = 'events_delegate'
+    and r.branch_key = p_branch_key
+    and r.phone = p_phone
+    and r.email = p_email
+    and r.status = 'approved'
+    and r.secret_hash = p_secret_hash
+  order by r.created_at desc
+  limit 1;
+
+  v_req_id := 'EVA-' ||
+    upper(substr(md5(random()::text || clock_timestamp()::text), 1, 4)) ||
+    '-' ||
+    upper(substr(md5(random()::text || clock_timestamp()::text), 5, 4));
+
+  insert into public.approval_requests (
+    request_id,
+    kind,
+    branch_key,
+    name,
+    phone,
+    email,
+    secret_hash,
+    message,
+    status,
+    created_at
+  ) values (
+    v_req_id,
+    'events_audit',
+    p_branch_key,
+    v_actor_name,
+    p_phone,
+    p_email,
+    p_secret_hash,
+    coalesce(p_payload, '{}'::jsonb)::text,
+    'approved',
+    now()
+  );
+exception
+  when others then
+    return;
+end;
+$$;
+
+create or replace function public.family_events_insert_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_row jsonb
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  insert into public.family_events (
+    branch_key, type, person, date_label, event_date, details,
+    hospital_name, hospital_dept, contact_method, contact_phone,
+    visit_date_from, visit_date_to, visit_time_from, visit_time_to, created_at
+  ) values (
+    p_branch_key,
+    nullif(p_row->>'type', ''),
+    nullif(p_row->>'person', ''),
+    nullif(p_row->>'date_label', ''),
+    nullif(p_row->>'event_date', '')::date,
+    nullif(p_row->>'details', ''),
+    nullif(p_row->>'hospital_name', ''),
+    nullif(p_row->>'hospital_dept', ''),
+    nullif(p_row->>'contact_method', ''),
+    nullif(p_row->>'contact_phone', ''),
+    nullif(p_row->>'visit_date_from', '')::date,
+    nullif(p_row->>'visit_date_to', '')::date,
+    nullif(p_row->>'visit_time_from', ''),
+    nullif(p_row->>'visit_time_to', ''),
+    coalesce(nullif(p_row->>'created_at', '')::timestamptz, now())
+  );
+
+  perform public.events_audit_log_v1(
+    p_branch_key,
+    p_phone,
+    p_email,
+    p_secret_hash,
+    jsonb_build_object(
+      'v', 1,
+      'kind', 'events_audit',
+      'op', 'insert',
+      'branch_key', p_branch_key,
+      'type', coalesce(p_row->>'type', ''),
+      'person', coalesce(p_row->>'person', ''),
+      'event_date', coalesce(p_row->>'event_date', ''),
+      'at', now()::timestamptz
+    )
+  );
+
+  return true;
+end;
+$$;
+
+create or replace function public.family_events_update_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_pk_col text,
+  p_pk_value text,
+  p_patch jsonb
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_updated boolean := false;
+begin
+  if not public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  if p_pk_col = 'id' then
+    update public.family_events e set
+      type = case when p_patch ? 'type' then nullif(p_patch->>'type', '') else e.type end,
+      person = case when p_patch ? 'person' then nullif(p_patch->>'person', '') else e.person end,
+      date_label = case when p_patch ? 'date_label' then nullif(p_patch->>'date_label', '') else e.date_label end,
+      event_date = case when p_patch ? 'event_date' then nullif(p_patch->>'event_date', '')::date else e.event_date end,
+      details = case when p_patch ? 'details' then nullif(p_patch->>'details', '') else e.details end,
+      hospital_name = case when p_patch ? 'hospital_name' then nullif(p_patch->>'hospital_name', '') else e.hospital_name end,
+      hospital_dept = case when p_patch ? 'hospital_dept' then nullif(p_patch->>'hospital_dept', '') else e.hospital_dept end,
+      contact_method = case when p_patch ? 'contact_method' then nullif(p_patch->>'contact_method', '') else e.contact_method end,
+      contact_phone = case when p_patch ? 'contact_phone' then nullif(p_patch->>'contact_phone', '') else e.contact_phone end,
+      visit_date_from = case when p_patch ? 'visit_date_from' then nullif(p_patch->>'visit_date_from', '')::date else e.visit_date_from end,
+      visit_date_to = case when p_patch ? 'visit_date_to' then nullif(p_patch->>'visit_date_to', '')::date else e.visit_date_to end,
+      visit_time_from = case when p_patch ? 'visit_time_from' then nullif(p_patch->>'visit_time_from', '') else e.visit_time_from end,
+      visit_time_to = case when p_patch ? 'visit_time_to' then nullif(p_patch->>'visit_time_to', '') else e.visit_time_to end
+    where e.id = p_pk_value::bigint;
+    v_updated := found;
+  else
+    update public.family_events e set
+      type = case when p_patch ? 'type' then nullif(p_patch->>'type', '') else e.type end,
+      person = case when p_patch ? 'person' then nullif(p_patch->>'person', '') else e.person end,
+      date_label = case when p_patch ? 'date_label' then nullif(p_patch->>'date_label', '') else e.date_label end,
+      event_date = case when p_patch ? 'event_date' then nullif(p_patch->>'event_date', '')::date else e.event_date end,
+      details = case when p_patch ? 'details' then nullif(p_patch->>'details', '') else e.details end,
+      hospital_name = case when p_patch ? 'hospital_name' then nullif(p_patch->>'hospital_name', '') else e.hospital_name end,
+      hospital_dept = case when p_patch ? 'hospital_dept' then nullif(p_patch->>'hospital_dept', '') else e.hospital_dept end,
+      contact_method = case when p_patch ? 'contact_method' then nullif(p_patch->>'contact_method', '') else e.contact_method end,
+      contact_phone = case when p_patch ? 'contact_phone' then nullif(p_patch->>'contact_phone', '') else e.contact_phone end,
+      visit_date_from = case when p_patch ? 'visit_date_from' then nullif(p_patch->>'visit_date_from', '')::date else e.visit_date_from end,
+      visit_date_to = case when p_patch ? 'visit_date_to' then nullif(p_patch->>'visit_date_to', '')::date else e.visit_date_to end,
+      visit_time_from = case when p_patch ? 'visit_time_from' then nullif(p_patch->>'visit_time_from', '') else e.visit_time_from end,
+      visit_time_to = case when p_patch ? 'visit_time_to' then nullif(p_patch->>'visit_time_to', '') else e.visit_time_to end
+    where e.created_at = p_pk_value::timestamptz and e.branch_key = p_branch_key;
+    v_updated := found;
+  end if;
+
+  if v_updated then
+    perform public.events_audit_log_v1(
+      p_branch_key,
+      p_phone,
+      p_email,
+      p_secret_hash,
+      jsonb_build_object(
+        'v', 1,
+        'kind', 'events_audit',
+        'op', 'update',
+        'branch_key', p_branch_key,
+        'type', coalesce(p_patch->>'type', ''),
+        'person', coalesce(p_patch->>'person', ''),
+        'event_date', coalesce(p_patch->>'event_date', ''),
+        'at', now()::timestamptz
+      )
+    );
+  end if;
+
+  return v_updated;
+end;
+$$;
+
+create or replace function public.family_events_delete_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_pk_col text,
+  p_pk_value text
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted boolean := false;
+begin
+  if not public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  if p_pk_col = 'id' then
+    delete from public.family_events e where e.id = p_pk_value::bigint;
+    v_deleted := found;
+  else
+    delete from public.family_events e where e.created_at = p_pk_value::timestamptz and e.branch_key = p_branch_key;
+    v_deleted := found;
+  end if;
+
+  if v_deleted then
+    perform public.events_audit_log_v1(
+      p_branch_key,
+      p_phone,
+      p_email,
+      p_secret_hash,
+      jsonb_build_object(
+        'v', 1,
+        'kind', 'events_audit',
+        'op', 'delete',
+        'branch_key', p_branch_key,
+        'pk_col', p_pk_col,
+        'pk_value', p_pk_value,
+        'at', now()::timestamptz
+      )
+    );
+  end if;
+
+  return v_deleted;
+end;
+$$;
+
+create or replace function public.admin_token_ok_v1(p_token text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform * from public.admin_list_requests(p_token, null, null, 1);
+  return true;
+exception
+  when others then
+    return false;
+end;
+$$;
+
+create or replace function public.admin_create_delegate_request_v1(
+  p_token text,
+  p_kind text,
+  p_branch_key text,
+  p_name text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+) returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_kind text;
+  v_req_id text;
+  v_now timestamptz := now();
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+
+  v_kind := nullif(trim(coalesce(p_kind, '')), '');
+  if v_kind is null or (v_kind <> 'tree_delegate' and v_kind <> 'events_delegate') then
+    raise exception 'invalid kind';
+  end if;
+
+  v_req_id := (case when v_kind = 'events_delegate' then 'EVT' else 'TRD' end) || '-' ||
+    upper(substr(md5(random()::text || clock_timestamp()::text), 1, 4)) ||
+    '-' ||
+    upper(substr(md5(random()::text || clock_timestamp()::text), 5, 4));
+
+  insert into public.approval_requests (
+    request_id,
+    kind,
+    branch_key,
+    name,
+    phone,
+    email,
+    secret_hash,
+    message,
+    status,
+    created_at
+  ) values (
+    v_req_id,
+    v_kind,
+    nullif(trim(coalesce(p_branch_key, '')), ''),
+    nullif(trim(coalesce(p_name, '')), ''),
+    nullif(trim(coalesce(p_phone, '')), ''),
+    nullif(trim(coalesce(p_email, '')), ''),
+    nullif(trim(coalesce(p_secret_hash, '')), ''),
+    jsonb_build_object('v', 1, 'kind', 'admin_grant', 'grant', v_kind, 'at', v_now)::text,
+    'approved',
+    v_now
+  );
+
+  return v_req_id;
+end;
+$$;
+
+create or replace function public.admin_delete_delegate_v1(
+  p_token text,
+  p_branch_key text,
+  p_phone text,
+  p_email text
+) returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted bigint := 0;
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+
+  delete from public.approval_requests r
+  where r.branch_key = nullif(trim(coalesce(p_branch_key, '')), '')
+    and r.phone = nullif(trim(coalesce(p_phone, '')), '')
+    and r.email = nullif(trim(coalesce(p_email, '')), '')
+    and r.kind in ('tree_delegate', 'events_delegate', 'tree_audit', 'events_audit');
+
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+
+grant execute on function public.events_delegate_allowed_v1(text, text, text, text) to anon, authenticated;
+grant execute on function public.check_events_delegate_access(text, text, text, text) to anon, authenticated;
+grant execute on function public.family_events_insert_v1(text, text, text, text, jsonb) to anon, authenticated;
+grant execute on function public.family_events_update_v1(text, text, text, text, text, text, jsonb) to anon, authenticated;
+grant execute on function public.family_events_delete_v1(text, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.admin_token_ok_v1(text) to anon, authenticated;
+grant execute on function public.admin_create_delegate_request_v1(text, text, text, text, text, text, text) to anon, authenticated;
+grant execute on function public.admin_delete_delegate_v1(text, text, text, text) to anon, authenticated;
+`.trim();
+
+            if (delegatesSqlEl) delegatesSqlEl.value = DELEGATES_SETUP_SQL;
+            if (copyDelegatesSqlBtn) {
+                copyDelegatesSqlBtn.addEventListener("click", async () => {
+                    const ok = await copyText(DELEGATES_SETUP_SQL);
+                    showAlert(ok ? "success" : "error", ok ? "تم نسخ SQL." : "تعذر النسخ.");
+                });
+            }
+
+            try {
+                lastNotifiedPendingKey = String(localStorage.getItem(ADMIN_NOTIF_LAST_KEY) || "");
+            } catch (e) {
+                lastNotifiedPendingKey = "";
+            }
+            try {
+                lastEmailedAuditKey = String(localStorage.getItem(ADMIN_EMAIL_LAST_AUDIT_KEY) || "");
+            } catch (e) {
+                lastEmailedAuditKey = "";
+            }
+
+            function setEmailStatus(text) {
+                if (!adminEmailStatus) return;
+                adminEmailStatus.textContent = text || "";
+            }
+
+            function loadAdminNotifyEmail() {
+                try {
+                    return String(localStorage.getItem(ADMIN_EMAIL_KEY) || "").trim();
+                } catch (e) {
+                    return "";
+                }
+            }
+
+            function saveAdminNotifyEmail(v) {
+                try {
+                    localStorage.setItem(ADMIN_EMAIL_KEY, String(v || "").trim());
+                } catch (e) {}
+            }
+
+            function loadBoolSetting(key, fallback) {
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (raw == null) return !!fallback;
+                    return raw === "1";
+                } catch (e) {
+                    return !!fallback;
+                }
+            }
+
+            function saveBoolSetting(key, v) {
+                try {
+                    localStorage.setItem(key, v ? "1" : "0");
+                } catch (e) {}
+            }
+
+            function canShowBrowserNotifications() {
+                return typeof Notification !== "undefined" && typeof Notification.requestPermission === "function";
+            }
+
+            async function ensureBrowserNotificationsEnabled() {
+                if (!canShowBrowserNotifications()) return false;
+                if (Notification.permission === "granted") return true;
+                if (Notification.permission === "denied") return false;
+                const res = await Notification.requestPermission();
+                return res === "granted";
+            }
+
+            function updateNotifsButtonText() {
+                if (!adminEnableNotifsBtn) return;
+                if (!getAdminToken()) {
+                    adminEnableNotifsBtn.textContent = "تفعيل إشعارات الطلبات";
+                    adminEnableNotifsBtn.disabled = true;
+                    return;
+                }
+                if (!canShowBrowserNotifications()) {
+                    adminEnableNotifsBtn.textContent = "الإشعارات غير مدعومة";
+                    adminEnableNotifsBtn.disabled = true;
+                    return;
+                }
+                if (Notification.permission === "granted") {
+                    adminEnableNotifsBtn.textContent = "الإشعارات مفعلة";
+                    adminEnableNotifsBtn.disabled = true;
+                    return;
+                }
+                if (Notification.permission === "denied") {
+                    adminEnableNotifsBtn.textContent = "الإشعارات مرفوضة";
+                    adminEnableNotifsBtn.disabled = true;
+                    return;
+                }
+                adminEnableNotifsBtn.textContent = "تفعيل إشعارات الطلبات";
+                adminEnableNotifsBtn.disabled = false;
+            }
+
+            function saveLastNotifiedPendingKey(key) {
+                const k = String(key || "").trim();
+                if (!k) return;
+                lastNotifiedPendingKey = k;
+                try {
+                    localStorage.setItem(ADMIN_NOTIF_LAST_KEY, k);
+                } catch (e) {}
+            }
+
+            function kindLabel(kind) {
+                if (kind === "tree_delegate") return "مندوب الشجرة";
+                if (kind === "events_delegate") return "مندوب المناسبات";
+                if (kind === "org_role") return "صندوق/جمعية";
+                return kind || "طلب";
+            }
+
+            function showPendingRequestNotification(row) {
+                if (!canShowBrowserNotifications()) return;
+                if (Notification.permission !== "granted") return;
+                if (!row) return;
+                const title = "طلب جديد: " + kindLabel(row.kind);
+                const parts = [];
+                if (row.branch_key) parts.push("الفرع: " + row.branch_key);
+                if (row.name) parts.push("الاسم: " + row.name);
+                if (row.phone) parts.push("الجوال: " + row.phone);
+                if (row.email) parts.push("البريد: " + row.email);
+                const body = parts.join("\n");
+                try {
+                    const n = new Notification(title, { body, tag: "alzidan-admin-req", renotify: true });
+                    n.onclick = () => {
+                        try {
+                            window.focus();
+                        } catch (e) {}
+                    };
+                } catch (e) {}
+            }
 
             function showAlert(type, text) {
                 if (!alertEl) return;
                 alertEl.className = "alert " + (type === "success" ? "alert-success" : "alert-error");
                 alertEl.textContent = text || "";
                 alertEl.style.display = "block";
+            }
+
+            function normalizeEmail(v) {
+                return String(v || "")
+                    .trim()
+                    .toLowerCase();
+            }
+
+            function isLikelyEmail(v) {
+                const s = normalizeEmail(v);
+                return !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
+            }
+
+            function fallbackCopyText(text) {
+                const el = document.createElement("textarea");
+                el.value = String(text || "");
+                el.setAttribute("readonly", "");
+                el.style.position = "fixed";
+                el.style.opacity = "0";
+                el.style.left = "-9999px";
+                document.body.appendChild(el);
+                el.select();
+                try {
+                    document.execCommand("copy");
+                } catch (e) {}
+                document.body.removeChild(el);
+            }
+
+            async function copyText(text) {
+                const t = String(text || "");
+                if (!t) return false;
+                try {
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                        await navigator.clipboard.writeText(t);
+                        return true;
+                    }
+                } catch (e) {}
+                fallbackCopyText(t);
+                return true;
+            }
+
+            function maybeOpenEmailDraft(to, subject, body) {
+                const email = normalizeEmail(to);
+                if (!isLikelyEmail(email)) return false;
+                const s = encodeURIComponent(String(subject || "").trim());
+                const b = encodeURIComponent(String(body || "").trim());
+                const url = "mailto:" + encodeURIComponent(email) + (s || b ? `?subject=${s}&body=${b}` : "");
+                try {
+                    window.open(url, "_blank", "noopener,noreferrer");
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function getAdminNotificationEmail() {
+                const email = normalizeEmail((adminNotifyEmail && adminNotifyEmail.value != null ? adminNotifyEmail.value : loadAdminNotifyEmail()) || "");
+                return isLikelyEmail(email) ? email : "";
+            }
+
+            function initEmailSettings() {
+                if (adminNotifyEmail) {
+                    adminNotifyEmail.value = loadAdminNotifyEmail();
+                    adminNotifyEmail.addEventListener("input", () => {
+                        saveAdminNotifyEmail(adminNotifyEmail.value);
+                        setEmailStatus("");
+                    });
+                }
+                if (adminEmailNotifPending) {
+                    adminEmailNotifPending.checked = loadBoolSetting(ADMIN_EMAIL_PENDING_KEY, false);
+                    adminEmailNotifPending.addEventListener("change", () => {
+                        saveBoolSetting(ADMIN_EMAIL_PENDING_KEY, !!adminEmailNotifPending.checked);
+                        setEmailStatus("");
+                    });
+                }
+                if (adminEmailNotifAudit) {
+                    adminEmailNotifAudit.checked = loadBoolSetting(ADMIN_EMAIL_AUDIT_KEY, false);
+                    adminEmailNotifAudit.addEventListener("change", () => {
+                        saveBoolSetting(ADMIN_EMAIL_AUDIT_KEY, !!adminEmailNotifAudit.checked);
+                        setEmailStatus("");
+                        if (adminEmailNotifAudit.checked) {
+                            seedAuditEmailKey().catch(() => {});
+                        }
+                    });
+                }
+                if (adminEmailAutoOpen) {
+                    adminEmailAutoOpen.checked = loadBoolSetting(ADMIN_EMAIL_AUTO_OPEN_KEY, false);
+                    adminEmailAutoOpen.addEventListener("change", () => {
+                        saveBoolSetting(ADMIN_EMAIL_AUTO_OPEN_KEY, !!adminEmailAutoOpen.checked);
+                        setEmailStatus("");
+                    });
+                }
+                if (adminEmailTestBtn) {
+                    adminEmailTestBtn.addEventListener("click", async () => {
+                        const subject = "اختبار تنبيهات بريد الإدارة";
+                        const body = [
+                            "هذه رسالة اختبار من صفحة الإدارة.",
+                            "",
+                            "إذا وصلتك المسودة/تم نسخ النص فالإعدادات تعمل.",
+                            "التاريخ: " + new Date().toLocaleString("ar-SA")
+                        ].join("\n");
+                        await sendAdminEmail(subject, body);
+                    });
+                }
+            }
+
+            async function sendAdminEmail(subject, body) {
+                const to = getAdminNotificationEmail();
+                if (!to) {
+                    setEmailStatus("اكتب بريد الإدارة لتفعيل التنبيه.");
+                    return { ok: false, reason: "missing_email" };
+                }
+                await copyText(body || "");
+                const autoOpen = !!(adminEmailAutoOpen && adminEmailAutoOpen.checked);
+                if (autoOpen) {
+                    const opened = maybeOpenEmailDraft(to, subject, body);
+                    setEmailStatus(opened ? "تم فتح مسودة بريد (وتم نسخ النص)." : "تم نسخ نص البريد. المتصفح منع فتح المسودة.");
+                    return { ok: opened, reason: opened ? "opened" : "blocked" };
+                }
+                setEmailStatus("تم نسخ نص البريد. اضغط (إرسال اختبار) لفتح المسودة.");
+                return { ok: true, reason: "copied" };
+            }
+
+            async function seedAuditEmailKey() {
+                const sb = getClient();
+                if (!sb) return;
+                const token = getAdminToken();
+                if (!token) return;
+
+                const fetchOne = async (kind) => {
+                    const { data, error } = await sb.rpc("admin_list_requests", {
+                        p_token: token,
+                        p_status: "approved",
+                        p_kind: kind,
+                        p_limit: 1
+                    });
+                    if (error) return null;
+                    const list = Array.isArray(data) ? data : [];
+                    return list && list[0] ? list[0] : null;
+                };
+
+                const a = await fetchOne("tree_audit");
+                const b = await fetchOne("events_audit");
+                const pickLatest = (x, y) => {
+                    if (!x) return y || null;
+                    if (!y) return x || null;
+                    const ax = String(x.created_at || "");
+                    const ay = String(y.created_at || "");
+                    if (ay > ax) return y;
+                    if (ay < ax) return x;
+                    const ix = Number(x.id || 0);
+                    const iy = Number(y.id || 0);
+                    return iy > ix ? y : x;
+                };
+                const latest = pickLatest(a, b);
+                if (!latest) return;
+                const key = String(latest.kind || "") + "|" + String(latest.request_id || latest.id || latest.created_at || "");
+                if (!key) return;
+                lastEmailedAuditKey = key;
+                didInitialAuditSync = true;
+                try {
+                    localStorage.setItem(ADMIN_EMAIL_LAST_AUDIT_KEY, key);
+                } catch (e) {}
             }
 
             function hideAlert() {
@@ -303,6 +1714,28 @@
             function setStatus(text) {
                 if (!sbStatus) return;
                 sbStatus.textContent = text || "";
+            }
+
+            function setProtectedVisibility(isAuthed) {
+                const ok = !!isAuthed;
+                if (adminProtectedInline) adminProtectedInline.style.display = ok ? "block" : "none";
+                if (adminProtectedSections) adminProtectedSections.style.display = ok ? "block" : "none";
+                if (adminLockedHint) adminLockedHint.style.display = ok ? "none" : "block";
+                if (adminLogoutBtn) adminLogoutBtn.disabled = !ok;
+                if (adminRefreshBtn) adminRefreshBtn.disabled = !ok;
+                if (adminEnableNotifsBtn) adminEnableNotifsBtn.disabled = !ok;
+                if (refreshViewsStatsBtn) refreshViewsStatsBtn.disabled = !ok;
+                if (refreshDelegateAuditBtn) refreshDelegateAuditBtn.disabled = !ok;
+            }
+
+            function updateEmailSettingsUi() {
+                const authed = !!getAdminToken();
+                if (adminNotifyEmail) adminNotifyEmail.disabled = !authed;
+                if (adminEmailNotifPending) adminEmailNotifPending.disabled = !authed;
+                if (adminEmailNotifAudit) adminEmailNotifAudit.disabled = !authed;
+                if (adminEmailAutoOpen) adminEmailAutoOpen.disabled = !authed;
+                if (adminEmailTestBtn) adminEmailTestBtn.disabled = !authed;
+                if (!authed) setEmailStatus("");
             }
 
             function getClient() {
@@ -330,11 +1763,145 @@
                 const sb = getClient();
                 if (!sb) {
                     setStatus("الخدمة غير مُعدة داخل الكود.");
+                    setProtectedVisibility(false);
+                    updateEmailSettingsUi();
                     return null;
                 }
                 const token = getAdminToken();
                 setStatus(token ? "تم تسجيل الدخول." : "غير مسجل الدخول.");
+                setProtectedVisibility(!!token);
+                updateEmailSettingsUi();
                 return token ? { token } : null;
+            }
+
+            async function pollPendingRequestsForNotifications() {
+                const sb = getClient();
+                if (!sb) return;
+                const token = getAdminToken();
+                if (!token) return;
+                const { data, error } = await sb.rpc("admin_list_requests", {
+                    p_token: token,
+                    p_status: "pending",
+                    p_kind: null,
+                    p_limit: 20
+                });
+                if (error) return;
+                const list = Array.isArray(data) ? data : [];
+                const newest = list && list[0] ? list[0] : null;
+                if (!newest) {
+                    if (!didInitialPendingSync) didInitialPendingSync = true;
+                    return;
+                }
+                const key = String(newest.request_id || newest.id || newest.created_at || "").trim();
+                if (!key) return;
+                if (!didInitialPendingSync) {
+                    didInitialPendingSync = true;
+                    saveLastNotifiedPendingKey(key);
+                    return;
+                }
+                if (key === lastNotifiedPendingKey) return;
+                saveLastNotifiedPendingKey(key);
+                showPendingRequestNotification(newest);
+                if (adminEmailNotifPending && adminEmailNotifPending.checked) {
+                    const subject = "طلب جديد: " + kindLabel(newest.kind);
+                    const body = [
+                        "طلب جديد في الإدارة",
+                        newest.request_id ? "رقم الطلب: " + newest.request_id : "",
+                        newest.kind ? "النوع: " + kindLabel(newest.kind) : "",
+                        newest.branch_key ? "الفرع: " + newest.branch_key : "",
+                        newest.name ? "الاسم: " + newest.name : "",
+                        newest.phone ? "الجوال: " + newest.phone : "",
+                        newest.email ? "البريد: " + newest.email : "",
+                        newest.created_at ? "التاريخ: " + new Date(newest.created_at).toLocaleString("ar-SA") : ""
+                    ]
+                        .filter(Boolean)
+                        .join("\n");
+                    await sendAdminEmail(subject, body);
+                }
+            }
+
+            async function pollAuditForEmailNotifications() {
+                const sb = getClient();
+                if (!sb) return;
+                const token = getAdminToken();
+                if (!token) return;
+                if (!(adminEmailNotifAudit && adminEmailNotifAudit.checked)) return;
+
+                const fetchOne = async (kind) => {
+                    const { data, error } = await sb.rpc("admin_list_requests", {
+                        p_token: token,
+                        p_status: "approved",
+                        p_kind: kind,
+                        p_limit: 1
+                    });
+                    if (error) return null;
+                    const list = Array.isArray(data) ? data : [];
+                    return list && list[0] ? list[0] : null;
+                };
+
+                const a = await fetchOne("tree_audit");
+                const b = await fetchOne("events_audit");
+                const pickLatest = (x, y) => {
+                    if (!x) return y || null;
+                    if (!y) return x || null;
+                    const ax = String(x.created_at || "");
+                    const ay = String(y.created_at || "");
+                    if (ay > ax) return y;
+                    if (ay < ax) return x;
+                    const ix = Number(x.id || 0);
+                    const iy = Number(y.id || 0);
+                    return iy > ix ? y : x;
+                };
+                const latest = pickLatest(a, b);
+                if (!latest) return;
+                const key = String(latest.kind || "") + "|" + String(latest.request_id || latest.id || latest.created_at || "");
+                if (!key) return;
+                if (!didInitialAuditSync) {
+                    didInitialAuditSync = true;
+                    if (!lastEmailedAuditKey) {
+                        lastEmailedAuditKey = key;
+                        try {
+                            localStorage.setItem(ADMIN_EMAIL_LAST_AUDIT_KEY, key);
+                        } catch (e) {}
+                        return;
+                    }
+                }
+                if (key === lastEmailedAuditKey) return;
+                lastEmailedAuditKey = key;
+                try {
+                    localStorage.setItem(ADMIN_EMAIL_LAST_AUDIT_KEY, key);
+                } catch (e) {}
+
+                const subject = "تعديل مندوب: " + kindLabel(latest.kind);
+                const body = [
+                    "سجل تعديل جديد من المندوب",
+                    latest.kind ? "النوع: " + kindLabel(latest.kind) : "",
+                    latest.branch_key ? "الفرع: " + latest.branch_key : "",
+                    latest.name ? "المندوب: " + latest.name : "",
+                    latest.phone ? "الجوال: " + latest.phone : "",
+                    latest.email ? "البريد: " + latest.email : "",
+                    latest.created_at ? "التاريخ: " + new Date(latest.created_at).toLocaleString("ar-SA") : "",
+                    "",
+                    latest.message ? String(latest.message) : ""
+                ]
+                    .filter(Boolean)
+                    .join("\n");
+                await sendAdminEmail(subject, body);
+            }
+
+            function startPendingPolling() {
+                if (pendingPollTimer) return;
+                pendingPollTimer = setInterval(() => {
+                    if (document.visibilityState !== "visible") return;
+                    pollPendingRequestsForNotifications().catch(() => {});
+                    pollAuditForEmailNotifications().catch(() => {});
+                }, 20000);
+            }
+
+            function stopPendingPolling() {
+                if (!pendingPollTimer) return;
+                clearInterval(pendingPollTimer);
+                pendingPollTimer = null;
             }
 
             function renderEmpty(text) {
@@ -424,9 +1991,10 @@
                 rejectBtn.className = "btn btn-outline btn-sm";
                 rejectBtn.textContent = "رفض";
 
-                const isPending = row.status === "pending";
-                approveBtn.disabled = !isPending;
-                rejectBtn.disabled = !isPending;
+                const canApprove = row.status !== "approved";
+                const canReject = row.status !== "rejected";
+                approveBtn.disabled = !canApprove;
+                rejectBtn.disabled = !canReject;
 
                 actions.appendChild(approveBtn);
                 actions.appendChild(rejectBtn);
@@ -454,6 +2022,22 @@
                         showAlert("error", "تعذر اعتماد الطلب. انتهت الجلسة أو لا توجد صلاحية.");
                         return;
                     }
+                    if (isLikelyEmail(row.email)) {
+                        const subject = "تم قبول الطلب (" + String(row.request_id || "").trim() + ")";
+                        const body = [
+                            "تم قبول طلبك.",
+                            row.request_id ? "رقم الطلب: " + row.request_id : "",
+                            row.kind ? "نوع الطلب: " + kindLabel(row.kind) : "",
+                            row.branch_key ? "الفرع: " + row.branch_key : "",
+                            row.name ? "الاسم: " + row.name : "",
+                            "",
+                            "يمكنك الآن المتابعة حسب تعليمات الإدارة."
+                        ]
+                            .filter(Boolean)
+                            .join("\n");
+                        await copyText(body);
+                        maybeOpenEmailDraft(row.email, subject, body);
+                    }
                     showAlert("success", `تم قبول الطلب: ${row.request_id}`);
                     await loadRequests();
                 });
@@ -479,11 +2063,550 @@
                         showAlert("error", "تعذر رفض الطلب. انتهت الجلسة أو لا توجد صلاحية.");
                         return;
                     }
+                    if (isLikelyEmail(row.email)) {
+                        const subject = "تم رفض الطلب (" + String(row.request_id || "").trim() + ")";
+                        const body = [
+                            "تم رفض طلبك.",
+                            row.request_id ? "رقم الطلب: " + row.request_id : "",
+                            row.kind ? "نوع الطلب: " + kindLabel(row.kind) : "",
+                            row.branch_key ? "الفرع: " + row.branch_key : "",
+                            row.name ? "الاسم: " + row.name : "",
+                            "",
+                            "للاستفسار: تواصل مع إدارة الموقع."
+                        ]
+                            .filter(Boolean)
+                            .join("\n");
+                        await copyText(body);
+                        maybeOpenEmailDraft(row.email, subject, body);
+                    }
                     showAlert("success", `تم رفض الطلب: ${row.request_id}`);
                     await loadRequests();
                 });
 
                 requestsBody.appendChild(tr);
+            }
+
+            function renderViewsStatsLoading() {
+                if (!viewsStatsEl) return;
+                viewsStatsEl.textContent = "جاري تحميل الإحصاءات...";
+            }
+
+            function renderViewsStatsError(text) {
+                if (!viewsStatsEl) return;
+                viewsStatsEl.textContent = text || "تعذر تحميل الإحصاءات.";
+            }
+
+            function renderViewsStats(data) {
+                if (!viewsStatsEl) return;
+                const total = data && data.total != null ? Number(data.total) : 0;
+                const today = data && data.today != null ? Number(data.today) : 0;
+                const last7 = data && data.last_7 != null ? Number(data.last_7) : 0;
+                const lines = [];
+                lines.push("إجمالي الزيارات: " + String(isFinite(total) ? total : 0));
+                lines.push("زيارات اليوم: " + String(isFinite(today) ? today : 0));
+                lines.push("آخر 7 أيام: " + String(isFinite(last7) ? last7 : 0));
+
+                const paths = data && Array.isArray(data.paths) ? data.paths : [];
+                if (paths.length) {
+                    lines.push("");
+                    lines.push("أكثر الصفحات زيارة:");
+                    paths.slice(0, 5).forEach((p) => {
+                        const path = p && p.path != null ? String(p.path) : "";
+                        const count = p && p.total != null ? Number(p.total) : 0;
+                        if (!path) return;
+                        lines.push("- " + path + " (" + String(isFinite(count) ? count : 0) + ")");
+                    });
+                }
+                viewsStatsEl.textContent = lines.join("\n");
+            }
+
+            async function loadViewsStats() {
+                const sb = getClient();
+                if (!sb) {
+                    renderViewsStatsError("الخدمة غير مُعدة داخل الكود.");
+                    return;
+                }
+                renderViewsStatsLoading();
+                const { data, error } = await sb.rpc("site_view_summary_v1", { p_days: 30 });
+                if (error) {
+                    const msg = String(error.message || "");
+                    const low = msg.toLowerCase();
+                    const isMissing = low.includes("could not find the function") || low.includes("does not exist") || String(error.code || "").toLowerCase() === "pgrst202";
+                    if (isMissing) {
+                        renderViewsStatsError("يلزم تنفيذ SQL الخاص بإحصاءات الزيارات في Supabase أولاً، ثم حدّث الصفحة.");
+                        return;
+                    }
+                    renderViewsStatsError("تعذر تحميل الإحصاءات: " + (error.message || "خطأ غير معروف"));
+                    return;
+                }
+                renderViewsStats(data || {});
+            }
+
+            function safeParseJsonText(v) {
+                try {
+                    if (v == null) return null;
+                    const s = String(v || "").trim();
+                    if (!s) return null;
+                    if (!(s.startsWith("{") || s.startsWith("["))) return null;
+                    return JSON.parse(s);
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function setDelegateAuditStatus(text) {
+                if (!delegateAuditStatus) return;
+                delegateAuditStatus.textContent = text || "";
+            }
+
+            function clearDelegateAuditTable(text) {
+                if (!delegateAuditBody) return;
+                delegateAuditBody.innerHTML = "";
+                if (!text) return;
+                const tr = document.createElement("tr");
+                const td = document.createElement("td");
+                td.colSpan = 5;
+                td.className = "hint";
+                td.textContent = text;
+                tr.appendChild(td);
+                delegateAuditBody.appendChild(tr);
+            }
+
+            function formatAuditOp(op) {
+                const o = String(op || "").trim();
+                if (o === "insert") return "إضافة";
+                if (o === "update") return "تعديل";
+                if (o === "delete") return "حذف";
+                if (o === "upsert_update") return "تعديل (موجود)";
+                return o || "عملية";
+            }
+
+            function formatAuditTarget(env, row) {
+                if (env && (env.kind === "events_audit" || env.kind === "event_audit")) {
+                    const parts = [];
+                    const type = env.type != null ? String(env.type || "").trim() : "";
+                    const person = env.person != null ? String(env.person || "").trim() : "";
+                    const date = env.event_date != null ? String(env.event_date || "").trim() : "";
+                    if (type) parts.push("النوع: " + type);
+                    if (person) parts.push("الاسم: " + person);
+                    if (date) parts.push("التاريخ: " + date);
+                    return parts.join(" — ");
+                }
+                const parent = env && env.parent_name != null ? String(env.parent_name) : String(row.parent_name || row.parent || "");
+                const child = env && env.child_name != null ? String(env.child_name) : String(row.child_name || row.name || "");
+                const parts = [];
+                if (parent) parts.push("الأب: " + parent);
+                if (child) parts.push("الابن: " + child);
+                return parts.join(" — ");
+            }
+
+            function renderDelegatesList(entries, selectedKey, onPick) {
+                if (!delegatesListEl) return;
+                delegatesListEl.innerHTML = "";
+                if (!entries.length) {
+                    const empty = document.createElement("div");
+                    empty.className = "hint";
+                    empty.textContent = "لا توجد بيانات مناديب حالياً.";
+                    delegatesListEl.appendChild(empty);
+                    return;
+                }
+                entries.forEach((e) => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "btn btn-outline btn-sm";
+                    btn.textContent = e.label;
+                    if (e.key === selectedKey) {
+                        btn.style.borderColor = "rgba(4,120,87,0.55)";
+                        btn.style.color = "#065f46";
+                    }
+                    btn.addEventListener("click", () => onPick(e.key));
+                    delegatesListEl.appendChild(btn);
+                });
+            }
+
+            function renderDelegateAuditSelect(entries, selectedKey, onPick) {
+                if (!delegateAuditSelect) return;
+                delegateAuditSelect.innerHTML = "";
+                const opt0 = document.createElement("option");
+                opt0.value = "";
+                opt0.textContent = "اختر مندوباً";
+                delegateAuditSelect.appendChild(opt0);
+                entries.forEach((e) => {
+                    const opt = document.createElement("option");
+                    opt.value = e.key;
+                    opt.textContent = e.label;
+                    delegateAuditSelect.appendChild(opt);
+                });
+                delegateAuditSelect.value = selectedKey || "";
+                delegateAuditSelect.onchange = () => onPick(String(delegateAuditSelect.value || ""));
+            }
+
+            function renderDelegateAuditRows(rows) {
+                if (!delegateAuditBody) return;
+                delegateAuditBody.innerHTML = "";
+                if (!rows.length) {
+                    clearDelegateAuditTable("لا توجد تعديلات لهذا المندوب بعد.");
+                    return;
+                }
+                rows.forEach((row) => {
+                    const env = safeParseJsonText(row.message);
+                    const tr = document.createElement("tr");
+
+                    const tdTime = document.createElement("td");
+                    try {
+                        tdTime.textContent = row.created_at ? new Date(row.created_at).toLocaleString("ar-SA") : "";
+                    } catch (e) {
+                        tdTime.textContent = String(row.created_at || "");
+                    }
+                    tr.appendChild(tdTime);
+
+                    const tdOp = document.createElement("td");
+                    tdOp.textContent = formatAuditOp(env && env.op ? env.op : "");
+                    tr.appendChild(tdOp);
+
+                    const tdBranch = document.createElement("td");
+                    tdBranch.textContent = String(row.branch_key || (env && env.branch_key ? env.branch_key : "") || "");
+                    tr.appendChild(tdBranch);
+
+                    const tdTarget = document.createElement("td");
+                    tdTarget.textContent = formatAuditTarget(env, row);
+                    tr.appendChild(tdTarget);
+
+                    const tdDetails = document.createElement("td");
+                    if (env) {
+                        const det = document.createElement("details");
+                        det.className = "msg";
+                        const sum = document.createElement("summary");
+                        sum.textContent = "عرض";
+                        const body = document.createElement("div");
+                        try {
+                            body.textContent = JSON.stringify(env, null, 2);
+                        } catch (e) {
+                            body.textContent = String(row.message || "");
+                        }
+                        det.appendChild(sum);
+                        det.appendChild(body);
+                        tdDetails.appendChild(det);
+                    } else if (row.message) {
+                        const det = document.createElement("details");
+                        det.className = "msg";
+                        const sum = document.createElement("summary");
+                        sum.textContent = "عرض";
+                        const body = document.createElement("div");
+                        body.textContent = String(row.message || "");
+                        det.appendChild(sum);
+                        det.appendChild(body);
+                        tdDetails.appendChild(det);
+                    } else {
+                        tdDetails.textContent = "";
+                    }
+                    tr.appendChild(tdDetails);
+
+                    delegateAuditBody.appendChild(tr);
+                });
+            }
+
+            let delegateAuditState = { selectedKey: "", delegates: [], auditRows: [], accessByKey: new Map() };
+
+            function buildDelegateKey(branchKey, phone, email) {
+                const b = String(branchKey || "").trim();
+                const p = String(phone || "").trim();
+                const e = String(email || "").trim();
+                return [b, p, e].join("|");
+            }
+
+            function labelForDelegate(row, countsByKey) {
+                const b = String(row.branch_key || "").trim();
+                const p = String(row.phone || "").trim();
+                const e = String(row.email || "").trim();
+                const n = String(row.name || "").trim();
+                const key = buildDelegateKey(b, p, e);
+                const c = countsByKey.get(key) || 0;
+                const who = n ? n : (p || e || "مندوب");
+                const parts = [];
+                parts.push(who);
+                if (b) parts.push("— " + b);
+                parts.push("— " + String(c));
+                return parts.join(" ");
+            }
+
+            function applyDelegateAuditSelection(key) {
+                const k = String(key || "").trim();
+                delegateAuditState.selectedKey = k;
+                if (!k) {
+                    clearDelegateAuditTable("اختر مندوباً لعرض السجل.");
+                    setDelegateAuditStatus("");
+                    if (delegatePermsStatus) delegatePermsStatus.textContent = "";
+                    return;
+                }
+                const filtered = delegateAuditState.auditRows
+                    .filter((r) => buildDelegateKey(r.branch_key, r.phone, r.email) === k)
+                    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+                renderDelegateAuditRows(filtered.slice(0, 300));
+                const total = filtered.length;
+                setDelegateAuditStatus(total ? "عدد السجلات: " + String(total) : "لا توجد سجلات.");
+
+                const caps = delegateAuditState.accessByKey.get(k) || null;
+                const treeStatus = caps && caps.tree ? String(caps.tree.status || "") : "";
+                const eventsStatus = caps && caps.events ? String(caps.events.status || "") : "";
+                const parts = [];
+                parts.push("الشجرة: " + (treeStatus || "غير موجود"));
+                parts.push("المناسبات: " + (eventsStatus || "غير موجود"));
+                if (delegatePermsStatus) delegatePermsStatus.textContent = parts.join(" — ");
+            }
+
+            async function loadDelegateAudit() {
+                const sb = getClient();
+                if (!sb) {
+                    clearDelegateAuditTable("الخدمة غير مُعدة داخل الكود.");
+                    return;
+                }
+                const token = getAdminToken();
+                if (!token) {
+                    clearDelegateAuditTable("سجل الدخول للإدارة لعرض سجل التعديلات.");
+                    return;
+                }
+
+                clearDelegateAuditTable("جاري تحميل سجل التعديلات...");
+                setDelegateAuditStatus("");
+                if (delegatePermsStatus) delegatePermsStatus.textContent = "";
+
+                const treeDelegatesRes = await sb.rpc("admin_list_requests", {
+                    p_token: token,
+                    p_status: null,
+                    p_kind: "tree_delegate",
+                    p_limit: 2000
+                });
+                if (treeDelegatesRes.error) {
+                    clearDelegateAuditTable("تعذر جلب المناديب: " + (treeDelegatesRes.error.message || "خطأ غير معروف"));
+                    return;
+                }
+                const treeDelegates = Array.isArray(treeDelegatesRes.data) ? treeDelegatesRes.data : [];
+
+                const eventsDelegatesRes = await sb.rpc("admin_list_requests", {
+                    p_token: token,
+                    p_status: null,
+                    p_kind: "events_delegate",
+                    p_limit: 2000
+                });
+                if (eventsDelegatesRes.error) {
+                    clearDelegateAuditTable("تعذر جلب مناديب المناسبات: " + (eventsDelegatesRes.error.message || "خطأ غير معروف"));
+                    return;
+                }
+                const eventsDelegates = Array.isArray(eventsDelegatesRes.data) ? eventsDelegatesRes.data : [];
+
+                const auditRes = await sb.rpc("admin_list_requests", {
+                    p_token: token,
+                    p_status: "approved",
+                    p_kind: "tree_audit",
+                    p_limit: 2000
+                });
+                if (auditRes.error) {
+                    clearDelegateAuditTable("تعذر جلب سجل التعديلات: " + (auditRes.error.message || "خطأ غير معروف"));
+                    return;
+                }
+                const treeAudits = Array.isArray(auditRes.data) ? auditRes.data : [];
+
+                const eventsAuditRes = await sb.rpc("admin_list_requests", {
+                    p_token: token,
+                    p_status: "approved",
+                    p_kind: "events_audit",
+                    p_limit: 2000
+                });
+                if (eventsAuditRes.error) {
+                    clearDelegateAuditTable("تعذر جلب سجل المناسبات: " + (eventsAuditRes.error.message || "خطأ غير معروف"));
+                    return;
+                }
+                const eventsAudits = Array.isArray(eventsAuditRes.data) ? eventsAuditRes.data : [];
+                const audits = treeAudits.concat(eventsAudits);
+
+                const countsByKey = new Map();
+                audits.forEach((r) => {
+                    const key = buildDelegateKey(r.branch_key, r.phone, r.email);
+                    countsByKey.set(key, (countsByKey.get(key) || 0) + 1);
+                });
+
+                const accessByKey = new Map();
+                const pickLatest = (a, b) => {
+                    if (!a) return b || null;
+                    if (!b) return a || null;
+                    return String(b.created_at || "").localeCompare(String(a.created_at || "")) > 0 ? b : a;
+                };
+                treeDelegates.forEach((r) => {
+                    const key = buildDelegateKey(r.branch_key, r.phone, r.email);
+                    if (!key || key === "||") return;
+                    const cur = accessByKey.get(key) || { tree: null, events: null };
+                    cur.tree = pickLatest(cur.tree, r);
+                    accessByKey.set(key, cur);
+                });
+                eventsDelegates.forEach((r) => {
+                    const key = buildDelegateKey(r.branch_key, r.phone, r.email);
+                    if (!key || key === "||") return;
+                    const cur = accessByKey.get(key) || { tree: null, events: null };
+                    cur.events = pickLatest(cur.events, r);
+                    accessByKey.set(key, cur);
+                });
+
+                const delegateRows = Array.from(accessByKey.entries())
+                    .map(([key, caps]) => {
+                        const row = caps.tree || caps.events;
+                        const count = countsByKey.get(key) || 0;
+                        const approvedCount = (caps.tree && caps.tree.status === "approved" ? 1 : 0) + (caps.events && caps.events.status === "approved" ? 1 : 0);
+                        return { key, row, count, approvedCount };
+                    })
+                    .sort((a, b) => (b.approvedCount || 0) - (a.approvedCount || 0) || (b.count || 0) - (a.count || 0));
+
+                const listEntries = delegateRows.map((d) => ({ key: d.key, label: labelForDelegate(d.row, countsByKey) }));
+
+                delegateAuditState.delegates = listEntries;
+                delegateAuditState.auditRows = audits;
+                delegateAuditState.accessByKey = new Map(Array.from(accessByKey.entries()).map(([k, v]) => ({ key: k, tree: v.tree, events: v.events })).map((x) => [x.key, { tree: x.tree, events: x.events }]));
+
+                const selected = delegateAuditState.selectedKey && listEntries.some((e) => e.key === delegateAuditState.selectedKey)
+                    ? delegateAuditState.selectedKey
+                    : (listEntries[0] ? listEntries[0].key : "");
+                const pickDelegateAuditKey = (k) => {
+                    const next = String(k || "").trim();
+                    delegateAuditState.selectedKey = next;
+                    if (delegateAuditSelect) delegateAuditSelect.value = next;
+                    renderDelegatesList(listEntries, next, pickDelegateAuditKey);
+                    renderDelegateAuditSelect(listEntries, next, pickDelegateAuditKey);
+                    applyDelegateAuditSelection(next);
+                };
+                pickDelegateAuditKey(selected);
+            }
+
+            function setDelegatePermsUiBusy(busy) {
+                const isBusy = !!busy;
+                if (delegatePermsTreeBtn) delegatePermsTreeBtn.disabled = isBusy;
+                if (delegatePermsEventsBtn) delegatePermsEventsBtn.disabled = isBusy;
+                if (delegatePermsBothBtn) delegatePermsBothBtn.disabled = isBusy;
+                if (delegatePermsDisableBtn) delegatePermsDisableBtn.disabled = isBusy;
+            }
+
+            function makeAdminDelegateRequestId(prefix) {
+                const p = String(prefix || "ADM").trim().toUpperCase() || "ADM";
+                const chunk = () => Math.random().toString(16).slice(2, 6).toUpperCase().padEnd(4, "0").slice(0, 4);
+                return p + "-" + chunk() + "-" + chunk();
+            }
+
+            async function createDelegatePermissionRow(sb, kind, sourceRow) {
+                const src = sourceRow || {};
+                const token = getAdminToken();
+                if (!token) return { ok: false, error: { message: "not_authed" } };
+                const { data, error } = await sb.rpc("admin_create_delegate_request_v1", {
+                    p_token: token,
+                    p_kind: kind,
+                    p_branch_key: src.branch_key || null,
+                    p_name: src.name || null,
+                    p_phone: src.phone || null,
+                    p_email: src.email || null,
+                    p_secret_hash: src.secret_hash || null
+                });
+                if (error) return { ok: false, error };
+                const requestId = typeof data === "string" ? data : (data && typeof data === "object" ? String(data.request_id || "") : "");
+                return { ok: true, requestId };
+            }
+
+            async function applyDelegatePermissions(mode) {
+                const sb = getClient();
+                if (!sb) return;
+                const token = getAdminToken();
+                if (!token) return;
+                const key = String(delegateAuditState.selectedKey || "").trim();
+                if (!key) {
+                    showAlert("error", "اختر مندوباً أولاً.");
+                    return;
+                }
+                const caps = delegateAuditState.accessByKey.get(key) || { tree: null, events: null };
+                const sourceRow = caps.tree || caps.events;
+                const treeWant = mode === "tree" || mode === "both";
+                const eventsWant = mode === "events" || mode === "both";
+                const treeStatus = treeWant ? "approved" : "rejected";
+                const eventsStatus = eventsWant ? "approved" : "rejected";
+
+                hideAlert();
+                setDelegatePermsUiBusy(true);
+                if (delegatePermsStatus) delegatePermsStatus.textContent = "جاري تطبيق الصلاحيات...";
+                try {
+                    if (caps.tree && caps.tree.id != null) {
+                        const { error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(caps.tree.id), p_status: treeStatus });
+                        if (error) {
+                            showAlert("error", "تعذر تحديث صلاحية الشجرة: " + (error.message || "خطأ غير معروف"));
+                            return;
+                        }
+                    } else if (treeWant) {
+                        if (!sourceRow) {
+                            showAlert("error", "لا يمكن إنشاء صلاحية الشجرة لأن بيانات المندوب غير مكتملة.");
+                            return;
+                        }
+                        const created = await createDelegatePermissionRow(sb, "tree_delegate", sourceRow);
+                        if (!created.ok) {
+                            showAlert("error", "تعذر إنشاء صلاحية الشجرة: " + (created.error.message || "خطأ غير معروف"));
+                            return;
+                        }
+                    }
+
+                    if (caps.events && caps.events.id != null) {
+                        const { error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(caps.events.id), p_status: eventsStatus });
+                        if (error) {
+                            showAlert("error", "تعذر تحديث صلاحية المناسبات: " + (error.message || "خطأ غير معروف"));
+                            return;
+                        }
+                    } else if (eventsWant) {
+                        if (!sourceRow) {
+                            showAlert("error", "لا يمكن إنشاء صلاحية المناسبات لأن بيانات المندوب غير مكتملة.");
+                            return;
+                        }
+                        const created = await createDelegatePermissionRow(sb, "events_delegate", sourceRow);
+                        if (!created.ok) {
+                            showAlert("error", "تعذر إنشاء صلاحية المناسبات: " + (created.error.message || "خطأ غير معروف"));
+                            return;
+                        }
+                    }
+
+                    showAlert("success", "تم تحديث صلاحيات المندوب.");
+                    await loadDelegateAudit();
+                } finally {
+                    setDelegatePermsUiBusy(false);
+                }
+            }
+
+            async function deleteDelegatePermanently() {
+                const sb = getClient();
+                if (!sb) return;
+                const token = getAdminToken();
+                if (!token) return;
+                const key = String(delegateAuditState.selectedKey || "").trim();
+                if (!key) {
+                    showAlert("error", "اختر مندوباً أولاً.");
+                    return;
+                }
+                const parts = key.split("|");
+                const branchKey = String(parts[0] || "").trim();
+                const phone = String(parts[1] || "").trim();
+                const email = String(parts[2] || "").trim();
+                const confirmed = window.confirm("تأكيد حذف المندوب نهائياً؟ سيتم حذف صلاحياته وسجل التعديلات.");
+                if (!confirmed) return;
+                hideAlert();
+                setDelegatePermsUiBusy(true);
+                if (delegatePermsStatus) delegatePermsStatus.textContent = "جاري حذف المندوب...";
+                try {
+                    const { data, error } = await sb.rpc("admin_delete_delegate_v1", {
+                        p_token: token,
+                        p_branch_key: branchKey || null,
+                        p_phone: phone || null,
+                        p_email: email || null
+                    });
+                    if (error) {
+                        showAlert("error", "تعذر حذف المندوب: " + (error.message || "خطأ غير معروف"));
+                        return;
+                    }
+                    showAlert("success", "تم حذف المندوب. عدد السجلات: " + String(Number(data || 0)));
+                    await loadDelegateAudit();
+                } finally {
+                    setDelegatePermsUiBusy(false);
+                }
             }
 
             async function loadRequests() {
@@ -550,11 +2673,18 @@
                     }
                     adminToken = token;
                     try {
-                        localStorage.setItem(ADMIN_TOKEN_KEY, token);
+                        sessionStorage.setItem(ADMIN_TOKEN_SESSION_KEY, token);
+                    } catch (e) {}
+                    try {
+                        localStorage.removeItem(ADMIN_TOKEN_KEY);
                     } catch (e) {}
                     showAlert("success", "تم تسجيل الدخول.");
                     await refreshAuthStatus();
                     await loadRequests();
+                    loadViewsStats().catch(() => {});
+                    loadDelegateAudit().catch(() => {});
+                    pollPendingRequestsForNotifications().catch(() => {});
+                    startPendingPolling();
                 });
             }
 
@@ -563,10 +2693,14 @@
                     hideAlert();
                     adminToken = "";
                     try {
+                        sessionStorage.removeItem(ADMIN_TOKEN_SESSION_KEY);
+                    } catch (e) {}
+                    try {
                         localStorage.removeItem(ADMIN_TOKEN_KEY);
                     } catch (e) {}
                     await refreshAuthStatus();
                     await loadRequests();
+                    stopPendingPolling();
                 });
             }
 
@@ -575,6 +2709,17 @@
                     hideAlert();
                     await refreshAuthStatus();
                     await loadRequests();
+                    pollPendingRequestsForNotifications().catch(() => {});
+                });
+            }
+
+            if (adminEnableNotifsBtn) {
+                updateNotifsButtonText();
+                adminEnableNotifsBtn.addEventListener("click", async () => {
+                    const ok = await ensureBrowserNotificationsEnabled();
+                    updateNotifsButtonText();
+                    if (!ok) return;
+                    pollPendingRequestsForNotifications().catch(() => {});
                 });
             }
 
@@ -589,16 +2734,49 @@
 
             (async function init() {
                 try {
-                    adminToken = String(localStorage.getItem(ADMIN_TOKEN_KEY) || "").trim();
+                    adminToken = String(sessionStorage.getItem(ADMIN_TOKEN_SESSION_KEY) || "").trim();
                 } catch (e) {
                     adminToken = "";
                 }
+                try {
+                    localStorage.removeItem(ADMIN_TOKEN_KEY);
+                } catch (e) {}
+                initEmailSettings();
                 if (adminUsername && !String(adminUsername.value || "").trim()) {
                     adminUsername.value = "alshryhy";
                 }
                 await refreshAuthStatus();
                 await loadRequests();
+                updateNotifsButtonText();
+                if (adminToken) {
+                    loadViewsStats().catch(() => {});
+                    loadDelegateAudit().catch(() => {});
+                    pollPendingRequestsForNotifications().catch(() => {});
+                    if (adminEmailNotifAudit && adminEmailNotifAudit.checked) {
+                        seedAuditEmailKey().catch(() => {});
+                    }
+                    startPendingPolling();
+                }
             })();
+
+            if (refreshViewsStatsBtn) refreshViewsStatsBtn.addEventListener("click", () => loadViewsStats().catch(() => {}));
+            if (refreshDelegateAuditBtn) refreshDelegateAuditBtn.addEventListener("click", () => loadDelegateAudit().catch(() => {}));
+            if (delegatePermsTreeBtn) delegatePermsTreeBtn.addEventListener("click", () => applyDelegatePermissions("tree").catch(() => {}));
+            if (delegatePermsEventsBtn) delegatePermsEventsBtn.addEventListener("click", () => applyDelegatePermissions("events").catch(() => {}));
+            if (delegatePermsBothBtn) delegatePermsBothBtn.addEventListener("click", () => applyDelegatePermissions("both").catch(() => {}));
+            if (delegatePermsDisableBtn) delegatePermsDisableBtn.addEventListener("click", () => applyDelegatePermissions("disable").catch(() => {}));
+            if (delegateDeleteBtn) delegateDeleteBtn.addEventListener("click", () => deleteDelegatePermanently().catch(() => {}));
+
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible") {
+                    if (getAdminToken()) {
+                        pollPendingRequestsForNotifications().catch(() => {});
+                        startPendingPolling();
+                    }
+                } else {
+                    stopPendingPolling();
+                }
+            });
         })();
     </script>
 </body>

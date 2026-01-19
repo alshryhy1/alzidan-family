@@ -395,7 +395,6 @@
                     </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <a href="index.html" class="btn btn-secondary btn-small">الصفحة الرئيسية</a>
-                    <button id="wipe-branch-btn" class="btn btn-secondary btn-small" type="button" style="display: none; border-color: rgba(239, 68, 68, 0.35); color: #b91c1c; background: #fef2f2;">حذف كل بيانات الفرع</button>
                     <button id="logout-btn" class="btn btn-secondary btn-small" type="button">تسجيل الخروج</button>
                 </div>
             </div>
@@ -838,7 +837,6 @@
         const cancelEditBtn = document.getElementById("cancel-edit-btn");
         const editChildAlert = document.getElementById("edit-child-alert");
         const logoutBtn = document.getElementById("logout-btn");
-        const wipeBranchBtn = document.getElementById("wipe-branch-btn");
         const happyType = document.getElementById("happy-type");
         const happyPerson = document.getElementById("happy-person");
         const happyDate = document.getElementById("happy-date");
@@ -898,6 +896,36 @@
                 return parts.join("");
             }
             return s;
+        }
+
+        function setDeceasedFieldsUiMode(deceased, els) {
+            const list = Array.isArray(els) ? els : [];
+            list.forEach((el) => {
+                if (!el) return;
+                const wrap = el.parentElement;
+                if (wrap && wrap.style) wrap.style.display = deceased ? "none" : "";
+                try {
+                    el.disabled = !!deceased;
+                    if (deceased) el.value = "";
+                } catch (e) {}
+            });
+        }
+
+        function applyAddDeceasedUiMode() {
+            const deceased = !!(childDeceased && childDeceased.checked);
+            setDeceasedFieldsUiMode(deceased, [childBirthHijri, childBirthGreg, childCity, childArea]);
+        }
+
+        function applyEditDeceasedUiMode() {
+            const deceased = !!(editChildDeceased && editChildDeceased.checked);
+            setDeceasedFieldsUiMode(deceased, [editChildHijri, editChildGreg, editChildCity, editChildArea]);
+            if (editChildName && editingChildRef && editingChildRef.childId) {
+                const cid = normalizePersonName(editingChildRef.childId);
+                const display = getDisplayNameForNodeId(cid, state.branch ? getBranchRootName(state.branch) : "");
+                const forcedSuffix = getForcedRahmaSuffix(cid);
+                const suffix = forcedSuffix ? forcedSuffix : deceased ? " (رحمه الله)" : "";
+                editChildName.textContent = "الاسم: " + (display || cid) + suffix;
+            }
         }
 
         function parseTruthyValue(v) {
@@ -981,7 +1009,7 @@
                         const hint = res.capabilities && res.capabilities.deceased_hint ? String(res.capabilities.deceased_hint) : "";
                         if (hint === "schema_cache") {
                             warn.textContent =
-                                "تعذر تحميل حالة الوفاة لأن Supabase لم يُحدّث المخطط بعد. نفّذ في SQL Editor: NOTIFY pgrst, 'reload schema'; ثم أعد المحاولة.";
+                                "تعذر تحميل حالة الوفاة لأن Supabase لم يُحدّث المخطط بعد. انتظر دقيقة ثم حدّث الصفحة، أو نفّذ Reload schema cache من لوحة Supabase.";
                         } else if (hint === "rls") {
                             warn.textContent =
                                 "تعذر تحميل حالة الوفاة لأن RLS تمنع القراءة من جدول tree_children. فعّل سياسة SELECT لدور anon ثم أعد المحاولة.";
@@ -1136,16 +1164,18 @@
                         title.className = "parent-name";
                         const displayName = getDisplayNameForNodeId(person, branchRoot);
                         const isBranchRootNode = branchRoot && normalizePersonName(person) === normalizePersonName(branchRoot);
-                        const forcedSuffix = getForcedRahmaSuffix(person);
-                        const suffix = isBranchRootNode ? " (رحمهم الله)" : forcedSuffix ? forcedSuffix : (effectiveMeta && effectiveMeta.deceased) ? " (رحمه الله)" : "";
-                        title.textContent = displayName + suffix;
-                        headerRow.appendChild(title);
+                    const forcedSuffix = getForcedRahmaSuffix(person);
+                    const suffix = isBranchRootNode ? " (رحمهم الله)" : forcedSuffix ? forcedSuffix : (effectiveMeta && effectiveMeta.deceased) ? " (رحمه الله)" : "";
+                    title.textContent = displayName + suffix;
+                    headerRow.appendChild(title);
 
-                        const actions = document.createElement("div");
-                        actions.style.display = "inline-flex";
-                        actions.style.alignItems = "center";
-                        actions.style.gap = "6px";
+                    const actions = document.createElement("div");
+                    actions.style.display = "inline-flex";
+                    actions.style.alignItems = "center";
+                    actions.style.gap = "6px";
 
+                    const isDeceased = !!(effectiveMeta && effectiveMeta.deceased);
+                    if (!isDeceased) {
                         const badge = document.createElement("span");
                         badge.className = "badge";
                         const ageText = calculateAge(effectiveMeta || {});
@@ -1154,8 +1184,9 @@
                         parts.push("الأبناء: " + String(Array.isArray(children) ? children.length : 0));
                         badge.textContent = parts.join(" – ");
                         actions.appendChild(badge);
-                        actions.appendChild(makeAddLink(person));
-                        headerRow.appendChild(actions);
+                    }
+                    actions.appendChild(makeAddLink(person));
+                    headerRow.appendChild(actions);
 
                         if (canExpand) {
                             const summary = document.createElement("summary");
@@ -1427,6 +1458,21 @@
             } catch (e) {}
             fallbackCopyText(text);
             return true;
+        }
+
+        const NOTIFY_EMAIL_TO = "info@alzidan.org";
+        function maybeOpenEmailDraft(subject, body) {
+            const to = String(NOTIFY_EMAIL_TO || "").trim();
+            if (!to || !to.includes("@")) return false;
+            const s = encodeURIComponent(String(subject || "").trim());
+            const b = encodeURIComponent(String(body || "").trim());
+            const url = "mailto:" + encodeURIComponent(to) + (s || b ? `?subject=${s}&body=${b}` : "");
+            try {
+                window.open(url, "_blank", "noopener,noreferrer");
+                return true;
+            } catch (e) {
+                return false;
+            }
         }
 
         function setLoginAlert(type, text) {
@@ -1729,24 +1775,49 @@
         }
 
         function formatTreeChildrenDbError(err, action) {
-            const a = action === "save" ? "save" : "load";
+            const a = action === "save" ? "save" : action === "update" ? "update" : action === "delete" ? "delete" : "load";
             const codeRaw = err && err.code != null ? String(err.code) : "";
             const msgRaw = err && err.message != null ? String(err.message) : "";
             const detailsRaw = err && err.details != null ? String(err.details) : "";
             const lowCode = codeRaw.trim().toLowerCase();
             const lowMsg = msgRaw.trim().toLowerCase();
             const lowDetails = detailsRaw.trim().toLowerCase();
-            const sql = wrapLTRText("NOTIFY pgrst, 'reload schema';");
             const tableName = "tree_children";
+
+            if (lowMsg === "missing key") {
+                if (a === "update" || a === "delete") return "تعذر تنفيذ العملية لأن بيانات الفرع/الأب/الابن غير مكتملة. حدّث الصفحة وحاول مرة أخرى.";
+            }
+
+            if (lowMsg === "row not found") {
+                if (a === "update") return "تعذر حفظ التعديل لأن السجل غير موجود (قد يكون الاسم تغيّر أو تم حذفه). حدّث الصفحة ثم حاول مرة أخرى.";
+                if (a === "delete") return "تعذر الحذف لأن السجل غير موجود (قد يكون الاسم تغيّر أو تم حذفه). حدّث الصفحة ثم حاول مرة أخرى.";
+            }
+
+            if (lowMsg === "no_session") {
+                return "يلزم تسجيل دخول المندوب أولاً.";
+            }
+
+            if (lowMsg === "hash_failed") {
+                return "تعذر التحقق من الرقم السري على هذا الجهاز. جرّب متصفحاً آخر أو حدّث الصفحة.";
+            }
+
+            if (lowMsg === "not allowed") {
+                return "غير مصرح لك بتنفيذ هذه العملية. تأكد أن طلبك كمندوب تم اعتماده وأن البيانات صحيحة.";
+            }
+
+            if (lowMsg.includes("no unique or exclusion constraint matching the on conflict specification")) {
+                return "تعذر الحفظ بسبب إعداد قديم في Supabase يستخدم ON CONFLICT بدون مفتاح فريد. افتح صفحة الإدارة (admin.html) وانسخ SQL الخاص بالشجرة ثم نفّذه في Supabase ليتم تحديث الدوال.";
+            }
 
             const isSchemaCache =
                 lowMsg.includes("schema cache") || lowMsg.includes("could not find the table") || lowDetails.includes("schema cache");
             if (isSchemaCache) {
-                const hint = `إذا استمر الخطأ بعد ذلك، فالغالب أن دور anon لا يملك صلاحيات على جدول ${tableName} أو أن RLS تمنع الوصول.`;
-                if (a === "save") {
-                    return `تعذر حفظ بيانات الابن لأن Supabase لم يُحدّث المخطط بعد. إذا كان جدول ${tableName} موجودًا، نفّذ هذا الأمر في SQL Editor: ${sql} ثم أعد المحاولة. ${hint}`;
+                const hint = `إذا استمر الخطأ، فالغالب أن دور anon لا يملك صلاحيات على جدول ${tableName} أو أن RLS تمنع الوصول.`;
+                const reloadHint = "انتظر دقيقة ثم حدّث الصفحة، أو نفّذ Reload schema cache من إعدادات Supabase (API).";
+                if (a === "save" || a === "update" || a === "delete") {
+                    return `تعذر تنفيذ العملية لأن Supabase لم يُحدّث المخطط بعد. ${reloadHint} ${hint}`;
                 }
-                return `تعذر تحميل بيانات الأبناء لأن Supabase لم يُحدّث المخطط بعد. إذا كان جدول ${tableName} موجودًا، نفّذ هذا الأمر في SQL Editor: ${sql} ثم أعد المحاولة. ${hint}`;
+                return `تعذر تحميل بيانات الأبناء لأن Supabase لم يُحدّث المخطط بعد. ${reloadHint} ${hint}`;
             }
 
             const isMissingTable =
@@ -1760,24 +1831,33 @@
 
             const isRls = lowMsg.includes("row-level security") || lowDetails.includes("row-level security") || lowMsg.includes("violates row-level security");
             if (isRls) {
-                if (a === "save") return `تعذر حفظ بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة INSERT/UPDATE على جدول ${tableName}.`;
-                return `تعذر تحميل بيانات الأبناء بسبب صلاحيات الجدول (RLS). تأكد من سياسة SELECT على جدول ${tableName}.`;
+                if (a === "save") return `تعذر حفظ بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة INSERT على جدول ${tableName}.`;
+                if (a === "update") return `تعذر تعديل بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة UPDATE على جدول ${tableName}.`;
+                if (a === "delete") return `تعذر حذف بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة DELETE على جدول ${tableName}.`;
+                return `تعذر تحميل بيانات الأبناء بسبب صلاحيات الجدول (RLS). تأكد من سياسات SELECT/INSERT/UPDATE/DELETE على جدول ${tableName}.`;
             }
 
             const isPermission = lowMsg.includes("permission denied") || lowDetails.includes("permission denied") || lowCode === "42501";
             if (isPermission) {
-                if (a === "save") return `تعذر حفظ بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}.`;
+                if (a === "save") return `تعذر حفظ بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}. افتح admin.html ثم انسخ SQL الخاص بالشجرة ونفّذه في Supabase لتفعيل دوال الحفظ وتحديث الصلاحيات.`;
+                if (a === "update") return `تعذر تعديل بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}. افتح admin.html ثم انسخ SQL الخاص بالشجرة ونفّذه في Supabase لتفعيل دوال التعديل وتحديث الصلاحيات.`;
+                if (a === "delete") return `تعذر حذف بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}. افتح admin.html ثم انسخ SQL الخاص بالشجرة ونفّذه في Supabase لتفعيل دوال الحذف وتحديث الصلاحيات.`;
                 return `تعذر تحميل بيانات الأبناء بسبب عدم وجود صلاحية على جدول ${tableName}.`;
             }
 
             const isSchemaMismatch = lowMsg.includes("column") && lowMsg.includes("does not exist");
             if (isSchemaMismatch) {
-                const needed = wrapLTRText("branch_key, parent_name, child_name, birth_date_g, birth_date_h, birth_year, city, area, created_at");
-                if (a === "save") return `تعذر حفظ بيانات الابن لأن أعمدة جدول ${tableName} غير مطابقة. يجب توفر الأعمدة: ${needed}.`;
-                return `تعذر تحميل بيانات الأبناء لأن أعمدة جدول ${tableName} غير مطابقة. يجب توفر الأعمدة: ${needed}.`;
+                const neededCore = wrapLTRText("branch_key + (parent_name أو parent) + (child_name أو name)");
+                const optional = wrapLTRText("birth_date_g, birth_date_h, birth_year, city, area, is_deceased, created_at");
+                if (a === "save" || a === "update" || a === "delete") {
+                    return `تعذر تنفيذ العملية لأن أعمدة جدول ${tableName} غير مطابقة. المطلوب على الأقل: ${neededCore}. الأعمدة الإضافية اختيارية: ${optional}.`;
+                }
+                return `تعذر تحميل بيانات الأبناء لأن أعمدة جدول ${tableName} غير مطابقة. المطلوب على الأقل: ${neededCore}. الأعمدة الإضافية اختيارية: ${optional}.`;
             }
 
             if (a === "save") return `تعذر حفظ بيانات الابن: ${msgRaw || "خطأ غير معروف"}`;
+            if (a === "update") return `تعذر تعديل بيانات الابن: ${msgRaw || "خطأ غير معروف"}`;
+            if (a === "delete") return `تعذر حذف بيانات الابن: ${msgRaw || "خطأ غير معروف"}`;
             return `تعذر تحميل بيانات الأبناء: ${msgRaw || "خطأ غير معروف"}`;
         }
 
@@ -2048,7 +2128,31 @@
                 "parent_name,child_name,birth_year,city,area,created_at",
                 "parent_name,name,birth_year,city,area,created_at",
                 "parent,name,birth_year,city,area,created_at",
-                "parent,child_name,birth_year,city,area,created_at"
+                "parent,child_name,birth_year,city,area,created_at",
+                "parent_name,parent,child_name,name,created_at",
+                "parent_name,child_name,name,created_at",
+                "parent_name,child_name,created_at",
+                "parent_name,name,created_at",
+                "parent,child_name,created_at",
+                "parent,name,created_at",
+                "parent_name,parent,child_name,name",
+                "parent_name,child_name,name",
+                "parent_name,child_name",
+                "parent_name,name",
+                "parent,child_name",
+                "parent,name",
+                "parent_name,parent,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at",
+                "parent_name,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at",
+                "parent_name,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at",
+                "parent_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at",
+                "parent,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at",
+                "parent,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at",
+                "parent_name,parent,child_name,name,year,city,area,created_at",
+                "parent_name,child_name,name,year,city,area,created_at",
+                "parent_name,child_name,year,city,area,created_at",
+                "parent_name,name,year,city,area,created_at",
+                "parent,name,year,city,area,created_at",
+                "parent,child_name,year,city,area,created_at"
             ];
             let lastError = null;
             let deceasedFallbackHint = "";
@@ -2271,6 +2375,186 @@
             return { ok: false, error: { message: "unknown update error" } };
         }
 
+        async function deleteTreeChildRow(sb, branchKey, parentId, childId) {
+            const attempts = [];
+            const key = normalizePersonName(branchKey || "");
+            const parent = normalizePersonName(parentId || "");
+            const id = normalizePersonName(childId || "");
+            if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } };
+            const parentCols = ["parent_name", "parent"];
+            const childCols = ["child_name", "name"];
+            parentCols.forEach((parentCol) => {
+                childCols.forEach((childCol) => {
+                    attempts.push({ parentCol, childCol });
+                });
+            });
+
+            for (let i = 0; i < attempts.length; i++) {
+                const a = attempts[i];
+                const { data, error } = await sb
+                    .from(FAMILY_TREE_CHILDREN_TABLE)
+                    .delete()
+                    .eq("branch_key", key)
+                    .eq(a.parentCol, parent)
+                    .eq(a.childCol, id)
+                    .select(a.childCol);
+                if (!error && Array.isArray(data) && data.length) return { ok: true };
+                if (!error && Array.isArray(data) && data.length === 0) {
+                    if (i === attempts.length - 1) return { ok: false, error: { message: "row not found" } };
+                    continue;
+                }
+
+                const msg = String(error.message || "").toLowerCase();
+                const isColumnMissing = msg.includes("column") && msg.includes("does not exist");
+                const isSchemaCacheMissingColumn = msg.includes("schema cache") && msg.includes("could not find") && msg.includes("column");
+                const canRetry = isColumnMissing || isSchemaCacheMissingColumn;
+                if (!canRetry) return { ok: false, error };
+                if (i === attempts.length - 1) return { ok: false, error };
+            }
+            return { ok: false, error: { message: "unknown delete error" } };
+        }
+
+        function isRpcMissingError(err) {
+            const msg = String(err && err.message ? err.message : "").toLowerCase();
+            const code = String(err && err.code ? err.code : "").toLowerCase();
+            if (code === "pgrst202") return true;
+            if (msg.includes("could not find the function")) return true;
+            if (msg.includes("function") && msg.includes("does not exist")) return true;
+            if (msg.includes("schema cache") && msg.includes("function")) return true;
+            return false;
+        }
+
+        function isOnConflictConstraintError(err) {
+            const msg = String(err && err.message ? err.message : "").toLowerCase();
+            return msg.includes("no unique or exclusion constraint matching the on conflict specification");
+        }
+
+        async function getDelegateRpcAuth() {
+            const session = loadDelegateSession();
+            if (!session) return { ok: false, reason: "no_session" };
+            const secretHash = await sha256Hex(session.secret);
+            if (!secretHash) return { ok: false, reason: "hash_failed" };
+            return { ok: true, branch: session.branch, phone: session.phone, email: session.email, secretHash };
+        }
+
+        async function rpcInsertTreeChildRow(sb, row) {
+            const auth = await getDelegateRpcAuth();
+            if (!auth.ok) return { ok: false, error: { message: auth.reason } };
+            const r = row || {};
+            const key = normalizePersonName(r.branch_key || "");
+            const parent = normalizePersonName(r.parent_name || r.parent || "");
+            const id = normalizePersonName(r.child_name || r.name || "");
+            if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } };
+            const { data, error } = await sb.rpc("tree_children_insert_v1", {
+                p_branch_key: key,
+                p_parent_name: parent,
+                p_child_name: id,
+                p_phone: auth.phone,
+                p_email: auth.email,
+                p_secret_hash: auth.secretHash,
+                p_row: r
+            });
+            if (error) {
+                if (isOnConflictConstraintError(error)) {
+                    return { ok: false, error };
+                }
+                return { ok: false, error };
+            }
+            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+        }
+
+        async function rpcUpdateTreeChildRow(sb, branchKey, parentId, childId, patch) {
+            const auth = await getDelegateRpcAuth();
+            if (!auth.ok) return { ok: false, error: { message: auth.reason } };
+            const key = normalizePersonName(branchKey || "");
+            const parent = normalizePersonName(parentId || "");
+            const id = normalizePersonName(childId || "");
+            if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } };
+            const { data, error } = await sb.rpc("tree_children_update_v1", {
+                p_branch_key: key,
+                p_parent_name: parent,
+                p_child_name: id,
+                p_phone: auth.phone,
+                p_email: auth.email,
+                p_secret_hash: auth.secretHash,
+                p_patch: patch || {}
+            });
+            if (error) return { ok: false, error };
+            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+        }
+
+        async function rpcDeleteTreeChildRow(sb, branchKey, parentId, childId) {
+            const auth = await getDelegateRpcAuth();
+            if (!auth.ok) return { ok: false, error: { message: auth.reason } };
+            const key = normalizePersonName(branchKey || "");
+            const parent = normalizePersonName(parentId || "");
+            const id = normalizePersonName(childId || "");
+            if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } };
+            const { data, error } = await sb.rpc("tree_children_delete_v1", {
+                p_branch_key: key,
+                p_parent_name: parent,
+                p_child_name: id,
+                p_phone: auth.phone,
+                p_email: auth.email,
+                p_secret_hash: auth.secretHash
+            });
+            if (error) return { ok: false, error };
+            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+        }
+
+        async function rpcInsertFamilyEventRow(sb, row) {
+            const auth = await getDelegateRpcAuth();
+            if (!auth.ok) return { ok: false, error: { message: auth.reason } };
+            const key = normalizePersonName(state.branch || auth.branch || "");
+            if (!key) return { ok: false, error: { message: "missing branch" } };
+            const { data, error } = await sb.rpc("family_events_insert_v1", {
+                p_branch_key: key,
+                p_phone: auth.phone,
+                p_email: auth.email,
+                p_secret_hash: auth.secretHash,
+                p_row: row || {}
+            });
+            if (error) return { ok: false, error };
+            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+        }
+
+        async function rpcUpdateFamilyEventRow(sb, pk, patch) {
+            const auth = await getDelegateRpcAuth();
+            if (!auth.ok) return { ok: false, error: { message: auth.reason } };
+            const key = normalizePersonName(state.branch || auth.branch || "");
+            if (!key) return { ok: false, error: { message: "missing branch" } };
+            if (!pk || !pk.col || pk.value == null) return { ok: false, error: { message: "missing pk" } };
+            const { data, error } = await sb.rpc("family_events_update_v1", {
+                p_branch_key: key,
+                p_phone: auth.phone,
+                p_email: auth.email,
+                p_secret_hash: auth.secretHash,
+                p_pk_col: String(pk.col),
+                p_pk_value: String(pk.value),
+                p_patch: patch || {}
+            });
+            if (error) return { ok: false, error };
+            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+        }
+
+        async function rpcDeleteFamilyEventRow(sb, pk) {
+            const auth = await getDelegateRpcAuth();
+            if (!auth.ok) return { ok: false, error: { message: auth.reason } };
+            const key = normalizePersonName(state.branch || auth.branch || "");
+            if (!key) return { ok: false, error: { message: "missing branch" } };
+            if (!pk || !pk.col || pk.value == null) return { ok: false, error: { message: "missing pk" } };
+            const { data, error } = await sb.rpc("family_events_delete_v1", {
+                p_branch_key: key,
+                p_phone: auth.phone,
+                p_email: auth.email,
+                p_secret_hash: auth.secretHash,
+                p_pk_col: String(pk.col),
+                p_pk_value: String(pk.value)
+            });
+            if (error) return { ok: false, error };
+            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+        }
+
         function renderParentsForBranch(branchKey) {
             parentSelect.innerHTML = "";
             const option = document.createElement("option");
@@ -2361,13 +2645,16 @@
             if (editChildCard) editChildCard.style.display = "block";
             if (editChildName) {
                 const display = getDisplayNameForNodeId(cid, state.branch ? getBranchRootName(state.branch) : "");
-                editChildName.textContent = "الاسم: " + (display || cid);
+                const forcedSuffix = getForcedRahmaSuffix(cid);
+                const suffix = forcedSuffix ? forcedSuffix : child && child.deceased ? " (رحمه الله)" : "";
+                editChildName.textContent = "الاسم: " + (display || cid) + suffix;
             }
             if (editChildHijri) editChildHijri.value = normalizePersonName(child && child.hdate ? child.hdate : "");
             if (editChildGreg) editChildGreg.value = normalizePersonName(child && child.gdate ? child.gdate : "");
             if (editChildCity) editChildCity.value = normalizePersonName(child && child.city ? child.city : "");
             if (editChildArea) editChildArea.value = normalizePersonName(child && child.area ? child.area : "");
             if (editChildDeceased) editChildDeceased.checked = !!(child && child.deceased);
+            applyEditDeceasedUiMode();
             if (editChildCard && typeof editChildCard.scrollIntoView === "function") {
                 editChildCard.scrollIntoView({ behavior: "smooth", block: "start" });
             }
@@ -2390,18 +2677,30 @@
                 const ageText = calculateAge(child);
                 const parts = [];
                 const childId = normalizePersonName(child.name);
-                parts.push(getDisplayNameForNodeId(childId, state.branch ? getBranchRootName(state.branch) : ""));
+                const display = getDisplayNameForNodeId(childId, state.branch ? getBranchRootName(state.branch) : "");
                 const forcedSuffix = getForcedRahmaSuffix(childId);
-                if (forcedSuffix) {
-                    parts.push(forcedSuffix.replace(/[()]/g, "").trim());
-                } else if (child && child.deceased) {
-                    parts.push("رحمه الله");
+                const suffix = forcedSuffix ? forcedSuffix : child && child.deceased ? " (رحمه الله)" : "";
+                parts.push((display || childId) + suffix);
+                const isDeceased = !!(child && child.deceased);
+                if (!isDeceased) {
+                    if (ageText) {
+                        parts.push("العمر: " + ageText);
+                    }
+                    const birthParts = [];
+                    const h = normalizePersonName(child && child.hdate ? child.hdate : "");
+                    const g = normalizePersonName(child && child.gdate ? child.gdate : "");
+                    const y = child && child.year ? String(child.year) : "";
+                    if (h) birthParts.push("هجري: " + h);
+                    if (g) birthParts.push("ميلادي: " + g);
+                    if (!h && !g && y) birthParts.push("سنة: " + y);
+                    if (birthParts.length) parts.push("الميلاد: " + birthParts.join(" / "));
+                    const city = normalizePersonName(child && child.city ? child.city : "");
+                    const area = normalizePersonName(child && child.area ? child.area : "");
+                    if (city) parts.push("المدينة: " + city);
+                    if (area) parts.push("الحي: " + area);
+                    const childCount = Array.isArray(state.children[normalizePersonName(child.name)]) ? state.children[normalizePersonName(child.name)].length : 0;
+                    parts.push("الأبناء: " + String(childCount));
                 }
-                if (ageText) {
-                    parts.push("العمر: " + ageText);
-                }
-                const childCount = Array.isArray(state.children[normalizePersonName(child.name)]) ? state.children[normalizePersonName(child.name)].length : 0;
-                parts.push("الأبناء: " + String(childCount));
                 const header = document.createElement("div");
                 header.style.display = "flex";
                 header.style.alignItems = "center";
@@ -2427,8 +2726,66 @@
                 editBtn.addEventListener("click", () => {
                     openEditChild(key, child);
                 });
+                const delBtn = document.createElement("button");
+                delBtn.type = "button";
+                delBtn.className = "btn btn-secondary btn-small";
+                delBtn.textContent = "حذف";
+                delBtn.addEventListener("click", async () => {
+                    if (!state.branch) {
+                        setChildAlert("error", "يلزم تسجيل دخول المندوب أولاً.");
+                        return;
+                    }
+                    const childIdForDelete = normalizePersonName(child && child.name ? child.name : "");
+                    const display = getDisplayNameForNodeId(childIdForDelete, state.branch ? getBranchRootName(state.branch) : "");
+                    const nameToConfirm = normalizePersonName(display || normalizePersonBaseName(childIdForDelete) || childIdForDelete);
+                    const typed = window.prompt("لتأكيد الحذف اكتب الاسم التالي بالضبط:\n" + nameToConfirm, "");
+                    if (typed == null) return;
+                    if (normalizePersonName(typed) !== nameToConfirm) {
+                        setChildAlert("error", "تم إلغاء الحذف لأن الاسم غير مطابق.");
+                        return;
+                    }
+                    const sb = getSupabaseClient();
+                    if (!sb) {
+                        setChildAlert("error", "تعذر الحذف لأن الربط غير مُعد.");
+                        return;
+                    }
+                    closeEditChild();
+                    const res = await rpcDeleteTreeChildRow(sb, state.branch, key, childIdForDelete);
+                    if (!res.ok) {
+                        const err = res.error || { message: "unknown error" };
+                        if (isRpcMissingError(err)) {
+                            setChildAlert(
+                                "error",
+                                "لا يمكن الحذف الآن لأن دوال الشجرة غير مفعلة في Supabase (tree_children_insert_v1 / tree_children_update_v1 / tree_children_delete_v1)."
+                            );
+                            return;
+                        }
+                        setChildAlert("error", formatTreeChildrenDbError(err, "delete"));
+                        return;
+                    }
+                    try {
+                        const list = state.children[key];
+                        if (Array.isArray(list) && list.length) {
+                            const next = list.filter((c) => normalizePersonName(c && c.name ? c.name : "") !== childIdForDelete);
+                            state.children[key] = next;
+                        }
+                    } catch (e) {}
+                    const reloadRes = await loadChildrenForBranch(state.branch, { applyToState: true });
+                    if (!reloadRes.ok) {
+                        renderParentsForBranch(state.branch);
+                        renderChildrenForParent(key);
+                        setChildAlert("success", "تم حذف الاسم. تعذر تحديث البيانات من قاعدة البيانات الآن، لكن تم تحديث العرض محلياً.");
+                        return;
+                    }
+                    renderParentsForBranch(state.branch);
+                    ensureParentOption(key);
+                    parentSelect.value = key;
+                    renderChildrenForParent(key);
+                    setChildAlert("success", "تم حذف الاسم.");
+                });
                 header.appendChild(main);
                 actions.appendChild(editBtn);
+                actions.appendChild(delBtn);
                 actions.appendChild(btn);
                 header.appendChild(actions);
                 row.appendChild(header);
@@ -3206,7 +3563,6 @@
             loginCard.style.display = "none";
             dashboardCard.style.display = "block";
             if (eventsCard) eventsCard.style.display = "block";
-            if (wipeBranchBtn) wipeBranchBtn.style.display = branchKey === "مزيد" ? "inline-flex" : "none";
             loadChildrenForBranch(branchKey, { applyToState: true })
                 .then(() => {
                     renderParentsForBranch(branchKey);
@@ -3412,6 +3768,7 @@
             const pushed = await pushDelegateRequestToSupabase(payload, msg, secretHash);
             if (pushed.ok) {
                 await copyText(msg);
+                maybeOpenEmailDraft("طلب مندوب شجرة (" + payload.requestId + ")", msg);
                 setLoginAlert("success", `تم تسجيل طلب دخول للمراجعة (رقم الطلب: ${payload.requestId}). سيتم التحقق من الهوية ثم اعتماد الطلب. تم نسخ نص الطلب.`);
                 return true;
             }
@@ -3466,6 +3823,7 @@
                         const { error } = await sb.from("approval_requests").update(row).eq("request_id", existingId);
                         if (!error) {
                             await copyText(msg);
+                            maybeOpenEmailDraft("تحديث طلب مندوب شجرة (" + existingId + ")", msg);
                             setLoginAlert("success", `تم تحديث طلبك للمراجعة (رقم الطلب: ${existingId}). تم نسخ نص الطلب.`);
                             return true;
                         }
@@ -3656,43 +4014,7 @@
             if (codeInput) codeInput.value = "";
             loginCard.style.display = "block";
             dashboardCard.style.display = "none";
-            if (wipeBranchBtn) wipeBranchBtn.style.display = "none";
         });
-
-        async function wipeBranchChildren(branchKey) {
-            const sb = getSupabaseClient();
-            if (!sb) return { ok: false, reason: "not_configured" };
-            const key = String(branchKey || "").trim();
-            if (!key) return { ok: false, reason: "missing_branch" };
-            const { error } = await sb.from(FAMILY_TREE_CHILDREN_TABLE).delete().eq("branch_key", key);
-            if (error) return { ok: false, error };
-            return { ok: true };
-        }
-
-        if (wipeBranchBtn) {
-            wipeBranchBtn.addEventListener("click", async () => {
-                if (!state.branch) {
-                    setChildAlert("error", "يلزم تسجيل الدخول أولاً.");
-                    return;
-                }
-                if (state.branch !== "مزيد") {
-                    setChildAlert("error", "هذا الزر مخصص لفرع مزيد فقط.");
-                    return;
-                }
-                const confirmed = window.confirm("تأكيد الحذف النهائي لكل بيانات الأبناء في فرع مزيد؟ لا يمكن التراجع.");
-                if (!confirmed) return;
-                const res = await wipeBranchChildren(state.branch);
-                if (!res.ok) {
-                    setChildAlert("error", formatTreeChildrenDbError(res.error || { message: "unknown error" }, "save"));
-                    return;
-                }
-                state.children = {};
-                renderParentsForBranch(state.branch);
-                parentSelect.value = "";
-                childrenContainer.innerHTML = "";
-                setChildAlert("success", "تم حذف كل بيانات فرع مزيد نهائياً. لم يتبق إلا الأصل.");
-            });
-        }
 
         parentSelect.addEventListener("change", () => {
             closeEditChild();
@@ -3707,8 +4029,8 @@
             const selectedParentName = resolveSelectedParentId(normalizePersonName(parentSelect.value), state.branch);
             const rawName = normalizePersonName(childName.value);
             const deceased = !!(childDeceased && childDeceased.checked);
-            const hijriInput = childBirthHijri ? String(childBirthHijri.value || "").trim() : "";
-            const gregInput = childBirthGreg ? String(childBirthGreg.value || "").trim() : "";
+            const hijriInput = deceased ? "" : (childBirthHijri ? String(childBirthHijri.value || "").trim() : "");
+            const gregInput = deceased ? "" : (childBirthGreg ? String(childBirthGreg.value || "").trim() : "");
             const hijriNorm = hijriInput ? normalizeHijriDateISO(hijriInput) : "";
             const gregNorm = gregInput ? normalizeGregorianDateISO(gregInput) : "";
             if (hijriInput && !hijriNorm) {
@@ -3732,8 +4054,8 @@
                 return;
             }
             const birthYear = finalHijri ? normalizeBirthYear(finalHijri.slice(0, 4)) : null;
-            const city = normalizePersonName(childCity.value);
-            const area = normalizePersonName(childArea.value);
+            const city = deceased ? "" : normalizePersonName(childCity.value);
+            const area = deceased ? "" : normalizePersonName(childArea.value);
             if (!rawName) {
                 setChildAlert("error", "يرجى إدخال اسم الابن.");
                 return;
@@ -3826,9 +4148,17 @@
                         is_deceased: deceased,
                         created_at: nowIso
                     };
-                    const insertRes = await insertTreeChildRow(sb, row);
+                    const insertRes = await rpcInsertTreeChildRow(sb, row);
                     if (!insertRes.ok) {
-                        setChildAlert("error", formatTreeChildrenDbError(insertRes.error, "save"));
+                        const err = insertRes.error || { message: "unknown error" };
+                        if (isRpcMissingError(err)) {
+                            setChildAlert(
+                                "error",
+                                "لا يمكن الحفظ الآن لأن دوال الشجرة غير مفعلة في Supabase (tree_children_insert_v1 / tree_children_update_v1 / tree_children_delete_v1)."
+                            );
+                            return;
+                        }
+                        setChildAlert("error", formatTreeChildrenDbError(err, "save"));
                         return;
                     }
                     if (!state.children[parentName]) state.children[parentName] = [];
@@ -3851,6 +4181,7 @@
                 childCity.value = "";
                 childArea.value = "";
                 if (childDeceased) childDeceased.checked = false;
+                applyAddDeceasedUiMode();
 
                 const reloadRes = await loadChildrenForBranch(state.branch, { applyToState: true });
                 if (!reloadRes.ok) {
@@ -3915,9 +4246,17 @@
                         is_deceased: isYoungest ? deceased : null,
                         created_at: nowIso
                     };
-                    const insertRes = await insertTreeChildRow(sb, row);
+                    const insertRes = await rpcInsertTreeChildRow(sb, row);
                     if (!insertRes.ok) {
-                        setChildAlert("error", formatTreeChildrenDbError(insertRes.error, "save"));
+                        const err = insertRes.error || { message: "unknown error" };
+                        if (isRpcMissingError(err)) {
+                            setChildAlert(
+                                "error",
+                                "لا يمكن الحفظ الآن لأن دوال الشجرة غير مفعلة في Supabase (tree_children_insert_v1 / tree_children_update_v1 / tree_children_delete_v1)."
+                            );
+                            return;
+                        }
+                        setChildAlert("error", formatTreeChildrenDbError(err, "save"));
                         return;
                     }
 
@@ -4014,8 +4353,16 @@
                 is_deceased: deceased,
                 created_at: nowIso
             };
-            const insertRes = await insertTreeChildRow(sb, row);
+            const insertRes = await rpcInsertTreeChildRow(sb, row);
             if (!insertRes.ok) {
+                const err = insertRes.error || { message: "unknown error" };
+                if (isRpcMissingError(err)) {
+                    setChildAlert(
+                        "error",
+                        "لا يمكن الحفظ الآن لأن دوال الشجرة غير مفعلة في Supabase (tree_children_insert_v1 / tree_children_update_v1 / tree_children_delete_v1)."
+                    );
+                    return;
+                }
                 setChildAlert("error", formatTreeChildrenDbError(insertRes.error, "save"));
                 return;
             }
@@ -4026,6 +4373,7 @@
             childCity.value = "";
             childArea.value = "";
             if (childDeceased) childDeceased.checked = false;
+            applyAddDeceasedUiMode();
             const reloadRes = await loadChildrenForBranch(state.branch, { applyToState: true });
             if (!reloadRes.ok) {
                 setChildAlert(
@@ -4081,6 +4429,18 @@
             });
         }
 
+        if (childDeceased) {
+            childDeceased.addEventListener("change", () => {
+                applyAddDeceasedUiMode();
+            });
+            applyAddDeceasedUiMode();
+        }
+        if (editChildDeceased) {
+            editChildDeceased.addEventListener("change", () => {
+                applyEditDeceasedUiMode();
+            });
+        }
+
         if (cancelEditBtn) {
             cancelEditBtn.addEventListener("click", () => {
                 closeEditChild();
@@ -4094,8 +4454,9 @@
                     setEditChildAlert("error", "يلزم تسجيل دخول المندوب أولاً.");
                     return;
                 }
-                const hijriInput = editChildHijri ? String(editChildHijri.value || "").trim() : "";
-                const gregInput = editChildGreg ? String(editChildGreg.value || "").trim() : "";
+                const deceased = !!(editChildDeceased && editChildDeceased.checked);
+                const hijriInput = deceased ? "" : (editChildHijri ? String(editChildHijri.value || "").trim() : "");
+                const gregInput = deceased ? "" : (editChildGreg ? String(editChildGreg.value || "").trim() : "");
                 const hijriNorm = hijriInput ? normalizeHijriDateISO(hijriInput) : "";
                 const gregNorm = gregInput ? normalizeGregorianDateISO(gregInput) : "";
                 if (hijriInput && !hijriNorm) {
@@ -4119,9 +4480,8 @@
                     return;
                 }
                 const birthYear = finalHijri ? normalizeBirthYear(finalHijri.slice(0, 4)) : null;
-                const city = editChildCity ? normalizePersonName(editChildCity.value) : "";
-                const area = editChildArea ? normalizePersonName(editChildArea.value) : "";
-                const deceased = !!(editChildDeceased && editChildDeceased.checked);
+                const city = deceased ? "" : (editChildCity ? normalizePersonName(editChildCity.value) : "");
+                const area = deceased ? "" : (editChildArea ? normalizePersonName(editChildArea.value) : "");
                 const sb = getSupabaseClient();
                 if (!sb) {
                     setEditChildAlert("error", "تعذر الحفظ لأن الربط غير مُعد.");
@@ -4137,9 +4497,17 @@
                     is_deceased: deceased
                 };
 
-                const res = await updateTreeChildRow(sb, state.branch, editingChildRef.parentId, editingChildRef.childId, patch);
+                const res = await rpcUpdateTreeChildRow(sb, state.branch, editingChildRef.parentId, editingChildRef.childId, patch);
                 if (!res.ok) {
-                    setEditChildAlert("error", formatTreeChildrenDbError(res.error || { message: "unknown error" }, "update"));
+                    const err = res.error || { message: "unknown error" };
+                    if (isRpcMissingError(err)) {
+                        setEditChildAlert(
+                            "error",
+                            "لا يمكن تنفيذ التعديل الآن لأن دوال الشجرة غير مفعلة في Supabase (tree_children_insert_v1 / tree_children_update_v1 / tree_children_delete_v1)."
+                        );
+                        return;
+                    }
+                    setEditChildAlert("error", formatTreeChildrenDbError(err, "update"));
                     return;
                 }
 
@@ -4327,55 +4695,35 @@
             const options = opts || {};
             const pk = getEventPk(row);
             if (!pk) return;
-            if (!confirm("هل أنت متأكد من الحذف؟")) return;
+            const personName = normalizePersonName(row && row.person ? row.person : "");
+            const confirmName = personName || "حذف";
+            const typed = window.prompt("لتأكيد الحذف اكتب الاسم التالي بالضبط:\n" + confirmName, "");
+            if (typed == null) return;
+            if (normalizePersonName(typed) !== confirmName) return;
             const sb = getSupabaseClient();
             const alertEl = options.kind === "death" ? deathAlert : options.kind === "sick" ? sickAlert : happyAlert;
-            const rowEl = options.rowEl || null;
-            const prevDisplay = rowEl ? rowEl.style.display : "";
-            if (rowEl) rowEl.style.display = "none";
             if (!sb) {
-                if (rowEl) rowEl.style.display = prevDisplay;
                 showAlertAndFocus(alertEl, "error", "تعذر الحذف لأن الربط غير مُعد.");
                 return;
             }
-            let delQuery = sb.from("family_events").delete().eq(pk.col, pk.value);
-            if (pk.col === "created_at") delQuery = delQuery.eq("branch_key", state.branch);
-            const delRes = await delQuery.select("id,created_at");
-            const delError = delRes && delRes.error ? delRes.error : null;
-            const deletedRows = Array.isArray(delRes && delRes.data ? delRes.data : null) ? delRes.data : [];
-            if (delError || deletedRows.length === 0) {
-                const denied = delError ? isPermissionDeniedError(delError) : true;
-                if (!denied) {
-                    if (rowEl) rowEl.style.display = prevDisplay;
-                    const msg = "تعذر الحذف: " + (delError && delError.message ? delError.message : "خطأ غير معروف");
-                    showAlertAndFocus(alertEl, "error", msg);
+            const res = await rpcDeleteFamilyEventRow(sb, pk);
+            if (!res.ok) {
+                const err = res.error || { message: "unknown error" };
+                if (isRpcMissingError(err)) {
+                    showAlertAndFocus(
+                        alertEl,
+                        "error",
+                        "لا يمكن الحذف الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                    );
                     return;
                 }
-                const marker = {
-                    v: 1,
-                    kind: "event_tombstone",
-                    target: { col: pk.col, value: pk.value },
-                    targetKeys: getEventPkRefs(row)
-                };
-                const tombRow = {
-                    branch_key: state.branch,
-                    type: String(row && row.type ? row.type : "") || null,
-                    person: normalizePersonName(row && row.person ? row.person : "") || null,
-                    date_label: row && row.date_label ? row.date_label : null,
-                    event_date: row && row.event_date ? row.event_date : null,
-                    details: JSON.stringify(marker),
-                    created_at: new Date().toISOString()
-                };
-                const ins = await sb.from("family_events").insert(tombRow);
-                if (ins && ins.error) {
-                    if (rowEl) rowEl.style.display = prevDisplay;
-                    const msg =
-                        "تعذر الحذف بسبب الصلاحيات. " +
-                        (ins.error.message || "خطأ غير معروف") +
-                        " (يلزم السماح بـ insert/update/delete في Supabase)";
-                    showAlertAndFocus(alertEl, "error", msg);
+                const msg = String(err && err.message ? err.message : "");
+                if (msg.toLowerCase().includes("not allowed")) {
+                    showAlertAndFocus(alertEl, "error", "لا توجد صلاحية لتعديل/حذف المناسبات لهذا المندوب.");
                     return;
                 }
+                showAlertAndFocus(alertEl, "error", "تعذر الحذف: " + (msg || "خطأ غير معروف"));
+                return;
             }
             touchEventsRefresh();
             if (options.kind === "death") {
@@ -4466,28 +4814,24 @@
                         showAlert(happyAlert, "error", "تعذر حفظ التعديل لأن معرف السجل غير متوفر.");
                         return;
                     }
-                    let updQuery = sb.from("family_events").update(patch).eq(pk.col, pk.value);
-                    if (pk.col === "created_at") updQuery = updQuery.eq("branch_key", state.branch);
-                    const updRes = await updQuery.select("id,created_at");
-                    const updError = updRes && updRes.error ? updRes.error : null;
-                    const updatedRows = Array.isArray(updRes && updRes.data ? updRes.data : null) ? updRes.data : [];
-                    if (updError || updatedRows.length === 0) {
-                        const denied = updError ? isPermissionDeniedError(updError) : true;
-                        if (!denied) {
-                            showAlert(happyAlert, "error", "تعذر حفظ التعديل: " + (updError && updError.message ? updError.message : "خطأ غير معروف"));
+                    const res = await rpcUpdateFamilyEventRow(sb, pk, patch);
+                    if (!res.ok) {
+                        const err = res.error || { message: "unknown error" };
+                        if (isRpcMissingError(err)) {
+                            showAlert(
+                                happyAlert,
+                                "error",
+                                "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                            );
                             return;
                         }
-                        const payloadWithReplace = {
-                            ...happyPayload,
-                            replaces: { col: pk.col, value: pk.value },
-                            replacesKeys: getEventPkRefs(editingHappy)
-                        };
-                        const row = { ...patch, details: JSON.stringify(payloadWithReplace), created_at: new Date().toISOString() };
-                        const ins = await sb.from("family_events").insert(row);
-                        if (ins && ins.error) {
-                            showAlert(happyAlert, "error", "تعذر حفظ التعديل: " + (ins.error.message || "خطأ غير معروف"));
+                        const msg = String(err && err.message ? err.message : "");
+                        if (msg.toLowerCase().includes("not allowed")) {
+                            showAlert(happyAlert, "error", "لا توجد صلاحية لتعديل المناسبات لهذا المندوب.");
                             return;
                         }
+                        showAlert(happyAlert, "error", "تعذر حفظ التعديل: " + (msg || "خطأ غير معروف"));
+                        return;
                     }
                     touchEventsRefresh();
                     resetHappyForm();
@@ -4497,11 +4841,31 @@
                 }
 
                 const row = { ...patch, created_at: new Date().toISOString() };
-                const { error } = await sb.from("family_events").insert(row);
-                if (error) {
-                    showAlert(happyAlert, "error", "تعذر الإضافة: " + (error.message || "خطأ غير معروف"));
+                const res = await rpcInsertFamilyEventRow(sb, row);
+                if (!res.ok) {
+                    const err = res.error || { message: "unknown error" };
+                    if (isRpcMissingError(err)) {
+                        showAlert(
+                            happyAlert,
+                            "error",
+                            "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                        );
+                        return;
+                    }
+                    const msg = String(err && err.message ? err.message : "");
+                    if (msg.toLowerCase().includes("not allowed")) {
+                        showAlert(happyAlert, "error", "لا توجد صلاحية لإضافة المناسبات لهذا المندوب.");
+                        return;
+                    }
+                    showAlert(happyAlert, "error", "تعذر الإضافة: " + (msg || "خطأ غير معروف"));
                     return;
                 }
+                maybeOpenEmailDraft(
+                    "مناسبة جديدة (" + type + ")",
+                    ["مناسبة جديدة", "الفرع: " + state.branch, "النوع: " + type, "الاسم: " + person, dateLabel ? "التاريخ: " + dateLabel : "", storedText ? "النص: " + storedText : ""]
+                        .filter(Boolean)
+                        .join("\n")
+                );
                 touchEventsRefresh();
                 resetHappyForm();
                 showAlert(happyAlert, "success", "تمت الإضافة.");
@@ -4590,32 +4954,24 @@
                         showAlert(sickAlert, "error", "تعذر حفظ التعديل لأن معرف السجل غير متوفر.");
                         return;
                     }
-                    let updQuery = sb.from("family_events").update(patch).eq(pk.col, pk.value);
-                    if (pk.col === "created_at") updQuery = updQuery.eq("branch_key", state.branch);
-                    const updRes = await updQuery.select("id,created_at");
-                    const updError = updRes && updRes.error ? updRes.error : null;
-                    const updatedRows = Array.isArray(updRes && updRes.data ? updRes.data : null) ? updRes.data : [];
-                    if (updError || updatedRows.length === 0) {
-                        const denied = updError ? isPermissionDeniedError(updError) : true;
-                        if (!denied) {
-                            showAlert(sickAlert, "error", "تعذر حفظ التعديل: " + (updError && updError.message ? updError.message : "خطأ غير معروف"));
+                    const res = await rpcUpdateFamilyEventRow(sb, pk, patch);
+                    if (!res.ok) {
+                        const err = res.error || { message: "unknown error" };
+                        if (isRpcMissingError(err)) {
+                            showAlert(
+                                sickAlert,
+                                "error",
+                                "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                            );
                             return;
                         }
-                        const payloadWithReplace = {
-                            ...payload,
-                            replaces: { col: pk.col, value: pk.value },
-                            replacesKeys: getEventPkRefs(editingSick)
-                        };
-                        const row = {
-                            ...patch,
-                            details: JSON.stringify(payloadWithReplace),
-                            created_at: new Date().toISOString()
-                        };
-                        const ins = await sb.from("family_events").insert(row);
-                        if (ins && ins.error) {
-                            showAlert(sickAlert, "error", "تعذر حفظ التعديل: " + (ins.error.message || "خطأ غير معروف"));
+                        const msg = String(err && err.message ? err.message : "");
+                        if (msg.toLowerCase().includes("not allowed")) {
+                            showAlert(sickAlert, "error", "لا توجد صلاحية لتعديل المناسبات لهذا المندوب.");
                             return;
                         }
+                        showAlert(sickAlert, "error", "تعذر حفظ التعديل: " + (msg || "خطأ غير معروف"));
+                        return;
                     }
                     touchEventsRefresh();
                     resetSickForm();
@@ -4625,11 +4981,38 @@
                 }
 
                 const row = { ...patch, created_at: new Date().toISOString() };
-                const { error } = await sb.from("family_events").insert(row);
-                if (error) {
-                    showAlert(sickAlert, "error", "تعذر الإضافة: " + (error.message || "خطأ غير معروف"));
+                const res = await rpcInsertFamilyEventRow(sb, row);
+                if (!res.ok) {
+                    const err = res.error || { message: "unknown error" };
+                    if (isRpcMissingError(err)) {
+                        showAlert(
+                            sickAlert,
+                            "error",
+                            "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                        );
+                        return;
+                    }
+                    const msg = String(err && err.message ? err.message : "");
+                    if (msg.toLowerCase().includes("not allowed")) {
+                        showAlert(sickAlert, "error", "لا توجد صلاحية لإضافة المناسبات لهذا المندوب.");
+                        return;
+                    }
+                    showAlert(sickAlert, "error", "تعذر الإضافة: " + (msg || "خطأ غير معروف"));
                     return;
                 }
+                maybeOpenEmailDraft(
+                    "مناسبة جديدة (" + type + ")",
+                    [
+                        "مناسبة جديدة",
+                        "الفرع: " + state.branch,
+                        "النوع: " + type,
+                        "الاسم: " + person,
+                        dateLabel ? "التاريخ: " + dateLabel : "",
+                        notesValue ? "ملاحظات: " + notesValue : ""
+                    ]
+                        .filter(Boolean)
+                        .join("\n")
+                );
                 touchEventsRefresh();
                 resetSickForm();
                 showAlert(sickAlert, "success", "تمت الإضافة.");
@@ -4696,28 +5079,24 @@
                         showAlert(deathAlert, "error", "تعذر حفظ التعديل لأن معرف السجل غير متوفر.");
                         return;
                     }
-                    let updQuery = sb.from("family_events").update(patch).eq(pk.col, pk.value);
-                    if (pk.col === "created_at") updQuery = updQuery.eq("branch_key", state.branch);
-                    const updRes = await updQuery.select("id,created_at");
-                    const updError = updRes && updRes.error ? updRes.error : null;
-                    const updatedRows = Array.isArray(updRes && updRes.data ? updRes.data : null) ? updRes.data : [];
-                    if (updError || updatedRows.length === 0) {
-                        const denied = updError ? isPermissionDeniedError(updError) : true;
-                        if (!denied) {
-                            showAlert(deathAlert, "error", "تعذر حفظ التعديل: " + (updError && updError.message ? updError.message : "خطأ غير معروف"));
+                    const res = await rpcUpdateFamilyEventRow(sb, pk, patch);
+                    if (!res.ok) {
+                        const err = res.error || { message: "unknown error" };
+                        if (isRpcMissingError(err)) {
+                            showAlert(
+                                deathAlert,
+                                "error",
+                                "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                            );
                             return;
                         }
-                        const payloadWithReplace = {
-                            ...payload,
-                            replaces: { col: pk.col, value: pk.value },
-                            replacesKeys: getEventPkRefs(editingDeath)
-                        };
-                        const row = { ...patch, details: JSON.stringify(payloadWithReplace), created_at: new Date().toISOString() };
-                        const ins = await sb.from("family_events").insert(row);
-                        if (ins && ins.error) {
-                            showAlert(deathAlert, "error", "تعذر حفظ التعديل: " + (ins.error.message || "خطأ غير معروف"));
+                        const msg = String(err && err.message ? err.message : "");
+                        if (msg.toLowerCase().includes("not allowed")) {
+                            showAlert(deathAlert, "error", "لا توجد صلاحية لتعديل المناسبات لهذا المندوب.");
                             return;
                         }
+                        showAlert(deathAlert, "error", "تعذر حفظ التعديل: " + (msg || "خطأ غير معروف"));
+                        return;
                     }
                     touchEventsRefresh();
                     resetDeathForm();
@@ -4727,11 +5106,44 @@
                 }
 
                 const row = { ...patch, created_at: new Date().toISOString() };
-                const { error } = await sb.from("family_events").insert(row);
-                if (error) {
-                    showAlert(deathAlert, "error", "تعذر النشر: " + (error.message || "خطأ غير معروف"));
+                const res = await rpcInsertFamilyEventRow(sb, row);
+                if (!res.ok) {
+                    const err = res.error || { message: "unknown error" };
+                    if (isRpcMissingError(err)) {
+                        showAlert(
+                            deathAlert,
+                            "error",
+                            "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                        );
+                        return;
+                    }
+                    const msg = String(err && err.message ? err.message : "");
+                    if (msg.toLowerCase().includes("not allowed")) {
+                        showAlert(deathAlert, "error", "لا توجد صلاحية لإضافة المناسبات لهذا المندوب.");
+                        return;
+                    }
+                    showAlert(deathAlert, "error", "تعذر النشر: " + (msg || "خطأ غير معروف"));
                     return;
                 }
+                maybeOpenEmailDraft(
+                    "خبر وفاة جديد",
+                    [
+                        "خبر وفاة جديد",
+                        "الفرع: " + state.branch,
+                        "الاسم: " + person,
+                        dateLabel ? "التاريخ: " + dateLabel : "",
+                        payload.prayerPlace ? "مكان الصلاة: " + payload.prayerPlace : "",
+                        payload.prayerTime ? "وقت الصلاة: " + payload.prayerTime : "",
+                        payload.burialPlace ? "مكان الدفن: " + payload.burialPlace : "",
+                        payload.burialTime ? "وقت الدفن: " + payload.burialTime : "",
+                        payload.condolencePlace ? "مكان العزاء: " + payload.condolencePlace : "",
+                        payload.condolenceTime ? "وقت العزاء: " + payload.condolenceTime : "",
+                        payload.phones ? "الجوال: " + payload.phones : "",
+                        payload.notes ? "ملاحظات: " + payload.notes : ""
+                    ]
+                        .filter(Boolean)
+                        .join("\n")
+                );
                 touchEventsRefresh();
                 resetDeathForm();
                 showAlert(deathAlert, "success", "تم نشر خبر الوفاة.");

@@ -1543,6 +1543,9 @@
                     <div class="section-title">المناسبات العائلية</div>
                     <div class="section-sub">أخبار مختصرة عن مناسبات العائلة المختلفة.</div>
                 </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button id="events-notify-btn" class="btn btn-outline btn-sm" type="button">تفعيل إشعارات المناسبات</button>
+                </div>
             </div>
             <div style="display: grid; gap: 12px;">
                 <details class="toggle-card" data-accordion="events" data-event-kind="happy">
@@ -1858,6 +1861,51 @@
                 });
             });
         })();
+
+        (function () {
+            const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
+            const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
+            let sbClient = null;
+
+            function getSupabaseClient() {
+                if (sbClient) return sbClient;
+                const url = String(SUPABASE_URL || "").trim();
+                const anonKey = String(SUPABASE_ANON_KEY || "").trim();
+                if (!url || !anonKey) return null;
+                if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+                sbClient = window.supabase.createClient(url, anonKey);
+                return sbClient;
+            }
+
+            function getPathForTracking() {
+                try {
+                    const p = String(window.location.pathname || "").trim();
+                    return p || "/";
+                } catch (e) {
+                    return "/";
+                }
+            }
+
+            async function trackViewOncePerTab() {
+                const sb = getSupabaseClient();
+                if (!sb) return;
+                const path = getPathForTracking();
+                const key = "alzidan_view_tracked_v1:" + path;
+                try {
+                    if (sessionStorage.getItem(key) === "1") return;
+                    sessionStorage.setItem(key, "1");
+                } catch (e) {}
+                try {
+                    await sb.rpc("site_track_view_v1", { p_path: path });
+                } catch (e) {}
+            }
+
+            if (document.readyState === "complete" || document.readyState === "interactive") {
+                trackViewOncePerTab().catch(() => {});
+            } else {
+                document.addEventListener("DOMContentLoaded", () => trackViewOncePerTab().catch(() => {}));
+            }
+        })();
         (function () {
             const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
             const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
@@ -1923,6 +1971,21 @@
                 } catch (e) {}
                 fallbackCopyText(text);
                 return true;
+            }
+
+            const NOTIFY_EMAIL_TO = "info@alzidan.org";
+            function maybeOpenEmailDraft(subject, body) {
+                const to = String(NOTIFY_EMAIL_TO || "").trim();
+                if (!to || !to.includes("@")) return false;
+                const s = encodeURIComponent(String(subject || "").trim());
+                const b = encodeURIComponent(String(body || "").trim());
+                const url = "mailto:" + encodeURIComponent(to) + (s || b ? `?subject=${s}&body=${b}` : "");
+                try {
+                    window.open(url, "_blank", "noopener,noreferrer");
+                    return true;
+                } catch (e) {
+                    return false;
+                }
             }
 
             function toggleForm(kind, open) {
@@ -2216,6 +2279,7 @@
                     const pushed = await pushApprovalRequestToSupabase(kind, payload, msg);
                     await copyText(msg);
                     if (pushed.ok) {
+                        maybeOpenEmailDraft("طلب جديد (" + payload.requestId + ")", msg);
                         setApplyAlert(kind, "success", `تم تسجيل طلبك للمراجعة (رقم الطلب: ${payload.requestId}). سيتم التحقق من الهوية ثم قبول الطلب أو رفضه. تم نسخ نص الطلب.`);
                     } else if (pushed.reason === "not_configured") {
                         setApplyAlert(kind, "error", "تعذر إرسال الطلب لأن الربط غير مُعد.");
@@ -3568,6 +3632,91 @@
 
             const bannerNewsEl = document.getElementById("top-banner-news");
             const bannerNewsCloneEl = document.getElementById("top-banner-news-clone");
+            const eventsNotifyBtn = document.getElementById("events-notify-btn");
+            const EVENTS_NOTIF_LAST_KEY = "alzidan_events_notif_last_key_v1";
+            let eventsLastNotifiedKey = "";
+            let eventsDidInitialSync = false;
+
+            try {
+                eventsLastNotifiedKey = String(localStorage.getItem(EVENTS_NOTIF_LAST_KEY) || "");
+            } catch (e) {
+                eventsLastNotifiedKey = "";
+            }
+
+            function canShowBrowserNotifications() {
+                return typeof Notification !== "undefined" && typeof Notification.requestPermission === "function";
+            }
+
+            async function ensureBrowserNotificationsEnabled() {
+                if (!canShowBrowserNotifications()) return false;
+                if (Notification.permission === "granted") return true;
+                if (Notification.permission === "denied") return false;
+                const res = await Notification.requestPermission();
+                return res === "granted";
+            }
+
+            function updateEventsNotifyButtonText() {
+                if (!eventsNotifyBtn) return;
+                if (!canShowBrowserNotifications()) {
+                    eventsNotifyBtn.textContent = "الإشعارات غير مدعومة";
+                    eventsNotifyBtn.disabled = true;
+                    return;
+                }
+                if (Notification.permission === "granted") {
+                    eventsNotifyBtn.textContent = "الإشعارات مفعلة";
+                    eventsNotifyBtn.disabled = true;
+                    return;
+                }
+                if (Notification.permission === "denied") {
+                    eventsNotifyBtn.textContent = "الإشعارات مرفوضة";
+                    eventsNotifyBtn.disabled = true;
+                    return;
+                }
+                eventsNotifyBtn.textContent = "تفعيل إشعارات المناسبات";
+                eventsNotifyBtn.disabled = false;
+            }
+
+            function saveEventsLastNotifiedKey(key) {
+                const k = String(key || "").trim();
+                if (!k) return;
+                eventsLastNotifiedKey = k;
+                try {
+                    localStorage.setItem(EVENTS_NOTIF_LAST_KEY, k);
+                } catch (e) {}
+            }
+
+            function showEventNotification(row) {
+                if (!canShowBrowserNotifications()) return;
+                if (Notification.permission !== "granted") return;
+                if (!row) return;
+                const type = normalizeText(row && row.type ? row.type : "");
+                const person = normalizeText(row && row.person ? row.person : "");
+                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const title = [formatEventTypeLabel(type), formatEventTitle(type, person)].filter(Boolean).join(" — ") || "مناسبة جديدة";
+                const body = [truncateText(formatEventCopy(type, person, row), 120), dateLabel ? "التاريخ: " + dateLabel : ""]
+                    .filter(Boolean)
+                    .join("\n");
+                try {
+                    const n = new Notification(title, { body, tag: "alzidan-event", renotify: true });
+                    n.onclick = () => {
+                        try {
+                            window.focus();
+                            const el = document.getElementById("events");
+                            if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        } catch (e) {}
+                    };
+                } catch (e) {}
+            }
+
+            if (eventsNotifyBtn) {
+                updateEventsNotifyButtonText();
+                eventsNotifyBtn.addEventListener("click", async () => {
+                    const ok = await ensureBrowserNotificationsEnabled();
+                    updateEventsNotifyButtonText();
+                    if (!ok) return;
+                    showEventNotification({ type: "gathering", person: "تم تفعيل الإشعارات", date_label: "" });
+                });
+            }
 
             function truncateText(v, maxLen) {
                 const s = normalizeText(v);
@@ -3810,6 +3959,21 @@
                 const bannerText = formatBannerTextFromRow(rows && rows[0] ? rows[0] : null);
                 if (bannerNewsEl) bannerNewsEl.textContent = bannerText;
                 if (bannerNewsCloneEl) bannerNewsCloneEl.textContent = bannerText;
+
+                const newest = rows && rows[0] ? rows[0] : null;
+                if (newest) {
+                    const keys = getRowPkKeys(newest);
+                    const k = keys && keys.length ? String(keys[0] || "").trim() : "";
+                    if (!eventsDidInitialSync) {
+                        eventsDidInitialSync = true;
+                        if (k) saveEventsLastNotifiedKey(k);
+                    } else if (k && k !== eventsLastNotifiedKey) {
+                        saveEventsLastNotifiedKey(k);
+                        showEventNotification(newest);
+                    }
+                } else if (!eventsDidInitialSync) {
+                    eventsDidInitialSync = true;
+                }
                 const happy = [];
                 const sick = [];
                 const death = [];
