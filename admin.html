@@ -2028,11 +2028,32 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                             "هذه رسالة اختبار من صفحة الإدارة.",
                             "",
                             "إذا وصلتك المسودة/تم نسخ النص فالإعدادات تعمل.",
-                            "التاريخ: " + new Date().toLocaleString("ar-SA")
+                            "التاريخ: " + formatDateTimeArSaVerbose(new Date())
                         ].join("\n");
                         await sendAdminEmail(subject, body);
                     });
                 }
+            }
+
+            function formatDateTimeArSaVerbose(v) {
+                if (!v) return "";
+                let date;
+                if (v instanceof Date) date = v;
+                else date = new Date(v);
+                if (!date || !Number.isFinite(date.getTime())) return String(v || "");
+                let s = "";
+                try {
+                    s = date.toLocaleString("ar-SA");
+                } catch (e) {
+                    s = String(v || "");
+                }
+                s = String(s || "").trim();
+                if (!s) return "";
+                s = s.replace(/\s*(AM|am)\s*$/, " صباحاً");
+                s = s.replace(/\s*(PM|pm)\s*$/, " مساءً");
+                s = s.replace(/\s*ص\s*$/, " صباحاً");
+                s = s.replace(/\s*م\s*$/, " مساءً");
+                return s;
             }
 
             async function sendAdminEmail(subject, body) {
@@ -2202,7 +2223,7 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                         newest.name ? "الاسم: " + newest.name : "",
                         newest.phone ? "الجوال: " + newest.phone : "",
                         newest.email ? "البريد: " + newest.email : "",
-                        newest.created_at ? "التاريخ: " + new Date(newest.created_at).toLocaleString("ar-SA") : ""
+                        newest.created_at ? "التاريخ: " + formatDateTimeArSaVerbose(newest.created_at) : ""
                     ]
                         .filter(Boolean)
                         .join("\n");
@@ -2270,7 +2291,7 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                     latest.name ? "المندوب: " + latest.name : "",
                     latest.phone ? "الجوال: " + latest.phone : "",
                     latest.email ? "البريد: " + latest.email : "",
-                    latest.created_at ? "التاريخ: " + new Date(latest.created_at).toLocaleString("ar-SA") : "",
+                    latest.created_at ? "التاريخ: " + formatDateTimeArSaVerbose(latest.created_at) : "",
                     "",
                     latest.message ? String(latest.message) : ""
                 ]
@@ -2351,7 +2372,7 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 const tdDate = document.createElement("td");
                 if (row.created_at) {
                     try {
-                        tdDate.textContent = new Date(row.created_at).toLocaleString("ar-SA");
+                        tdDate.textContent = formatDateTimeArSaVerbose(row.created_at);
                     } catch (e) {
                         tdDate.textContent = String(row.created_at || "");
                     }
@@ -2663,7 +2684,7 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
 
                     const tdTime = document.createElement("td");
                     try {
-                        tdTime.textContent = row.created_at ? new Date(row.created_at).toLocaleString("ar-SA") : "";
+                        tdTime.textContent = row.created_at ? formatDateTimeArSaVerbose(row.created_at) : "";
                     } catch (e) {
                         tdTime.textContent = String(row.created_at || "");
                     }
