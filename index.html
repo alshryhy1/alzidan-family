@@ -3648,6 +3648,18 @@
                 return null;
             }
 
+            function getRowVisibilityDays(row) {
+                const env = parseEventEnvelope(row || {});
+                if (env && env.v === 1 && (env.kind === "happy_notice" || env.kind === "health_notice" || env.kind === "death_notice")) {
+                    const n = parseInt(String(env.showDays != null ? env.showDays : "").trim(), 10);
+                    if (!Number.isFinite(n)) return 7;
+                    if (n < 1) return 1;
+                    if (n > 7) return 7;
+                    return n;
+                }
+                return 7;
+            }
+
             function getRowPkKeys(row) {
                 const keys = [];
                 if (row && row.id != null) keys.push("id:" + String(row.id));
@@ -3857,6 +3869,20 @@
                 return "https://api.whatsapp.com/send" + (msg ? ("?text=" + msg) : "");
             }
 
+            function formatTime12Ar(v) {
+                const s = String(v || "").trim();
+                if (!s) return "";
+                const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(s);
+                if (!m) return s;
+                let h = parseInt(m[1], 10);
+                const min = m[2];
+                if (!Number.isFinite(h)) return s;
+                const suffix = h >= 12 ? "مساءً" : "صباحاً";
+                h = h % 12;
+                if (h === 0) h = 12;
+                return String(h) + ":" + min + " " + suffix;
+            }
+
             function getSiteEventsUrl() {
                 const origin = location && location.origin ? String(location.origin) : "";
                 const path = location && location.pathname ? String(location.pathname) : "";
@@ -3870,7 +3896,7 @@
                 const typeLabel = formatEventTypeLabel(type);
                 const title = formatEventTitle(type, person);
                 const copy = normalizeText(formatEventCopy(type, person, rowSafe));
-                const dateLabel = normalizeText(rowSafe.date_label || rowSafe.dateLabel);
+                const dateLabel = getRowHijriDateLabel(rowSafe);
                 const branchLabel = branchLabelFromKey(rowSafe.branch_key || rowSafe.branchKey);
                 const url = normalizeText(urlOverride) || getSiteEventsUrl();
                 const lines = [];
@@ -3916,9 +3942,11 @@
                         else visitParts.push("إلى " + visitDateTo);
                     }
                     if (visitTimeFrom || visitTimeTo) {
-                        if (visitTimeFrom && visitTimeTo) visitParts.push("من " + visitTimeFrom + " إلى " + visitTimeTo);
-                        else if (visitTimeFrom) visitParts.push("من " + visitTimeFrom);
-                        else visitParts.push("إلى " + visitTimeTo);
+                        const fromLabel = visitTimeFrom ? formatTime12Ar(visitTimeFrom) : "";
+                        const toLabel = visitTimeTo ? formatTime12Ar(visitTimeTo) : "";
+                        if (fromLabel && toLabel) visitParts.push("من " + fromLabel + " إلى " + toLabel);
+                        else if (fromLabel) visitParts.push("من " + fromLabel);
+                        else visitParts.push("إلى " + toLabel);
                     }
                     if (visitParts.length) lines.push("وقت الزيارة: " + visitParts.join(" – "));
                 }
@@ -3958,6 +3986,53 @@
                 return out;
             }
 
+            function formatHijriDateDisplay(v) {
+                let s = normalizeText(v);
+                if (!s) return "";
+                for (let i = 0; i < 3; i++) {
+                    const m = /^\s*[\(（]\s*(.*?)\s*[\)）]\s*$/.exec(s);
+                    if (!m) break;
+                    s = normalizeText(m[1] || "");
+                    if (!s) return "";
+                }
+                const toLooseIso = (y, mo, d) => String(parseInt(y, 10)) + "-" + String(parseInt(mo, 10)) + "-" + String(parseInt(d, 10));
+                const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+                if (slash) {
+                    const d = slash[1].padStart(2, "0");
+                    const mo = slash[2].padStart(2, "0");
+                    const y = slash[3];
+                    const year = parseInt(y, 10);
+                    if (year >= 1200 && year <= 1700) return toLooseIso(y, mo, d);
+                    const hijriISO = gregorianToHijriISO(y + "-" + mo + "-" + d);
+                    const h = parseHijriISO(hijriISO);
+                    if (h) return toLooseIso(String(h.y), String(h.mo), String(h.d));
+                    return y + "-" + String(parseInt(mo, 10)) + "-" + String(parseInt(d, 10));
+                }
+                const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+                if (iso) {
+                    const y = iso[1].padStart(4, "0");
+                    const mo = iso[2].padStart(2, "0");
+                    const d = iso[3].padStart(2, "0");
+                    const year = parseInt(y, 10);
+                    if (year >= 1200 && year <= 1700) return toLooseIso(y, mo, d);
+                    const hijriISO = gregorianToHijriISO(y + "-" + mo + "-" + d);
+                    const h = parseHijriISO(hijriISO);
+                    if (h) return toLooseIso(String(h.y), String(h.mo), String(h.d));
+                    return y + "-" + String(parseInt(mo, 10)) + "-" + String(parseInt(d, 10));
+                }
+                return "";
+            }
+
+            function getRowHijriDateLabel(row) {
+                if (!row) return "";
+                const eventDate = normalizeText(row && (row.event_date || row.eventDate) ? (row.event_date || row.eventDate) : "");
+                const fromEventDate = eventDate ? formatHijriDateDisplay(eventDate) : "";
+                if (fromEventDate) return fromEventDate;
+                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                if (!dateLabel) return "";
+                return formatHijriDateDisplay(dateLabel) || dateLabel;
+            }
+
             function makeBannerHtmlFromRow(row, fallbackText) {
                 if (!row) return '<span class="news-rest">' + wrapParenGlowHtml(fallbackText || "") + "</span>";
                 const type = normalizeText(row && row.type ? row.type : "");
@@ -3965,13 +4040,13 @@
                 const typeLabel = normalizeText(formatEventTypeLabel(type));
                 const title = normalizeText(formatEventTitle(type, person));
                 const copy = normalizeText(formatEventCopy(type, person, row));
-                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const dateLabel = getRowHijriDateLabel(row);
                 let html = "";
                 if (typeLabel) html += '<span class="news-type">' + escapeHtml(typeLabel) + "</span>";
                 let rest = "";
                 if (title) rest += (rest ? " " : "") + "— " + title;
                 if (copy) rest += (rest ? " " : "") + "— " + copy;
-                if (dateLabel) rest += (rest ? " " : "") + "(" + dateLabel + ")";
+                if (dateLabel) rest += (rest ? " " : "") + "— " + dateLabel;
                 if (rest) html += (html ? " " : "") + '<span class="news-rest">' + wrapParenGlowHtml(rest) + "</span>";
                 if (!html) html = '<span class="news-rest">' + wrapParenGlowHtml(fallbackText || "خبر جديد.") + "</span>";
                 return html;
@@ -4048,7 +4123,7 @@
                 if (!row) return;
                 const type = normalizeText(row && row.type ? row.type : "");
                 const person = normalizeText(row && row.person ? row.person : "");
-                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const dateLabel = getRowHijriDateLabel(row);
                 const title = [formatEventTypeLabel(type), formatEventTitle(type, person)].filter(Boolean).join(" — ") || "مناسبة جديدة";
                 const body = [truncateText(formatEventCopy(type, person, row), 120), dateLabel ? "التاريخ: " + dateLabel : ""]
                     .filter(Boolean)
@@ -4152,9 +4227,9 @@
                 if (!row) return "";
                 const type = normalizeText(row && row.type ? row.type : "");
                 const typeLabel = formatEventTypeLabel(type);
-                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const dateLabel = getRowHijriDateLabel(row);
                 let out = typeLabel || "خبر جديد.";
-                if (dateLabel) out += " (" + dateLabel + ")";
+                if (dateLabel) out += " — " + dateLabel;
                 return out || "خبر جديد.";
             }
 
@@ -4171,7 +4246,7 @@
                 const typeLabel = formatEventTypeLabel(type);
                 const title = formatEventTitle(type, person);
                 const copy = truncateText(formatEventCopy(type, person, row), 220);
-                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const dateLabel = getRowHijriDateLabel(row);
                 const branchLabel = branchLabelFromKey(row && (row.branch_key || row.branchKey) ? (row.branch_key || row.branchKey) : "");
                 const head = ["خبر من عائلة الزيدان:", [typeLabel, title].filter(Boolean).join(" — ")].filter(Boolean).join(" ");
                 const lines = [head, copy, branchLabel ? "الفرع: " + branchLabel : "", dateLabel ? "التاريخ: " + dateLabel : "", siteEventsUrl()]
@@ -4217,7 +4292,7 @@
                 const actions = document.createElement("div");
                 actions.className = "event-actions";
 
-                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                const dateLabel = getRowHijriDateLabel(row);
                 const branchLabel = branchLabelFromKey(row && (row.branch_key || row.branchKey) ? (row.branch_key || row.branchKey) : "");
                 const shareText = makeEventShareText(row || {}, "");
                 if (shareText) {
@@ -4256,9 +4331,11 @@
                             else visitParts.push("إلى " + visitDateTo);
                         }
                         if (visitTimeFrom || visitTimeTo) {
-                            if (visitTimeFrom && visitTimeTo) visitParts.push("من " + visitTimeFrom + " إلى " + visitTimeTo);
-                            else if (visitTimeFrom) visitParts.push("من " + visitTimeFrom);
-                            else visitParts.push("إلى " + visitTimeTo);
+                        const fromLabel = visitTimeFrom ? formatTime12Ar(visitTimeFrom) : "";
+                        const toLabel = visitTimeTo ? formatTime12Ar(visitTimeTo) : "";
+                        if (fromLabel && toLabel) visitParts.push("من " + fromLabel + " إلى " + toLabel);
+                        else if (fromLabel) visitParts.push("من " + fromLabel);
+                        else visitParts.push("إلى " + toLabel);
                         }
                         if (visitParts.length) addKvRow(kv, "وقت الزيارة", visitParts.join(" – "));
                     } else if (method === "call" || method === "whatsapp") {
@@ -4394,12 +4471,13 @@
                     if (keys.some((k) => replacedKeys.has(k))) return false;
                     return true;
                 });
-                const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
-                const cutoffMs = Date.now() - maxAgeMs;
+                const nowMs = Date.now();
                 const activeRows = rows.filter((r) => {
                     const createdAt = r && r.created_at ? Date.parse(String(r.created_at)) : NaN;
                     if (!Number.isFinite(createdAt)) return true;
-                    return createdAt >= cutoffMs;
+                    const days = getRowVisibilityDays(r);
+                    const maxAgeMs = Math.max(1, days) * 24 * 60 * 60 * 1000;
+                    return createdAt >= nowMs - maxAgeMs;
                 });
 
                 const baseBannerText = "الحمد لله الذي بنعمته تتم الصالحات — تم بحمد الله اكتمال موقع عائلة الزيدان وسيكون في هذا الشريط أخبار العائلة";

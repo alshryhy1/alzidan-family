@@ -533,7 +533,19 @@
                         </div>
                         <div class="field">
                             <label for="happy-date">تاريخ المناسبة</label>
-                            <input id="happy-date" type="text" dir="ltr" lang="en" inputmode="numeric" placeholder="YYYY-MM-DD" />
+                            <input id="happy-date" type="date" dir="ltr" lang="en" />
+                        </div>
+                        <div class="field">
+                            <label for="happy-visibility-days">مدة عرض الخبر</label>
+                            <select id="happy-visibility-days">
+                                <option value="1">يوم</option>
+                                <option value="2">يومان</option>
+                                <option value="3">ثلاثة أيام</option>
+                                <option value="4">أربعة أيام</option>
+                                <option value="5">خمسة أيام</option>
+                                <option value="6">ستة أيام</option>
+                                <option value="7" selected>أسبوع</option>
+                            </select>
                         </div>
                     </div>
                     <div class="field">
@@ -584,7 +596,19 @@
                         </div>
                         <div class="field">
                             <label for="sick-date">تاريخ الخبر</label>
-                            <input id="sick-date" type="text" dir="ltr" lang="en" inputmode="numeric" placeholder="YYYY-MM-DD" />
+                            <input id="sick-date" type="date" dir="ltr" lang="en" />
+                        </div>
+                        <div class="field">
+                            <label for="sick-visibility-days">مدة عرض الخبر</label>
+                            <select id="sick-visibility-days">
+                                <option value="1">يوم</option>
+                                <option value="2">يومان</option>
+                                <option value="3">ثلاثة أيام</option>
+                                <option value="4">أربعة أيام</option>
+                                <option value="5">خمسة أيام</option>
+                                <option value="6">ستة أيام</option>
+                                <option value="7" selected>أسبوع</option>
+                            </select>
                         </div>
                     </div>
 
@@ -646,19 +670,191 @@
                         <div class="grid">
                             <div>
                                 <label for="sick-visit-date-from">الزيارة من تاريخ</label>
-                                <input id="sick-visit-date-from" type="text" dir="ltr" lang="en" inputmode="numeric" placeholder="YYYY-MM-DD" />
+                                <input id="sick-visit-date-from" type="date" dir="ltr" lang="en" />
                             </div>
                             <div>
                                 <label for="sick-visit-date-to">الزيارة إلى تاريخ</label>
-                                <input id="sick-visit-date-to" type="text" dir="ltr" lang="en" inputmode="numeric" placeholder="YYYY-MM-DD" />
+                                <input id="sick-visit-date-to" type="date" dir="ltr" lang="en" />
                             </div>
                             <div>
                                 <label for="sick-visit-time-from">من الساعة</label>
-                                <input id="sick-visit-time-from" type="time" dir="ltr" lang="en" />
+                                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                                    <select id="sick-visit-time-from-hour" dir="ltr" lang="en">
+                                        <option value=""></option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                        <option value="7">7</option>
+                                        <option value="8">8</option>
+                                        <option value="9">9</option>
+                                        <option value="10">10</option>
+                                        <option value="11">11</option>
+                                        <option value="12">12</option>
+                                    </select>
+                                    <span dir="ltr">:</span>
+                                    <select id="sick-visit-time-from-minute" dir="ltr" lang="en">
+                                        <option value=""></option>
+                                        <option value="00">00</option>
+                                        <option value="01">01</option>
+                                        <option value="02">02</option>
+                                        <option value="03">03</option>
+                                        <option value="04">04</option>
+                                        <option value="05">05</option>
+                                        <option value="06">06</option>
+                                        <option value="07">07</option>
+                                        <option value="08">08</option>
+                                        <option value="09">09</option>
+                                        <option value="10">10</option>
+                                        <option value="11">11</option>
+                                        <option value="12">12</option>
+                                        <option value="13">13</option>
+                                        <option value="14">14</option>
+                                        <option value="15">15</option>
+                                        <option value="16">16</option>
+                                        <option value="17">17</option>
+                                        <option value="18">18</option>
+                                        <option value="19">19</option>
+                                        <option value="20">20</option>
+                                        <option value="21">21</option>
+                                        <option value="22">22</option>
+                                        <option value="23">23</option>
+                                        <option value="24">24</option>
+                                        <option value="25">25</option>
+                                        <option value="26">26</option>
+                                        <option value="27">27</option>
+                                        <option value="28">28</option>
+                                        <option value="29">29</option>
+                                        <option value="30">30</option>
+                                        <option value="31">31</option>
+                                        <option value="32">32</option>
+                                        <option value="33">33</option>
+                                        <option value="34">34</option>
+                                        <option value="35">35</option>
+                                        <option value="36">36</option>
+                                        <option value="37">37</option>
+                                        <option value="38">38</option>
+                                        <option value="39">39</option>
+                                        <option value="40">40</option>
+                                        <option value="41">41</option>
+                                        <option value="42">42</option>
+                                        <option value="43">43</option>
+                                        <option value="44">44</option>
+                                        <option value="45">45</option>
+                                        <option value="46">46</option>
+                                        <option value="47">47</option>
+                                        <option value="48">48</option>
+                                        <option value="49">49</option>
+                                        <option value="50">50</option>
+                                        <option value="51">51</option>
+                                        <option value="52">52</option>
+                                        <option value="53">53</option>
+                                        <option value="54">54</option>
+                                        <option value="55">55</option>
+                                        <option value="56">56</option>
+                                        <option value="57">57</option>
+                                        <option value="58">58</option>
+                                        <option value="59">59</option>
+                                    </select>
+                                    <select id="sick-visit-time-from-period">
+                                        <option value=""></option>
+                                        <option value="am">صباحاً</option>
+                                        <option value="pm">مساءً</option>
+                                    </select>
+                                    <input id="sick-visit-time-from" type="hidden" />
+                                </div>
                             </div>
                             <div>
                                 <label for="sick-visit-time-to">إلى الساعة</label>
-                                <input id="sick-visit-time-to" type="time" dir="ltr" lang="en" />
+                                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                                    <select id="sick-visit-time-to-hour" dir="ltr" lang="en">
+                                        <option value=""></option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                        <option value="7">7</option>
+                                        <option value="8">8</option>
+                                        <option value="9">9</option>
+                                        <option value="10">10</option>
+                                        <option value="11">11</option>
+                                        <option value="12">12</option>
+                                    </select>
+                                    <span dir="ltr">:</span>
+                                    <select id="sick-visit-time-to-minute" dir="ltr" lang="en">
+                                        <option value=""></option>
+                                        <option value="00">00</option>
+                                        <option value="01">01</option>
+                                        <option value="02">02</option>
+                                        <option value="03">03</option>
+                                        <option value="04">04</option>
+                                        <option value="05">05</option>
+                                        <option value="06">06</option>
+                                        <option value="07">07</option>
+                                        <option value="08">08</option>
+                                        <option value="09">09</option>
+                                        <option value="10">10</option>
+                                        <option value="11">11</option>
+                                        <option value="12">12</option>
+                                        <option value="13">13</option>
+                                        <option value="14">14</option>
+                                        <option value="15">15</option>
+                                        <option value="16">16</option>
+                                        <option value="17">17</option>
+                                        <option value="18">18</option>
+                                        <option value="19">19</option>
+                                        <option value="20">20</option>
+                                        <option value="21">21</option>
+                                        <option value="22">22</option>
+                                        <option value="23">23</option>
+                                        <option value="24">24</option>
+                                        <option value="25">25</option>
+                                        <option value="26">26</option>
+                                        <option value="27">27</option>
+                                        <option value="28">28</option>
+                                        <option value="29">29</option>
+                                        <option value="30">30</option>
+                                        <option value="31">31</option>
+                                        <option value="32">32</option>
+                                        <option value="33">33</option>
+                                        <option value="34">34</option>
+                                        <option value="35">35</option>
+                                        <option value="36">36</option>
+                                        <option value="37">37</option>
+                                        <option value="38">38</option>
+                                        <option value="39">39</option>
+                                        <option value="40">40</option>
+                                        <option value="41">41</option>
+                                        <option value="42">42</option>
+                                        <option value="43">43</option>
+                                        <option value="44">44</option>
+                                        <option value="45">45</option>
+                                        <option value="46">46</option>
+                                        <option value="47">47</option>
+                                        <option value="48">48</option>
+                                        <option value="49">49</option>
+                                        <option value="50">50</option>
+                                        <option value="51">51</option>
+                                        <option value="52">52</option>
+                                        <option value="53">53</option>
+                                        <option value="54">54</option>
+                                        <option value="55">55</option>
+                                        <option value="56">56</option>
+                                        <option value="57">57</option>
+                                        <option value="58">58</option>
+                                        <option value="59">59</option>
+                                    </select>
+                                    <select id="sick-visit-time-to-period">
+                                        <option value=""></option>
+                                        <option value="am">صباحاً</option>
+                                        <option value="pm">مساءً</option>
+                                    </select>
+                                    <input id="sick-visit-time-to" type="hidden" />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -717,7 +913,19 @@
                         </div>
                         <div class="field">
                             <label for="death-date">تاريخ الوفاة</label>
-                            <input id="death-date" type="text" dir="ltr" lang="en" inputmode="numeric" placeholder="YYYY-MM-DD" />
+                            <input id="death-date" type="date" dir="ltr" lang="en" />
+                        </div>
+                        <div class="field">
+                            <label for="death-visibility-days">مدة عرض الخبر</label>
+                            <select id="death-visibility-days">
+                                <option value="1">يوم</option>
+                                <option value="2">يومان</option>
+                                <option value="3">ثلاثة أيام</option>
+                                <option value="4">أربعة أيام</option>
+                                <option value="5">خمسة أيام</option>
+                                <option value="6">ستة أيام</option>
+                                <option value="7" selected>أسبوع</option>
+                            </select>
                         </div>
                     </div>
                     <div class="section-title" style="margin-top: 6px;">تفاصيل الصلاة والدفن</div>
@@ -848,6 +1056,7 @@
         const happyType = document.getElementById("happy-type");
         const happyPerson = document.getElementById("happy-person");
         const happyDate = document.getElementById("happy-date");
+        const happyVisibilityDays = document.getElementById("happy-visibility-days");
         const happyDetails = document.getElementById("happy-details");
         const saveHappyBtn = document.getElementById("save-happy-btn");
         const cancelHappyBtn = document.getElementById("cancel-happy-btn");
@@ -857,6 +1066,7 @@
         const sickType = document.getElementById("sick-type");
         const sickPerson = document.getElementById("sick-person");
         const sickDate = document.getElementById("sick-date");
+        const sickVisibilityDays = document.getElementById("sick-visibility-days");
         const sickPlace = document.getElementById("sick-place");
         const sickHospitalFields = document.getElementById("sick-hospital-fields");
         const sickHospitalName = document.getElementById("sick-hospital-name");
@@ -870,6 +1080,12 @@
         const sickVisitDateTo = document.getElementById("sick-visit-date-to");
         const sickVisitTimeFrom = document.getElementById("sick-visit-time-from");
         const sickVisitTimeTo = document.getElementById("sick-visit-time-to");
+        const sickVisitTimeFromHour = document.getElementById("sick-visit-time-from-hour");
+        const sickVisitTimeFromMinute = document.getElementById("sick-visit-time-from-minute");
+        const sickVisitTimeFromPeriod = document.getElementById("sick-visit-time-from-period");
+        const sickVisitTimeToHour = document.getElementById("sick-visit-time-to-hour");
+        const sickVisitTimeToMinute = document.getElementById("sick-visit-time-to-minute");
+        const sickVisitTimeToPeriod = document.getElementById("sick-visit-time-to-period");
         const sickContactBlock = document.getElementById("sick-contact-block");
         const sickContactPhone = document.getElementById("sick-contact-phone");
         const sickNotes = document.getElementById("sick-notes");
@@ -880,6 +1096,7 @@
 
         const deathPerson = document.getElementById("death-person");
         const deathDate = document.getElementById("death-date");
+        const deathVisibilityDays = document.getElementById("death-visibility-days");
         const prayerPlace = document.getElementById("prayer-place");
         const prayerTime = document.getElementById("prayer-time");
         const burialPlace = document.getElementById("burial-place");
@@ -2959,9 +3176,10 @@
                     const h = normalizePersonName(child && child.hdate ? child.hdate : "");
                     const g = normalizePersonName(child && child.gdate ? child.gdate : "");
                     const y = child && child.year ? String(child.year) : "";
-                    if (h) birthParts.push("هجري: " + h);
-                    if (g) birthParts.push("ميلادي: " + g);
-                    if (!h && !g && y) birthParts.push("سنة: " + y);
+                    let hijriLabel = h ? formatDateISO(h) : "";
+                    if (!hijriLabel && g) hijriLabel = formatDateISO(g);
+                    if (hijriLabel) birthParts.push(hijriLabel);
+                    if (!hijriLabel && y) birthParts.push("سنة: " + y);
                     if (birthParts.length) parts.push("الميلاد: " + birthParts.join(" / "));
                     const city = normalizePersonName(child && child.city ? child.city : "");
                     const area = normalizePersonName(child && child.area ? child.area : "");
@@ -3208,29 +3426,68 @@
         }
 
         function formatDateISO(v) {
-            const s = String(v || "").trim();
+            let s = String(v || "").trim();
             if (!s) return "";
-            const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
-            if (iso) {
-                const y = iso[1];
-                const m = iso[2].padStart(2, "0");
-                const d = iso[3].padStart(2, "0");
-                return d + "/" + m + "/" + y;
+            for (let i = 0; i < 3; i++) {
+                const m = /^\s*[\(（]\s*(.*?)\s*[\)）]\s*$/.exec(s);
+                if (!m) break;
+                s = String(m[1] || "").trim();
+                if (!s) return "";
             }
+            const toLooseIso = (y, mo, d) => String(parseInt(y, 10)) + "-" + String(parseInt(mo, 10)) + "-" + String(parseInt(d, 10));
             const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
             if (slash) {
                 const d = slash[1].padStart(2, "0");
                 const m = slash[2].padStart(2, "0");
                 const y = slash[3];
-                return d + "/" + m + "/" + y;
+                const year = parseInt(y, 10);
+                if (year >= 1200 && year <= 1700) return toLooseIso(y, m, d);
+                const hijriISO = gregorianToHijriISO(y + "-" + m + "-" + d);
+                const h = parseHijriISO(hijriISO);
+                if (h) return toLooseIso(String(h.y), String(h.mo), String(h.d));
+                return y + "-" + String(parseInt(m, 10)) + "-" + String(parseInt(d, 10));
+            }
+            const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+            if (iso) {
+                const y = iso[1].padStart(4, "0");
+                const m = iso[2].padStart(2, "0");
+                const d = iso[3].padStart(2, "0");
+                const year = parseInt(y, 10);
+                if (year >= 1200 && year <= 1700) return toLooseIso(y, m, d);
+                const hijriISO = gregorianToHijriISO(y + "-" + m + "-" + d);
+                const h = parseHijriISO(hijriISO);
+                if (h) return toLooseIso(String(h.y), String(h.mo), String(h.d));
+                return y + "-" + String(parseInt(m, 10)) + "-" + String(parseInt(d, 10));
             }
             return s;
+        }
+
+        function todayGregorianISO() {
+            const now = new Date();
+            const y = String(now.getFullYear()).padStart(4, "0");
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            const d = String(now.getDate()).padStart(2, "0");
+            return y + "-" + m + "-" + d;
         }
 
         function wrapLTRText(v) {
             const s = String(v || "");
             if (!s) return "";
             return "\u200E" + s + "\u200E";
+        }
+
+        function formatTime12Ar(v) {
+            const s = String(v || "").trim();
+            if (!s) return "";
+            const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(s);
+            if (!m) return s;
+            let h = parseInt(m[1], 10);
+            const min = m[2];
+            if (!Number.isFinite(h)) return s;
+            const suffix = h >= 12 ? "مساءً" : "صباحاً";
+            h = h % 12;
+            if (h === 0) h = 12;
+            return String(h) + ":" + min + " " + suffix;
         }
 
         function formatEventText(event) {
@@ -3417,11 +3674,19 @@
             sickContactBlock.style.display = isVisit ? "none" : "block";
             if (isVisit) {
                 if (sickContactPhone) sickContactPhone.value = "";
+                syncVisitTimeHidden(sickVisitTimeFromHour, sickVisitTimeFromMinute, sickVisitTimeFromPeriod, sickVisitTimeFrom);
+                syncVisitTimeHidden(sickVisitTimeToHour, sickVisitTimeToMinute, sickVisitTimeToPeriod, sickVisitTimeTo);
             } else {
                 if (sickVisitDateFrom) sickVisitDateFrom.value = "";
                 if (sickVisitDateTo) sickVisitDateTo.value = "";
                 if (sickVisitTimeFrom) sickVisitTimeFrom.value = "";
                 if (sickVisitTimeTo) sickVisitTimeTo.value = "";
+                if (sickVisitTimeFromHour) sickVisitTimeFromHour.value = "";
+                if (sickVisitTimeFromMinute) sickVisitTimeFromMinute.value = "";
+                if (sickVisitTimeFromPeriod) sickVisitTimeFromPeriod.value = "";
+                if (sickVisitTimeToHour) sickVisitTimeToHour.value = "";
+                if (sickVisitTimeToMinute) sickVisitTimeToMinute.value = "";
+                if (sickVisitTimeToPeriod) sickVisitTimeToPeriod.value = "";
             }
         }
 
@@ -3440,6 +3705,48 @@
             }
         }
 
+        function buildVisitTimeValue(hourEl, minuteEl, periodEl) {
+            const hourRaw = String(hourEl && hourEl.value != null ? hourEl.value : "").trim();
+            const minuteRaw = String(minuteEl && minuteEl.value != null ? minuteEl.value : "").trim();
+            const periodRaw = String(periodEl && periodEl.value != null ? periodEl.value : "").trim().toLowerCase();
+            if (!hourRaw || !minuteRaw || !periodRaw) return "";
+            const hour12 = parseInt(hourRaw, 10);
+            const minute = parseInt(minuteRaw, 10);
+            if (!Number.isFinite(hour12) || hour12 < 1 || hour12 > 12) return "";
+            if (!Number.isFinite(minute) || minute < 0 || minute > 59) return "";
+            if (periodRaw !== "am" && periodRaw !== "pm") return "";
+            let hour24 = hour12 % 12;
+            if (periodRaw === "pm") hour24 += 12;
+            return String(hour24).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+        }
+
+        function syncVisitTimeHidden(hourEl, minuteEl, periodEl, hiddenEl) {
+            if (!hiddenEl) return;
+            hiddenEl.value = buildVisitTimeValue(hourEl, minuteEl, periodEl);
+        }
+
+        function setVisitTimeSelectorsFromValue(hourEl, minuteEl, periodEl, timeValue) {
+            const s = String(timeValue || "").trim();
+            if (!hourEl || !minuteEl || !periodEl) return;
+            if (!s) {
+                hourEl.value = "";
+                minuteEl.value = "";
+                periodEl.value = "";
+                return;
+            }
+            const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(s);
+            if (!m) return;
+            const hour24 = parseInt(m[1], 10);
+            const minute = parseInt(m[2], 10);
+            if (!Number.isFinite(hour24) || hour24 < 0 || hour24 > 23) return;
+            if (!Number.isFinite(minute) || minute < 0 || minute > 59) return;
+            const period = hour24 >= 12 ? "pm" : "am";
+            const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+            hourEl.value = String(hour12);
+            minuteEl.value = String(minute).padStart(2, "0");
+            periodEl.value = period;
+        }
+
         function buildVisitMeta(event) {
             const contactMethodValue = event.contactMethod || event.contact_method || "";
             const contactPhoneValue = event.contactPhone || event.contact_phone || "";
@@ -3454,14 +3761,18 @@
                 const timeTo = visitTimeToValue || "";
                 const visitParts = [];
                 if (dateFrom || dateTo) {
-                    if (dateFrom && dateTo) visitParts.push("من " + wrapLTRText(dateFrom) + " إلى " + wrapLTRText(dateTo));
-                    else if (dateFrom) visitParts.push("من " + wrapLTRText(dateFrom));
-                    else visitParts.push("إلى " + wrapLTRText(dateTo));
+                    const fromLabel = dateFrom ? formatDateISO(dateFrom) : "";
+                    const toLabel = dateTo ? formatDateISO(dateTo) : "";
+                    if (fromLabel && toLabel) visitParts.push("من " + wrapLTRText(fromLabel) + " إلى " + wrapLTRText(toLabel));
+                    else if (fromLabel) visitParts.push("من " + wrapLTRText(fromLabel));
+                    else if (toLabel) visitParts.push("إلى " + wrapLTRText(toLabel));
                 }
                 if (timeFrom || timeTo) {
-                    if (timeFrom && timeTo) visitParts.push("من " + timeFrom + " إلى " + timeTo);
-                    else if (timeFrom) visitParts.push("من " + timeFrom);
-                    else visitParts.push("إلى " + timeTo);
+                    const fromLabel = timeFrom ? formatTime12Ar(timeFrom) : "";
+                    const toLabel = timeTo ? formatTime12Ar(timeTo) : "";
+                    if (fromLabel && toLabel) visitParts.push("من " + fromLabel + " إلى " + toLabel);
+                    else if (fromLabel) visitParts.push("من " + fromLabel);
+                    else visitParts.push("إلى " + toLabel);
                 }
                 return visitParts.length ? ("الزيارة: " + visitParts.join(" – ")) : "";
             }
@@ -3519,7 +3830,8 @@
                 row.appendChild(main);
 
                 const metaParts = [];
-                const dateLabel = event.dateLabel || event.date_label || "";
+                const dateRaw = String(event && (event.event_date || event.eventDate || event.date_label || event.dateLabel) ? (event.event_date || event.eventDate || event.date_label || event.dateLabel) : "").trim();
+                const dateLabel = dateRaw ? formatDateISO(dateRaw) : "";
                 if (dateLabel) metaParts.push("التاريخ: " + wrapLTRText(dateLabel));
                 const detailsText = getHappyDetailsText(event || {});
                 if (detailsText) metaParts.push(detailsText);
@@ -3560,7 +3872,8 @@
                 row.appendChild(main);
 
                 const metaParts = [];
-                const dateLabel = event.dateLabel || event.date_label || "";
+                const dateRaw = String(event && (event.event_date || event.eventDate || event.date_label || event.dateLabel) ? (event.event_date || event.eventDate || event.date_label || event.dateLabel) : "").trim();
+                const dateLabel = dateRaw ? formatDateISO(dateRaw) : "";
                 if (dateLabel) metaParts.push("التاريخ: " + wrapLTRText(dateLabel));
 
                 const health = parseHealthDetails(event || {});
@@ -3674,6 +3987,22 @@
             return null;
         }
 
+        function clampVisibilityDays(v) {
+            const n = parseInt(String(v || "").trim(), 10);
+            if (!Number.isFinite(n)) return 7;
+            if (n < 1) return 1;
+            if (n > 7) return 7;
+            return n;
+        }
+
+        function getEventVisibilityDays(eventRow) {
+            const env = parseEventEnvelope(eventRow || {});
+            if (env && env.v === 1 && (env.kind === "happy_notice" || env.kind === "health_notice" || env.kind === "death_notice")) {
+                return clampVisibilityDays(env.showDays);
+            }
+            return 7;
+        }
+
         function getHappyDetailsText(eventRow) {
             const env = parseEventEnvelope(eventRow || {});
             if (env && env.kind === "happy_notice" && env.v === 1) {
@@ -3742,7 +4071,8 @@
                 title.textContent = person ? ("خبر وفاة: " + person) : "خبر وفاة";
                 row.appendChild(title);
 
-                const dateLabel = String(deathRow && (deathRow.date_label || deathRow.dateLabel) ? (deathRow.date_label || deathRow.dateLabel) : "").trim();
+                const dateRaw = String(deathRow && (deathRow.event_date || deathRow.eventDate || deathRow.date_label || deathRow.dateLabel) ? (deathRow.event_date || deathRow.eventDate || deathRow.date_label || deathRow.dateLabel) : "").trim();
+                const dateLabel = dateRaw ? formatDateISO(dateRaw) : "";
                 const metaParts = [];
                 if (dateLabel) metaParts.push("التاريخ: " + wrapLTRText(dateLabel));
 
@@ -4861,7 +5191,8 @@
             editingHappy = null;
             if (happyType) happyType.value = "";
             if (happyPerson) happyPerson.value = "";
-            if (happyDate) happyDate.value = "";
+            if (happyDate) happyDate.value = todayGregorianISO();
+            if (happyVisibilityDays) happyVisibilityDays.value = "7";
             if (happyDetails) happyDetails.value = "";
             if (saveHappyBtn) saveHappyBtn.textContent = "إضافة";
             if (cancelHappyBtn) cancelHappyBtn.style.display = "none";
@@ -4871,7 +5202,8 @@
             editingSick = null;
             if (sickType) sickType.value = "";
             if (sickPerson) sickPerson.value = "";
-            if (sickDate) sickDate.value = "";
+            if (sickDate) sickDate.value = todayGregorianISO();
+            if (sickVisibilityDays) sickVisibilityDays.value = "7";
             if (sickPlace) sickPlace.value = "hospital";
             if (sickHospitalName) sickHospitalName.value = "";
             if (sickHospitalDept) sickHospitalDept.value = "";
@@ -4882,6 +5214,12 @@
             if (sickVisitDateTo) sickVisitDateTo.value = "";
             if (sickVisitTimeFrom) sickVisitTimeFrom.value = "";
             if (sickVisitTimeTo) sickVisitTimeTo.value = "";
+            if (sickVisitTimeFromHour) sickVisitTimeFromHour.value = "";
+            if (sickVisitTimeFromMinute) sickVisitTimeFromMinute.value = "";
+            if (sickVisitTimeFromPeriod) sickVisitTimeFromPeriod.value = "";
+            if (sickVisitTimeToHour) sickVisitTimeToHour.value = "";
+            if (sickVisitTimeToMinute) sickVisitTimeToMinute.value = "";
+            if (sickVisitTimeToPeriod) sickVisitTimeToPeriod.value = "";
             if (sickContactPhone) sickContactPhone.value = "";
             if (sickNotes) sickNotes.value = "";
             if (saveSickBtn) saveSickBtn.textContent = "إضافة";
@@ -4893,7 +5231,8 @@
         function resetDeathForm() {
             editingDeath = null;
             if (deathPerson) deathPerson.value = "";
-            if (deathDate) deathDate.value = "";
+            if (deathDate) deathDate.value = todayGregorianISO();
+            if (deathVisibilityDays) deathVisibilityDays.value = "7";
             if (prayerPlace) prayerPlace.value = "";
             if (prayerTime) prayerTime.value = "";
             if (burialPlace) burialPlace.value = "";
@@ -4907,12 +5246,57 @@
             if (cancelDeathBtn) cancelDeathBtn.style.display = "none";
         }
 
+        function resolveEventDateInputValue(row) {
+            const raw = row && row.event_date != null ? String(row.event_date).trim() : "";
+            const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(raw);
+            if (iso) {
+                const y = iso[1].padStart(4, "0");
+                const m = iso[2].padStart(2, "0");
+                const d = iso[3].padStart(2, "0");
+                return y + "-" + m + "-" + d;
+            }
+            const labelRaw = row && row.date_label != null ? String(row.date_label).trim() : "";
+            let s = labelRaw;
+            for (let i = 0; i < 3; i++) {
+                const m = /^\s*[\(（]\s*(.*?)\s*[\)）]\s*$/.exec(s);
+                if (!m) break;
+                s = String(m[1] || "").trim();
+                if (!s) break;
+            }
+            const labelIso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+            if (labelIso) {
+                const y = labelIso[1].padStart(4, "0");
+                const m = labelIso[2].padStart(2, "0");
+                const d = labelIso[3].padStart(2, "0");
+                const year = parseInt(y, 10);
+                if (year >= 1200 && year <= 1700) {
+                    const g = hijriToGregorianISO(y + "-" + m + "-" + d);
+                    if (g) return g;
+                }
+                if (year >= 1900 && year <= 2100) return y + "-" + m + "-" + d;
+            }
+            const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+            if (slash) {
+                const d = slash[1].padStart(2, "0");
+                const m = slash[2].padStart(2, "0");
+                const y = slash[3];
+                const year = parseInt(y, 10);
+                if (year >= 1200 && year <= 1700) {
+                    const g = hijriToGregorianISO(y + "-" + m + "-" + d);
+                    if (g) return g;
+                }
+                if (year >= 1900 && year <= 2100) return y + "-" + m + "-" + d;
+            }
+            return todayGregorianISO();
+        }
+
         function startEditHappy(row) {
             editingHappy = row || null;
             if (happySection) happySection.open = true;
             if (happyType) happyType.value = String(row && row.type ? row.type : "");
             if (happyPerson) happyPerson.value = normalizePersonName(row && row.person ? row.person : "");
-            if (happyDate) happyDate.value = String(row && row.event_date ? row.event_date : "");
+            if (happyDate) happyDate.value = resolveEventDateInputValue(row || {});
+            if (happyVisibilityDays) happyVisibilityDays.value = String(getEventVisibilityDays(row || {}));
             if (happyDetails) happyDetails.value = getHappyDetailsText(row || {});
             if (saveHappyBtn) saveHappyBtn.textContent = "حفظ التعديل";
             if (cancelHappyBtn) cancelHappyBtn.style.display = "inline-flex";
@@ -4923,7 +5307,8 @@
             if (sickSection) sickSection.open = true;
             if (sickType) sickType.value = String(row && row.type ? row.type : "");
             if (sickPerson) sickPerson.value = normalizePersonName(row && row.person ? row.person : "");
-            if (sickDate) sickDate.value = String(row && row.event_date ? row.event_date : "");
+            if (sickDate) sickDate.value = resolveEventDateInputValue(row || {});
+            if (sickVisibilityDays) sickVisibilityDays.value = String(getEventVisibilityDays(row || {}));
 
             const health = parseHealthDetails(row || {});
             if (sickPlace) sickPlace.value = health.place === "home" ? "home" : "hospital";
@@ -4942,6 +5327,8 @@
             if (sickVisitDateTo) sickVisitDateTo.value = String(row && row.visit_date_to ? row.visit_date_to : "");
             if (sickVisitTimeFrom) sickVisitTimeFrom.value = String(row && row.visit_time_from ? row.visit_time_from : "");
             if (sickVisitTimeTo) sickVisitTimeTo.value = String(row && row.visit_time_to ? row.visit_time_to : "");
+            setVisitTimeSelectorsFromValue(sickVisitTimeFromHour, sickVisitTimeFromMinute, sickVisitTimeFromPeriod, sickVisitTimeFrom && sickVisitTimeFrom.value ? sickVisitTimeFrom.value : "");
+            setVisitTimeSelectorsFromValue(sickVisitTimeToHour, sickVisitTimeToMinute, sickVisitTimeToPeriod, sickVisitTimeTo && sickVisitTimeTo.value ? sickVisitTimeTo.value : "");
 
             updateSickPlaceVisibility();
             updateSickContactModeVisibility();
@@ -4953,7 +5340,8 @@
             editingDeath = row || null;
             if (deathSection) deathSection.open = true;
             if (deathPerson) deathPerson.value = normalizePersonName(row && row.person ? row.person : "");
-            if (deathDate) deathDate.value = String(row && row.event_date ? row.event_date : "");
+            if (deathDate) deathDate.value = resolveEventDateInputValue(row || {});
+            if (deathVisibilityDays) deathVisibilityDays.value = String(getEventVisibilityDays(row || {}));
             const d = parseDeathDetails(row || {});
             if (prayerPlace) prayerPlace.value = d.prayerPlace || "";
             if (prayerTime) prayerTime.value = d.prayerTime || "";
@@ -5037,6 +5425,12 @@
 
         if (sickPlace) sickPlace.addEventListener("change", updateSickPlaceVisibility);
         if (sickContactMethod) sickContactMethod.addEventListener("change", updateSickContactModeVisibility);
+        if (sickVisitTimeFromHour) sickVisitTimeFromHour.addEventListener("change", () => syncVisitTimeHidden(sickVisitTimeFromHour, sickVisitTimeFromMinute, sickVisitTimeFromPeriod, sickVisitTimeFrom));
+        if (sickVisitTimeFromMinute) sickVisitTimeFromMinute.addEventListener("change", () => syncVisitTimeHidden(sickVisitTimeFromHour, sickVisitTimeFromMinute, sickVisitTimeFromPeriod, sickVisitTimeFrom));
+        if (sickVisitTimeFromPeriod) sickVisitTimeFromPeriod.addEventListener("change", () => syncVisitTimeHidden(sickVisitTimeFromHour, sickVisitTimeFromMinute, sickVisitTimeFromPeriod, sickVisitTimeFrom));
+        if (sickVisitTimeToHour) sickVisitTimeToHour.addEventListener("change", () => syncVisitTimeHidden(sickVisitTimeToHour, sickVisitTimeToMinute, sickVisitTimeToPeriod, sickVisitTimeTo));
+        if (sickVisitTimeToMinute) sickVisitTimeToMinute.addEventListener("change", () => syncVisitTimeHidden(sickVisitTimeToHour, sickVisitTimeToMinute, sickVisitTimeToPeriod, sickVisitTimeTo));
+        if (sickVisitTimeToPeriod) sickVisitTimeToPeriod.addEventListener("change", () => syncVisitTimeHidden(sickVisitTimeToHour, sickVisitTimeToMinute, sickVisitTimeToPeriod, sickVisitTimeTo));
 
         if (saveHappyBtn) {
             saveHappyBtn.addEventListener("click", async () => {
@@ -5046,11 +5440,15 @@
                 }
                 const type = String(happyType && happyType.value ? happyType.value : "").trim();
                 const person = normalizePersonName(happyPerson && happyPerson.value ? happyPerson.value : "");
-                const dateValue = String(happyDate && happyDate.value ? happyDate.value : "").trim();
+                let dateValue = String(happyDate && happyDate.value ? happyDate.value : "").trim();
                 const detailsText = String(happyDetails && happyDetails.value ? happyDetails.value : "").trim();
                 if (!type || !person) {
                     showAlert(happyAlert, "error", "يرجى اختيار نوع المناسبة وكتابة اسم الشخص.");
                     return;
+                }
+                if (!dateValue) {
+                    dateValue = todayGregorianISO();
+                    if (happyDate) happyDate.value = dateValue;
                 }
                 const dateLabel = dateValue ? formatDateISO(dateValue) : "";
                 const sb = getSupabaseClient();
@@ -5066,11 +5464,13 @@
                         detailsText.includes("تهانينا"));
                 const baseHappyText = formatEventText({ type, person });
                 const storedText = looksLikeMessage ? detailsText : baseHappyText;
+                const showDays = clampVisibilityDays(happyVisibilityDays && happyVisibilityDays.value ? happyVisibilityDays.value : 7);
                 const happyPayload = {
                     v: 1,
                     kind: "happy_notice",
                     text: storedText || "",
-                    extra: looksLikeMessage ? "" : detailsText
+                    extra: looksLikeMessage ? "" : detailsText,
+                    showDays
                 };
                 const patch = {
                     branch_key: state.branch,
@@ -5194,10 +5594,14 @@
                 }
                 const type = String(sickType && sickType.value ? sickType.value : "").trim();
                 const person = normalizePersonName(sickPerson && sickPerson.value ? sickPerson.value : "");
-                const dateValue = String(sickDate && sickDate.value ? sickDate.value : "").trim();
+                let dateValue = String(sickDate && sickDate.value ? sickDate.value : "").trim();
                 if (!type || !person) {
                     showAlert(sickAlert, "error", "يرجى اختيار نوع الحالة وكتابة اسم الشخص.");
                     return;
+                }
+                if (!dateValue) {
+                    dateValue = todayGregorianISO();
+                    if (sickDate) sickDate.value = dateValue;
                 }
                 const dateLabel = dateValue ? formatDateISO(dateValue) : "";
                 const place = sickPlace && sickPlace.value === "home" ? "home" : "hospital";
@@ -5226,6 +5630,7 @@
                     }
                 }
 
+                const showDays = clampVisibilityDays(sickVisibilityDays && sickVisibilityDays.value ? sickVisibilityDays.value : 7);
                 const payload = {
                     v: 1,
                     kind: "health_notice",
@@ -5234,7 +5639,8 @@
                     homeArea: homeAreaValue,
                     notes: notesValue,
                     hospitalName: hospitalNameValue,
-                    hospitalDept: hospitalDeptValue
+                    hospitalDept: hospitalDeptValue,
+                    showDays
                 };
                 const details = JSON.stringify(payload);
 
@@ -5372,12 +5778,17 @@
                     return;
                 }
                 const person = normalizePersonName(deathPerson && deathPerson.value ? deathPerson.value : "");
-                const dateValue = String(deathDate && deathDate.value ? deathDate.value : "").trim();
+                let dateValue = String(deathDate && deathDate.value ? deathDate.value : "").trim();
                 if (!person) {
                     showAlert(deathAlert, "error", "يرجى كتابة اسم المتوفى.");
                     return;
                 }
+                if (!dateValue) {
+                    dateValue = todayGregorianISO();
+                    if (deathDate) deathDate.value = dateValue;
+                }
                 const dateLabel = dateValue ? formatDateISO(dateValue) : "";
+                const showDays = clampVisibilityDays(deathVisibilityDays && deathVisibilityDays.value ? deathVisibilityDays.value : 7);
                 const payload = {
                     v: 1,
                     kind: "death_notice",
@@ -5391,7 +5802,8 @@
                         condolencePhone1 && condolencePhone1.value ? condolencePhone1.value : "",
                         condolencePhone2 && condolencePhone2.value ? condolencePhone2.value : ""
                     ]),
-                    notes: String(deathNotes && deathNotes.value ? deathNotes.value : "").trim()
+                    notes: String(deathNotes && deathNotes.value ? deathNotes.value : "").trim(),
+                    showDays
                 };
                 const details = JSON.stringify(payload);
 
