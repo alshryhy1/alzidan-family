@@ -368,6 +368,26 @@
 
         <section class="section">
             <div class="section-header">
+                <div class="section-title">استيراد شجرة العائلة (CSV)</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    حمّل القالب ثم املأه (Excel/Google Sheets) واحفظه بصيغة CSV، وبعدها اختر الملف واضغط استيراد.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+                    <button id="tree-import-download" class="btn btn-outline btn-sm" type="button">تحميل قالب CSV</button>
+                    <button id="tree-import-whatsapp" class="btn btn-outline btn-sm" type="button">إرسال القالب عبر واتساب</button>
+                    <button id="tree-import-copy" class="btn btn-outline btn-sm" type="button">نسخ نموذج CSV</button>
+                    <input id="tree-import-file" type="file" accept=".csv,text/csv" />
+                    <button id="tree-import-run" class="btn btn-primary btn-sm" type="button">استيراد</button>
+                </div>
+                <textarea id="tree-import-template" readonly style="width: 100%; min-height: 96px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr; margin-bottom: 10px;"></textarea>
+                <div id="tree-import-status" class="hint"></div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
                 <div class="section-title">تهيئة Supabase للمناسبات وصلاحيات المناديب</div>
             </div>
             <div class="card">
@@ -477,6 +497,13 @@
             const adminEmailAutoOpen = document.getElementById("admin-email-auto-open");
             const adminEmailTestBtn = document.getElementById("admin-email-test");
             const adminEmailStatus = document.getElementById("admin-email-status");
+            const treeImportDownloadBtn = document.getElementById("tree-import-download");
+            const treeImportWhatsappBtn = document.getElementById("tree-import-whatsapp");
+            const treeImportCopyBtn = document.getElementById("tree-import-copy");
+            const treeImportFileEl = document.getElementById("tree-import-file");
+            const treeImportRunBtn = document.getElementById("tree-import-run");
+            const treeImportTemplateEl = document.getElementById("tree-import-template");
+            const treeImportStatusEl = document.getElementById("tree-import-status");
 
             const TREE_SETUP_SQL = `
 create table if not exists public.tree_children (
@@ -983,6 +1010,35 @@ alter table public.family_events add column if not exists visit_time_from text;
 alter table public.family_events add column if not exists visit_time_to text;
 alter table public.family_events add column if not exists created_at timestamptz;
 
+do $$
+begin
+  begin
+    execute 'alter table public.family_events alter column event_date type date using nullif(event_date::text, '''')::date';
+  exception
+    when others then
+      null;
+  end;
+  begin
+    execute 'alter table public.family_events alter column visit_date_from type date using nullif(visit_date_from::text, '''')::date';
+  exception
+    when others then
+      null;
+  end;
+  begin
+    execute 'alter table public.family_events alter column visit_date_to type date using nullif(visit_date_to::text, '''')::date';
+  exception
+    when others then
+      null;
+  end;
+  begin
+    execute 'alter table public.family_events alter column created_at type timestamptz using nullif(created_at::text, '''')::timestamptz';
+  exception
+    when others then
+      null;
+  end;
+end
+$$;
+
 alter table public.family_events enable row level security;
 
 drop policy if exists "family_events_select_all" on public.family_events;
@@ -990,6 +1046,10 @@ create policy "family_events_select_all" on public.family_events for select usin
 
 revoke insert, update, delete on table public.family_events from anon, authenticated;
 grant select on table public.family_events to anon, authenticated;
+
+drop function if exists public.family_events_insert_v1(text, text, text, text, jsonb);
+drop function if exists public.family_events_update_v1(text, text, text, text, text, text, jsonb);
+drop function if exists public.family_events_delete_v1(text, text, text, text, text, text);
 
 create or replace function public.events_delegate_allowed_v1(
   p_branch_key text,
@@ -1201,14 +1261,14 @@ begin
       type = case when p_patch ? 'type' then nullif(p_patch->>'type', '') else e.type end,
       person = case when p_patch ? 'person' then nullif(p_patch->>'person', '') else e.person end,
       date_label = case when p_patch ? 'date_label' then nullif(p_patch->>'date_label', '') else e.date_label end,
-      event_date = case when p_patch ? 'event_date' then nullif(p_patch->>'event_date', '')::date else e.event_date end,
+      event_date = case when p_patch ? 'event_date' then nullif(p_patch->>'event_date', '')::date else nullif(e.event_date::text, '')::date end,
       details = case when p_patch ? 'details' then nullif(p_patch->>'details', '') else e.details end,
       hospital_name = case when p_patch ? 'hospital_name' then nullif(p_patch->>'hospital_name', '') else e.hospital_name end,
       hospital_dept = case when p_patch ? 'hospital_dept' then nullif(p_patch->>'hospital_dept', '') else e.hospital_dept end,
       contact_method = case when p_patch ? 'contact_method' then nullif(p_patch->>'contact_method', '') else e.contact_method end,
       contact_phone = case when p_patch ? 'contact_phone' then nullif(p_patch->>'contact_phone', '') else e.contact_phone end,
-      visit_date_from = case when p_patch ? 'visit_date_from' then nullif(p_patch->>'visit_date_from', '')::date else e.visit_date_from end,
-      visit_date_to = case when p_patch ? 'visit_date_to' then nullif(p_patch->>'visit_date_to', '')::date else e.visit_date_to end,
+      visit_date_from = case when p_patch ? 'visit_date_from' then nullif(p_patch->>'visit_date_from', '')::date else nullif(e.visit_date_from::text, '')::date end,
+      visit_date_to = case when p_patch ? 'visit_date_to' then nullif(p_patch->>'visit_date_to', '')::date else nullif(e.visit_date_to::text, '')::date end,
       visit_time_from = case when p_patch ? 'visit_time_from' then nullif(p_patch->>'visit_time_from', '') else e.visit_time_from end,
       visit_time_to = case when p_patch ? 'visit_time_to' then nullif(p_patch->>'visit_time_to', '') else e.visit_time_to end
     where e.id = p_pk_value::bigint;
@@ -1218,14 +1278,14 @@ begin
       type = case when p_patch ? 'type' then nullif(p_patch->>'type', '') else e.type end,
       person = case when p_patch ? 'person' then nullif(p_patch->>'person', '') else e.person end,
       date_label = case when p_patch ? 'date_label' then nullif(p_patch->>'date_label', '') else e.date_label end,
-      event_date = case when p_patch ? 'event_date' then nullif(p_patch->>'event_date', '')::date else e.event_date end,
+      event_date = case when p_patch ? 'event_date' then nullif(p_patch->>'event_date', '')::date else nullif(e.event_date::text, '')::date end,
       details = case when p_patch ? 'details' then nullif(p_patch->>'details', '') else e.details end,
       hospital_name = case when p_patch ? 'hospital_name' then nullif(p_patch->>'hospital_name', '') else e.hospital_name end,
       hospital_dept = case when p_patch ? 'hospital_dept' then nullif(p_patch->>'hospital_dept', '') else e.hospital_dept end,
       contact_method = case when p_patch ? 'contact_method' then nullif(p_patch->>'contact_method', '') else e.contact_method end,
       contact_phone = case when p_patch ? 'contact_phone' then nullif(p_patch->>'contact_phone', '') else e.contact_phone end,
-      visit_date_from = case when p_patch ? 'visit_date_from' then nullif(p_patch->>'visit_date_from', '')::date else e.visit_date_from end,
-      visit_date_to = case when p_patch ? 'visit_date_to' then nullif(p_patch->>'visit_date_to', '')::date else e.visit_date_to end,
+      visit_date_from = case when p_patch ? 'visit_date_from' then nullif(p_patch->>'visit_date_from', '')::date else nullif(e.visit_date_from::text, '')::date end,
+      visit_date_to = case when p_patch ? 'visit_date_to' then nullif(p_patch->>'visit_date_to', '')::date else nullif(e.visit_date_to::text, '')::date end,
       visit_time_from = case when p_patch ? 'visit_time_from' then nullif(p_patch->>'visit_time_from', '') else e.visit_time_from end,
       visit_time_to = case when p_patch ? 'visit_time_to' then nullif(p_patch->>'visit_time_to', '') else e.visit_time_to end
     where e.created_at = p_pk_value::timestamptz and e.branch_key = p_branch_key;
@@ -1407,6 +1467,114 @@ begin
 end;
 $$;
 
+create or replace function public.admin_tree_children_import_v1(
+  p_token text,
+  p_rows jsonb
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row jsonb;
+  v_branch text;
+  v_parent text;
+  v_child text;
+  v_id bigint;
+  v_deceased boolean;
+  v_inserted bigint := 0;
+  v_updated bigint := 0;
+  v_skipped bigint := 0;
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+
+  if to_regclass('public.tree_children') is null then
+    raise exception 'tree_children table missing';
+  end if;
+
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array' then
+    return jsonb_build_object('inserted', 0, 'updated', 0, 'skipped', 0);
+  end if;
+
+  for v_row in select value from jsonb_array_elements(p_rows)
+  loop
+    v_branch := nullif(btrim(coalesce(v_row->>'branch_key', '')), '');
+    v_parent := nullif(btrim(coalesce(v_row->>'parent_name', '')), '');
+    v_child := nullif(btrim(coalesce(v_row->>'child_name', '')), '');
+    if v_branch is null or v_parent is null or v_child is null then
+      v_skipped := v_skipped + 1;
+      continue;
+    end if;
+
+    v_deceased := case
+      when v_row ? 'is_deceased' then (v_row->>'is_deceased')::boolean
+      when v_row ? 'deceased' then (v_row->>'deceased')::boolean
+      else false
+    end;
+
+    select c.id into v_id
+    from public.tree_children c
+    where c.branch_key = v_branch
+      and c.parent_name = v_parent
+      and coalesce(c.child_name, c.name) = v_child
+    order by c.id desc
+    limit 1;
+
+    if v_id is not null then
+      update public.tree_children c set
+        parent_name = v_parent,
+        parent = v_parent,
+        name = v_child,
+        child_name = v_child,
+        birth_date_g = nullif(v_row->>'birth_date_g', '')::date,
+        birth_date_h = nullif(v_row->>'birth_date_h', ''),
+        birth_year = nullif(v_row->>'birth_year', '')::int,
+        city = nullif(v_row->>'city', ''),
+        area = nullif(v_row->>'area', ''),
+        is_deceased = coalesce(v_deceased, false),
+        deceased = coalesce(v_deceased, false)
+      where c.id = v_id;
+      v_updated := v_updated + 1;
+    else
+      insert into public.tree_children (
+        branch_key,
+        parent_name,
+        parent,
+        name,
+        child_name,
+        birth_date_g,
+        birth_date_h,
+        birth_year,
+        city,
+        area,
+        is_deceased,
+        deceased,
+        created_at
+      ) values (
+        v_branch,
+        v_parent,
+        v_parent,
+        v_child,
+        v_child,
+        nullif(v_row->>'birth_date_g', '')::date,
+        nullif(v_row->>'birth_date_h', ''),
+        nullif(v_row->>'birth_year', '')::int,
+        nullif(v_row->>'city', ''),
+        nullif(v_row->>'area', ''),
+        coalesce(v_deceased, false),
+        coalesce(v_deceased, false),
+        coalesce(nullif(v_row->>'created_at', '')::timestamptz, now())
+      );
+      v_inserted := v_inserted + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('inserted', v_inserted, 'updated', v_updated, 'skipped', v_skipped);
+end;
+$$;
+
 grant execute on function public.events_delegate_allowed_v1(text, text, text, text) to anon, authenticated;
 grant execute on function public.check_events_delegate_access(text, text, text, text) to anon, authenticated;
 grant execute on function public.family_events_insert_v1(text, text, text, text, jsonb) to anon, authenticated;
@@ -1415,6 +1583,7 @@ grant execute on function public.family_events_delete_v1(text, text, text, text,
 grant execute on function public.admin_token_ok_v1(text) to anon, authenticated;
 grant execute on function public.admin_create_delegate_request_v1(text, text, text, text, text, text, text) to anon, authenticated;
 grant execute on function public.admin_delete_delegate_v1(text, text, text, text) to anon, authenticated;
+grant execute on function public.admin_tree_children_import_v1(text, jsonb) to anon, authenticated;
 `.trim();
 
             if (delegatesSqlEl) delegatesSqlEl.value = DELEGATES_SETUP_SQL;
@@ -1590,6 +1759,215 @@ grant execute on function public.admin_delete_delegate_v1(text, text, text, text
                 } catch (e) {}
                 fallbackCopyText(t);
                 return true;
+            }
+
+            function downloadTextFile(filename, text, mimeType) {
+                const name = String(filename || "").trim() || "file.txt";
+                const content = String(text || "");
+                const type = String(mimeType || "").trim() || "text/plain;charset=utf-8";
+                const blob = new Blob([content], { type });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+
+            function treeCsvTemplateText() {
+                const bom = "\ufeff";
+                const header = ["branch_key", "parent_name", "child_name", "birth_date_g", "birth_date_h", "birth_year", "city", "area", "is_deceased"].join(",");
+                const example = ["زيدان", "خميس", "عبدالله خميس الزيدان", "1990-01-01", "1410/01/01", "1990", "حائل", "المدينة/الحي", "false"].join(",");
+                return bom + header + "\n" + example + "\n";
+            }
+
+            function openWhatsAppWithText(text) {
+                const t = String(text || "").trim();
+                if (!t) return false;
+                const url = "https://wa.me/?text=" + encodeURIComponent(t);
+                try {
+                    window.open(url, "_blank", "noopener,noreferrer");
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            async function shareTreeCsvTemplateFile() {
+                const csv = treeCsvTemplateText();
+                const file = new File([csv], "alzidan-tree-template.csv", { type: "text/csv;charset=utf-8" });
+                if (!navigator || typeof navigator.share !== "function") return { ok: false, reason: "no_share" };
+                try {
+                    if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) {
+                        return { ok: false, reason: "no_file_share" };
+                    }
+                } catch (e) {
+                    return { ok: false, reason: "no_file_share" };
+                }
+                try {
+                    await navigator.share({
+                        title: "قالب شجرة العائلة (CSV)",
+                        text: "قالب CSV لتعبئة شجرة عائلة الزيدان",
+                        files: [file]
+                    });
+                    return { ok: true };
+                } catch (e) {
+                    return { ok: false, reason: "share_failed" };
+                }
+            }
+
+            function detectCsvDelimiter(line) {
+                const s = String(line || "");
+                const commas = (s.match(/,/g) || []).length;
+                const semis = (s.match(/;/g) || []).length;
+                return semis > commas ? ";" : ",";
+            }
+
+            function parseCsv(text) {
+                const raw = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+                const lines = raw
+                    .split("\n")
+                    .map((l) => l.replace(/^\ufeff/, ""))
+                    .filter((l) => l.trim().length);
+                if (!lines.length) return [];
+                const delimiter = detectCsvDelimiter(lines[0]);
+
+                const parseLine = (line) => {
+                    const out = [];
+                    let cur = "";
+                    let inQuotes = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const ch = line[i];
+                        if (inQuotes) {
+                            if (ch === '"') {
+                                if (line[i + 1] === '"') {
+                                    cur += '"';
+                                    i++;
+                                } else {
+                                    inQuotes = false;
+                                }
+                            } else {
+                                cur += ch;
+                            }
+                            continue;
+                        }
+                        if (ch === '"') {
+                            inQuotes = true;
+                            continue;
+                        }
+                        if (ch === delimiter) {
+                            out.push(cur.trim());
+                            cur = "";
+                            continue;
+                        }
+                        cur += ch;
+                    }
+                    out.push(cur.trim());
+                    return out;
+                };
+
+                const header = parseLine(lines[0]).map((h) => String(h || "").trim());
+                const rows = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const parts = parseLine(lines[i]);
+                    if (!parts.some((p) => String(p || "").trim())) continue;
+                    const obj = {};
+                    header.forEach((k, idx) => {
+                        if (!k) return;
+                        obj[k] = parts[idx] != null ? String(parts[idx]) : "";
+                    });
+                    rows.push(obj);
+                }
+                return rows;
+            }
+
+            function coerceBool(v) {
+                if (v == null) return null;
+                const s = String(v || "").trim().toLowerCase();
+                if (!s) return null;
+                if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "نعم" || s === "صح") return true;
+                if (s === "0" || s === "false" || s === "no" || s === "n" || s === "لا" || s === "خطأ") return false;
+                return null;
+            }
+
+            function chunkArray(arr, size) {
+                const n = Math.max(1, Number(size || 1));
+                const out = [];
+                for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+                return out;
+            }
+
+            function setTreeImportStatus(text) {
+                if (!treeImportStatusEl) return;
+                treeImportStatusEl.textContent = String(text || "");
+            }
+
+            async function runTreeImportFromFile(file) {
+                const sb = getClient();
+                if (!sb) {
+                    showAlert("error", "تعذر الاتصال.");
+                    return;
+                }
+                const token = getAdminToken();
+                if (!token) {
+                    showAlert("error", "يلزم تسجيل الدخول أولاً.");
+                    return;
+                }
+                if (!file) {
+                    showAlert("error", "اختر ملف CSV أولاً.");
+                    return;
+                }
+
+                setTreeImportStatus("جاري قراءة الملف...");
+                const text = await file.text();
+                const rawRows = parseCsv(text);
+                const rows = rawRows
+                    .map((r) => {
+                        const row = r || {};
+                        const out = {
+                            branch_key: String(row.branch_key || "").trim(),
+                            parent_name: String(row.parent_name || "").trim(),
+                            child_name: String(row.child_name || "").trim(),
+                            birth_date_g: String(row.birth_date_g || "").trim(),
+                            birth_date_h: String(row.birth_date_h || "").trim(),
+                            birth_year: String(row.birth_year || "").trim(),
+                            city: String(row.city || "").trim(),
+                            area: String(row.area || "").trim()
+                        };
+                        const b = coerceBool(row.is_deceased);
+                        if (b != null) out.is_deceased = b;
+                        return out;
+                    })
+                    .filter((r) => r.branch_key && r.parent_name && r.child_name);
+
+                if (!rows.length) {
+                    showAlert("error", "لم يتم العثور على صفوف صالحة داخل الملف.");
+                    setTreeImportStatus("");
+                    return;
+                }
+
+                const chunks = chunkArray(rows, 200);
+                let inserted = 0;
+                let updated = 0;
+                let skipped = 0;
+
+                for (let i = 0; i < chunks.length; i++) {
+                    setTreeImportStatus(`جاري الاستيراد... (${i + 1}/${chunks.length})`);
+                    const { data, error } = await sb.rpc("admin_tree_children_import_v1", { p_token: token, p_rows: chunks[i] });
+                    if (error) {
+                        showAlert("error", "تعذر الاستيراد: " + (error.message || "خطأ غير معروف"));
+                        setTreeImportStatus("");
+                        return;
+                    }
+                    inserted += Number(data && data.inserted != null ? data.inserted : 0) || 0;
+                    updated += Number(data && data.updated != null ? data.updated : 0) || 0;
+                    skipped += Number(data && data.skipped != null ? data.skipped : 0) || 0;
+                }
+
+                showAlert("success", "تم الاستيراد بنجاح.");
+                setTreeImportStatus(`إضافة: ${inserted} — تحديث: ${updated} — تجاهل: ${skipped}`);
             }
 
             function maybeOpenEmailDraft(to, subject, body) {
@@ -1935,6 +2313,15 @@ grant execute on function public.admin_delete_delegate_v1(text, text, text, text
                 return status || "";
             }
 
+            function coerceRpcId(v) {
+                if (v == null) return "";
+                if (typeof v === "number" && Number.isFinite(v)) return v;
+                const s = String(v || "").trim();
+                if (!s) return "";
+                if (/^-?\d+$/.test(s)) return s;
+                return s;
+            }
+
             function renderRequestRow(row) {
                 if (!requestsBody) return;
                 const tr = document.createElement("tr");
@@ -2025,7 +2412,12 @@ grant execute on function public.admin_delete_delegate_v1(text, text, text, text
                         showAlert("error", "يلزم تسجيل الدخول أولاً.");
                         return;
                     }
-                    const { data, error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(row.id), p_status: "approved" });
+                    const id = coerceRpcId(row.id != null ? row.id : row.request_id);
+                    if (!id) {
+                        showAlert("error", "بيانات الطلب ناقصة.");
+                        return;
+                    }
+                    const { data, error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: id, p_status: "approved" });
                     if (error) {
                         showAlert("error", `تعذر اعتماد الطلب: ${error.message || "خطأ غير معروف"}`);
                         return;
@@ -2066,7 +2458,12 @@ grant execute on function public.admin_delete_delegate_v1(text, text, text, text
                         showAlert("error", "يلزم تسجيل الدخول أولاً.");
                         return;
                     }
-                    const { data, error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(row.id), p_status: "rejected" });
+                    const id = coerceRpcId(row.id != null ? row.id : row.request_id);
+                    if (!id) {
+                        showAlert("error", "بيانات الطلب ناقصة.");
+                        return;
+                    }
+                    const { data, error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: id, p_status: "rejected" });
                     if (error) {
                         showAlert("error", `تعذر رفض الطلب: ${error.message || "خطأ غير معروف"}`);
                         return;
@@ -2542,7 +2939,12 @@ grant execute on function public.admin_delete_delegate_v1(text, text, text, text
                 if (delegatePermsStatus) delegatePermsStatus.textContent = "جاري تطبيق الصلاحيات...";
                 try {
                     if (caps.tree && caps.tree.id != null) {
-                        const { error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(caps.tree.id), p_status: treeStatus });
+                        const id = coerceRpcId(caps.tree.id);
+                        if (!id) {
+                            showAlert("error", "تعذر تحديث صلاحية الشجرة: بيانات غير مكتملة.");
+                            return;
+                        }
+                        const { error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: id, p_status: treeStatus });
                         if (error) {
                             showAlert("error", "تعذر تحديث صلاحية الشجرة: " + (error.message || "خطأ غير معروف"));
                             return;
@@ -2560,7 +2962,12 @@ grant execute on function public.admin_delete_delegate_v1(text, text, text, text
                     }
 
                     if (caps.events && caps.events.id != null) {
-                        const { error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: Number(caps.events.id), p_status: eventsStatus });
+                        const id = coerceRpcId(caps.events.id);
+                        if (!id) {
+                            showAlert("error", "تعذر تحديث صلاحية المناسبات: بيانات غير مكتملة.");
+                            return;
+                        }
+                        const { error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: id, p_status: eventsStatus });
                         if (error) {
                             showAlert("error", "تعذر تحديث صلاحية المناسبات: " + (error.message || "خطأ غير معروف"));
                             return;
@@ -2778,6 +3185,60 @@ grant execute on function public.admin_delete_delegate_v1(text, text, text, text
             if (delegatePermsBothBtn) delegatePermsBothBtn.addEventListener("click", () => applyDelegatePermissions("both").catch(() => {}));
             if (delegatePermsDisableBtn) delegatePermsDisableBtn.addEventListener("click", () => applyDelegatePermissions("disable").catch(() => {}));
             if (delegateDeleteBtn) delegateDeleteBtn.addEventListener("click", () => deleteDelegatePermanently().catch(() => {}));
+            if (treeImportDownloadBtn) {
+                treeImportDownloadBtn.addEventListener("click", () => {
+                    hideAlert();
+                    downloadTextFile("alzidan-tree-template.csv", treeCsvTemplateText(), "text/csv;charset=utf-8");
+                });
+            }
+            if (treeImportTemplateEl) {
+                try {
+                    treeImportTemplateEl.value = String(treeCsvTemplateText() || "").replace(/^\ufeff/, "");
+                } catch (e) {}
+            }
+            if (treeImportCopyBtn) {
+                treeImportCopyBtn.addEventListener("click", async () => {
+                    hideAlert();
+                    const text = String(treeCsvTemplateText() || "").replace(/^\ufeff/, "");
+                    const ok = await copyText(text);
+                    setTreeImportStatus(ok ? "تم نسخ نموذج CSV." : "تعذر نسخ النموذج.");
+                });
+            }
+            if (treeImportWhatsappBtn) {
+                treeImportWhatsappBtn.addEventListener("click", async () => {
+                    hideAlert();
+                    setTreeImportStatus("");
+                    const shared = await shareTreeCsvTemplateFile();
+                    if (shared.ok) {
+                        setTreeImportStatus("تم فتح المشاركة. اختر واتساب لإرسال الملف.");
+                        return;
+                    }
+                    downloadTextFile("alzidan-tree-template.csv", treeCsvTemplateText(), "text/csv;charset=utf-8");
+                    const msg = [
+                        "قالب CSV لتعبئة شجرة العائلة.",
+                        "تم تنزيل الملف الآن باسم: alzidan-tree-template.csv",
+                        "أرفقه في واتساب ثم املأه (Excel/Google Sheets) واحفظه CSV.",
+                        "بعد ذلك أرسله للإدارة للاستيراد."
+                    ].join("\n");
+                    const opened = openWhatsAppWithText(msg);
+                    setTreeImportStatus(opened ? "تم فتح واتساب. أرفق الملف الذي تم تنزيله." : "تم تنزيل القالب. افتح واتساب وأرفق الملف يدويًا.");
+                });
+            }
+            if (treeImportFileEl) {
+                treeImportFileEl.addEventListener("change", () => {
+                    setTreeImportStatus("");
+                });
+            }
+            if (treeImportRunBtn) {
+                treeImportRunBtn.addEventListener("click", () => {
+                    hideAlert();
+                    const file = treeImportFileEl && treeImportFileEl.files && treeImportFileEl.files[0] ? treeImportFileEl.files[0] : null;
+                    runTreeImportFromFile(file).catch(() => {
+                        showAlert("error", "تعذر الاستيراد.");
+                        setTreeImportStatus("");
+                    });
+                });
+            }
 
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === "visible") {

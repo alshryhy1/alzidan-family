@@ -795,10 +795,18 @@
             children: {},
             happyEvents: [],
             sickEvents: [],
-            deaths: []
+            deaths: [],
+            forcedRahmaByBranch: {}
         };
         let desiredParentFromUrl = "";
         let desiredFocusFromUrl = "";
+
+        const FORCED_RAHMA_BY_BASE = {
+            "صلف": " (رحمة الله)",
+            "صلال": " (رحمه الله)",
+            "عرفج": " (رحمه الله)",
+            "دليميك": " (رحمه الله)"
+        };
 
         const treeCard = document.getElementById("tree-card");
         const treeTitleEl = document.getElementById("tree-title");
@@ -922,7 +930,7 @@
             if (editChildName && editingChildRef && editingChildRef.childId) {
                 const cid = normalizePersonName(editingChildRef.childId);
                 const display = getDisplayNameForNodeId(cid, state.branch ? getBranchRootName(state.branch) : "");
-                const forcedSuffix = getForcedRahmaSuffix(cid);
+                const forcedSuffix = getForcedRahmaSuffix(cid, state.branch);
                 const suffix = forcedSuffix ? forcedSuffix : deceased ? " (رحمه الله)" : "";
                 editChildName.textContent = "الاسم: " + (display || cid) + suffix;
             }
@@ -1103,7 +1111,7 @@
                     if (focusId && treeTitleEl) {
                         const focusDisplay = getDisplayNameForNodeId(focusId, branchRoot);
                         const focusIsBranchRoot = branchRoot && normalizePersonName(focusId) === normalizePersonName(branchRoot);
-                        const focusSuffix = focusIsBranchRoot ? " (رحمهم الله)" : getForcedRahmaSuffix(focusId);
+                        const focusSuffix = focusIsBranchRoot ? " (رحمهم الله)" : getForcedRahmaSuffix(focusId, key);
                         treeTitleEl.textContent = "شجرة " + focusDisplay + focusSuffix;
                     }
                     if (focusId) {
@@ -1164,7 +1172,7 @@
                         title.className = "parent-name";
                         const displayName = getDisplayNameForNodeId(person, branchRoot);
                         const isBranchRootNode = branchRoot && normalizePersonName(person) === normalizePersonName(branchRoot);
-                    const forcedSuffix = getForcedRahmaSuffix(person);
+                    const forcedSuffix = getForcedRahmaSuffix(person, key);
                     const suffix = isBranchRootNode ? " (رحمهم الله)" : forcedSuffix ? forcedSuffix : (effectiveMeta && effectiveMeta.deceased) ? " (رحمه الله)" : "";
                     title.textContent = displayName + suffix;
                     headerRow.appendChild(title);
@@ -2068,6 +2076,37 @@
                 addChain(parentId, [tokens[0]], meta);
             });
 
+            const forcedMap = {};
+            const forcedBases = Object.keys(FORCED_RAHMA_BY_BASE);
+            if (forcedBases.length) {
+                const pickBestId = (ids) => {
+                    const list = (Array.isArray(ids) ? ids : []).map((x) => normalizePersonName(x)).filter(Boolean);
+                    if (!list.length) return "";
+                    const root = normalizePersonName(branchRoot);
+                    list.sort((a, b) => {
+                        const aInRoot = root ? (a === root || a.startsWith(root + "/")) : false;
+                        const bInRoot = root ? (b === root || b.startsWith(root + "/")) : false;
+                        if (aInRoot !== bInRoot) return aInRoot ? -1 : 1;
+                        const aDepth = a.split("/").filter(Boolean).length;
+                        const bDepth = b.split("/").filter(Boolean).length;
+                        if (aDepth !== bDepth) return aDepth - bDepth;
+                        if (a.length !== b.length) return a.length - b.length;
+                        return a.localeCompare(b, "ar");
+                    });
+                    return list[0] || "";
+                };
+
+                forcedBases.forEach((base) => {
+                    const b = normalizePersonName(base);
+                    if (!b) return;
+                    const set = idsByBase.get(b);
+                    if (!set || !set.size) return;
+                    const picked = pickBestId(Array.from(set));
+                    if (picked) forcedMap[b] = picked;
+                });
+            }
+            if (key) state.forcedRahmaByBranch[key] = forcedMap;
+
             return byParent;
         }
 
@@ -2424,6 +2463,147 @@
             return false;
         }
 
+        function isCaseTypesTextAndDateMismatchError(err) {
+            const msg = String(err && err.message ? err.message : "").toLowerCase();
+            const details = String(err && err.details ? err.details : "").toLowerCase();
+            const low = (msg + " " + details).trim();
+            return low.includes("case types") && low.includes("text") && low.includes("date") && low.includes("cannot be matched");
+        }
+
+        function confirmTypedText(expectedRaw, opts) {
+            const options = opts || {};
+            const expected = normalizePersonName(expectedRaw || "");
+            if (!expected) return Promise.resolve(false);
+            const title = String(options.title || "تأكيد").trim() || "تأكيد";
+            const body = String(options.body || "").trim();
+            const confirmLabel = String(options.confirmLabel || "تأكيد").trim() || "تأكيد";
+            const cancelLabel = String(options.cancelLabel || "إلغاء").trim() || "إلغاء";
+            return new Promise((resolve) => {
+                const overlay = document.createElement("div");
+                overlay.style.position = "fixed";
+                overlay.style.inset = "0";
+                overlay.style.background = "rgba(0, 0, 0, 0.55)";
+                overlay.style.display = "flex";
+                overlay.style.alignItems = "center";
+                overlay.style.justifyContent = "center";
+                overlay.style.zIndex = "99999";
+                overlay.dir = "rtl";
+
+                const card = document.createElement("div");
+                card.style.width = "min(92vw, 520px)";
+                card.style.background = "#fff";
+                card.style.borderRadius = "14px";
+                card.style.padding = "14px 14px 12px";
+                card.style.boxShadow = "0 14px 40px rgba(0,0,0,0.25)";
+                card.style.border = "1px solid rgba(0,0,0,0.08)";
+
+                const h = document.createElement("div");
+                h.textContent = title;
+                h.style.fontWeight = "700";
+                h.style.fontSize = "16px";
+                h.style.marginBottom = "8px";
+
+                const p = document.createElement("div");
+                p.style.marginBottom = "10px";
+                p.style.color = "#374151";
+                p.style.fontSize = "13px";
+                p.textContent = body || "اكتب النص التالي لتأكيد العملية:";
+
+                const expectedBox = document.createElement("div");
+                expectedBox.style.background = "#f3f4f6";
+                expectedBox.style.border = "1px solid #e5e7eb";
+                expectedBox.style.borderRadius = "10px";
+                expectedBox.style.padding = "10px 12px";
+                expectedBox.style.fontWeight = "700";
+                expectedBox.style.marginBottom = "10px";
+                expectedBox.style.userSelect = "text";
+                expectedBox.textContent = expected;
+
+                const input = document.createElement("input");
+                input.type = "text";
+                input.autocomplete = "off";
+                input.inputMode = "text";
+                input.style.width = "100%";
+                input.style.padding = "10px 12px";
+                input.style.borderRadius = "10px";
+                input.style.border = "1px solid #d1d5db";
+                input.style.outline = "none";
+                input.style.fontSize = "14px";
+                input.placeholder = "اكتب هنا...";
+
+                const actions = document.createElement("div");
+                actions.style.display = "flex";
+                actions.style.gap = "8px";
+                actions.style.marginTop = "12px";
+                actions.style.justifyContent = "flex-start";
+
+                const cancelBtn = document.createElement("button");
+                cancelBtn.type = "button";
+                cancelBtn.className = "btn btn-secondary btn-small";
+                cancelBtn.textContent = cancelLabel;
+
+                const okBtn = document.createElement("button");
+                okBtn.type = "button";
+                okBtn.className = "btn btn-primary btn-small";
+                okBtn.textContent = confirmLabel;
+                okBtn.disabled = true;
+
+                const cleanup = (v) => {
+                    try {
+                        document.removeEventListener("keydown", onKeyDown, true);
+                    } catch (e) {}
+                    try {
+                        overlay.remove();
+                    } catch (e) {}
+                    resolve(!!v);
+                };
+
+                const isMatch = () => normalizePersonName(input.value || "") === expected;
+                const refresh = () => {
+                    okBtn.disabled = !isMatch();
+                };
+
+                const onKeyDown = (e) => {
+                    if (!e) return;
+                    if (e.key === "Escape") {
+                        e.preventDefault();
+                        cleanup(false);
+                        return;
+                    }
+                    if (e.key === "Enter") {
+                        if (isMatch()) {
+                            e.preventDefault();
+                            cleanup(true);
+                        }
+                    }
+                };
+
+                overlay.addEventListener("click", (e) => {
+                    if (e && e.target === overlay) cleanup(false);
+                });
+                cancelBtn.addEventListener("click", () => cleanup(false));
+                okBtn.addEventListener("click", () => cleanup(true));
+                input.addEventListener("input", refresh);
+                document.addEventListener("keydown", onKeyDown, true);
+
+                card.appendChild(h);
+                card.appendChild(p);
+                card.appendChild(expectedBox);
+                card.appendChild(input);
+                actions.appendChild(cancelBtn);
+                actions.appendChild(okBtn);
+                card.appendChild(actions);
+                overlay.appendChild(card);
+                document.body.appendChild(overlay);
+                setTimeout(() => {
+                    try {
+                        input.focus();
+                        input.select();
+                    } catch (e) {}
+                }, 0);
+            });
+        }
+
         function isOnConflictConstraintError(err) {
             const msg = String(err && err.message ? err.message : "").toLowerCase();
             return msg.includes("no unique or exclusion constraint matching the on conflict specification");
@@ -2705,7 +2885,7 @@
             if (editChildCard) editChildCard.style.display = "block";
             if (editChildName) {
                 const display = getDisplayNameForNodeId(cid, state.branch ? getBranchRootName(state.branch) : "");
-                const forcedSuffix = getForcedRahmaSuffix(cid);
+                const forcedSuffix = getForcedRahmaSuffix(cid, state.branch);
                 const suffix = forcedSuffix ? forcedSuffix : child && child.deceased ? " (رحمه الله)" : "";
                 editChildName.textContent = "الاسم: " + (display || cid) + suffix;
             }
@@ -2723,7 +2903,36 @@
         function renderChildrenForParent(parentName) {
             childrenContainer.innerHTML = "";
             const key = normalizePersonName(parentName || "");
-            const list = state.children[key] || [];
+            const listRaw = state.children[key] || [];
+            const getBirthSortKey = (child) => {
+                const g = normalizePersonName(child && child.gdate ? child.gdate : "");
+                const gp = parseISODate(g);
+                if (gp) return gp.y * 10000 + gp.mo * 100 + gp.d;
+                const yRaw = child && child.year != null ? String(child.year) : "";
+                const y = parseInt(yRaw, 10);
+                if (y && isFinite(y)) return y * 10000;
+                return null;
+            };
+            const shouldSort = Array.isArray(listRaw) && listRaw.some((c) => getBirthSortKey(c) != null);
+            const list = shouldSort
+                ? listRaw
+                      .slice()
+                      .sort((a, b) => {
+                          const ak = getBirthSortKey(a);
+                          const bk = getBirthSortKey(b);
+                          if (ak == null && bk == null) {
+                              const an = normalizePersonName(a && a.name ? a.name : "");
+                              const bn = normalizePersonName(b && b.name ? b.name : "");
+                              return an.localeCompare(bn, "ar");
+                          }
+                          if (ak == null) return 1;
+                          if (bk == null) return -1;
+                          if (ak !== bk) return ak - bk;
+                          const an = normalizePersonName(a && a.name ? a.name : "");
+                          const bn = normalizePersonName(b && b.name ? b.name : "");
+                          return an.localeCompare(bn, "ar");
+                      })
+                : listRaw;
             if (!list.length) {
                 const empty = document.createElement("div");
                 empty.className = "hint";
@@ -2738,7 +2947,7 @@
                 const parts = [];
                 const childId = normalizePersonName(child.name);
                 const display = getDisplayNameForNodeId(childId, state.branch ? getBranchRootName(state.branch) : "");
-                const forcedSuffix = getForcedRahmaSuffix(childId);
+                const forcedSuffix = getForcedRahmaSuffix(childId, state.branch);
                 const suffix = forcedSuffix ? forcedSuffix : child && child.deceased ? " (رحمه الله)" : "";
                 parts.push((display || childId) + suffix);
                 const isDeceased = !!(child && child.deceased);
@@ -2798,12 +3007,13 @@
                     const childIdForDelete = normalizePersonName(child && child.name ? child.name : "");
                     const display = getDisplayNameForNodeId(childIdForDelete, state.branch ? getBranchRootName(state.branch) : "");
                     const nameToConfirm = normalizePersonName(display || normalizePersonBaseName(childIdForDelete) || childIdForDelete);
-                    const typed = window.prompt("لتأكيد الحذف اكتب الاسم التالي بالضبط:\n" + nameToConfirm, "");
-                    if (typed == null) return;
-                    if (normalizePersonName(typed) !== nameToConfirm) {
-                        setChildAlert("error", "تم إلغاء الحذف لأن الاسم غير مطابق.");
-                        return;
-                    }
+                    const ok = await confirmTypedText(nameToConfirm, {
+                        title: "تأكيد حذف الاسم",
+                        body: "لتأكيد الحذف اكتب الاسم التالي بالضبط:",
+                        confirmLabel: "تأكيد الحذف",
+                        cancelLabel: "إلغاء"
+                    });
+                    if (!ok) return;
                     const sb = getSupabaseClient();
                     if (!sb) {
                         setChildAlert("error", "تعذر الحذف لأن الربط غير مُعد.");
@@ -2890,12 +3100,19 @@
             return normalizePersonBaseName(leaf);
         }
 
-        function getForcedRahmaSuffix(nodeId) {
+        function getForcedRahmaSuffix(nodeId, branchKey) {
             const base = normalizePersonName(getLeafBaseNameFromNodeId(nodeId));
-            if (base === "صلف") return " (رحمة الله)";
-            if (base === "صلال") return " (رحمه الله)";
-            if (base === "عرفج" || base === "دليميك") return " (رحمه الله)";
-            return "";
+            if (!base) return "";
+            const suffix = FORCED_RAHMA_BY_BASE[base] || "";
+            if (!suffix) return "";
+            const branch = normalizePersonName(branchKey || state.branch || "");
+            if (!branch) return "";
+            const byBranch = state.forcedRahmaByBranch && state.forcedRahmaByBranch[branch] ? state.forcedRahmaByBranch[branch] : null;
+            if (!byBranch) return "";
+            const canonicalId = normalizePersonName(byBranch[base] || "");
+            if (!canonicalId) return "";
+            const id = normalizePersonName(nodeId || "");
+            return id === canonicalId ? suffix : "";
         }
 
         function buildLineagePlanFromTokens(tokens, branchKey, selectedParent) {
@@ -4757,9 +4974,13 @@
             if (!pk) return;
             const personName = normalizePersonName(row && row.person ? row.person : "");
             const confirmName = personName || "حذف";
-            const typed = window.prompt("لتأكيد الحذف اكتب الاسم التالي بالضبط:\n" + confirmName, "");
-            if (typed == null) return;
-            if (normalizePersonName(typed) !== confirmName) return;
+            const ok = await confirmTypedText(confirmName, {
+                title: "تأكيد حذف الخبر",
+                body: "لتأكيد الحذف اكتب الاسم التالي بالضبط:",
+                confirmLabel: "تأكيد الحذف",
+                cancelLabel: "إلغاء"
+            });
+            if (!ok) return;
             const sb = getSupabaseClient();
             const alertEl = options.kind === "death" ? deathAlert : options.kind === "sick" ? sickAlert : happyAlert;
             if (!sb) {
@@ -4885,6 +5106,14 @@
                             );
                             return;
                         }
+                        if (isCaseTypesTextAndDateMismatchError(err)) {
+                            showAlert(
+                                happyAlert,
+                                "error",
+                                "تعذر حفظ التعديل بسبب مشكلة في نوع التاريخ داخل Supabase. نفّذ SQL تهيئة المناسبات من صفحة الإدارة مرة أخرى ثم أعد المحاولة."
+                            );
+                            return;
+                        }
                         const msg = String(err && err.message ? err.message : "");
                         if (msg.toLowerCase().includes("not allowed")) {
                             showAlert(happyAlert, "error", "لا توجد صلاحية لتعديل المناسبات لهذا المندوب.");
@@ -4909,6 +5138,14 @@
                             happyAlert,
                             "error",
                             "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                        );
+                        return;
+                    }
+                    if (isCaseTypesTextAndDateMismatchError(err)) {
+                        showAlert(
+                            happyAlert,
+                            "error",
+                            "تعذر الإضافة بسبب مشكلة في نوع التاريخ داخل Supabase. نفّذ SQL تهيئة المناسبات من صفحة الإدارة مرة أخرى ثم أعد المحاولة."
                         );
                         return;
                     }
@@ -5041,6 +5278,14 @@
                             );
                             return;
                         }
+                        if (isCaseTypesTextAndDateMismatchError(err)) {
+                            showAlert(
+                                sickAlert,
+                                "error",
+                                "تعذر حفظ التعديل بسبب مشكلة في نوع التاريخ داخل Supabase. نفّذ SQL تهيئة المناسبات من صفحة الإدارة مرة أخرى ثم أعد المحاولة."
+                            );
+                            return;
+                        }
                         const msg = String(err && err.message ? err.message : "");
                         if (msg.toLowerCase().includes("not allowed")) {
                             showAlert(sickAlert, "error", "لا توجد صلاحية لتعديل المناسبات لهذا المندوب.");
@@ -5065,6 +5310,14 @@
                             sickAlert,
                             "error",
                             "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                        );
+                        return;
+                    }
+                    if (isCaseTypesTextAndDateMismatchError(err)) {
+                        showAlert(
+                            sickAlert,
+                            "error",
+                            "تعذر الإضافة بسبب مشكلة في نوع التاريخ داخل Supabase. نفّذ SQL تهيئة المناسبات من صفحة الإدارة مرة أخرى ثم أعد المحاولة."
                         );
                         return;
                     }
@@ -5182,6 +5435,14 @@
                             );
                             return;
                         }
+                        if (isCaseTypesTextAndDateMismatchError(err)) {
+                            showAlert(
+                                deathAlert,
+                                "error",
+                                "تعذر حفظ التعديل بسبب مشكلة في نوع التاريخ داخل Supabase. نفّذ SQL تهيئة المناسبات من صفحة الإدارة مرة أخرى ثم أعد المحاولة."
+                            );
+                            return;
+                        }
                         const msg = String(err && err.message ? err.message : "");
                         if (msg.toLowerCase().includes("not allowed")) {
                             showAlert(deathAlert, "error", "لا توجد صلاحية لتعديل المناسبات لهذا المندوب.");
@@ -5206,6 +5467,14 @@
                             deathAlert,
                             "error",
                             "لا يمكن الحفظ الآن لأن دوال المناسبات غير مفعلة في Supabase (family_events_insert_v1 / family_events_update_v1 / family_events_delete_v1)."
+                        );
+                        return;
+                    }
+                    if (isCaseTypesTextAndDateMismatchError(err)) {
+                        showAlert(
+                            deathAlert,
+                            "error",
+                            "تعذر النشر بسبب مشكلة في نوع التاريخ داخل Supabase. نفّذ SQL تهيئة المناسبات من صفحة الإدارة مرة أخرى ثم أعد المحاولة."
                         );
                         return;
                     }

@@ -163,8 +163,61 @@
             animation: ticker 60s linear infinite;
         }
         .news-ticker-text {
-            font-size: 12px;
-            color: #4b5563;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #111827;
+            font-weight: 700;
+        }
+        .news-ticker-text + .news-ticker-text {
+            position: relative;
+            padding-inline-start: 18px;
+        }
+        .news-ticker-text + .news-ticker-text::before {
+            content: "•";
+            position: absolute;
+            inset-inline-start: 6px;
+            top: 0;
+            color: rgba(17, 24, 39, 0.35);
+            font-weight: 900;
+        }
+        .news-ticker-text .news-type {
+            color: #b91c1c;
+            font-size: 14px;
+            font-weight: 900;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+            background: rgba(185, 28, 28, 0.12);
+            border: 1px solid rgba(185, 28, 28, 0.22);
+            padding: 2px 8px;
+            border-radius: 999px;
+        }
+        .news-ticker-text .news-rest {
+            color: #111827;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .news-ticker-text .news-paren {
+            color: #16a34a;
+            font-weight: 900;
+            text-shadow:
+                0 0 10px rgba(34, 197, 94, 0.45),
+                0 0 18px rgba(34, 197, 94, 0.35);
+            animation: newsParenPulse 1.1s ease-in-out infinite;
+        }
+        @keyframes newsParenPulse {
+            0% {
+                opacity: 1;
+                filter: brightness(1.0);
+            }
+            50% {
+                opacity: 0.55;
+                filter: brightness(1.3);
+            }
+            100% {
+                opacity: 1;
+                filter: brightness(1.0);
+            }
         }
         .news-ticker-link {
             color: inherit;
@@ -178,10 +231,10 @@
         }
         @keyframes ticker {
             0% {
-                transform: translateX(100%);
+                transform: translateX(-100%);
             }
             100% {
-                transform: translateX(-100%);
+                transform: translateX(100%);
             }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -3804,6 +3857,126 @@
                 return "https://api.whatsapp.com/send" + (msg ? ("?text=" + msg) : "");
             }
 
+            function getSiteEventsUrl() {
+                const origin = location && location.origin ? String(location.origin) : "";
+                const path = location && location.pathname ? String(location.pathname) : "";
+                return origin + path + "#events";
+            }
+
+            function makeEventShareText(row, urlOverride) {
+                const rowSafe = row || {};
+                const type = normalizeText(rowSafe.type);
+                const person = normalizeText(rowSafe.person);
+                const typeLabel = formatEventTypeLabel(type);
+                const title = formatEventTitle(type, person);
+                const copy = normalizeText(formatEventCopy(type, person, rowSafe));
+                const dateLabel = normalizeText(rowSafe.date_label || rowSafe.dateLabel);
+                const branchLabel = branchLabelFromKey(rowSafe.branch_key || rowSafe.branchKey);
+                const url = normalizeText(urlOverride) || getSiteEventsUrl();
+                const lines = [];
+                lines.push("خبر من عائلة الزيدان");
+                const head = [typeLabel, title].filter(Boolean).join(" — ");
+                if (head) lines.push(head);
+                if (copy) lines.push(copy);
+                if (type === "death") {
+                    const d = parseDeathDetails(rowSafe);
+                    if (d.prayerPlace) lines.push("مكان الصلاة: " + d.prayerPlace);
+                    if (d.prayerTime) lines.push("وقت الصلاة: " + d.prayerTime);
+                    if (d.burialPlace) lines.push("مكان الدفن: " + d.burialPlace);
+                    if (d.burialTime) lines.push("وقت الدفن: " + d.burialTime);
+                    if (d.condolencePlace) lines.push("موقع العزاء: " + d.condolencePlace);
+                    if (d.condolenceTime) lines.push("وقت العزاء: " + d.condolenceTime);
+                    if (d.phones && d.phones.length) lines.push("للتواصل: " + d.phones.join(" / "));
+                    if (d.notes) lines.push(d.notes);
+                } else if (type === "sick" || type === "operation" || type === "discharge") {
+                    const h = parseHealthDetails(rowSafe);
+                    if (h.place === "home") {
+                        if (h.homeCity) lines.push("المدينة: " + h.homeCity);
+                        if (h.homeArea) lines.push("الموقع: " + h.homeArea);
+                    } else {
+                        const hospitalName = normalizeText(rowSafe.hospital_name || rowSafe.hospitalName || h.hospitalName);
+                        const hospitalDept = normalizeText(rowSafe.hospital_dept || rowSafe.hospitalDept || h.hospitalDept);
+                        if (hospitalName) lines.push("المستشفى: " + hospitalName);
+                        if (hospitalDept) lines.push("القسم: " + hospitalDept);
+                    }
+                    const method = normalizeText(rowSafe.contact_method || rowSafe.contactMethod);
+                    const phone = normalizeText(rowSafe.contact_phone || rowSafe.contactPhone);
+                    if ((method === "call" || method === "whatsapp") && phone) {
+                        const label = method === "call" ? "اتصال" : "واتساب";
+                        lines.push("للتواصل: " + label + " — " + phone);
+                    }
+                    const visitDateFrom = normalizeText(rowSafe.visit_date_from || rowSafe.visitDateFromLabel);
+                    const visitDateTo = normalizeText(rowSafe.visit_date_to || rowSafe.visitDateToLabel);
+                    const visitTimeFrom = normalizeText(rowSafe.visit_time_from || rowSafe.visitTimeFrom);
+                    const visitTimeTo = normalizeText(rowSafe.visit_time_to || rowSafe.visitTimeTo);
+                    const visitParts = [];
+                    if (visitDateFrom || visitDateTo) {
+                        if (visitDateFrom && visitDateTo) visitParts.push("من " + visitDateFrom + " إلى " + visitDateTo);
+                        else if (visitDateFrom) visitParts.push("من " + visitDateFrom);
+                        else visitParts.push("إلى " + visitDateTo);
+                    }
+                    if (visitTimeFrom || visitTimeTo) {
+                        if (visitTimeFrom && visitTimeTo) visitParts.push("من " + visitTimeFrom + " إلى " + visitTimeTo);
+                        else if (visitTimeFrom) visitParts.push("من " + visitTimeFrom);
+                        else visitParts.push("إلى " + visitTimeTo);
+                    }
+                    if (visitParts.length) lines.push("وقت الزيارة: " + visitParts.join(" – "));
+                }
+                const metaParts = [];
+                if (branchLabel) metaParts.push("الفرع: " + branchLabel);
+                if (dateLabel) metaParts.push("التاريخ: " + dateLabel);
+                if (metaParts.length) lines.push(metaParts.join(" – "));
+                if (url) lines.push(url);
+                return lines.filter(Boolean).join("\n");
+            }
+
+            function escapeHtml(v) {
+                return String(v || "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            function wrapParenGlowHtml(text) {
+                const s = String(text || "");
+                if (!s) return "";
+                const re = /(\([^)]*\)|（[^）]*）)/g;
+                let out = "";
+                let last = 0;
+                for (;;) {
+                    const m = re.exec(s);
+                    if (!m) break;
+                    const start = m.index;
+                    const token = m[0] || "";
+                    out += escapeHtml(s.slice(last, start));
+                    out += '<span class="news-paren">' + escapeHtml(token) + "</span>";
+                    last = start + token.length;
+                }
+                out += escapeHtml(s.slice(last));
+                return out;
+            }
+
+            function makeBannerHtmlFromRow(row, fallbackText) {
+                if (!row) return '<span class="news-rest">' + wrapParenGlowHtml(fallbackText || "") + "</span>";
+                const type = normalizeText(row && row.type ? row.type : "");
+                const person = normalizeText(row && row.person ? row.person : "");
+                const typeLabel = normalizeText(formatEventTypeLabel(type));
+                const title = normalizeText(formatEventTitle(type, person));
+                const copy = normalizeText(formatEventCopy(type, person, row));
+                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                let html = "";
+                if (typeLabel) html += '<span class="news-type">' + escapeHtml(typeLabel) + "</span>";
+                let rest = "";
+                if (title) rest += (rest ? " " : "") + "— " + title;
+                if (copy) rest += (rest ? " " : "") + "— " + copy;
+                if (dateLabel) rest += (rest ? " " : "") + "(" + dateLabel + ")";
+                if (rest) html += (html ? " " : "") + '<span class="news-rest">' + wrapParenGlowHtml(rest) + "</span>";
+                if (!html) html = '<span class="news-rest">' + wrapParenGlowHtml(fallbackText || "خبر جديد.") + "</span>";
+                return html;
+            }
+
             const bannerNewsEl = document.getElementById("top-banner-news");
             const bannerNewsCloneEl = document.getElementById("top-banner-news-clone");
             const bannerCountEl = document.getElementById("events-news-count");
@@ -3978,18 +4151,33 @@
             function formatBannerItemFromRow(row) {
                 if (!row) return "";
                 const type = normalizeText(row && row.type ? row.type : "");
+                const typeLabel = formatEventTypeLabel(type);
+                const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
+                let out = typeLabel || "خبر جديد.";
+                if (dateLabel) out += " (" + dateLabel + ")";
+                return out || "خبر جديد.";
+            }
+
+            function siteEventsUrl() {
+                const origin = location && location.origin ? String(location.origin) : "";
+                const path = location && location.pathname ? String(location.pathname) : "";
+                return (origin || "") + (path || "") + "#events";
+            }
+
+            function formatShareTextFromRow(row) {
+                if (!row) return "";
+                const type = normalizeText(row && row.type ? row.type : "");
                 const person = normalizeText(row && row.person ? row.person : "");
                 const typeLabel = formatEventTypeLabel(type);
                 const title = formatEventTitle(type, person);
-                const copy = truncateText(formatEventCopy(type, person, row), 90);
+                const copy = truncateText(formatEventCopy(type, person, row), 220);
                 const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
-                const parts = [];
-                if (typeLabel) parts.push(typeLabel);
-                if (title) parts.push(title);
-                let out = parts.join(" — ");
-                if (copy) out += (out ? ": " : "") + copy;
-                if (dateLabel) out += " (" + dateLabel + ")";
-                return out || "خبر جديد.";
+                const branchLabel = branchLabelFromKey(row && (row.branch_key || row.branchKey) ? (row.branch_key || row.branchKey) : "");
+                const head = ["خبر من عائلة الزيدان:", [typeLabel, title].filter(Boolean).join(" — ")].filter(Boolean).join(" ");
+                const lines = [head, copy, branchLabel ? "الفرع: " + branchLabel : "", dateLabel ? "التاريخ: " + dateLabel : "", siteEventsUrl()]
+                    .filter(Boolean)
+                    .join("\n");
+                return lines.trim();
             }
 
             function createEventItem(row, opts) {
@@ -4031,6 +4219,10 @@
 
                 const dateLabel = normalizeText(row && (row.date_label || row.dateLabel) ? (row.date_label || row.dateLabel) : "");
                 const branchLabel = branchLabelFromKey(row && (row.branch_key || row.branchKey) ? (row.branch_key || row.branchKey) : "");
+                const shareText = makeEventShareText(row || {}, "");
+                if (shareText) {
+                    actions.appendChild(createActionButton("مشاركة واتساب", makeWhatsAppShareUrl(shareText), true));
+                }
 
                 if (type === "sick" || type === "operation" || type === "discharge") {
                     const h = parseHealthDetails(row || {});
@@ -4211,14 +4403,14 @@
                 });
 
                 const baseBannerText = "الحمد لله الذي بنعمته تتم الصالحات — تم بحمد الله اكتمال موقع عائلة الزيدان وسيكون في هذا الشريط أخبار العائلة";
-                const msg1 = activeRows && activeRows[0] ? formatBannerItemFromRow(activeRows[0]) : baseBannerText;
-                const msg2 = activeRows && activeRows[1] ? formatBannerItemFromRow(activeRows[1]) : (activeRows && activeRows[0] ? baseBannerText : baseBannerText);
-                if (bannerNewsEl) bannerNewsEl.textContent = msg1 || baseBannerText;
-                if (bannerNewsCloneEl) bannerNewsCloneEl.textContent = msg2 || msg1 || baseBannerText;
+                const html1 = makeBannerHtmlFromRow(activeRows && activeRows[0] ? activeRows[0] : null, baseBannerText);
+                const html2 = makeBannerHtmlFromRow(activeRows && activeRows[1] ? activeRows[1] : null, activeRows && activeRows[0] ? baseBannerText : baseBannerText);
+                if (bannerNewsEl) bannerNewsEl.innerHTML = html1;
+                if (bannerNewsCloneEl) bannerNewsCloneEl.innerHTML = html2 || html1;
                 if (eventsShareWhatsappBtn) {
-                    const url = (location && location.origin ? location.origin : "") + (location && location.pathname ? location.pathname : "") + "#events";
-                    const shareText = (activeRows && activeRows[0] ? ("خبر جديد من عائلة الزيدان: " + msg1) : baseBannerText) + "\n" + url;
-                    eventsShareWhatsappBtn.href = makeWhatsAppShareUrl(shareText);
+                    const url = getSiteEventsUrl();
+                    const shareText = activeRows && activeRows[0] ? makeEventShareText(activeRows[0], url) : (baseBannerText + "\n" + url);
+                    eventsShareWhatsappBtn.href = makeWhatsAppShareUrl(shareText || (baseBannerText + "\n" + url));
                 }
 
                 const newest = activeRows && activeRows[0] ? activeRows[0] : null;
