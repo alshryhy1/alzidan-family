@@ -2515,7 +2515,27 @@
                 p_row: row || {}
             });
             if (error) return { ok: false, error };
-            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+            if (data === true) return { ok: true };
+            try {
+                const info = await sb.rpc("check_events_delegate_access", {
+                    p_branch_key: key,
+                    p_phone: auth.phone,
+                    p_email: auth.email,
+                    p_secret_hash: auth.secretHash
+                });
+                if (!info.error && info.data && typeof info.data === "object") {
+                    return {
+                        ok: false,
+                        error: {
+                            message: "not allowed",
+                            detail: "events_access",
+                            status: info.data.status || null,
+                            requestId: info.data.request_id || null
+                        }
+                    };
+                }
+            } catch (e) {}
+            return { ok: false, error: { message: "not allowed" } };
         }
 
         async function rpcUpdateFamilyEventRow(sb, pk, patch) {
@@ -2534,7 +2554,27 @@
                 p_patch: patch || {}
             });
             if (error) return { ok: false, error };
-            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+            if (data === true) return { ok: true };
+            try {
+                const info = await sb.rpc("check_events_delegate_access", {
+                    p_branch_key: key,
+                    p_phone: auth.phone,
+                    p_email: auth.email,
+                    p_secret_hash: auth.secretHash
+                });
+                if (!info.error && info.data && typeof info.data === "object") {
+                    return {
+                        ok: false,
+                        error: {
+                            message: "not allowed",
+                            detail: "events_access",
+                            status: info.data.status || null,
+                            requestId: info.data.request_id || null
+                        }
+                    };
+                }
+            } catch (e) {}
+            return { ok: false, error: { message: "not allowed" } };
         }
 
         async function rpcDeleteFamilyEventRow(sb, pk) {
@@ -2552,7 +2592,27 @@
                 p_pk_value: String(pk.value)
             });
             if (error) return { ok: false, error };
-            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+            if (data === true) return { ok: true };
+            try {
+                const info = await sb.rpc("check_events_delegate_access", {
+                    p_branch_key: key,
+                    p_phone: auth.phone,
+                    p_email: auth.email,
+                    p_secret_hash: auth.secretHash
+                });
+                if (!info.error && info.data && typeof info.data === "object") {
+                    return {
+                        ok: false,
+                        error: {
+                            message: "not allowed",
+                            detail: "events_access",
+                            status: info.data.status || null,
+                            requestId: info.data.request_id || null
+                        }
+                    };
+                }
+            } catch (e) {}
+            return { ok: false, error: { message: "not allowed" } };
         }
 
         function renderParentsForBranch(branchKey) {
@@ -4854,6 +4914,22 @@
                     }
                     const msg = String(err && err.message ? err.message : "");
                     if (msg.toLowerCase().includes("not allowed")) {
+                        if (err && err.detail === "events_access") {
+                            const st = String(err.status || "");
+                            const rid = String(err.requestId || "");
+                            if (st === "pending") {
+                                showAlert(happyAlert, "error", rid ? `صلاحية المناسبات قيد المراجعة (رقم الطلب: ${rid}).` : "صلاحية المناسبات قيد المراجعة.");
+                                return;
+                            }
+                            if (st === "rejected") {
+                                showAlert(happyAlert, "error", rid ? `تم رفض صلاحية المناسبات (رقم الطلب: ${rid}).` : "تم رفض صلاحية المناسبات.");
+                                return;
+                            }
+                            if (st === "approved") {
+                                showAlert(happyAlert, "error", "الصلاحية معتمدة لكن بيانات الدخول لا تطابق بيانات الاعتماد. جرّب تسجيل خروج/دخول وتأكد من البريد والجوال.");
+                                return;
+                            }
+                        }
                         showAlert(happyAlert, "error", "لا توجد صلاحية لإضافة المناسبات لهذا المندوب.");
                         return;
                     }
@@ -4994,6 +5070,22 @@
                     }
                     const msg = String(err && err.message ? err.message : "");
                     if (msg.toLowerCase().includes("not allowed")) {
+                        if (err && err.detail === "events_access") {
+                            const st = String(err.status || "");
+                            const rid = String(err.requestId || "");
+                            if (st === "pending") {
+                                showAlert(sickAlert, "error", rid ? `صلاحية المناسبات قيد المراجعة (رقم الطلب: ${rid}).` : "صلاحية المناسبات قيد المراجعة.");
+                                return;
+                            }
+                            if (st === "rejected") {
+                                showAlert(sickAlert, "error", rid ? `تم رفض صلاحية المناسبات (رقم الطلب: ${rid}).` : "تم رفض صلاحية المناسبات.");
+                                return;
+                            }
+                            if (st === "approved") {
+                                showAlert(sickAlert, "error", "الصلاحية معتمدة لكن بيانات الدخول لا تطابق بيانات الاعتماد. جرّب تسجيل خروج/دخول وتأكد من البريد والجوال.");
+                                return;
+                            }
+                        }
                         showAlert(sickAlert, "error", "لا توجد صلاحية لإضافة المناسبات لهذا المندوب.");
                         return;
                     }
@@ -5119,6 +5211,22 @@
                     }
                     const msg = String(err && err.message ? err.message : "");
                     if (msg.toLowerCase().includes("not allowed")) {
+                        if (err && err.detail === "events_access") {
+                            const st = String(err.status || "");
+                            const rid = String(err.requestId || "");
+                            if (st === "pending") {
+                                showAlert(deathAlert, "error", rid ? `صلاحية المناسبات قيد المراجعة (رقم الطلب: ${rid}).` : "صلاحية المناسبات قيد المراجعة.");
+                                return;
+                            }
+                            if (st === "rejected") {
+                                showAlert(deathAlert, "error", rid ? `تم رفض صلاحية المناسبات (رقم الطلب: ${rid}).` : "تم رفض صلاحية المناسبات.");
+                                return;
+                            }
+                            if (st === "approved") {
+                                showAlert(deathAlert, "error", "الصلاحية معتمدة لكن بيانات الدخول لا تطابق بيانات الاعتماد. جرّب تسجيل خروج/دخول وتأكد من البريد والجوال.");
+                                return;
+                            }
+                        }
                         showAlert(deathAlert, "error", "لا توجد صلاحية لإضافة المناسبات لهذا المندوب.");
                         return;
                     }

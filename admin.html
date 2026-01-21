@@ -536,11 +536,14 @@ as $$
     select 1
     from public.approval_requests r
     where r.kind = 'tree_delegate'
-      and r.branch_key = p_branch_key
-      and r.phone = p_phone
-      and r.email = p_email
+      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g') = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g')
+      and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g') = regexp_replace(btrim(coalesce(p_phone, '')), '\s+', '', 'g')
+      and lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g')) = lower(regexp_replace(btrim(coalesce(p_email, '')), '\s+', '', 'g'))
       and r.status = 'approved'
-      and r.secret_hash = p_secret_hash
+      and (
+        r.secret_hash = p_secret_hash
+        or nullif(trim(coalesce(r.secret_hash, '')), '') is null
+      )
     limit 1
   )
 $$;
@@ -563,11 +566,14 @@ begin
   select r.name into v_actor_name
   from public.approval_requests r
   where r.kind = 'tree_delegate'
-    and r.branch_key = p_branch_key
-    and r.phone = p_phone
-    and r.email = p_email
+    and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g') = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g')
+    and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g') = regexp_replace(btrim(coalesce(p_phone, '')), '\s+', '', 'g')
+    and lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g')) = lower(regexp_replace(btrim(coalesce(p_email, '')), '\s+', '', 'g'))
     and r.status = 'approved'
-    and r.secret_hash = p_secret_hash
+    and (
+      r.secret_hash = p_secret_hash
+      or nullif(trim(coalesce(r.secret_hash, '')), '') is null
+    )
   order by r.created_at desc
   limit 1;
 
@@ -1000,11 +1006,14 @@ as $$
     select 1
     from public.approval_requests r
     where r.kind = 'events_delegate'
-      and r.branch_key = p_branch_key
-      and r.phone = p_phone
-      and r.email = p_email
+      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g') = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g')
+      and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g') = regexp_replace(btrim(coalesce(p_phone, '')), '\s+', '', 'g')
+      and lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g')) = lower(regexp_replace(btrim(coalesce(p_email, '')), '\s+', '', 'g'))
       and r.status = 'approved'
-      and r.secret_hash = p_secret_hash
+      and (
+        r.secret_hash = p_secret_hash
+        or nullif(trim(coalesce(r.secret_hash, '')), '') is null
+      )
     limit 1
   )
 $$;
@@ -1027,9 +1036,9 @@ begin
   into v_row
   from public.approval_requests r
   where r.kind = 'events_delegate'
-    and r.branch_key = p_branch_key
-    and r.phone = p_phone
-    and r.email = p_email
+    and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g') = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g')
+    and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g') = regexp_replace(btrim(coalesce(p_phone, '')), '\s+', '', 'g')
+    and lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g')) = lower(regexp_replace(btrim(coalesce(p_email, '')), '\s+', '', 'g'))
   order by r.created_at desc
   limit 1;
 
@@ -1037,7 +1046,7 @@ begin
     return jsonb_build_object('allowed', false, 'status', null, 'request_id', null);
   end if;
 
-  if v_row.status = 'approved' and p_secret_hash is not null then
+  if v_row.status = 'approved' then
     select public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) into v_allowed;
   end if;
 
@@ -1063,11 +1072,14 @@ begin
   select r.name into v_actor_name
   from public.approval_requests r
   where r.kind = 'events_delegate'
-    and r.branch_key = p_branch_key
-    and r.phone = p_phone
-    and r.email = p_email
+    and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g') = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g')
+    and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g') = regexp_replace(btrim(coalesce(p_phone, '')), '\s+', '', 'g')
+    and lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g')) = lower(regexp_replace(btrim(coalesce(p_email, '')), '\s+', '', 'g'))
     and r.status = 'approved'
-    and r.secret_hash = p_secret_hash
+    and (
+      r.secret_hash = p_secret_hash
+      or nullif(trim(coalesce(r.secret_hash, '')), '') is null
+    )
   order by r.created_at desc
   limit 1;
 
@@ -1356,7 +1368,7 @@ begin
     nullif(trim(coalesce(p_branch_key, '')), ''),
     nullif(trim(coalesce(p_name, '')), ''),
     nullif(trim(coalesce(p_phone, '')), ''),
-    nullif(trim(coalesce(p_email, '')), ''),
+    nullif(lower(trim(coalesce(p_email, ''))), ''),
     nullif(trim(coalesce(p_secret_hash, '')), ''),
     jsonb_build_object('v', 1, 'kind', 'admin_grant', 'grant', v_kind, 'at', v_now)::text,
     'approved',
