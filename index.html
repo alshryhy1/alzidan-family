@@ -3801,7 +3801,7 @@
 
             function makeWhatsAppShareUrl(text) {
                 const msg = encodeURIComponent(String(text || "").trim());
-                return "https://wa.me/" + (msg ? ("?text=" + msg) : "");
+                return "https://api.whatsapp.com/send" + (msg ? ("?text=" + msg) : "");
             }
 
             const bannerNewsEl = document.getElementById("top-banner-news");
