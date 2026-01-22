@@ -2839,8 +2839,8 @@
             if (!auth.ok) return { ok: false, error: { message: auth.reason } };
             const r = row || {};
             const key = normalizePersonName(r.branch_key || "");
-            const parent = normalizePersonName(r.parent_name || r.parent || "");
-            const id = normalizePersonName(r.child_name || r.name || "");
+            const parent = getLeafStoredNameFromNodeId(r.parent_name || r.parent || "");
+            const id = getLeafStoredNameFromNodeId(r.child_name || r.name || "");
             if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } };
             const { data, error } = await sb.rpc("tree_children_insert_v1", {
                 p_branch_key: key,
@@ -2864,39 +2864,85 @@
             const auth = await getDelegateRpcAuth();
             if (!auth.ok) return { ok: false, error: { message: auth.reason } };
             const key = normalizePersonName(branchKey || "");
-            const parent = normalizePersonName(parentId || "");
-            const id = normalizePersonName(childId || "");
-            if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } };
-            const { data, error } = await sb.rpc("tree_children_update_v1", {
+            const parentStored = getLeafStoredNameFromNodeId(parentId || "");
+            const childStored = getLeafStoredNameFromNodeId(childId || "");
+            if (!key || !parentStored || !childStored) return { ok: false, error: { message: "missing key" } };
+
+            const call = async (parentName, childName) =>
+                await sb.rpc("tree_children_update_v1", {
+                    p_branch_key: key,
+                    p_parent_name: parentName,
+                    p_child_name: childName,
+                    p_phone: auth.phone,
+                    p_email: auth.email,
+                    p_secret_hash: auth.secretHash,
+                    p_patch: patch || {}
+                });
+
+            const first = await call(parentStored, childStored);
+            if (first.error) return { ok: false, error: first.error };
+            if (first.data === true) return { ok: true };
+
+            const parentBase = getLeafBaseNameFromNodeId(parentId || "");
+            const childBase = getLeafBaseNameFromNodeId(childId || "");
+            if ((parentBase && childBase && (parentBase !== parentStored || childBase !== childStored))) {
+                const second = await call(parentBase, childBase);
+                if (second.error) return { ok: false, error: second.error };
+                if (second.data === true) return { ok: true };
+            }
+
+            const info = await sb.rpc("check_tree_delegate_access", {
                 p_branch_key: key,
-                p_parent_name: parent,
-                p_child_name: id,
                 p_phone: auth.phone,
                 p_email: auth.email,
-                p_secret_hash: auth.secretHash,
-                p_patch: patch || {}
+                p_secret_hash: auth.secretHash
             });
-            if (error) return { ok: false, error };
-            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+            if (!info.error && info.data && typeof info.data === "object" && info.data.allowed === true) {
+                return { ok: false, error: { message: "row not found" } };
+            }
+            return { ok: false, error: { message: "not allowed" } };
         }
 
         async function rpcDeleteTreeChildRow(sb, branchKey, parentId, childId) {
             const auth = await getDelegateRpcAuth();
             if (!auth.ok) return { ok: false, error: { message: auth.reason } };
             const key = normalizePersonName(branchKey || "");
-            const parent = normalizePersonName(parentId || "");
-            const id = normalizePersonName(childId || "");
-            if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } };
-            const { data, error } = await sb.rpc("tree_children_delete_v1", {
+            const parentStored = getLeafStoredNameFromNodeId(parentId || "");
+            const childStored = getLeafStoredNameFromNodeId(childId || "");
+            if (!key || !parentStored || !childStored) return { ok: false, error: { message: "missing key" } };
+
+            const call = async (parentName, childName) =>
+                await sb.rpc("tree_children_delete_v1", {
+                    p_branch_key: key,
+                    p_parent_name: parentName,
+                    p_child_name: childName,
+                    p_phone: auth.phone,
+                    p_email: auth.email,
+                    p_secret_hash: auth.secretHash
+                });
+
+            const first = await call(parentStored, childStored);
+            if (first.error) return { ok: false, error: first.error };
+            if (first.data === true) return { ok: true };
+
+            const parentBase = getLeafBaseNameFromNodeId(parentId || "");
+            const childBase = getLeafBaseNameFromNodeId(childId || "");
+            if ((parentBase && childBase && (parentBase !== parentStored || childBase !== childStored))) {
+                const second = await call(parentBase, childBase);
+                if (second.error) return { ok: false, error: second.error };
+                if (second.data === true) return { ok: true };
+            }
+
+            const info = await sb.rpc("check_tree_delegate_access", {
                 p_branch_key: key,
-                p_parent_name: parent,
-                p_child_name: id,
                 p_phone: auth.phone,
                 p_email: auth.email,
                 p_secret_hash: auth.secretHash
             });
-            if (error) return { ok: false, error };
-            return data === true ? { ok: true } : { ok: false, error: { message: "not allowed" } };
+            if (!info.error && info.data && typeof info.data === "object" && info.data.allowed === true) {
+                return { ok: false, error: { message: "row not found" } };
+            }
+            return { ok: false, error: { message: "not allowed" } };
         }
 
         async function rpcInsertFamilyEventRow(sb, row) {
@@ -3293,6 +3339,8 @@
         function tokenizeLineageInput(v) {
             const s = normalizePersonName(v || "");
             if (!s) return [];
+            const hasConnector = /(^|\s)(?:بن|ابن|بنت)(\s|$)/.test(s);
+            if (!hasConnector) return [s];
             return s
                 .split(/\s+/g)
                 .map((w) => normalizePersonName(w))
@@ -3316,6 +3364,12 @@
             if (!id) return "";
             const leaf = id.includes("/") ? (id.split("/").map((p) => normalizePersonName(p)).filter(Boolean).slice(-1)[0] || id) : id;
             return normalizePersonBaseName(leaf);
+        }
+
+        function getLeafStoredNameFromNodeId(nodeId) {
+            const id = normalizePersonName(nodeId || "");
+            if (!id) return "";
+            return id.includes("/") ? (id.split("/").map((p) => normalizePersonName(p)).filter(Boolean).slice(-1)[0] || id) : id;
         }
 
         function getForcedRahmaSuffix(nodeId, branchKey) {

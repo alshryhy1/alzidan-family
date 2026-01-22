@@ -929,6 +929,40 @@
             position: relative;
             z-index: 1;
         }
+        @keyframes treeAttnBreath {
+            0%, 100% { opacity: 0.12; }
+            50% { opacity: 0.26; }
+        }
+        @keyframes treeAttnRing {
+            0% { box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04); }
+            50% { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18), 0 10px 24px rgba(15, 23, 42, 0.12); }
+            100% { box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04); }
+        }
+        #tree details.toggle-card[data-tree-attn] {
+            background: linear-gradient(135deg, rgba(240, 253, 244, 0.95), rgba(239, 246, 255, 0.95));
+            border-color: rgba(34, 197, 94, 0.24);
+            animation: treeAttnRing 3.2s ease-in-out infinite;
+        }
+        #tree details.toggle-card[data-tree-attn]::before {
+            opacity: 0.14;
+            background:
+                radial-gradient(1000px 420px at 18% 10%, rgba(34, 197, 94, 0.26), transparent 60%),
+                radial-gradient(900px 420px at 85% 85%, rgba(59, 130, 246, 0.18), transparent 58%);
+            animation: treeAttnBreath 3.2s ease-in-out infinite;
+        }
+        #tree details.toggle-card[data-tree-attn] .toggle-body {
+            background-color: rgba(240, 253, 244, 0.42);
+            border-top: 1px solid rgba(34, 197, 94, 0.12);
+        }
+        #tree details.toggle-card[data-tree-attn] .founder-form {
+            background-color: rgba(255, 255, 255, 0.92);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #tree details.toggle-card[data-tree-attn],
+            #tree details.toggle-card[data-tree-attn]::before {
+                animation: none;
+            }
+        }
         #fund .toggle-card {
             background: linear-gradient(135deg, #f0fdf4, #ecfeff);
             border-color: rgba(16, 185, 129, 0.22);
@@ -1452,6 +1486,104 @@
                 <div class="section-title" id="home-tree-title" style="display:none;"></div>
             </div>
             <div id="home-tree-body" class="tree-list"></div>
+            <details class="toggle-card" data-accordion="tree-actions" data-tree-attn style="margin-top: 12px;">
+                <summary class="toggle-summary">
+                    <span class="toggle-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 5v14"></path>
+                            <path d="M5 12h14"></path>
+                        </svg>
+                    </span>
+                    <span class="toggle-text">
+                        <span class="toggle-title">إضافة بيانات للشجرة</span>
+                        <span class="toggle-sub">إرسال بطاقة مباشرة للإدارة للمراجعة والإضافة.</span>
+                    </span>
+                </summary>
+                <div class="toggle-body">
+                    <div class="note" style="margin-bottom: 10px;">يرجى تعبئة البيانات العربية فقط. سيتم إرسالها للإدارة ثم مراجعتها واعتمادها.</div>
+                    <form class="founder-form" data-tree-card-form>
+                        <div class="founder-grid">
+                            <div class="founder-field">
+                                <label for="tree-card-branch">العائلة (إجباري)</label>
+                                <select id="tree-card-branch" name="branch" required>
+                                    <option value="">اختر العائلة</option>
+                                    <option value="زيدان">زيدان</option>
+                                    <option value="مزيد">مزيد</option>
+                                    <option value="زايد">زايد</option>
+                                    <option value="لاحم">لاحم</option>
+                                    <option value="ملحم">ملحم</option>
+                                </select>
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-grandfather">الجد 1 (إجباري)</label>
+                                <input id="tree-card-grandfather" name="grandfather" type="text" autocomplete="off" required />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-grandfather-2">الجد 2 (اختياري)</label>
+                                <input id="tree-card-grandfather-2" name="grandfather2" type="text" autocomplete="off" />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-grandfather-3">الجد 3 (اختياري)</label>
+                                <input id="tree-card-grandfather-3" name="grandfather3" type="text" autocomplete="off" />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-grandfather-4">الجد 4 (اختياري)</label>
+                                <input id="tree-card-grandfather-4" name="grandfather4" type="text" autocomplete="off" />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-father">الأب (إجباري)</label>
+                                <input id="tree-card-father" name="father" type="text" autocomplete="off" required />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-name">الاسم (إجباري)</label>
+                                <input id="tree-card-name" name="name" type="text" autocomplete="off" required />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-dob">تاريخ الميلاد (اختياري)</label>
+                                <input id="tree-card-dob" name="dob" type="date" />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-city">المدينة (اختياري)</label>
+                                <input id="tree-card-city" name="city" type="text" autocomplete="address-level2" />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-area">الحي/القرية (اختياري)</label>
+                                <input id="tree-card-area" name="area" type="text" autocomplete="address-level3" />
+                            </div>
+
+                            <div class="founder-field" style="grid-column: 1 / -1;">
+                                <label>الأبناء (اختياري)</label>
+                                <div data-tree-card-children></div>
+                                <div class="info-actions" style="margin-top: 10px;">
+                                    <button class="btn btn-outline btn-sm" type="button" data-tree-card-add-child>إضافة ابن/ابنة</button>
+                                </div>
+                            </div>
+
+                            <div class="founder-field" style="grid-column: 1 / -1;">
+                                <div class="note" style="margin: 0 0 10px;">بيانات المرسل (للرجوع إليه)</div>
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-submit-name">اسم المرسل (إجباري)</label>
+                                <input id="tree-card-submit-name" name="submitterName" type="text" autocomplete="name" required />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-submit-phone">رقم الجوال (إجباري)</label>
+                                <input id="tree-card-submit-phone" name="submitterPhone" type="tel" inputmode="tel" placeholder="05xxxxxxxx" autocomplete="tel" required />
+                            </div>
+                            <div class="founder-field">
+                                <label for="tree-card-submit-email">البريد الإلكتروني (اختياري)</label>
+                                <input id="tree-card-submit-email" name="submitterEmail" type="email" inputmode="email" autocomplete="email" />
+                            </div>
+                        </div>
+
+                        <div class="info-actions">
+                            <button class="btn btn-primary" type="submit">إرسال البطاقة للإدارة</button>
+                            <button class="btn btn-outline" type="button" data-tree-card-cancel>إلغاء</button>
+                        </div>
+                        <div class="founder-alert" data-tree-card-alert></div>
+                    </form>
+                </div>
+            </details>
         </section>
 
         <section id="fund" class="section">
@@ -1466,11 +1598,25 @@
                     </span>
                     <span class="toggle-text">
                         <span class="toggle-title">صندوق تراحم عائلة الزيدان</span>
-                        <span class="toggle-sub">مبادرة أسرية لتنظيم التراحم والدعم والمساهمات والالتزامات المالية داخل العائلة.</span>
+                        <span class="toggle-sub">مبادرة أسرية لتنظيم الاشتراكات والمساعدات العائلية بشفافية وحوكمة، مع برامج تكافل داخلية ورفع الحالات للجهات المرخصة.</span>
                     </span>
                     <span class="badge badge-warn toggle-badge">تحت التأسيس</span>
                 </summary>
                 <div class="toggle-body">
+                    <div class="conditions-block" aria-label="مزايا المشاركة" style="margin-bottom: 12px;">
+                        <div class="conditions-title">مزايا المشاركة</div>
+                        <p class="conditions-sub">أفكار تشغيلية تحت التأسيس، ويتم اعتماد التفاصيل والضوابط من المؤسسين. لا يستلم الصندوق أي تبرعات أو زكاة/صدقات بشكل مباشر، وأي دعم خيري يكون عبر جهة/منصة مرخصة فقط.</p>
+                        <div class="conditions-grid">
+                            <div class="condition-card"><div class="condition-number">1</div><div class="condition-text">اشتراك عضوية مرن (شهري/سنوي) مع سجل واضح لمساهمات الأعضاء.</div></div>
+                            <div class="condition-card"><div class="condition-number">2</div><div class="condition-text">برنامج تكافل ودعم طارئ للحالات داخل العائلة وفق معايير استحقاق معلنة.</div></div>
+                            <div class="condition-card"><div class="condition-number">3</div><div class="condition-text">قروض حسنة/سلف بدون فوائد للأعضاء بضوابط وحدود واضحة.</div></div>
+                            <div class="condition-card"><div class="condition-number">4</div><div class="condition-text">خدمات اجتماعية للأسرة (صلة رحم، تكريم، فعاليات) ضمن ميزانية معتمدة.</div></div>
+                            <div class="condition-card"><div class="condition-number">5</div><div class="condition-text">شفافية: تقارير دورية تلخص الإيرادات، المصروفات، والالتزامات.</div></div>
+                            <div class="condition-card"><div class="condition-number">6</div><div class="condition-text">شراكات وخصومات للأعضاء مع جهات خدمية داخل نطاق العائلة وخارجها.</div></div>
+                            <div class="condition-card"><div class="condition-number">7</div><div class="condition-text">لجنة استحقاق تحفظ السرية وتوثّق القرارات وتمنع تعارض المصالح.</div></div>
+                            <div class="condition-card"><div class="condition-number">8</div><div class="condition-text">رفع الحالات للجهات المرخصة وتوفير روابط الدعم الرسمية فقط عند الاعتماد.</div></div>
+                        </div>
+                    </div>
                     <div class="conditions-block" aria-label="شروط المدير التنفيذي">
                         <div class="conditions-title">شروط المدير التنفيذي</div>
                         <p class="conditions-sub">لمن يرغب بالتقدم لإدارة صندوق تراحم عائلة الزيدان.</p>
@@ -2556,6 +2702,333 @@
         })();
 
         (function () {
+            const form = document.querySelector("[data-tree-card-form]");
+            if (!form) return;
+            const alertEl = document.querySelector("[data-tree-card-alert]");
+            const childrenWrap = document.querySelector("[data-tree-card-children]");
+            const addChildBtn = document.querySelector("[data-tree-card-add-child]");
+            const cancelBtn = document.querySelector("[data-tree-card-cancel]");
+
+            const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
+            const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
+            let sbClient = null;
+
+            function getSupabaseClient() {
+                if (sbClient) return sbClient;
+                const url = String(SUPABASE_URL || "").trim();
+                const anonKey = String(SUPABASE_ANON_KEY || "").trim();
+                if (!url || !anonKey) return null;
+                if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+                sbClient = window.supabase.createClient(url, anonKey);
+                return sbClient;
+            }
+
+            function makeRequestId() {
+                const part1 = Math.random().toString(36).slice(2, 6).toUpperCase();
+                const part2 = Math.random().toString(36).slice(2, 6).toUpperCase();
+                return "REQ-" + part1 + "-" + part2;
+            }
+
+            function normalizePhone(v) {
+                return String(v || "").replace(/[^\d+]/g, "").trim();
+            }
+
+            function normalizeEmail(v) {
+                return String(v || "")
+                    .trim()
+                    .toLowerCase();
+            }
+
+            function isLikelyEmail(v) {
+                const s = normalizeEmail(v);
+                return !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
+            }
+
+            function setAlert(type, text) {
+                if (!alertEl) return;
+                alertEl.className = "founder-alert " + (type === "success" ? "founder-alert-success" : "founder-alert-error");
+                alertEl.textContent = String(text || "");
+                alertEl.style.display = "block";
+            }
+
+            function hideAlert() {
+                if (!alertEl) return;
+                alertEl.style.display = "none";
+                alertEl.textContent = "";
+                alertEl.className = "founder-alert";
+            }
+
+            function fallbackCopyText(text) {
+                const el = document.createElement("textarea");
+                el.value = String(text || "");
+                el.setAttribute("readonly", "");
+                el.style.position = "fixed";
+                el.style.opacity = "0";
+                el.style.left = "-9999px";
+                document.body.appendChild(el);
+                el.select();
+                try {
+                    document.execCommand("copy");
+                } catch (e) {}
+                document.body.removeChild(el);
+            }
+
+            async function copyText(text) {
+                const t = String(text || "");
+                if (!t) return false;
+                try {
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                        await navigator.clipboard.writeText(t);
+                        return true;
+                    }
+                } catch (e) {}
+                fallbackCopyText(t);
+                return true;
+            }
+
+            function createChildRow() {
+                const row = document.createElement("div");
+                row.style.display = "grid";
+                row.style.gridTemplateColumns = "minmax(160px, 1fr) minmax(150px, 180px) auto";
+                row.style.gap = "10px";
+                row.style.alignItems = "end";
+                row.style.marginTop = "8px";
+
+                const nameField = document.createElement("div");
+                const nameLabel = document.createElement("label");
+                nameLabel.textContent = "الاسم";
+                const nameInput = document.createElement("input");
+                nameInput.type = "text";
+                nameInput.name = "childName";
+                nameInput.autocomplete = "off";
+                nameField.appendChild(nameLabel);
+                nameField.appendChild(nameInput);
+
+                const dobField = document.createElement("div");
+                const dobLabel = document.createElement("label");
+                dobLabel.textContent = "تاريخ الميلاد";
+                const dobInput = document.createElement("input");
+                dobInput.type = "date";
+                dobInput.name = "childDob";
+                dobField.appendChild(dobLabel);
+                dobField.appendChild(dobInput);
+
+                const removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "btn btn-outline btn-sm";
+                removeBtn.textContent = "حذف";
+                removeBtn.addEventListener("click", () => row.remove());
+
+                row.appendChild(nameField);
+                row.appendChild(dobField);
+                row.appendChild(removeBtn);
+                return row;
+            }
+
+            function addChildRow() {
+                if (!childrenWrap) return;
+                childrenWrap.appendChild(createChildRow());
+            }
+
+            function readChildren() {
+                if (!childrenWrap) return { ok: true, children: [] };
+                const rows = Array.from(childrenWrap.children || []);
+                const out = [];
+                for (const r of rows) {
+                    const name = String(r.querySelector('[name="childName"]')?.value || "").trim();
+                    const dob = String(r.querySelector('[name="childDob"]')?.value || "").trim();
+                    if (!name && !dob) continue;
+                    if (!name) return { ok: false, reason: "missing_child_name" };
+                    out.push({ name, dob: dob || "" });
+                }
+                return { ok: true, children: out };
+            }
+
+            function buildTreeCardMessage(payload) {
+                const lines = [];
+                const ancestors = Array.isArray(payload.ancestors) ? payload.ancestors : [];
+                lines.push("بطاقة إضافة بيانات للشجرة");
+                lines.push("");
+                lines.push("رقم الطلب: " + payload.requestId);
+                lines.push("العائلة (إجباري): " + (payload.branch || ""));
+                if (ancestors.length) {
+                    lines.push("سلسلة الأجداد:");
+                    ancestors.forEach((v, idx) => {
+                        lines.push("الجد " + String(idx + 1) + ": " + (v || ""));
+                    });
+                } else {
+                    lines.push("الجد 1 (إجباري): " + (payload.grandfather || ""));
+                }
+                lines.push("الأب (إجباري): " + (payload.father || ""));
+                lines.push("الاسم (إجباري): " + (payload.personName || ""));
+                lines.push("تاريخ الميلاد (اختياري): " + (payload.personDob || ""));
+                lines.push("المدينة (اختياري): " + (payload.city || ""));
+                lines.push("الحي/القرية (اختياري): " + (payload.area || ""));
+                lines.push("");
+                lines.push("الأبناء (اختياري):");
+                if (payload.children && payload.children.length) {
+                    payload.children.forEach((c, idx) => {
+                        lines.push(String(idx + 1) + "- الاسم: " + (c.name || "") + " — تاريخ الميلاد: " + (c.dob || ""));
+                    });
+                } else {
+                    lines.push("(لا يوجد)");
+                }
+                lines.push("");
+                lines.push("بيانات المرسل (إجباري):");
+                lines.push("الاسم: " + (payload.submitterName || ""));
+                lines.push("الجوال: " + (payload.submitterPhone || ""));
+                lines.push("البريد (اختياري): " + (payload.submitterEmail || ""));
+                lines.push("التاريخ: " + new Date(payload.createdAt).toLocaleString("ar-SA"));
+                lines.push("");
+                lines.push("__JSON__:");
+                lines.push(
+                    JSON.stringify(
+                        {
+                            v: 1,
+                            kind: "tree_card",
+                            branch_key: payload.branch,
+                            grandfather: payload.grandfather,
+                            ancestors: ancestors,
+                            father: payload.father,
+                            name: payload.personName,
+                            birth_date_g: payload.personDob,
+                            city: payload.city,
+                            area: payload.area,
+                            children: payload.children || [],
+                            submitter: {
+                                name: payload.submitterName,
+                                phone: payload.submitterPhone,
+                                email: payload.submitterEmail
+                            },
+                            created_at: payload.createdAt
+                        },
+                        null,
+                        2
+                    )
+                );
+                return lines.join("\n");
+            }
+
+            function resetForm() {
+                try {
+                    form.reset();
+                } catch (e) {}
+                if (childrenWrap) childrenWrap.innerHTML = "";
+                addChildRow();
+            }
+
+            if (addChildBtn) addChildBtn.addEventListener("click", () => addChildRow());
+            if (cancelBtn)
+                cancelBtn.addEventListener("click", () => {
+                    hideAlert();
+                    resetForm();
+                });
+
+            resetForm();
+
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                hideAlert();
+
+                const branch = String(form.querySelector('[name="branch"]')?.value || "").trim();
+                const grandfather = String(form.querySelector('[name="grandfather"]')?.value || "").trim();
+                const grandfather2 = String(form.querySelector('[name="grandfather2"]')?.value || "").trim();
+                const grandfather3 = String(form.querySelector('[name="grandfather3"]')?.value || "").trim();
+                const grandfather4 = String(form.querySelector('[name="grandfather4"]')?.value || "").trim();
+                const father = String(form.querySelector('[name="father"]')?.value || "").trim();
+                const personName = String(form.querySelector('[name="name"]')?.value || "").trim();
+                const personDob = String(form.querySelector('[name="dob"]')?.value || "").trim();
+                const city = String(form.querySelector('[name="city"]')?.value || "").trim();
+                const area = String(form.querySelector('[name="area"]')?.value || "").trim();
+
+                const submitterName = String(form.querySelector('[name="submitterName"]')?.value || "").trim();
+                const submitterPhone = normalizePhone(form.querySelector('[name="submitterPhone"]')?.value || "");
+                const submitterEmailRaw = String(form.querySelector('[name="submitterEmail"]')?.value || "").trim();
+                const submitterEmail = submitterEmailRaw ? normalizeEmail(submitterEmailRaw) : "";
+
+                if (!branch || !grandfather || !father || !personName) {
+                    setAlert("error", "يرجى إدخال العائلة والجد 1 والأب والاسم.");
+                    return;
+                }
+                if (grandfather4 && !grandfather3) {
+                    setAlert("error", "يرجى تعبئة الجد 3 قبل الجد 4.");
+                    return;
+                }
+                if (grandfather3 && !grandfather2) {
+                    setAlert("error", "يرجى تعبئة الجد 2 قبل الجد 3.");
+                    return;
+                }
+                if (grandfather2 && !grandfather) {
+                    setAlert("error", "يرجى تعبئة الجد 1 قبل الجد 2.");
+                    return;
+                }
+                if (!submitterName || !submitterPhone) {
+                    setAlert("error", "يرجى إدخال اسم المرسل ورقم الجوال.");
+                    return;
+                }
+                if (submitterPhone.length < 9) {
+                    setAlert("error", "يرجى إدخال رقم جوال صحيح.");
+                    return;
+                }
+                if (submitterEmail && !isLikelyEmail(submitterEmail)) {
+                    setAlert("error", "يرجى إدخال بريد إلكتروني صحيح أو تركه فارغاً.");
+                    return;
+                }
+
+                const kids = readChildren();
+                if (!kids.ok) {
+                    setAlert("error", "يرجى إدخال اسم الابن/الابنة أو حذف السطر الفارغ.");
+                    return;
+                }
+
+                const sb = getSupabaseClient();
+                if (!sb) {
+                    setAlert("error", "تعذر إرسال الطلب لأن الربط غير مُعد.");
+                    return;
+                }
+
+                const payload = {
+                    requestId: makeRequestId(),
+                    createdAt: new Date().toISOString(),
+                    branch,
+                    grandfather,
+                    ancestors: [grandfather, grandfather2, grandfather3, grandfather4].filter(Boolean),
+                    father,
+                    personName,
+                    personDob,
+                    city,
+                    area,
+                    children: kids.children || [],
+                    submitterName,
+                    submitterPhone,
+                    submitterEmail
+                };
+
+                const msg = buildTreeCardMessage(payload);
+                const row = {
+                    request_id: payload.requestId,
+                    kind: "tree_card",
+                    branch_key: payload.branch,
+                    name: payload.submitterName,
+                    phone: payload.submitterPhone,
+                    email: payload.submitterEmail || null,
+                    message: msg,
+                    status: "pending",
+                    created_at: payload.createdAt
+                };
+
+                const { error } = await sb.from("approval_requests").insert(row);
+                await copyText(msg);
+                if (error) {
+                    setAlert("error", `تعذر إرسال البطاقة: ${error.message || "خطأ غير معروف"}`);
+                    return;
+                }
+                resetForm();
+                setAlert("success", `تم إرسال البطاقة للإدارة (رقم الطلب: ${payload.requestId}). تم نسخ نص البطاقة.`);
+            });
+        })();
+
+        (function () {
             const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
             const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
             const FAMILY_TREE_CHILDREN_TABLE = "tree_children";
@@ -2815,6 +3288,8 @@
             function tokenizeLineageInput(v) {
                 const s = normalizePersonName(v || "");
                 if (!s) return [];
+                const hasConnector = /(^|\s)(?:بن|ابن|بنت)(\s|$)/.test(s);
+                if (!hasConnector) return [s];
                 return s
                     .split(/\s+/g)
                     .map((w) => normalizePersonName(w))
