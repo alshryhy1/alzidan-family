@@ -260,7 +260,6 @@
                                 <option value="org_role">صندوق/جمعية</option>
                                 <option value="tree_delegate">مندوب الشجرة</option>
                                 <option value="events_delegate">مندوب المناسبات</option>
-                                <option value="tree_card">بطاقة الشجرة</option>
                             </select>
                         </div>
                         <div class="field">
@@ -300,6 +299,108 @@
         </section>
 
         <div id="admin-protected-sections" style="display:none;">
+        <section id="delegate-audit" class="section">
+            <div class="section-header">
+                <div class="section-title">سجل تعديلات المناديب</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    يعرض هذا القسم جميع التعديلات التي نفذها مناديب الشجرة، مع التاريخ والوقت. (يلزم تنفيذ SQL الشجرة المحدث أولاً لتفعيل التسجيل).
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="refresh-delegate-audit" class="btn btn-outline btn-sm" type="button">تحديث السجل</button>
+                </div>
+                <div class="grid" style="margin-bottom: 10px;">
+                    <div class="field">
+                        <label>المناديب المعتمدون</label>
+                        <div id="delegates-list" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+                    </div>
+                    <div class="field">
+                        <label for="delegate-audit-select">عرض سجل مندوب</label>
+                        <select id="delegate-audit-select">
+                            <option value="">اختر مندوباً</option>
+                        </select>
+                        <div id="delegate-audit-status" class="hint" style="margin-top: 8px;"></div>
+                    </div>
+                </div>
+                <div class="field" style="margin-bottom: 10px;">
+                    <label>صلاحيات المندوب (الشجرة / المناسبات)</label>
+                    <div id="delegate-perms-status" class="hint"></div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top: 8px;">
+                        <button id="delegate-perms-tree" class="btn btn-outline btn-sm" type="button">الشجرة فقط</button>
+                        <button id="delegate-perms-events" class="btn btn-outline btn-sm" type="button">المناسبات فقط</button>
+                        <button id="delegate-perms-both" class="btn btn-outline btn-sm" type="button">كلاهما</button>
+                        <button id="delegate-perms-disable" class="btn btn-outline btn-sm" type="button" style="border-color: rgba(239, 68, 68, 0.35); color: #b91c1c;">تعطيل المندوب</button>
+                        <button id="delegate-delete-btn" class="btn btn-outline btn-sm" type="button" style="border-color: rgba(239, 68, 68, 0.55); color: #991b1b;">حذف نهائي</button>
+                    </div>
+                </div>
+                <div class="table-wrap" aria-label="سجل تعديلات المناديب">
+                    <table style="min-width: 860px;">
+                        <thead>
+                            <tr>
+                                <th>الوقت</th>
+                                <th>العملية</th>
+                                <th>الفرع</th>
+                                <th>الهدف</th>
+                                <th>التفاصيل</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delegate-audit-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">تهيئة Supabase للشجرة</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    انسخ هذا النص ثم الصقه في Supabase SQL Editor ونفّذه مرة واحدة لتفعيل الحفظ/التعديل/الحذف للمندوب.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="copy-tree-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
+                </div>
+                <textarea id="tree-sql" readonly style="width: 100%; min-height: 280px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">استيراد شجرة العائلة (CSV)</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    حمّل القالب ثم املأه (Excel/Google Sheets) واحفظه بصيغة CSV، وبعدها اختر الملف واضغط استيراد.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+                    <button id="tree-import-download" class="btn btn-outline btn-sm" type="button">تحميل قالب CSV</button>
+                    <button id="tree-import-whatsapp" class="btn btn-outline btn-sm" type="button">إرسال القالب عبر واتساب</button>
+                    <button id="tree-import-copy" class="btn btn-outline btn-sm" type="button">نسخ نموذج CSV</button>
+                    <input id="tree-import-file" type="file" accept=".csv,text/csv" />
+                    <button id="tree-import-run" class="btn btn-primary btn-sm" type="button">استيراد</button>
+                </div>
+                <textarea id="tree-import-template" readonly style="width: 100%; min-height: 96px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr; margin-bottom: 10px;"></textarea>
+                <div id="tree-import-status" class="hint"></div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div class="section-title">تهيئة Supabase للمناسبات وصلاحيات المناديب</div>
+            </div>
+            <div class="card">
+                <div class="hint" style="margin: 0 0 10px;">
+                    نفّذ هذا النص مرة واحدة لتفعيل: (1) صلاحية مندوب المناسبات + (2) تسجيل تدقيق المناسبات + (3) دوال الحفظ/التعديل/الحذف عبر RPC.
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="copy-delegates-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
+                </div>
+                <textarea id="delegates-sql" readonly style="width: 100%; min-height: 320px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
+            </div>
+        </section>
+
         <section class="section">
             <div class="section-header">
                 <div class="section-title">إحصاءات الزيارات</div>
@@ -315,163 +416,20 @@
             </div>
         </section>
 
-        <section id="requests-stats-section" class="section">
-            <div class="section-header">
-                <div class="section-title">إحصاء طلبات المناديب</div>
-            </div>
-            <div class="card">
-                <div class="hint" style="margin: 0 0 10px;">
-                    يعرض هذا القسم ملخصاً سريعاً لأعداد الطلبات حسب النوع والحالة.
-                </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                    <button id="refresh-requests-stats" class="btn btn-outline btn-sm" type="button">تحديث الإحصاء</button>
-                </div>
-                <div id="requests-stats" class="hint"></div>
-            </div>
-        </section>
-
-        <section id="file-whatsapp-section" class="section">
-            <div class="section-header">
-                <div class="section-title">استقبال ملف وإرساله بصيغة واتساب</div>
-            </div>
-            <div class="card">
-                <div class="hint" style="margin: 0 0 10px;">
-                    اختر ملفاً (CSV/TXT/JSON) وسيتم تجهيز نص مختصر مناسب للإرسال عبر واتساب.
-                </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
-                    <input id="wa-file" type="file" accept=".txt,.csv,.json,text/plain,text/csv,application/json" />
-                    <button id="wa-file-build" class="btn btn-outline btn-sm" type="button">تجهيز النص</button>
-                    <button id="wa-file-copy" class="btn btn-outline btn-sm" type="button">نسخ النص</button>
-                    <button id="wa-file-open" class="btn btn-primary btn-sm" type="button">فتح واتساب</button>
-                </div>
-                <textarea id="wa-file-text" style="width: 100%; min-height: 140px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: rtl; margin-bottom: 10px;"></textarea>
-                <div id="wa-file-status" class="hint"></div>
-            </div>
-        </section>
-
-        <section id="delegate-audit" class="section">
-            <div class="section-header">
-                <div class="section-title">سجل تعديلات المناديب</div>
-            </div>
-            <div class="card">
-                <details id="delegate-audit-details">
-                    <summary style="cursor:pointer; font-weight: 800; color: #047857; list-style: none;">فتح سجل التعديلات</summary>
-                    <div style="margin-top: 10px;">
-                        <div class="hint" style="margin: 0 0 10px;">
-                            يعرض هذا القسم جميع التعديلات التي نفذها مناديب الشجرة، مع التاريخ والوقت. (يلزم تنفيذ SQL الشجرة المحدث أولاً لتفعيل التسجيل).
-                        </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                            <button id="refresh-delegate-audit" class="btn btn-outline btn-sm" type="button">تحديث السجل</button>
-                        </div>
-                        <div class="grid" style="margin-bottom: 10px;">
-                            <div class="field">
-                                <label>المناديب المعتمدون</label>
-                                <div id="delegates-list" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-                            </div>
-                            <div class="field">
-                                <label for="delegate-audit-select">عرض سجل مندوب</label>
-                                <select id="delegate-audit-select">
-                                    <option value="">اختر مندوباً</option>
-                                </select>
-                                <div id="delegate-audit-status" class="hint" style="margin-top: 8px;"></div>
-                            </div>
-                        </div>
-                        <div class="field" style="margin-bottom: 10px;">
-                            <label>صلاحيات المندوب (الشجرة / المناسبات)</label>
-                            <div id="delegate-perms-status" class="hint"></div>
-                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top: 8px;">
-                                <button id="delegate-perms-tree" class="btn btn-outline btn-sm" type="button">الشجرة فقط</button>
-                                <button id="delegate-perms-events" class="btn btn-outline btn-sm" type="button">المناسبات فقط</button>
-                                <button id="delegate-perms-both" class="btn btn-outline btn-sm" type="button">كلاهما</button>
-                                <button id="delegate-perms-disable" class="btn btn-outline btn-sm" type="button" style="border-color: rgba(239, 68, 68, 0.35); color: #b91c1c;">تعطيل المندوب</button>
-                                <button id="delegate-delete-btn" class="btn btn-outline btn-sm" type="button" style="border-color: rgba(239, 68, 68, 0.55); color: #991b1b;">حذف نهائي</button>
-                            </div>
-                        </div>
-                        <div class="table-wrap" aria-label="سجل تعديلات المناديب">
-                            <table style="min-width: 860px;">
-                                <thead>
-                                    <tr>
-                                        <th>الوقت</th>
-                                        <th>العملية</th>
-                                        <th>الفرع</th>
-                                        <th>الهدف</th>
-                                        <th>التفاصيل</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="delegate-audit-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </details>
-            </div>
-        </section>
-
         <section class="section">
             <div class="section-header">
-                <div class="section-title">استيراد شجرة العائلة (CSV)</div>
+                <div class="section-title">تهيئة Supabase لإحصاءات الزيارات</div>
             </div>
             <div class="card">
                 <div class="hint" style="margin: 0 0 10px;">
-                    للاستيراد: حمّل قالب CSV واملأه (Excel/Google Sheets) واحفظه CSV، ثم اختر الملف واضغط استيراد. ولجمع البيانات عبر واتساب: انسخ/أرسل نموذج البطاقة أدناه.
+                    انسخ هذا النص ثم الصقه في Supabase SQL Editor ونفّذه مرة واحدة لتفعيل تتبع المشاهدات وعرض الإحصاءات.
                 </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
-                    <button id="tree-import-download" class="btn btn-outline btn-sm" type="button">تحميل قالب CSV</button>
-                    <button id="tree-import-whatsapp" class="btn btn-outline btn-sm" type="button">إرسال نموذج البطاقة عبر واتساب</button>
-                    <button id="tree-import-copy" class="btn btn-outline btn-sm" type="button">نسخ نموذج البطاقة</button>
-                    <input id="tree-import-file" type="file" accept=".csv,text/csv" />
-                    <button id="tree-import-run" class="btn btn-primary btn-sm" type="button">استيراد</button>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button id="copy-views-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
                 </div>
-                <textarea id="tree-import-template" readonly style="width: 100%; min-height: 180px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: rtl; margin-bottom: 10px;"></textarea>
-                <div id="tree-import-status" class="hint"></div>
+                <textarea id="views-sql" readonly style="width: 100%; min-height: 240px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
             </div>
         </section>
-
-        <section id="admin-setup" class="section">
-            <div class="section-header">
-                <div class="section-title">التهيئة</div>
-            </div>
-            <div class="card">
-                <details>
-                    <summary style="cursor:pointer; font-weight: 800; color: #047857; list-style: none;">تهيئة Supabase لإحصاءات الزيارات</summary>
-                    <div style="margin-top: 10px;">
-                        <div class="hint" style="margin: 0 0 10px;">
-                            انسخ هذا النص ثم الصقه في Supabase SQL Editor ونفّذه مرة واحدة لتفعيل تتبع المشاهدات وعرض الإحصاءات.
-                        </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                            <button id="copy-views-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
-                        </div>
-                        <textarea id="views-sql" readonly style="width: 100%; min-height: 240px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
-                    </div>
-                </details>
-
-                <details style="margin-top: 12px;">
-                    <summary style="cursor:pointer; font-weight: 800; color: #047857; list-style: none;">تهيئة Supabase للشجرة</summary>
-                    <div style="margin-top: 10px;">
-                        <div class="hint" style="margin: 0 0 10px;">
-                            انسخ هذا النص ثم الصقه في Supabase SQL Editor ونفّذه مرة واحدة لتفعيل الحفظ/التعديل/الحذف للمندوب.
-                        </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                            <button id="copy-tree-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
-                        </div>
-                        <textarea id="tree-sql" readonly style="width: 100%; min-height: 280px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
-                    </div>
-                </details>
-
-                <details style="margin-top: 12px;">
-                    <summary style="cursor:pointer; font-weight: 800; color: #047857; list-style: none;">تهيئة Supabase للمناسبات وصلاحيات المناديب</summary>
-                    <div style="margin-top: 10px;">
-                        <div class="hint" style="margin: 0 0 10px;">
-                            نفّذ هذا النص مرة واحدة لتفعيل: (1) صلاحية مندوب المناسبات + (2) تسجيل تدقيق المناسبات + (3) دوال الحفظ/التعديل/الحذف عبر RPC.
-                        </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                            <button id="copy-delegates-sql" class="btn btn-outline btn-sm" type="button">نسخ SQL</button>
-                        </div>
-                        <textarea id="delegates-sql" readonly style="width: 100%; min-height: 320px; border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.6; direction: ltr;"></textarea>
-                    </div>
-                </details>
-            </div>
-        </section>
-
         </div>
 
         <footer>شجرة عائلة الزيدان — صفحة إدارة</footer>
@@ -531,11 +489,8 @@
             const viewsSqlEl = document.getElementById("views-sql");
             const refreshViewsStatsBtn = document.getElementById("refresh-views-stats");
             const viewsStatsEl = document.getElementById("views-stats");
-            const refreshRequestsStatsBtn = document.getElementById("refresh-requests-stats");
-            const requestsStatsEl = document.getElementById("requests-stats");
             const copyDelegatesSqlBtn = document.getElementById("copy-delegates-sql");
             const delegatesSqlEl = document.getElementById("delegates-sql");
-            const delegateAuditDetails = document.getElementById("delegate-audit-details");
             const adminNotifyEmail = document.getElementById("admin-notify-email");
             const adminEmailNotifPending = document.getElementById("admin-email-notif-pending");
             const adminEmailNotifAudit = document.getElementById("admin-email-notif-audit");
@@ -549,12 +504,6 @@
             const treeImportRunBtn = document.getElementById("tree-import-run");
             const treeImportTemplateEl = document.getElementById("tree-import-template");
             const treeImportStatusEl = document.getElementById("tree-import-status");
-            const waFileEl = document.getElementById("wa-file");
-            const waFileBuildBtn = document.getElementById("wa-file-build");
-            const waFileCopyBtn = document.getElementById("wa-file-copy");
-            const waFileOpenBtn = document.getElementById("wa-file-open");
-            const waFileTextEl = document.getElementById("wa-file-text");
-            const waFileStatusEl = document.getElementById("wa-file-status");
 
             const TREE_SETUP_SQL = `
 create table if not exists public.tree_children (
@@ -1742,7 +1691,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 if (kind === "tree_delegate") return "مندوب الشجرة";
                 if (kind === "events_delegate") return "مندوب المناسبات";
                 if (kind === "org_role") return "صندوق/جمعية";
-                if (kind === "tree_card") return "بطاقة الشجرة";
                 return kind || "طلب";
             }
 
@@ -1830,31 +1778,9 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
 
             function treeCsvTemplateText() {
                 const bom = "\ufeff";
-                const header = ["الفرع", "اسم_الأب", "الاسم_كامل", "تاريخ_الميلاد_ميلادي", "تاريخ_الميلاد_هجري", "سنة_الميلاد", "المدينة", "الحي", "متوفى"].join(",");
-                const example = ["زيدان", "خميس", "عبدالله خميس الزيدان", "١٩٩٠/٠١/٠١", "١٤١٠/٠١/٠١", "١٩٩٠", "حائل", "المدينة/الحي", "لا"].join(",");
+                const header = ["branch_key", "parent_name", "child_name", "birth_date_g", "birth_date_h", "birth_year", "city", "area", "is_deceased"].join(",");
+                const example = ["زيدان", "خميس", "عبدالله خميس الزيدان", "1990-01-01", "1410/01/01", "1990", "حائل", "المدينة/الحي", "false"].join(",");
                 return bom + header + "\n" + example + "\n";
-            }
-
-            function treeCardTemplateText() {
-                const lines = [];
-                lines.push("بطاقة إضافة بيانات للشجرة");
-                lines.push("");
-                lines.push("العائلة (إجباري): زيدان / مزيد / زايد / لاحم / ملحم");
-                lines.push("الجد (إجباري): ");
-                lines.push("الأب (إجباري): ");
-                lines.push("الاسم (إجباري): ");
-                lines.push("تاريخ الميلاد (اختياري): ");
-                lines.push("المدينة (اختياري): ");
-                lines.push("الحي/القرية (اختياري): ");
-                lines.push("");
-                lines.push("الأبناء (اختياري):");
-                lines.push("1- الاسم:  — تاريخ الميلاد: ");
-                lines.push("2- الاسم:  — تاريخ الميلاد: ");
-                lines.push("3- الاسم:  — تاريخ الميلاد: ");
-                lines.push("4- الاسم:  — تاريخ الميلاد: ");
-                lines.push("5- الاسم:  — تاريخ الميلاد: ");
-                lines.push("أضف سطوراً أخرى إذا كان عدد الأبناء أكثر.");
-                return lines.join("\n");
             }
 
             function openWhatsAppWithText(text) {
@@ -1867,80 +1793,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 } catch (e) {
                     return false;
                 }
-            }
-
-            function setWaFileStatus(text) {
-                if (!waFileStatusEl) return;
-                waFileStatusEl.textContent = String(text || "");
-            }
-
-            function truncateText(t, max) {
-                const s = String(t || "");
-                const n = Number(max || 0);
-                if (!n || s.length <= n) return s;
-                return s.slice(0, Math.max(0, n - 20)) + "\n...\n(تم الاختصار)";
-            }
-
-            function takeLines(text, maxLines, maxChars) {
-                const src = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-                const lines = src.split("\n");
-                const out = [];
-                for (let i = 0; i < lines.length && out.length < maxLines; i += 1) {
-                    const v = String(lines[i] || "");
-                    if (!v.trim()) continue;
-                    out.push(v);
-                    if (maxChars && out.join("\n").length >= maxChars) break;
-                }
-                return out.join("\n");
-            }
-
-            async function readFileAsText(file) {
-                if (!file) return "";
-                try {
-                    if (typeof file.text === "function") return await file.text();
-                } catch (e) {}
-                return await new Promise((resolve) => {
-                    try {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(String(reader.result || ""));
-                        reader.onerror = () => resolve("");
-                        reader.readAsText(file);
-                    } catch (e) {
-                        resolve("");
-                    }
-                });
-            }
-
-            function buildWhatsAppTextFromFile(file, text) {
-                const f = file || null;
-                const name = f && f.name ? String(f.name || "") : "file";
-                const size = f && f.size != null ? Number(f.size) : 0;
-                const sizeKb = isFinite(size) ? Math.max(0, Math.round(size / 1024)) : 0;
-                const ext = name.toLowerCase().split(".").pop();
-                const raw = String(text || "");
-
-                let snippet = "";
-                if (ext === "json") {
-                    try {
-                        const parsed = JSON.parse(raw);
-                        snippet = JSON.stringify(parsed, null, 2);
-                    } catch (e) {
-                        snippet = raw;
-                    }
-                    snippet = takeLines(snippet, 120, 2400);
-                } else if (ext === "csv") {
-                    snippet = takeLines(raw, 35, 2400);
-                } else {
-                    snippet = takeLines(raw, 60, 2400);
-                }
-
-                const lines = [];
-                lines.push("ملف: " + name);
-                if (sizeKb) lines.push("الحجم: " + String(sizeKb) + "KB");
-                lines.push("");
-                lines.push("محتوى مختصر:");
-                lines.push(snippet || "(فارغ)");
-                return truncateText(lines.join("\n"), 3600);
             }
 
             async function shareTreeCsvTemplateFile() {
@@ -2016,7 +1868,7 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                     return out;
                 };
 
-                const header = parseLine(lines[0]).map((h) => String(h || "").trim().replace(/^\ufeff/, ""));
+                const header = parseLine(lines[0]).map((h) => String(h || "").trim());
                 const rows = [];
                 for (let i = 1; i < lines.length; i++) {
                     const parts = parseLine(lines[i]);
@@ -2038,86 +1890,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "نعم" || s === "صح") return true;
                 if (s === "0" || s === "false" || s === "no" || s === "n" || s === "لا" || s === "خطأ") return false;
                 return null;
-            }
-
-            function normalizeArabicDigitsToLatin(v) {
-                const s = String(v || "");
-                const map = {
-                    "٠": "0",
-                    "١": "1",
-                    "٢": "2",
-                    "٣": "3",
-                    "٤": "4",
-                    "٥": "5",
-                    "٦": "6",
-                    "٧": "7",
-                    "٨": "8",
-                    "٩": "9",
-                    "۰": "0",
-                    "۱": "1",
-                    "۲": "2",
-                    "۳": "3",
-                    "۴": "4",
-                    "۵": "5",
-                    "۶": "6",
-                    "۷": "7",
-                    "۸": "8",
-                    "۹": "9"
-                };
-                return s.replace(/[٠-٩۰-۹]/g, (ch) => map[ch] || ch);
-            }
-
-            function pickRowValue(row, keys) {
-                const r = row || {};
-                for (let i = 0; i < keys.length; i += 1) {
-                    const k = keys[i];
-                    if (!k) continue;
-                    const v = r[k];
-                    const s = v != null ? String(v).trim() : "";
-                    if (s) return s;
-                }
-                return "";
-            }
-
-            function toIntOrNull(v) {
-                const s = normalizeArabicDigitsToLatin(String(v || "").trim());
-                if (!s) return null;
-                const n = parseInt(s, 10);
-                return Number.isFinite(n) ? n : null;
-            }
-
-            function toIsoDateOrEmpty(v) {
-                const raw = normalizeArabicDigitsToLatin(String(v || "").trim());
-                if (!raw) return "";
-                const cleaned = raw.replace(/[.\s]+/g, "/");
-                let y = null;
-                let m = null;
-                let d = null;
-
-                let mm = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-                if (mm) {
-                    y = toIntOrNull(mm[1]);
-                    m = toIntOrNull(mm[2]);
-                    d = toIntOrNull(mm[3]);
-                } else {
-                    mm = cleaned.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
-                    if (mm) {
-                        d = toIntOrNull(mm[1]);
-                        m = toIntOrNull(mm[2]);
-                        y = toIntOrNull(mm[3]);
-                    }
-                }
-
-                if (!y || !m || !d) return "";
-                if (y < 1800 || y > 2100) return "";
-                if (m < 1 || m > 12) return "";
-                if (d < 1 || d > 31) return "";
-                const dt = new Date(Date.UTC(y, m - 1, d));
-                if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return "";
-                const yy = String(y).padStart(4, "0");
-                const mm2 = String(m).padStart(2, "0");
-                const dd2 = String(d).padStart(2, "0");
-                return `${yy}-${mm2}-${dd2}`;
             }
 
             function chunkArray(arr, size) {
@@ -2154,38 +1926,18 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 const rows = rawRows
                     .map((r) => {
                         const row = r || {};
-                        const branch_key = pickRowValue(row, ["branch_key", "branch", "الفرع", "فرع", "العائلة", "العائله", "اسم_العائلة", "اسم_العائله"]);
-                        const parent_name = pickRowValue(row, ["parent_name", "parent", "father", "الأب", "الاب", "اسم_الأب", "اسم_الاب", "والد", "الوالد"]);
-                        const child_name = pickRowValue(row, ["child_name", "child", "name", "الاسم", "الاسم_كامل", "الاسم_الكامل", "الاسم كامل", "اسم"]);
-                        const birth_date_g = toIsoDateOrEmpty(
-                            pickRowValue(row, ["birth_date_g", "birth_date", "dob", "تاريخ_الميلاد", "تاريخ الميلاد", "تاريخ_الميلاد_ميلادي", "الميلاد"])
-                        );
-                        const birth_date_h = pickRowValue(row, ["birth_date_h", "hijri", "تاريخ_الميلاد_هجري", "تاريخ_الميلاد_الهجري", "هجري"]);
-                        const city = pickRowValue(row, ["city", "المدينة", "المدينه"]);
-                        const area = pickRowValue(row, ["area", "الحي", "المنطقة", "المنطقه"]);
-                        const birthYearRaw = pickRowValue(row, ["birth_year", "year", "سنة_الميلاد", "سنه_الميلاد", "سنة الميلاد", "سنه الميلاد"]);
-                        const ageRaw = pickRowValue(row, ["age", "العمر", "عمر"]);
-                        let birth_year = normalizeArabicDigitsToLatin(String(birthYearRaw || "").trim());
-                        if (!birth_year) {
-                            const age = toIntOrNull(ageRaw);
-                            if (age != null && age >= 1 && age <= 120) {
-                                const y = new Date().getFullYear() - age;
-                                birth_year = String(y);
-                            }
-                        }
-                        const deceasedRaw = pickRowValue(row, ["is_deceased", "deceased", "متوفى", "متوفي", "وفاة", "وفاه"]);
-                        const deceasedBool = coerceBool(deceasedRaw);
                         const out = {
-                            branch_key: String(branch_key || "").trim(),
-                            parent_name: String(parent_name || "").trim(),
-                            child_name: String(child_name || "").trim(),
-                            birth_date_g: String(birth_date_g || "").trim(),
-                            birth_date_h: String(birth_date_h || "").trim(),
-                            birth_year: String(birth_year || "").trim(),
-                            city: String(city || "").trim(),
-                            area: String(area || "").trim()
+                            branch_key: String(row.branch_key || "").trim(),
+                            parent_name: String(row.parent_name || "").trim(),
+                            child_name: String(row.child_name || "").trim(),
+                            birth_date_g: String(row.birth_date_g || "").trim(),
+                            birth_date_h: String(row.birth_date_h || "").trim(),
+                            birth_year: String(row.birth_year || "").trim(),
+                            city: String(row.city || "").trim(),
+                            area: String(row.area || "").trim()
                         };
-                        if (deceasedBool != null) out.is_deceased = deceasedBool;
+                        const b = coerceBool(row.is_deceased);
+                        if (b != null) out.is_deceased = b;
                         return out;
                     })
                     .filter((r) => r.branch_key && r.parent_name && r.child_name);
@@ -2591,115 +2343,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 return s;
             }
 
-            function normalizeTreeCardText(v) {
-                return String(v || "")
-                    .replace(/\s+/g, " ")
-                    .trim();
-            }
-
-            function safeParseJsonTextLoose(v) {
-                try {
-                    if (v == null) return null;
-                    const s = String(v || "").trim();
-                    if (!s) return null;
-                    return JSON.parse(s);
-                } catch (e) {
-                    return null;
-                }
-            }
-
-            function extractTreeCardPayloadFromMessage(msg) {
-                const text = String(msg || "");
-                const marker = "__JSON__:";
-                const idx = text.indexOf(marker);
-                if (idx < 0) return null;
-                const jsonText = text.slice(idx + marker.length).trim();
-                if (!jsonText) return null;
-                const parsed = safeParseJsonTextLoose(jsonText);
-                return parsed && typeof parsed === "object" ? parsed : null;
-            }
-
-            async function importTreeCardToTree(sb, token, reqRow) {
-                const payload = extractTreeCardPayloadFromMessage(reqRow && reqRow.message ? reqRow.message : "");
-                if (!payload) return { ok: false, message: "تعذر قراءة بيانات البطاقة (JSON غير موجود)." };
-
-                const branchKey = normalizeTreeCardText(payload.branch_key || reqRow.branch_key || "");
-                const father = normalizeTreeCardText(payload.father || "");
-                const personName = normalizeTreeCardText(payload.name || "");
-                const personDob = normalizeTreeCardText(payload.birth_date_g || "");
-                const city = normalizeTreeCardText(payload.city || "");
-                const area = normalizeTreeCardText(payload.area || "");
-
-                if (!branchKey || !father || !personName) {
-                    return { ok: false, message: "بيانات البطاقة ناقصة (العائلة/الأب/الاسم)." };
-                }
-
-                const createdAt = normalizeTreeCardText(payload.created_at || reqRow.created_at || new Date().toISOString());
-                const rows = [];
-                const seen = new Set();
-
-                function pushEdge(parent, child, extra) {
-                    const p = normalizeTreeCardText(parent || "");
-                    const c = normalizeTreeCardText(child || "");
-                    if (!p || !c) return;
-                    const key = branchKey + "|" + p + "|" + c;
-                    if (seen.has(key)) return;
-                    seen.add(key);
-                    const row = {
-                        branch_key: branchKey,
-                        parent_name: p,
-                        child_name: c,
-                        created_at: createdAt
-                    };
-                    if (extra && typeof extra === "object") Object.assign(row, extra);
-                    rows.push(row);
-                }
-
-                const ancestorsFromArray = Array.isArray(payload.ancestors) ? payload.ancestors : [];
-                const ancestorsFromFields = [payload.grandfather, payload.grandfather2, payload.grandfather3, payload.grandfather4].filter(Boolean);
-                const ancestorsClosestFirst = (ancestorsFromArray.length ? ancestorsFromArray : ancestorsFromFields)
-                    .map((v) => normalizeTreeCardText(v))
-                    .filter(Boolean);
-
-                const farthestFirst = ancestorsClosestFirst.slice().reverse();
-                for (let i = 0; i + 1 < farthestFirst.length; i += 1) {
-                    pushEdge(farthestFirst[i], farthestFirst[i + 1]);
-                }
-                if (ancestorsClosestFirst.length) {
-                    pushEdge(ancestorsClosestFirst[0], father);
-                }
-
-                pushEdge(father, personName, { birth_date_g: personDob || "", city: city || "", area: area || "" });
-
-                const kids = Array.isArray(payload.children) ? payload.children : [];
-                kids.forEach((c) => {
-                    const childName = normalizeTreeCardText(c && c.name ? c.name : "");
-                    const childDob = normalizeTreeCardText(c && c.dob ? c.dob : "");
-                    if (!childName) return;
-                    pushEdge(personName, childName, { birth_date_g: childDob || "" });
-                });
-
-                const { data, error } = await sb.rpc("admin_tree_children_import_v1", { p_token: token, p_rows: rows });
-                if (error) {
-                    const msg = String(error.message || "");
-                    const low = msg.toLowerCase();
-                    const isMissing = low.includes("could not find the function") || low.includes("does not exist") || String(error.code || "").toLowerCase() === "pgrst202";
-                    if (isMissing) {
-                        return { ok: false, message: "يلزم تفعيل SQL الشجرة في Supabase أولاً، ثم إعادة المحاولة." };
-                    }
-                    return { ok: false, message: "تعذر إضافة بيانات البطاقة للشجرة: " + (error.message || "خطأ غير معروف") };
-                }
-
-                const inserted = data && data.inserted != null ? Number(data.inserted) : null;
-                const updated = data && data.updated != null ? Number(data.updated) : null;
-                const skipped = data && data.skipped != null ? Number(data.skipped) : null;
-                const parts = [];
-                if (Number.isFinite(inserted)) parts.push("جديد: " + String(inserted));
-                if (Number.isFinite(updated)) parts.push("تحديث: " + String(updated));
-                if (Number.isFinite(skipped)) parts.push("تخطي: " + String(skipped));
-                return { ok: true, message: parts.length ? parts.join("، ") : "" };
-            }
-
             function renderRequestRow(row) {
                 if (!requestsBody) return;
                 const tr = document.createElement("tr");
@@ -2711,7 +2354,7 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 }
 
                 tr.appendChild(tdText(row.request_id || ""));
-                tr.appendChild(tdText(kindLabel(row.kind)));
+                tr.appendChild(tdText(row.kind || ""));
                 tr.appendChild(tdText(row.branch_key || ""));
                 tr.appendChild(tdText(row.name || ""));
                 tr.appendChild(tdText(row.phone || ""));
@@ -2795,13 +2438,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                         showAlert("error", "بيانات الطلب ناقصة.");
                         return;
                     }
-                    if (row.kind === "tree_card") {
-                        const imported = await importTreeCardToTree(sb, token, row);
-                        if (!imported.ok) {
-                            showAlert("error", imported.message || "تعذر إضافة البطاقة للشجرة.");
-                            return;
-                        }
-                    }
                     const { data, error } = await sb.rpc("admin_set_request_status_v2", { p_token: token, p_id: id, p_status: "approved" });
                     if (error) {
                         showAlert("error", `تعذر اعتماد الطلب: ${error.message || "خطأ غير معروف"}`);
@@ -2827,11 +2463,7 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                         await copyText(body);
                         maybeOpenEmailDraft(row.email, subject, body);
                     }
-                    if (row.kind === "tree_card") {
-                        showAlert("success", `تم قبول الطلب وإضافة البيانات للشجرة: ${row.request_id}`);
-                    } else {
-                        showAlert("success", `تم قبول الطلب: ${row.request_id}`);
-                    }
+                    showAlert("success", `تم قبول الطلب: ${row.request_id}`);
                     await loadRequests();
                 });
 
@@ -2882,116 +2514,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 });
 
                 requestsBody.appendChild(tr);
-            }
-
-            function renderRequestsStatsLoading() {
-                if (!requestsStatsEl) return;
-                requestsStatsEl.textContent = "جاري تحميل الإحصاء...";
-            }
-
-            function renderRequestsStatsError(text) {
-                if (!requestsStatsEl) return;
-                requestsStatsEl.textContent = text || "تعذر تحميل الإحصاء.";
-            }
-
-            function renderRequestsStats(list, limit) {
-                if (!requestsStatsEl) return;
-                const rows = Array.isArray(list) ? list : [];
-                const total = rows.length;
-                const byKind = new Map();
-                const byStatus = new Map();
-                let latestAt = "";
-                rows.forEach((r) => {
-                    const kind = String(r && r.kind != null ? r.kind : "").trim() || "unknown";
-                    const status = String(r && r.status != null ? r.status : "").trim() || "unknown";
-                    const cur = byKind.get(kind) || { total: 0, pending: 0, approved: 0, rejected: 0, other: 0 };
-                    cur.total += 1;
-                    if (status === "pending") cur.pending += 1;
-                    else if (status === "approved") cur.approved += 1;
-                    else if (status === "rejected") cur.rejected += 1;
-                    else cur.other += 1;
-                    byKind.set(kind, cur);
-                    byStatus.set(status, (byStatus.get(status) || 0) + 1);
-                    const at = r && r.created_at != null ? String(r.created_at || "") : "";
-                    if (at && (!latestAt || at.localeCompare(latestAt) > 0)) latestAt = at;
-                });
-
-                const lines = [];
-                lines.push("إجمالي الطلبات: " + String(total));
-                if (byStatus.size) {
-                    const statusLabel = (s) => {
-                        if (s === "pending") return "انتظار";
-                        if (s === "approved") return "قبول";
-                        if (s === "rejected") return "رفض";
-                        return s || "غير معروف";
-                    };
-                    const statusOrder = ["pending", "approved", "rejected"];
-                    const ordered = statusOrder
-                        .filter((s) => byStatus.has(s))
-                        .concat(Array.from(byStatus.keys()).filter((s) => !statusOrder.includes(s)).sort());
-                    ordered.forEach((s) => {
-                        lines.push(statusLabel(s) + ": " + String(byStatus.get(s) || 0));
-                    });
-                }
-
-                const kindEntries = Array.from(byKind.entries()).sort((a, b) => (b[1].total || 0) - (a[1].total || 0));
-                if (kindEntries.length) {
-                    lines.push("");
-                    lines.push("حسب النوع:");
-                    kindEntries.forEach(([k, agg]) => {
-                        lines.push(
-                            "- " +
-                                kindLabel(k) +
-                                ": " +
-                                String(agg.total) +
-                                " (انتظار " +
-                                String(agg.pending) +
-                                "، قبول " +
-                                String(agg.approved) +
-                                "، رفض " +
-                                String(agg.rejected) +
-                                ")"
-                        );
-                    });
-                }
-
-                if (latestAt) {
-                    let label = latestAt;
-                    try {
-                        label = formatDateTimeArSaVerbose(latestAt);
-                    } catch (e) {}
-                    lines.push("");
-                    lines.push("آخر طلب: " + label);
-                }
-
-                if (limit && total >= limit) {
-                    lines.push("");
-                    lines.push("ملاحظة: قد تكون الإحصاءات جزئية إذا تجاوزت النتائج الحد.");
-                }
-
-                requestsStatsEl.textContent = lines.join("\n");
-            }
-
-            async function loadRequestsStats() {
-                const sb = getClient();
-                if (!sb) {
-                    renderRequestsStatsError("الخدمة غير مُعدة داخل الكود.");
-                    return;
-                }
-                const token = getAdminToken();
-                if (!token) {
-                    renderRequestsStatsError("سجل الدخول للإدارة لعرض الإحصاء.");
-                    return;
-                }
-                const limit = 5000;
-                renderRequestsStatsLoading();
-                const { data, error } = await sb.rpc("admin_list_requests", { p_token: token, p_status: null, p_kind: null, p_limit: limit });
-                if (error) {
-                    renderRequestsStatsError("تعذر تحميل الإحصاء: " + (error.message || "خطأ غير معروف"));
-                    return;
-                }
-                const list = Array.isArray(data) ? data : [];
-                renderRequestsStats(list, limit);
             }
 
             function renderViewsStatsLoading() {
@@ -3599,8 +3121,8 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                     showAlert("success", "تم تسجيل الدخول.");
                     await refreshAuthStatus();
                     await loadRequests();
-                    loadRequestsStats().catch(() => {});
                     loadViewsStats().catch(() => {});
+                    loadDelegateAudit().catch(() => {});
                     pollPendingRequestsForNotifications().catch(() => {});
                     startPendingPolling();
                 });
@@ -3650,26 +3172,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
             if (filterKind) filterKind.addEventListener("change", loadRequests);
             if (filterStatus) filterStatus.addEventListener("change", loadRequests);
 
-            async function buildWaFileText() {
-                if (!waFileTextEl) return "";
-                const file = waFileEl && waFileEl.files && waFileEl.files[0] ? waFileEl.files[0] : null;
-                if (!file) {
-                    setWaFileStatus("اختر ملفاً أولاً.");
-                    return "";
-                }
-                setWaFileStatus("جاري تجهيز النص...");
-                const raw = await readFileAsText(file);
-                if (!raw) {
-                    waFileTextEl.value = "";
-                    setWaFileStatus("تعذر قراءة الملف أو الملف فارغ.");
-                    return "";
-                }
-                const msg = buildWhatsAppTextFromFile(file, raw);
-                waFileTextEl.value = msg;
-                setWaFileStatus("تم تجهيز النص.");
-                return msg;
-            }
-
             (async function init() {
                 try {
                     adminToken = String(sessionStorage.getItem(ADMIN_TOKEN_SESSION_KEY) || "").trim();
@@ -3687,11 +3189,8 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 await loadRequests();
                 updateNotifsButtonText();
                 if (adminToken) {
-                    loadRequestsStats().catch(() => {});
                     loadViewsStats().catch(() => {});
-                    if (delegateAuditDetails && delegateAuditDetails.open) {
-                        loadDelegateAudit().catch(() => {});
-                    }
+                    loadDelegateAudit().catch(() => {});
                     pollPendingRequestsForNotifications().catch(() => {});
                     if (adminEmailNotifAudit && adminEmailNotifAudit.checked) {
                         seedAuditEmailKey().catch(() => {});
@@ -3700,7 +3199,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                 }
             })();
 
-            if (refreshRequestsStatsBtn) refreshRequestsStatsBtn.addEventListener("click", () => loadRequestsStats().catch(() => {}));
             if (refreshViewsStatsBtn) refreshViewsStatsBtn.addEventListener("click", () => loadViewsStats().catch(() => {}));
             if (refreshDelegateAuditBtn) refreshDelegateAuditBtn.addEventListener("click", () => loadDelegateAudit().catch(() => {}));
             if (delegatePermsTreeBtn) delegatePermsTreeBtn.addEventListener("click", () => applyDelegatePermissions("tree").catch(() => {}));
@@ -3708,13 +3206,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
             if (delegatePermsBothBtn) delegatePermsBothBtn.addEventListener("click", () => applyDelegatePermissions("both").catch(() => {}));
             if (delegatePermsDisableBtn) delegatePermsDisableBtn.addEventListener("click", () => applyDelegatePermissions("disable").catch(() => {}));
             if (delegateDeleteBtn) delegateDeleteBtn.addEventListener("click", () => deleteDelegatePermanently().catch(() => {}));
-            if (delegateAuditDetails) {
-                delegateAuditDetails.addEventListener("toggle", () => {
-                    if (delegateAuditDetails.open && getAdminToken()) {
-                        loadDelegateAudit().catch(() => {});
-                    }
-                });
-            }
             if (treeImportDownloadBtn) {
                 treeImportDownloadBtn.addEventListener("click", () => {
                     hideAlert();
@@ -3723,23 +3214,35 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
             }
             if (treeImportTemplateEl) {
                 try {
-                    treeImportTemplateEl.value = String(treeCardTemplateText() || "");
+                    treeImportTemplateEl.value = String(treeCsvTemplateText() || "").replace(/^\ufeff/, "");
                 } catch (e) {}
             }
             if (treeImportCopyBtn) {
                 treeImportCopyBtn.addEventListener("click", async () => {
                     hideAlert();
-                    const text = String(treeCardTemplateText() || "");
+                    const text = String(treeCsvTemplateText() || "").replace(/^\ufeff/, "");
                     const ok = await copyText(text);
-                    setTreeImportStatus(ok ? "تم نسخ نموذج البطاقة." : "تعذر نسخ النموذج.");
+                    setTreeImportStatus(ok ? "تم نسخ نموذج CSV." : "تعذر نسخ النموذج.");
                 });
             }
             if (treeImportWhatsappBtn) {
-                treeImportWhatsappBtn.addEventListener("click", () => {
+                treeImportWhatsappBtn.addEventListener("click", async () => {
                     hideAlert();
-                    const text = String(treeCardTemplateText() || "");
-                    const opened = openWhatsAppWithText(text);
-                    setTreeImportStatus(opened ? "تم فتح واتساب." : "تعذر فتح واتساب.");
+                    setTreeImportStatus("");
+                    const shared = await shareTreeCsvTemplateFile();
+                    if (shared.ok) {
+                        setTreeImportStatus("تم فتح المشاركة. اختر واتساب لإرسال الملف.");
+                        return;
+                    }
+                    downloadTextFile("alzidan-tree-template.csv", treeCsvTemplateText(), "text/csv;charset=utf-8");
+                    const msg = [
+                        "قالب CSV لتعبئة شجرة العائلة.",
+                        "تم تنزيل الملف الآن باسم: alzidan-tree-template.csv",
+                        "أرفقه في واتساب ثم املأه (Excel/Google Sheets) واحفظه CSV.",
+                        "بعد ذلك أرسله للإدارة للاستيراد."
+                    ].join("\n");
+                    const opened = openWhatsAppWithText(msg);
+                    setTreeImportStatus(opened ? "تم فتح واتساب. أرفق الملف الذي تم تنزيله." : "تم تنزيل القالب. افتح واتساب وأرفق الملف يدويًا.");
                 });
             }
             if (treeImportFileEl) {
@@ -3755,39 +3258,6 @@ grant execute on function public.admin_tree_children_import_v1(text, jsonb) to a
                         showAlert("error", "تعذر الاستيراد.");
                         setTreeImportStatus("");
                     });
-                });
-            }
-
-            if (waFileEl) {
-                waFileEl.addEventListener("change", () => {
-                    setWaFileStatus("");
-                    if (waFileTextEl) waFileTextEl.value = "";
-                });
-            }
-            if (waFileBuildBtn) {
-                waFileBuildBtn.addEventListener("click", () => {
-                    hideAlert();
-                    buildWaFileText().catch(() => setWaFileStatus("تعذر تجهيز النص."));
-                });
-            }
-            if (waFileCopyBtn) {
-                waFileCopyBtn.addEventListener("click", async () => {
-                    hideAlert();
-                    let text = waFileTextEl ? String(waFileTextEl.value || "") : "";
-                    if (!text) text = await buildWaFileText();
-                    if (!text) return;
-                    const ok = await copyText(text);
-                    setWaFileStatus(ok ? "تم نسخ النص." : "تعذر نسخ النص.");
-                });
-            }
-            if (waFileOpenBtn) {
-                waFileOpenBtn.addEventListener("click", async () => {
-                    hideAlert();
-                    let text = waFileTextEl ? String(waFileTextEl.value || "") : "";
-                    if (!text) text = await buildWaFileText();
-                    if (!text) return;
-                    const opened = openWhatsAppWithText(text);
-                    setWaFileStatus(opened ? "تم فتح واتساب." : "تعذر فتح واتساب.");
                 });
             }
 
