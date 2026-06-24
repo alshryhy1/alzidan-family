@@ -1,0 +1,10 @@
+.DS_Store
+*.bak*
+*backup*
+*.old
+*.sql
+*.txt
+*.md
+_archive*/
+tmp/
+supabase/.temp/
