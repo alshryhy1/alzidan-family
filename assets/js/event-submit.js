@@ -4,8 +4,6 @@ const copyLinkBtn = document.querySelector("[data-event-submit-copy-link]");
 const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
 const panel = document.getElementById("send-event");
 if (!form) return;
-const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
 const EVENT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 const EVENT_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"]);
 const EVENT_VIDEO_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
@@ -13,15 +11,11 @@ const EVENT_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "he
 const EVENT_VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm"]);
 let sbClient = null;
 function getالخدمةClient() { if (sbClient) return sbClient;
-if (window.__alzidanالخدمةClient) { sbClient = window.__alzidanالخدمةClient;
+if (window.__alzidanConfig && typeof window.__alzidanConfig.getClient === "function") { sbClient = window.__alzidanConfig.getClient();
 return sbClient;
-} const url = String(SUPABASE_URL || "").trim();
-const anonKey = String(SUPABASE_ANON_KEY || "").trim();
-if (!url || !anonKey) return null;
-if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
-sbClient = window.supabase.createClient(url, anonKey);
-window.__alzidanالخدمةClient = sbClient;
+} if (window.__alzidanالخدمةClient) { sbClient = window.__alzidanالخدمةClient;
 return sbClient;
+} return null;
 }
 function normalizeEventText(v) { return String(v || "").replace(/\s+/g, " ").trim();
 }
@@ -93,7 +87,7 @@ const allowedTypes = isImage ? EVENT_IMAGE_MIME_TYPES : EVENT_VIDEO_MIME_TYPES;
 const allowedExts = isImage ? EVENT_IMAGE_EXTENSIONS : EVENT_VIDEO_EXTENSIONS;
 return (type && allowedTypes.has(type)) || (ext && allowedExts.has(ext));
 }
-function publicStorageUrl(path) { return String(SUPABASE_URL || "").replace(/\/+$/, "") + "/storage/v1/object/public/event-media/" + String(path || "").split("/").map(encodeURIComponent).join("/");
+function publicStorageUrl(path) { const config = window.__alzidanConfig || {}; return String(config.SUPABASE_URL || "").replace(/\/+$/, "") + "/storage/v1/object/public/event-media/" + String(path || "").split("/").map(encodeURIComponent).join("/");
 }
 async function uploadEventMedia(sb, requestId, file, kind) { if (!file) return "";
 const isImage = kind === "image";

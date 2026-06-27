@@ -1,0 +1,123 @@
+.person-card-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.45);
+}
+.person-card-backdrop.is-open {
+  display: flex;
+}
+.person-card {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 22px;
+  border: 1px solid rgba(4, 120, 87, 0.18);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  direction: rtl;
+}
+.person-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid rgba(4, 120, 87, 0.12);
+}
+.person-card-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #064e3b;
+}
+.person-card-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+.person-card-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(4, 120, 87, 0.2);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 22px;
+  cursor: pointer;
+}
+.person-card-body {
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+.person-card-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+.person-card-label {
+  font-weight: 800;
+  color: #065f46;
+}
+.person-card-value {
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+.person-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.person-card-stat {
+  border: 1px solid rgba(4, 120, 87, 0.14);
+  border-radius: 16px;
+  padding: 12px;
+  background: #ecfdf5;
+}
+.person-card-stat-label {
+  font-size: 12px;
+  color: #047857;
+  font-weight: 800;
+}
+.person-card-stat-value {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 900;
+  color: #064e3b;
+}
+.person-card-lineage,
+.person-card-children,
+.person-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.person-card-lineage-step,
+.person-card-chip {
+  border: 1px solid rgba(4, 120, 87, 0.18);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+.person-card-lineage-sep {
+  color: #94a3b8;
+}
+.person-card-actions {
+  margin-top: 8px;
+}
+@media (max-width: 640px) {
+  .person-card-row {
+    grid-template-columns: 1fr;
+  }
+  .person-card-stats {
+    grid-template-columns: 1fr;
+  }
+}

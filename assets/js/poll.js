@@ -1,17 +1,13 @@
 /* ===== extracted script block ===== */
 
 (function(){
-  const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
   let sbClient = null;
 
   function getClient(){
     if (sbClient) return sbClient;
+    if (window.__alzidanConfig && typeof window.__alzidanConfig.getClient === "function") return (sbClient = window.__alzidanConfig.getClient());
     if (window.__alzidanالخدمةClient) return (sbClient = window.__alzidanالخدمةClient);
-    if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
-    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    window.__alzidanالخدمةClient = sbClient;
-    return sbClient;
+    return null;
   }
 
   function getVoterKey(){
@@ -156,5 +152,9 @@
     if (visits && visitsCard) visitsCard.textContent = visits.textContent || "—";
   }
   syncMiniStatsCard();
-  setInterval(syncMiniStatsCard, 700);
+  const miniStatsTargets = ["mini-tree-total", "mini-visits-total"].map((id) =>document.getElementById(id)).filter(Boolean);
+  if (miniStatsTargets.length && typeof MutationObserver === "function") {
+    const miniStatsObserver = new MutationObserver(() =>syncMiniStatsCard());
+    miniStatsTargets.forEach((target) =>miniStatsObserver.observe(target, { childList: true, characterData: true, subtree: true }));
+  }
 })();
