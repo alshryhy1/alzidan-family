@@ -33,10 +33,6 @@
   const ADMIN_TOKEN_SESSION_KEY = "alzidan_admin_token_session_v1";
   let adminToken = "";
   const ADMIN_NOTIF_LAST_KEY = "alzidan_admin_notif_last_pending_v1";
-  const ADMIN_EMAIL_KEY = "alzidan_admin_notify_email_v1";
-  const ADMIN_EMAIL_PENDING_KEY = "alzidan_admin_email_pending_v1";
-  const ADMIN_EMAIL_AUDIT_KEY = "alzidan_admin_email_audit_v1";
-  const ADMIN_EMAIL_AUTO_OPEN_KEY = "alzidan_admin_email_auto_open_v1";
   const ADMIN_EMAIL_LAST_AUDIT_KEY = "alzidan_admin_email_last_audit_v1";
   let lastNotifiedPendingKey = "";
   let lastEmailedAuditKey = "";
@@ -83,15 +79,6 @@
   const delegateAuditDetails = document.getElementById(
     "delegate-audit-details",
   );
-  const adminNotifyEmail = document.getElementById("admin-notify-email");
-  const adminEmailNotifPending = document.getElementById(
-    "admin-email-notif-pending",
-  );
-  const adminEmailNotifAudit = document.getElementById(
-    "admin-email-notif-audit",
-  );
-  const adminEmailAutoOpen = document.getElementById("admin-email-auto-open");
-  const adminEmailTestBtn = null;
   const adminEmailStatus = document.getElementById("admin-email-status");
   const treeImportDownloadBtn = document.getElementById("tree-import-download");
   const treeImportWhatsappBtn = document.getElementById("tree-import-whatsapp");
@@ -598,22 +585,6 @@ where c.id = matches.id; commit;
     );
   } catch (e) {
     lastEmailedAuditKey = "";
-  }
-  function setEmailStatus(text) {
-    if (!adminEmailStatus) return;
-    adminEmailStatus.textContent = text || "";
-  }
-  function loadAdminNotifyEmail() {
-    try {
-      return String(localStorage.getItem(ADMIN_EMAIL_KEY) || "").trim();
-    } catch (e) {
-      return "";
-    }
-  }
-  function saveAdminNotifyEmail(v) {
-    try {
-      localStorage.setItem(ADMIN_EMAIL_KEY, String(v || "").trim());
-    } catch (e) {}
   }
   function loadBoolSetting(key, fallback) {
     try {
@@ -1527,77 +1498,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
       `إضافة: ${inserted} — تحديث: ${updated} — تجاهل: ${skipped}`,
     );
   }
-  function maybeOpenEmailDraft(to, subject, body) {
-    return false;
-  }
-  function getAdminNotificationEmail() {
-    const email = normalizeEmail(
-      (adminNotifyEmail && adminNotifyEmail.value != null
-        ? adminNotifyEmail.value
-        : loadAdminNotifyEmail()) || "",
-    );
-    return isLikelyEmail(email) ? email : "";
-  }
-  function initEmailSettings() {
-    if (adminNotifyEmail) {
-      adminNotifyEmail.value = loadAdminNotifyEmail();
-      adminNotifyEmail.addEventListener("input", () => {
-        saveAdminNotifyEmail(adminNotifyEmail.value);
-        setEmailStatus("");
-      });
-    }
-    if (adminEmailNotifPending) {
-      adminEmailNotifPending.checked = loadBoolSetting(
-        ADMIN_EMAIL_PENDING_KEY,
-        false,
-      );
-      adminEmailNotifPending.addEventListener("change", () => {
-        saveBoolSetting(
-          ADMIN_EMAIL_PENDING_KEY,
-          !!adminEmailNotifPending.checked,
-        );
-        setEmailStatus("");
-      });
-    }
-    if (adminEmailNotifAudit) {
-      adminEmailNotifAudit.checked = loadBoolSetting(
-        ADMIN_EMAIL_AUDIT_KEY,
-        false,
-      );
-      adminEmailNotifAudit.addEventListener("change", () => {
-        saveBoolSetting(ADMIN_EMAIL_AUDIT_KEY, !!adminEmailNotifAudit.checked);
-        setEmailStatus("");
-        if (adminEmailNotifAudit.checked) {
-          seedAuditEmailKey().catch(() => {});
-        }
-      });
-    }
-    if (adminEmailAutoOpen) {
-      adminEmailAutoOpen.checked = loadBoolSetting(
-        ADMIN_EMAIL_AUTO_OPEN_KEY,
-        false,
-      );
-      adminEmailAutoOpen.addEventListener("change", () => {
-        saveBoolSetting(
-          ADMIN_EMAIL_AUTO_OPEN_KEY,
-          !!adminEmailAutoOpen.checked,
-        );
-        setEmailStatus("");
-      });
-    }
-    if (adminEmailTestBtn) {
-      adminEmailTestBtn.addEventListener("click", async () => {
-        const subject = "اختبار تنبيهات بريد الإدارة";
-        const body = [
-          "هذه رسالة اختبار من صفحة الإدارة.",
-          "",
-          "إذا وصلتك المسودة/تم نسخ النص فالإعدادات تعمل.",
-          "التاريخ: " + formatDateTimeArSaVerbose(new Date()),
-        ].join("\n");
-        await sendAdminEmail(subject, body);
-      });
-    }
-  }
   function formatDateTimeArSaVerbose(v) {
     if (!v) return "";
     let date;
@@ -1617,26 +1517,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
     s = s.replace(/\s*ص\s*$/, " صباحاً");
     s = s.replace(/\s*م\s*$/, " مساءً");
     return s;
-  }
-  async function sendAdminEmail(subject, body) {
-    const to = getAdminNotificationEmail();
-    if (!to) {
-      setEmailStatus("اكتب بريد الإدارة لتفعيل التنبيه.");
-      return { ok: false, reason: "missing_email" };
-    }
-    await copyText(body || "");
-    const autoOpen = !!(adminEmailAutoOpen && adminEmailAutoOpen.checked);
-    if (autoOpen) {
-      const opened = maybeOpenEmailDraft(to, subject, body);
-      setEmailStatus(
-        opened
-          ? "تم فتح مسودة بريد (وتم نسخ النص)."
-          : "تم نسخ نص البريد. المتصفح منع فتح المسودة.",
-      );
-      return { ok: opened, reason: opened ? "opened" : "blocked" };
-    }
-    setEmailStatus("تم نسخ نص البريد.");
-    return { ok: true, reason: "copied" };
   }
   async function seedAuditEmailKey() {
     const sb = getClient();
@@ -1719,15 +1599,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
       });
     if (sourceTreeDelete && ok && !(sourceTreeId && sourceTreeId.value))
       sourceTreeDelete.disabled = true;
-  }
-  function updateEmailSettingsUi() {
-    const authed = !!getAdminToken();
-    if (adminNotifyEmail) adminNotifyEmail.disabled = !authed;
-    if (adminEmailNotifPending) adminEmailNotifPending.disabled = !authed;
-    if (adminEmailNotifAudit) adminEmailNotifAudit.disabled = !authed;
-    if (adminEmailAutoOpen) adminEmailAutoOpen.disabled = !authed;
-    if (adminEmailTestBtn) adminEmailTestBtn.disabled = !authed;
-    if (!authed) setEmailStatus("");
   }
   function getClient() {
     if (sbClient) return sbClient;
@@ -3203,13 +3074,11 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
     if (!sb) {
       setStatus("الخدمة غير جاهزة حالياً.");
       setProtectedVisibility(false);
-      updateEmailSettingsUi();
       return null;
     }
     const token = getAdminToken();
     setStatus(token ? "" : "غير مسجل الدخول.");
     setProtectedVisibility(!!token);
-    updateEmailSettingsUi();
     return token ? { token } : null;
   }
   async function pollPendingRequestsForNotifications() {
@@ -5743,7 +5612,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
     try {
       localStorage.removeItem(ADMIN_TOKEN_KEY);
     } catch (e) {}
-    initEmailSettings();
     if (adminUsername && !String(adminUsername.value || "").trim()) {
       adminUsername.value = "alshryhy";
     }
@@ -5762,9 +5630,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
         loadDelegateAudit().catch(() => {});
       }
       pollPendingRequestsForNotifications().catch(() => {});
-      if (adminEmailNotifAudit && adminEmailNotifAudit.checked) {
-        seedAuditEmailKey().catch(() => {});
-      }
       startPendingPolling();
     }
   })();
