@@ -305,8 +305,8 @@ document.head.appendChild(style);
       id: "missing-city",
       label: "ناقص المدينة",
       severity: "low",
-      canFix: false,
-      fixType: null,
+      canFix: true,
+      fixType: "copy_city_from_parent",
       run(rows) {
         return rows.filter(r => !norm(r.city)).map(r => issue(this.label, this.severity, r, "لا توجد مدينة."));
       }
@@ -382,9 +382,12 @@ document.head.appendChild(style);
     if (previewBtn) {
       previewBtn.addEventListener("click", () => {
         if (fixStatus) {
-          fixStatus.textContent = "المعاينة جاهزة من الواجهة، لكن RPC الإصلاح لم يُفعّل بعد.";
+          fixStatus.textContent = "جاري تجهيز المعاينة...";
         }
         if (runFixBtn) runFixBtn.disabled = true;
+        previewFix().catch(() => {
+          if (fixStatus) fixStatus.textContent = "تعذرت معاينة الإصلاح.";
+        });
       });
     }
 
@@ -535,6 +538,136 @@ item.severity==="low"?"sev-low":"sev-ok");
     });
 
     return { critical, medium, low, score, branchCounts };
+  }
+
+  const QUALITY_FIXERS = {
+    copy_city_from_parent: {
+      id: "copy_city_from_parent",
+      label: "نسخ المدينة من الأب",
+      safety: "safe",
+      description: "يقترح نسخ المدينة من سجل الأب إلى الابن إذا كانت مدينة الابن فارغة.",
+      preview(rows) {
+        const byChild = new Map();
+
+        rows.forEach(row => {
+          const child = rowChild(row);
+          if (!child) return;
+          byChild.set(child, row);
+        });
+
+        const items = [];
+
+        rows.forEach(row => {
+          const city = norm(row.city);
+          const parentName = rowParent(row);
+          if (city || !parentName) return;
+
+          const parentRow = byChild.get(parentName);
+          if (!parentRow) return;
+
+          const parentCity = norm(parentRow.city);
+          if (!parentCity) return;
+
+          items.push({
+            severity: "low",
+            rule: this.label,
+            branch: norm(row.branch_key),
+            person: childLabel(row),
+            parent: leaf(parentName),
+            id: row && row.id != null ? String(row.id) : "",
+            personId: row && row.person_id ? String(row.person_id) : "",
+            message: "اقتراح: نسخ المدينة «" + parentCity + "» من الأب إلى هذا السجل.",
+            fixType: this.id,
+            fromValue: "",
+            toValue: parentCity
+          });
+        });
+
+        return items;
+      }
+    }
+  };
+
+  function getFixableRules() {
+    return QUALITY_RULES.filter(rule => rule && rule.canFix && rule.fixType && QUALITY_FIXERS[rule.fixType]);
+  }
+
+  function getDefaultFixer() {
+    const firstFixable = getFixableRules()[0];
+    return firstFixable ? QUALITY_FIXERS[firstFixable.fixType] : QUALITY_FIXERS.copy_city_from_parent;
+  }
+
+  function safetyLabel(value) {
+    if (value === "safe") return "آمن";
+    if (value === "review") return "يحتاج مراجعة";
+    if (value === "dangerous") return "خطير";
+    return "غير محدد";
+  }
+
+  function runFixPreview(fixer, rows) {
+    if (!fixer || typeof fixer.preview !== "function") return [];
+    const items = fixer.preview(rows);
+    return Array.isArray(items) ? items : [];
+  }
+
+  function renderFixPreview(fixer, items) {
+    const fixStatus = document.getElementById("quality-fix-status");
+    const issuesBox = document.getElementById("quality-issues");
+
+    if (!fixStatus || !issuesBox) return;
+
+    issuesBox.innerHTML = "";
+
+    const head = document.createElement("div");
+    head.className = "hint";
+    head.style.margin = "0 0 10px";
+    head.innerHTML =
+      "<strong>معاينة إصلاح: " + fixer.label + "</strong><br>" +
+      String(fixer.description || "") + "<br>" +
+      "مستوى الأمان: " + safetyLabel(fixer.safety) + "<br>" +
+      "عدد السجلات المقترحة: " + String(items.length) + ". لم يتم تغيير أي بيانات.";
+    issuesBox.appendChild(head);
+
+    if (!items.length) {
+      const ok = document.createElement("div");
+      ok.className = "batch-list-item sev-ok";
+      ok.textContent = "لا توجد سجلات مناسبة لهذا الإصلاح.";
+      issuesBox.appendChild(ok);
+      fixStatus.textContent = "المعاينة اكتملت: لا توجد سجلات قابلة للإصلاح بهذا النوع.";
+      return;
+    }
+
+    items.slice(0, 120).forEach(item => addIssue(issuesBox, item));
+    fixStatus.textContent = "المعاينة اكتملت. التنفيذ الحقيقي متوقف حتى إضافة admin_quality_fix_v1.";
+  }
+
+  async function previewFix() {
+    const sb = getClient();
+    const status = document.getElementById("quality-status");
+    const fixStatus = document.getElementById("quality-fix-status");
+    const runFixBtn = document.getElementById("quality-run-fix-btn");
+    const fixer = getDefaultFixer();
+
+    if (runFixBtn) runFixBtn.disabled = true;
+
+    if (!fixStatus) return;
+
+    if (!sb) {
+      fixStatus.textContent = "تعذر الوصول إلى اتصال Supabase.";
+      return;
+    }
+
+    fixStatus.textContent = "جاري معاينة الإصلاح: " + fixer.label + "...";
+    if (status) status.textContent = "المعاينة لا تغيّر أي بيانات.";
+
+    const loaded = await loadRows(sb);
+    if (loaded.error) {
+      fixStatus.textContent = "تعذر تحميل بيانات الشجرة للمعاينة: " + (loaded.error.message || "خطأ غير معروف");
+      return;
+    }
+
+    const items = runFixPreview(fixer, loaded.rows);
+    renderFixPreview(fixer, items);
   }
 
   async function runQualityCheck() {
