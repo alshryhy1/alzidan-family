@@ -4718,23 +4718,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
         );
         return;
       }
-      if (isLikelyEmail(row.email)) {
-        const subject =
-          "تم قبول الطلب (" + String(row.request_id || "").trim() + ")";
-        const body = [
-          "تم قبول طلبك.",
-          row.request_id ? "رقم الطلب: " + row.request_id : "",
-          row.kind ? "نوع الطلب: " + kindLabel(row.kind) : "",
-          row.branch_key ? "الفرع: " + row.branch_key : "",
-          row.name ? "الاسم: " + row.name : "",
-          "",
-          "يمكنك الآن المتابعة حسب تعليمات الإدارة.",
-        ]
-          .filter(Boolean)
-          .join("\n");
-        await copyText(body);
-        maybeOpenEmailDraft(row.email, subject, body);
-      }
       if (row.kind === "tree_card") {
         showAlert(
           "success",
@@ -4848,23 +4831,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
       if (data === false) {
         showAlert("error", "تعذر رفض الطلب. انتهت الجلسة أو لا توجد صلاحية.");
         return;
-      }
-      if (isLikelyEmail(row.email)) {
-        const subject =
-          "تم رفض الطلب (" + String(row.request_id || "").trim() + ")";
-        const body = [
-          "تم رفض طلبك.",
-          row.request_id ? "رقم الطلب: " + row.request_id : "",
-          row.kind ? "نوع الطلب: " + kindLabel(row.kind) : "",
-          row.branch_key ? "الفرع: " + row.branch_key : "",
-          row.name ? "الاسم: " + row.name : "",
-          "",
-          "للاستفسار: تواصل مع إدارة الموقع.",
-        ]
-          .filter(Boolean)
-          .join("\n");
-        await copyText(body);
-        maybeOpenEmailDraft(row.email, subject, body);
       }
       showAlert("success", `تم رفض الطلب: ${row.request_id}`);
       await loadRequests();
