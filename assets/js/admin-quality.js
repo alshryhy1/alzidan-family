@@ -121,6 +121,8 @@ document.head.appendChild(style);
       id: "missing-name",
       label: "بدون اسم",
       severity: "critical",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows.filter(r => !rowChild(r)).map(r => issue(this.label, this.severity, r, "سجل بدون اسم شخص."));
       }
@@ -129,6 +131,8 @@ document.head.appendChild(style);
       id: "missing-parent",
       label: "بدون أب/والد",
       severity: "critical",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows.filter(r => !rowParent(r)).map(r => issue(this.label, this.severity, r, "شخص بلا والد/مسار أب."));
       }
@@ -137,6 +141,8 @@ document.head.appendChild(style);
       id: "missing-branch",
       label: "بدون فرع",
       severity: "critical",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows.filter(r => !norm(r.branch_key)).map(r => issue(this.label, this.severity, r, "شخص بلا فرع."));
       }
@@ -145,6 +151,8 @@ document.head.appendChild(style);
       id: "duplicates",
       label: "تشابه أسماء يحتاج مراجعة",
       severity: "low",
+      canFix: false,
+      fixType: null,
       run(rows) {
         const groups = new Map();
         const out = [];
@@ -185,6 +193,8 @@ document.head.appendChild(style);
       id: "birth-none",
       label: "بدون أي ميلاد",
       severity: "medium",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows
           .filter(r => !norm(r.birth_date_g) && !norm(r.birth_date_h) && !norm(r.birth_year))
@@ -195,6 +205,8 @@ document.head.appendChild(style);
       id: "birth-year-only",
       label: "سنة فقط",
       severity: "low",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows
           .filter(r => !norm(r.birth_date_g) && !norm(r.birth_date_h) && norm(r.birth_year))
@@ -205,6 +217,8 @@ document.head.appendChild(style);
       id: "birth-gregorian-only",
       label: "ميلادي فقط",
       severity: "low",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows
           .filter(r => norm(r.birth_date_g) && !norm(r.birth_date_h))
@@ -215,6 +229,8 @@ document.head.appendChild(style);
       id: "birth-hijri-only",
       label: "هجري فقط",
       severity: "low",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows
           .filter(r => !norm(r.birth_date_g) && norm(r.birth_date_h))
@@ -225,6 +241,8 @@ document.head.appendChild(style);
       id: "invalid-birth",
       label: "ميلاد غير منطقي",
       severity: "critical",
+      canFix: false,
+      fixType: null,
       run(rows) {
         const current = new Date().getFullYear();
         return rows.filter(r => {
@@ -239,6 +257,8 @@ document.head.appendChild(style);
       id: "death-before-birth",
       label: "وفاة قبل الميلاد",
       severity: "critical",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows.filter(r => {
           const b = extractYear(r.birth_date_g || r.birth_date_h || r.birth_year);
@@ -254,6 +274,8 @@ document.head.appendChild(style);
       id: "father-younger-than-child",
       label: "الأب أصغر من الابن",
       severity: "critical",
+      canFix: false,
+      fixType: null,
       run(rows) {
         const byChild = new Map();
         rows.forEach(r => {
@@ -283,6 +305,8 @@ document.head.appendChild(style);
       id: "missing-city",
       label: "ناقص المدينة",
       severity: "low",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows.filter(r => !norm(r.city)).map(r => issue(this.label, this.severity, r, "لا توجد مدينة."));
       }
@@ -291,6 +315,8 @@ document.head.appendChild(style);
       id: "missing-birth-order",
       label: "بدون ترتيب ميلاد",
       severity: "low",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows.filter(r => r.birth_order == null || norm(r.birth_order) === "").map(r => issue(this.label, this.severity, r, "لا يوجد ترتيب ميلاد."));
       }
@@ -299,6 +325,8 @@ document.head.appendChild(style);
       id: "invalid-birth-order",
       label: "ترتيب ميلاد غير منطقي",
       severity: "medium",
+      canFix: false,
+      fixType: null,
       run(rows) {
         return rows.filter(r => {
           if (r.birth_order == null || norm(r.birth_order) === "") return false;
@@ -324,10 +352,15 @@ document.head.appendChild(style);
           <div class="section-title">مركز جودة الشجرة</div>
           <div class="hint">محرك فحص إداري لقواعد جودة البيانات. قراءة فقط ولا يغيّر أي بيانات.</div>
         </div>
-        <button id="quality-refresh-btn" class="btn btn-outline btn-sm" type="button">تشغيل الفحص</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="quality-refresh-btn" class="btn btn-outline btn-sm" type="button">تشغيل الفحص</button>
+          <button id="quality-preview-fix-btn" class="btn btn-outline btn-sm" type="button">معاينة الإصلاح</button>
+          <button id="quality-run-fix-btn" class="btn btn-primary btn-sm" type="button" disabled>تنفيذ الإصلاح</button>
+        </div>
       </div>
       <div class="card">
         <div id="quality-status" class="hint">اضغط تشغيل الفحص.</div>
+        <div id="quality-fix-status" class="hint" style="margin-top:8px;">الإصلاحات الجماعية غير مفعلة بعد.</div>
         <div id="quality-summary" class="requests-stats-cards" style="margin-top:12px;"></div>
         <div class="section-title" style="margin-top:16px;">تفصيل القواعد</div>
         <div id="quality-rules" class="requests-stats-cards" style="margin-top:10px;"></div>
@@ -341,6 +374,27 @@ document.head.appendChild(style);
     else host.appendChild(section);
 
     document.getElementById("quality-refresh-btn").addEventListener("click", runQualityCheck);
+
+    const previewBtn = document.getElementById("quality-preview-fix-btn");
+    const runFixBtn = document.getElementById("quality-run-fix-btn");
+    const fixStatus = document.getElementById("quality-fix-status");
+
+    if (previewBtn) {
+      previewBtn.addEventListener("click", () => {
+        if (fixStatus) {
+          fixStatus.textContent = "المعاينة جاهزة من الواجهة، لكن RPC الإصلاح لم يُفعّل بعد.";
+        }
+        if (runFixBtn) runFixBtn.disabled = true;
+      });
+    }
+
+    if (runFixBtn) {
+      runFixBtn.addEventListener("click", () => {
+        if (fixStatus) {
+          fixStatus.textContent = "تنفيذ الإصلاح متوقف حتى إضافة admin_quality_fix_v1.";
+        }
+      });
+    }
   }
 
   function addCard(grid, label, value, sub, onClick) {
@@ -455,6 +509,34 @@ item.severity==="low"?"sev-low":"sev-ok");
     return { rows: [], error: lastError };
   }
 
+  function runRules(rows) {
+    const grouped = [];
+    let allIssues = [];
+
+    QUALITY_RULES.forEach(rule => {
+      const items = rule.run(rows);
+      grouped.push({ rule, items });
+      allIssues = allIssues.concat(items);
+    });
+
+    return { grouped, allIssues };
+  }
+
+  function buildQualitySummary(rows, allIssues) {
+    const critical = allIssues.filter(x => x.severity === "critical").length;
+    const medium = allIssues.filter(x => x.severity === "medium").length;
+    const low = allIssues.filter(x => x.severity === "low").length;
+    const score = calculateScore(rows.length, allIssues);
+
+    const branchCounts = new Map();
+    rows.forEach(r => {
+      const b = norm(r.branch_key);
+      if (b) branchCounts.set(b, (branchCounts.get(b) || 0) + 1);
+    });
+
+    return { critical, medium, low, score, branchCounts };
+  }
+
   async function runQualityCheck() {
     const sb = getClient();
     const status = document.getElementById("quality-status");
@@ -482,25 +564,8 @@ item.severity==="low"?"sev-low":"sev-ok");
     }
 
     const rows = loaded.rows;
-    const grouped = [];
-    let allIssues = [];
-
-    QUALITY_RULES.forEach(rule => {
-      const items = rule.run(rows);
-      grouped.push({ rule, items });
-      allIssues = allIssues.concat(items);
-    });
-
-    const critical = allIssues.filter(x => x.severity === "critical").length;
-    const medium = allIssues.filter(x => x.severity === "medium").length;
-    const low = allIssues.filter(x => x.severity === "low").length;
-    const score = calculateScore(rows.length, allIssues);
-
-    const branchCounts = new Map();
-    rows.forEach(r => {
-      const b = norm(r.branch_key);
-      if (b) branchCounts.set(b, (branchCounts.get(b) || 0) + 1);
-    });
+    const { grouped, allIssues } = runRules(rows);
+    const { critical, medium, low, score, branchCounts } = buildQualitySummary(rows, allIssues);
 
     addCard(summary, "إجمالي السجلات", rows.length);
     addCard(summary, "درجة الجودة", score + "%");
