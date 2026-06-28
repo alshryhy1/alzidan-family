@@ -13,6 +13,15 @@
   } = Core;
 
   let reloadRequests = async function () {};
+  const treeCardEditDialog = document.getElementById("tree-card-edit-dialog");
+  const treeCardEditForm = document.getElementById("tree-card-edit-form");
+  const treeCardEditError = document.getElementById("tree-card-edit-error");
+  const treeCardRelations = document.getElementById("tree-card-relations");
+  const treeCardAddRelation = document.getElementById("tree-card-add-relation");
+  const treeCardEditCancel = document.getElementById("tree-card-edit-cancel");
+
+  let treeCardEditRow = null;
+
 
   function setReloadRequests(fn) {
     if (typeof fn === "function") reloadRequests = fn;
@@ -1050,7 +1059,7 @@
           ? "تم تعديل الطلب وتصحيح بيانات الشجرة."
           : "تم تعديل الطلب كاملًا.",
       );
-      await loadRequests();
+      await reloadRequests();
     });
   }
   async function importTreeCardToTree(sb, token, reqRow) {

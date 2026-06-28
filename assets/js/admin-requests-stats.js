@@ -109,4 +109,6 @@
   window.AlzidanRequestsStats = {
     loadRequestsStats,
   };
+
+  loadRequestsStats().catch(() => {});
 })();
