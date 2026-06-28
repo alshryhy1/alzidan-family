@@ -5599,6 +5599,21 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
     setWaFileStatus("تم تجهيز النص.");
     return msg;
   }
+  window.AlzidanAdminCore = {
+    showAlert,
+    hideAlert,
+    copyText,
+    downloadTextFile,
+    escapeHtml,
+    getClient,
+    getAdminToken,
+    formatDateTimeArSaVerbose,
+    normalizeEmail,
+    isLikelyEmail,
+    normalizeArabicDigitsToLatin,
+    chunkArray,
+  };
+
   (async function init() {
     try {
       adminToken = String(
