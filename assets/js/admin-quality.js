@@ -107,6 +107,11 @@ document.head.appendChild(style);
       severity,
       branch: norm(row && row.branch_key),
       person: row ? childLabel(row) : "",
+      parent: row ? leaf(rowParent(row)) : "",
+      rawParent: row ? rowParent(row) : "",
+      rawChild: row ? rowChild(row) : "",
+      id: row && row.id != null ? String(row.id) : "",
+      personId: row && row.person_id ? String(row.person_id) : "",
       message
     };
   }
@@ -177,13 +182,27 @@ document.head.appendChild(style);
       }
     },
     {
-      id: "missing-birth",
-      label: "ناقص الميلاد",
+      id: "birth-quality",
+      label: "جودة الميلاد",
       severity: "medium",
       run(rows) {
-        return rows
-          .filter(r => !norm(r.birth_date_g || r.birth_date_h || r.birth_year))
-          .map(r => issue(this.label, this.severity, r, "لا يوجد تاريخ/سنة ميلاد."));
+        const out = [];
+        rows.forEach(r => {
+          const g = norm(r.birth_date_g);
+          const h = norm(r.birth_date_h);
+          const y = norm(r.birth_year);
+
+          if (!g && !h && !y) {
+            out.push(issue("بدون أي ميلاد", "medium", r, "لا يوجد ميلادي ولا هجري ولا سنة."));
+          } else if (!g && !h && y) {
+            out.push(issue("سنة فقط", "low", r, "يوجد birth_year فقط بدون تاريخ هجري/ميلادي."));
+          } else if (g && !h) {
+            out.push(issue("ميلادي فقط", "low", r, "يوجد تاريخ ميلادي بدون هجري."));
+          } else if (!g && h) {
+            out.push(issue("هجري فقط", "low", r, "يوجد تاريخ هجري بدون ميلادي."));
+          }
+        });
+        return out;
       }
     },
     {
@@ -198,6 +217,50 @@ document.head.appendChild(style);
           const g = approxGregorianYear(y);
           return !g || g < 1850 || g > current;
         }).map(r => issue(this.label, this.severity, r, "تاريخ/سنة الميلاد تحتاج مراجعة."));
+      }
+    },
+    {
+      id: "death-before-birth",
+      label: "وفاة قبل الميلاد",
+      severity: "critical",
+      run(rows) {
+        return rows.filter(r => {
+          const b = extractYear(r.birth_date_g || r.birth_date_h || r.birth_year);
+          const d = extractYear(r.death_date_g || r.death_date_h);
+          if (!b || !d) return false;
+          const bg = approxGregorianYear(b);
+          const dg = approxGregorianYear(d);
+          return bg && dg && dg < bg;
+        }).map(r => issue(this.label, this.severity, r, "تاريخ الوفاة أقدم من تاريخ الميلاد."));
+      }
+    },
+    {
+      id: "father-younger-than-child",
+      label: "الأب أصغر من الابن",
+      severity: "critical",
+      run(rows) {
+        const byChild = new Map();
+        rows.forEach(r => {
+          const c = rowChild(r);
+          if (c) byChild.set(c, r);
+        });
+
+        const out = [];
+        rows.forEach(r => {
+          const parentRow = byChild.get(rowParent(r));
+          if (!parentRow) return;
+
+          const py = extractYear(parentRow.birth_date_g || parentRow.birth_date_h || parentRow.birth_year);
+          const cy = extractYear(r.birth_date_g || r.birth_date_h || r.birth_year);
+          if (!py || !cy) return;
+
+          const pg = approxGregorianYear(py);
+          const cg = approxGregorianYear(cy);
+          if (pg && cg && pg >= cg) {
+            out.push(issue(this.label, this.severity, r, "ميلاد الأب يساوي أو بعد ميلاد الابن."));
+          }
+        });
+        return out;
       }
     },
     {
@@ -300,7 +363,14 @@ item.severity==="low"?"sev-low":"sev-ok");
     el.style.alignItems = "center";
 
     const text = document.createElement("span");
-    text.textContent = severityLabel(item.severity) + " — " + item.rule + ": " + item.person + (item.branch ? " — " + item.branch : "") + " — " + item.message;
+    text.textContent =
+      severityLabel(item.severity) +
+      " — " + item.rule +
+      ": " + item.person +
+      (item.parent ? " — الأب: " + item.parent : "") +
+      (item.branch ? " — الفرع: " + item.branch : "") +
+      (item.id ? " — id: " + item.id : "") +
+      " — " + item.message;
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -312,7 +382,25 @@ item.severity==="low"?"sev-low":"sev-ok");
       const sourceSection = document.getElementById("source-tree-list");
       if (branchSelect && item.branch) branchSelect.value = item.branch;
       if (loadBtn) loadBtn.click();
-      if (sourceSection) sourceSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      setTimeout(() => {
+        const list = document.getElementById("source-tree-list");
+        const wanted = String(item.person || "").trim();
+        if (list && wanted) {
+          const nodes = Array.from(list.querySelectorAll(".source-tree-item"));
+          const hit = nodes.find(n => (n.textContent || "").includes(wanted));
+          if (hit) {
+            hit.scrollIntoView({ behavior: "smooth", block: "center" });
+            hit.style.outline = "3px solid #f97316";
+            hit.style.outlineOffset = "3px";
+            setTimeout(() => { hit.style.outline = ""; hit.style.outlineOffset = ""; }, 3500);
+            const edit = hit.querySelector("[data-source-tree-edit]");
+            if (edit) edit.click();
+            return;
+          }
+        }
+        if (sourceSection) sourceSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 900);
     });
 
     el.appendChild(text);
