@@ -3242,31 +3242,12 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
     if (key === lastNotifiedPendingKey) return;
     saveLastNotifiedPendingKey(key);
     showPendingRequestNotification(newest);
-    if (adminEmailNotifPending && adminEmailNotifPending.checked) {
-      const subject = "طلب جديد: " + kindLabel(newest.kind);
-      const body = [
-        "طلب جديد في الإدارة",
-        newest.request_id ? "رقم الطلب: " + newest.request_id : "",
-        newest.kind ? "النوع: " + kindLabel(newest.kind) : "",
-        newest.branch_key ? "الفرع: " + newest.branch_key : "",
-        newest.name ? "الاسم: " + newest.name : "",
-        newest.phone ? "الجوال: " + newest.phone : "",
-        newest.email ? "البريد: " + newest.email : "",
-        newest.created_at
-          ? "التاريخ: " + formatDateTimeArSaVerbose(newest.created_at)
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-      await sendAdminEmail(subject, body);
-    }
   }
   async function pollAuditForEmailNotifications() {
     const sb = getClient();
     if (!sb) return;
     const token = getAdminToken();
     if (!token) return;
-    if (!(adminEmailNotifAudit && adminEmailNotifAudit.checked)) return;
     const fetchOne = async (kind) => {
       const { data, error } = await sb.rpc("admin_list_requests", {
         p_token: token,
@@ -3313,23 +3294,6 @@ end $$; تحديث الخدمة, 'تحديث البيانات';
     try {
       localStorage.setItem(ADMIN_EMAIL_LAST_AUDIT_KEY, key);
     } catch (e) {}
-    const subject = "تعديل مندوب: " + kindLabel(latest.kind);
-    const body = [
-      "سجل تعديل جديد من المندوب",
-      latest.kind ? "النوع: " + kindLabel(latest.kind) : "",
-      latest.branch_key ? "الفرع: " + latest.branch_key : "",
-      latest.name ? "المندوب: " + latest.name : "",
-      latest.phone ? "الجوال: " + latest.phone : "",
-      latest.email ? "البريد: " + latest.email : "",
-      latest.created_at
-        ? "التاريخ: " + formatDateTimeArSaVerbose(latest.created_at)
-        : "",
-      "",
-      latest.message ? String(latest.message) : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-    await sendAdminEmail(subject, body);
   }
   function startPendingPolling() {
     if (pendingPollTimer) return;
