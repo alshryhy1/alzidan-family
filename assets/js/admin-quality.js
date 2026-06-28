@@ -182,27 +182,43 @@ document.head.appendChild(style);
       }
     },
     {
-      id: "birth-quality",
-      label: "جودة الميلاد",
+      id: "birth-none",
+      label: "بدون أي ميلاد",
       severity: "medium",
       run(rows) {
-        const out = [];
-        rows.forEach(r => {
-          const g = norm(r.birth_date_g);
-          const h = norm(r.birth_date_h);
-          const y = norm(r.birth_year);
-
-          if (!g && !h && !y) {
-            out.push(issue("بدون أي ميلاد", "medium", r, "لا يوجد ميلادي ولا هجري ولا سنة."));
-          } else if (!g && !h && y) {
-            out.push(issue("سنة فقط", "low", r, "يوجد birth_year فقط بدون تاريخ هجري/ميلادي."));
-          } else if (g && !h) {
-            out.push(issue("ميلادي فقط", "low", r, "يوجد تاريخ ميلادي بدون هجري."));
-          } else if (!g && h) {
-            out.push(issue("هجري فقط", "low", r, "يوجد تاريخ هجري بدون ميلادي."));
-          }
-        });
-        return out;
+        return rows
+          .filter(r => !norm(r.birth_date_g) && !norm(r.birth_date_h) && !norm(r.birth_year))
+          .map(r => issue(this.label, this.severity, r, "لا يوجد ميلادي ولا هجري ولا سنة."));
+      }
+    },
+    {
+      id: "birth-year-only",
+      label: "سنة فقط",
+      severity: "low",
+      run(rows) {
+        return rows
+          .filter(r => !norm(r.birth_date_g) && !norm(r.birth_date_h) && norm(r.birth_year))
+          .map(r => issue(this.label, this.severity, r, "يوجد سنة فقط بدون تاريخ هجري/ميلادي."));
+      }
+    },
+    {
+      id: "birth-gregorian-only",
+      label: "ميلادي فقط",
+      severity: "low",
+      run(rows) {
+        return rows
+          .filter(r => norm(r.birth_date_g) && !norm(r.birth_date_h))
+          .map(r => issue(this.label, this.severity, r, "يوجد تاريخ ميلادي بدون هجري."));
+      }
+    },
+    {
+      id: "birth-hijri-only",
+      label: "هجري فقط",
+      severity: "low",
+      run(rows) {
+        return rows
+          .filter(r => !norm(r.birth_date_g) && norm(r.birth_date_h))
+          .map(r => issue(this.label, this.severity, r, "يوجد تاريخ هجري بدون ميلادي."));
       }
     },
     {
@@ -363,14 +379,12 @@ item.severity==="low"?"sev-low":"sev-ok");
     el.style.alignItems = "center";
 
     const text = document.createElement("span");
-    text.textContent =
-      severityLabel(item.severity) +
-      " — " + item.rule +
-      ": " + item.person +
-      (item.parent ? " — الأب: " + item.parent : "") +
-      (item.branch ? " — الفرع: " + item.branch : "") +
-      (item.id ? " — id: " + item.id : "") +
-      " — " + item.message;
+    text.innerHTML =
+      "<strong>👤 " + item.person + "</strong>" +
+      (item.parent ? " <span>👨 الأب: " + item.parent + "</span>" : "") +
+      (item.branch ? " <span>🌳 الفرع: " + item.branch + "</span>" : "") +
+      (item.id ? " <span>🆔 " + item.id + "</span>" : "") +
+      "<br><span>" + severityLabel(item.severity) + " — " + item.rule + " — " + item.message + "</span>";
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -503,7 +517,38 @@ item.severity==="low"?"sev-low":"sev-ok");
       const head = document.createElement("div");
       head.className = "hint";
       head.style.margin = "0 0 10px";
-      head.textContent = title + " — العدد: " + String(list.length);
+      head.style.display = "flex";
+      head.style.justifyContent = "space-between";
+      head.style.gap = "8px";
+      head.style.flexWrap = "wrap";
+
+      const titleEl = document.createElement("strong");
+      titleEl.textContent = title + " (" + String(list.length) + ")";
+
+      const filters = document.createElement("span");
+      filters.style.display = "inline-flex";
+      filters.style.gap = "6px";
+      filters.style.flexWrap = "wrap";
+
+      [
+        ["all", "الكل"],
+        ["critical", "حرجة"],
+        ["medium", "متوسطة"],
+        ["low", "بسيطة"]
+      ].forEach(([key, label]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn btn-outline btn-sm";
+        b.textContent = label;
+        b.addEventListener("click", () => {
+          const filtered = key === "all" ? list : list.filter(x => x.severity === key);
+          renderIssuesFor(title + " / " + label, filtered);
+        });
+        filters.appendChild(b);
+      });
+
+      head.appendChild(titleEl);
+      head.appendChild(filters);
       issuesBox.appendChild(head);
 
       if (!list.length) {
