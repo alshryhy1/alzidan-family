@@ -270,7 +270,7 @@ header {
 .section,
 .card,
 .table-wrap {
-  background: #ffffff !important;
+  background: #f8fcfa !important;
   border: 1px solid #c9d8d1 !important;
   box-shadow: 0 12px 30px rgba(15, 35, 28, 0.08) !important;
 }
@@ -292,7 +292,7 @@ td {
 input,
 select,
 textarea {
-  background: #ffffff !important;
+  background: #f8fcfa !important;
   color: #10231c !important;
   border: 1px solid #b7cbc2 !important;
 }
@@ -315,7 +315,7 @@ button.btn-primary {
 
 .btn-outline,
 button.btn-outline {
-  background: #ffffff !important;
+  background: #f8fcfa !important;
   border-color: #b9cbc3 !important;
   color: #123c30 !important;
 }
@@ -402,4 +402,107 @@ body.admin-authenticated #admin-login-section .section-header {
 
 body.admin-authenticated #admin-login-section > .card {
   margin: 0 18px 12px !important;
+}
+
+/* private admin/delegate soft working theme */
+body {
+  background: #eef4f0 !important;
+}
+
+.section,
+.card,
+.table-wrap,
+.request,
+.request-media-item,
+.relation-card,
+.source-tree-item,
+.batch-list-item {
+  background: #f8fcfa !important;
+  border-color: #d8ebe2 !important;
+}
+
+input,
+select,
+textarea {
+  background: #f8fcfa !important;
+}
+
+thead th {
+  background: #edf7f1 !important;
+}
+
+tbody tr:nth-child(even) {
+  background: #fbfdfc !important;
+}
+
+
+
+/* ===== Unified Admin & Delegate UI ===== */
+
+:root{
+  --ui-radius:16px;
+  --ui-gap:16px;
+  --ui-card:#f8fcfa;
+  --ui-border:#d7e7de;
+  --ui-shadow:0 10px 24px rgba(15,35,28,.08);
+  --ui-input:#fdfefe;
+  --ui-head:#edf7f1;
+}
+
+.section,
+.card,
+.table-wrap,
+.request,
+.request-media-item,
+.relation-card,
+.source-tree-item,
+.batch-list-item{
+    border-radius:var(--ui-radius)!important;
+    box-shadow:var(--ui-shadow)!important;
+    border:1px solid var(--ui-border)!important;
+    background:var(--ui-card)!important;
+}
+
+.section-header{
+    margin-bottom:var(--ui-gap)!important;
+}
+
+.section-title{
+    font-size:20px!important;
+    font-weight:800!important;
+}
+
+input,
+select,
+textarea{
+    min-height:46px!important;
+    border-radius:12px!important;
+    background:var(--ui-input)!important;
+}
+
+button,
+.btn,
+.btn-primary,
+.btn-outline{
+    min-height:44px!important;
+    border-radius:12px!important;
+    font-weight:700!important;
+}
+
+table{
+    border-collapse:separate!important;
+    border-spacing:0!important;
+}
+
+thead th{
+    background:var(--ui-head)!important;
+    font-weight:800!important;
+}
+
+tbody td{
+    padding:12px 14px!important;
+}
+
+tbody tr:nth-child(even){
+    background:#fbfdfc!important;
 }
