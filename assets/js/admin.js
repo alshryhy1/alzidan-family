@@ -1,3 +1,23 @@
+
+function reloadAdminRequestsSafe() {
+  if (window.AlzidanAdminRequests && typeof window.AlzidanAdminRequests.loadRequests === "function") {
+    return window.AlzidanAdminRequests.loadRequests();
+  }
+  return Promise.resolve();
+}
+
+
+const normalizeTreeCardText = (window.TreeLineage && window.TreeLineage.normalizeTreeCardText) || function (v) {
+  return String(v || "").replace(/\s+/g, " ").trim();
+};
+const relationLeafName = (window.TreeLineage && window.TreeLineage.relationLeafName) || function (path) {
+  const parts = String(path || "").split("/").map(normalizeTreeCardText).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "";
+};
+const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPathLabel) || function (path) {
+  return String(path || "").split("/").map(normalizeTreeCardText).filter(Boolean).join(" ← ");
+};
+
 (function () {
   const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
@@ -450,7 +470,28 @@ as $$
 declare v_id bigint; v_branch text; v_parent text; v_child text; v_old_parent text; v_old_child text; v_person_id uuid; v_parent_person_id uuid; v_deceased boolean; v_saved_id bigint;
 begin if not public.admin_token_ok_v1(p_token) then raise exception 'not allowed'; end if; if to_regclass('public.tree_children') is null then raise exception 'tree_children table missing'; end if; v_id := nullif(p_row->>'id', '')::bigint; v_branch := nullif(btrim(coalesce(p_row->>'branch_key', '')), ''); v_parent := nullif(btrim(coalesce(p_row->>'parent_name', '')), ''); v_child := nullif(btrim(coalesce(p_row->>'child_name', '')), ''); v_person_id := nullif(p_row->>'person_id', '')::uuid; v_parent_person_id := nullif(p_row->>'parent_person_id', '')::uuid; v_deceased := case when p_row ? 'is_deceased' then (p_row->>'is_deceased')::boolean when p_row ? 'deceased' then (p_row->>'deceased')::boolean else false end; if v_branch is null or v_parent is null or v_child is null then raise exception 'missing tree row fields'; end if; if v_parent_person_id is null then select min(c.person_id::text)::uuid into v_parent_person_id from public.tree_children c where c.branch_key = v_branch and coalesce(c.child_name, c.name) = v_parent having count(distinct c.person_id) = 1; end if; if v_id is not null then select coalesce(c.parent_name, c.parent), coalesce(c.child_name, c.name), c.person_id into v_old_parent, v_old_child, v_person_id from public.tree_children c where c.id = v_id and c.branch_key = v_branch limit 1; if v_old_child is null then raise exception 'tree row not found'; end if; update public.tree_children c set parent_name = v_parent, parent = v_parent, child_name = v_child, name = v_child, person_id = coalesce(c.person_id, v_person_id, gen_random_uuid()), parent_person_id = coalesce(v_parent_person_id, c.parent_person_id), birth_date_g = nullif(p_row->>'birth_date_g', '')::date, birth_date_h = nullif(p_row->>'birth_date_h', ''), birth_year = nullif(p_row->>'birth_year', '')::int, birth_order = nullif(p_row->>'birth_order', '')::int, death_date_g = nullif(p_row->>'death_date_g', '')::date, death_date_h = nullif(p_row->>'death_date_h', ''), city = nullif(p_row->>'city', ''), area = nullif(p_row->>'area', ''), is_deceased = coalesce(v_deceased, false), deceased = coalesce(v_deceased, false) where c.id = v_id returning c.id into v_saved_id; if v_old_child<>v_child then update public.tree_children c set parent_name = case when coalesce(c.parent_name, c.parent, '') = v_old_child then v_child when coalesce(c.parent_name, c.parent, '') like v_old_child || '/%' then v_child || substr(coalesce(c.parent_name, c.parent), length(v_old_child) + 1) else c.parent_name end, parent = case when coalesce(c.parent, c.parent_name, '') = v_old_child then v_child when coalesce(c.parent, c.parent_name, '') like v_old_child || '/%' then v_child || substr(coalesce(c.parent, c.parent_name), length(v_old_child) + 1) else c.parent end, child_name = case when coalesce(c.child_name, c.name, '') like v_old_child || '/%' then v_child || substr(coalesce(c.child_name, c.name), length(v_old_child) + 1) else c.child_name end, name = case when coalesce(c.name, c.child_name, '') like v_old_child || '/%' then v_child || substr(coalesce(c.name, c.child_name), length(v_old_child) + 1) else c.name end where c.branch_key = v_branch and c.id<>v_id and ( coalesce(c.parent_name, c.parent, '') = v_old_child or coalesce(c.parent_name, c.parent, '') like v_old_child || '/%' or coalesce(c.child_name, c.name, '') like v_old_child || '/%' ); end if; else insert into public.tree_children ( branch_key, parent_name, parent, child_name, name, person_id, parent_person_id, birth_date_g, birth_date_h, birth_year, birth_order, death_date_g, death_date_h, city, area, is_deceased, deceased, created_at ) values ( v_branch, v_parent, v_parent, v_child, v_child, coalesce(v_person_id, gen_random_uuid()), v_parent_person_id, nullif(p_row->>'birth_date_g', '')::date, nullif(p_row->>'birth_date_h', ''), nullif(p_row->>'birth_year', '')::int, nullif(p_row->>'birth_order', '')::int, nullif(p_row->>'death_date_g', '')::date, nullif(p_row->>'death_date_h', ''), nullif(p_row->>'city', ''), nullif(p_row->>'area', ''), coalesce(v_deceased, false), coalesce(v_deceased, false), now() ) returning id into v_saved_id; end if; return jsonb_build_object('ok', true, 'id', v_saved_id);
 end;
-$$; create or replace function public.admin_tree_child_delete_subtree_v1( p_token text, p_branch_key text, p_id bigint
+$$; create or replace function public.admin_tree_child_delete_one_v1( p_token text, p_branch_key text, p_id bigint
+) returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_deleted bigint := 0;
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+
+  delete from public.tree_children c
+  where c.branch_key = p_branch_key
+    and c.id = p_id;
+
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+grant execute on function public.admin_tree_child_delete_one_v1(text, text, bigint) to anon, authenticated;
+ create or replace function public.admin_tree_child_delete_subtree_v1( p_token text, p_branch_key text, p_id bigint
 ) returns bigint
 language plpgsql
 security definer
@@ -1174,33 +1215,18 @@ where c.id = matches.id; commit;
     return idx > 0 ? p.slice(0, idx) : "";
   }
   function sourceTreeDisplayRows() {
-    const branch = getSourceTreeBranch();
-    const root = sourceTreeRoot(branch);
     const byChildPath = new Map();
+
     sourceTreeRows.forEach((row) => {
       const child = sourceTreeRowPath(row);
       if (!child) return;
+
       const existing = byChildPath.get(child);
-      if (!existing || (row.id && !existing.id)) byChildPath.set(child, row);
-    });
-    sourceTreeRows.forEach((row) => {
-      let parent = sourceTreeParentPath(row);
-      while (parent && parent !== root) {
-        if (!byChildPath.has(parent)) {
-          const grandParent = sourceTreeParentOfPath(parent) || root;
-          byChildPath.set(parent, {
-            _virtual: true,
-            branch_key: branch,
-            parent_name: grandParent,
-            parent: grandParent,
-            child_name: parent,
-            name: parent,
-            birth_order: null,
-          });
-        }
-        parent = sourceTreeParentOfPath(parent);
+      if (!existing || (row.id && !existing.id)) {
+        byChildPath.set(child, row);
       }
     });
+
     return sourceTreeSortRows(Array.from(byChildPath.values()));
   }
   function sourceTreeChildrenCount(row) {
@@ -1245,21 +1271,17 @@ where c.id = matches.id; commit;
     sourceTreeParent.value = current || root || "";
   }
   function resetSourceTreeForm(parentValue) {
+    clearSourceTreeExtraChildren();
     if (sourceTreeId) sourceTreeId.value = "";
     if (sourceTreePersonId) sourceTreePersonId.value = "";
-    refreshSourceTreeParentOptions(
-      parentValue || sourceTreeRoot(getSourceTreeBranch()),
-    );
-    if (sourceTreeName) sourceTreeName.value = "";
-    if (sourceTreeOrder) sourceTreeOrder.value = "";
-    if (sourceTreeBirthG) sourceTreeBirthG.value = "";
-    if (sourceTreeBirthH) sourceTreeBirthH.value = "";
-    if (sourceTreeAge) sourceTreeAge.value = "";
-    if (sourceTreeDeathG) sourceTreeDeathG.value = "";
-    if (sourceTreeDeathH) sourceTreeDeathH.value = "";
-    if (sourceTreeCity) sourceTreeCity.value = "";
-    if (sourceTreeArea) sourceTreeArea.value = "";
-    if (sourceTreeDeceased) sourceTreeDeceased.checked = false;
+    const parent = parentValue || sourceTreeRoot(getSourceTreeBranch());
+    refreshSourceTreeParentOptions(parent);
+    addSourceTreeExtraChildField("", 1, {
+      _cardTitle: "الشخص",
+      parent_name: parent,
+      parent: parent,
+      birth_order: 1,
+    });
     if (sourceTreeDelete) sourceTreeDelete.disabled = true;
     setSourceTreeStatus("وضع إضافة شخص جديد.");
   }
@@ -1269,25 +1291,21 @@ where c.id = matches.id; commit;
     const parent = sourceTreeParentPath(row);
     const child = sourceTreeRowPath(row);
     if (sourceTreeId) sourceTreeId.value = String(row.id || "");
-    if (sourceTreePersonId)
-      sourceTreePersonId.value = String(row.person_id || "");
+    if (sourceTreePersonId) sourceTreePersonId.value = String(row.person_id || "");
     refreshSourceTreeParentOptions(parent);
-    if (sourceTreeName) sourceTreeName.value = sourceTreeLeaf(child);
-    if (sourceTreeOrder)
-      sourceTreeOrder.value =
-        row.birth_order == null ? "" : String(row.birth_order || "");
-    if (sourceTreeBirthG)
-      sourceTreeBirthG.value = String(row.birth_date_g || "").slice(0, 10);
-    if (sourceTreeBirthH)
-      sourceTreeBirthH.value = String(row.birth_date_h || "");
-    if (sourceTreeDeathG)
-      sourceTreeDeathG.value = String(row.death_date_g || "").slice(0, 10);
-    if (sourceTreeDeathH)
-      sourceTreeDeathH.value = String(row.death_date_h || "");
-    if (sourceTreeCity) sourceTreeCity.value = String(row.city || "");
-    if (sourceTreeArea) sourceTreeArea.value = String(row.area || "");
-    if (sourceTreeDeceased)
-      sourceTreeDeceased.checked = !!(row.is_deceased || row.deceased);
+    if (sourceTreeExtraChildren) sourceTreeExtraChildren.dataset.currentPersonPath = child;
+
+    const mainRow = Object.assign({}, row, { _cardTitle: "الشخص" });
+    addSourceTreeExtraChildField(sourceTreeLeaf(child), row.birth_order || 1, mainRow);
+
+    sourceTreeDirectChildren(row).forEach((childRow, index) => {
+      addSourceTreeExtraChildField(
+        sourceTreeLeaf(sourceTreeRowPath(childRow)),
+        childRow.birth_order || index + 1,
+        Object.assign({}, childRow, { _cardTitle: "الابن " + String(index + 1) }),
+      );
+    });
+
     if (sourceTreeDelete) sourceTreeDelete.disabled = !row.id;
     setSourceTreeStatus("تعديل: " + relationPathLabel(child));
   }
@@ -1449,49 +1467,99 @@ where c.id = matches.id; commit;
       : 0;
     return base + count + 1;
   }
-  function addSourceTreeExtraChildField(value) {
-    if (!sourceTreeExtraChildren) return;
+  function addSourceTreeExtraChildField(value, forcedOrder, existingRow) {
+    if (!sourceTreeExtraChildren) return null;
+
+    const data = existingRow || {};
+    const nextOrder = forcedOrder || data.birth_order || (sourceTreeExtraChildren.querySelectorAll("[data-extra-child-row]").length + 1);
     const row = document.createElement("div");
     row.setAttribute("data-extra-child-row", "1");
-    row.style.display = "grid";
-    row.style.gridTemplateColumns = "minmax(0, 1fr) 120px auto";
-    row.style.gap = "8px";
-    row.style.alignItems = "end";
+    row.dataset.id = String(data.id || "");
+    row.dataset.personId = String(data.person_id || "");
+    row.dataset.parentPersonId = String(data.parent_person_id || "");
+    row.dataset.parentName = String(
+      sourceTreeParentPath(data) ||
+      (data._cardTitle === "الشخص" ? "" : (sourceTreeExtraChildren && sourceTreeExtraChildren.dataset.currentPersonPath ? sourceTreeExtraChildren.dataset.currentPersonPath : "")) ||
+      ""
+    );
+    row.dataset.cardRole = data._cardTitle === "الشخص" ? "person" : "child";
+    row.style.cssText = "grid-column:1/-1;border:1px solid #d8e8df;border-radius:16px;padding:14px;margin:8px 0;background:#fff;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;";
+
+    const titleText = data._cardTitle || ("الابن " + String(nextOrder));
     row.innerHTML =
-      '<div class="field"><label>اسم ابن إضافي</label><input data-extra-child-name type="text" placeholder="اسم الابن" value="' +
-      escapeHtml(value || "") +
-      '" /></div>' +
-      '<div class="field"><label>الترتيب</label><input data-extra-child-order type="number" min="1" inputmode="numeric" value="' +
-      String(nextSourceTreeOrderValue()) +
-      '" /></div>' +
-      '<button class="btn btn-outline btn-sm" type="button" data-extra-child-remove>حذف الخانة</button>';
+      '<div data-child-card-title style="grid-column:1/-1;font-weight:800;color:#064e3b;">' + escapeHtml(titleText) + '</div>' +
+      '<div class="field"><label>الاسم</label><input data-extra-child-name type="text" placeholder="اسم الابن" value="' + escapeHtml(value || sourceTreeLeaf(sourceTreeRowPath(data)) || "") + '"></div>' +
+      '<div class="field"><label>الترتيب</label><input data-extra-child-order type="number" min="1" inputmode="numeric" value="' + escapeHtml(nextOrder == null ? "" : String(nextOrder)) + '"></div>' +
+      '<div class="field"><label>تاريخ الميلاد ميلادي</label><input data-extra-child-birth-g type="date" value="' + escapeHtml(String(data.birth_date_g || "").slice(0,10)) + '"></div>' +
+      '<div class="field"><label>تاريخ الميلاد هجري</label><input data-extra-child-birth-h type="text" placeholder="مثال: 1392/08/10" value="' + escapeHtml(data.birth_date_h || "") + '"></div>' +
+      '<div class="field"><label>العمر التقريبي</label><input data-extra-child-age type="number" min="0" max="130" inputmode="numeric" placeholder="مثال: 63"></div>' +
+      '<div class="field"><label>تاريخ الوفاة ميلادي</label><input data-extra-child-death-g type="date" value="' + escapeHtml(String(data.death_date_g || "").slice(0,10)) + '"></div>' +
+      '<div class="field"><label>تاريخ الوفاة هجري</label><input data-extra-child-death-h type="text" placeholder="اختياري" value="' + escapeHtml(data.death_date_h || "") + '"></div>' +
+      '<div class="field"><label>المدينة</label><input data-extra-child-city type="text" value="' + escapeHtml(data.city || "") + '"></div>' +
+      '<div class="field"><label>الحي/القرية</label><input data-extra-child-area type="text" value="' + escapeHtml(data.area || "") + '"></div>' +
+      '<label style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:4px 0;"><input data-extra-child-deceased type="checkbox"' + ((data.is_deceased || data.deceased) ? " checked" : "") + '> <span>متوفى / رحمه الله</span></label>' +
+      '<div style="grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary btn-sm" type="button" data-extra-child-save>حفظ هذه البطاقة</button><button class="btn btn-outline btn-sm" type="button" data-extra-child-remove>حذف هذه البطاقة</button></div>';
+
+    const save = row.querySelector("[data-extra-child-save]");
+    if (save) save.addEventListener("click", () => saveSourceTreeCard(row).catch(() => {}));
+
     const remove = row.querySelector("[data-extra-child-remove]");
-    if (remove) remove.addEventListener("click", () => row.remove());
+    if (remove) remove.addEventListener("click", () => deleteSourceTreeCard(row).catch(() => {}));
+
     sourceTreeExtraChildren.appendChild(row);
+    renumberSourceTreeChildCards();
+    return row;
+  }
+
+  function renumberSourceTreeChildCards() {
+    if (!sourceTreeExtraChildren) return;
+    Array.from(sourceTreeExtraChildren.querySelectorAll("[data-extra-child-row]")).forEach((row, i) => {
+      const title = row.querySelector("[data-child-card-title]");
+      const order = row.querySelector("[data-extra-child-order]");
+      if (row.dataset.cardRole === "person") {
+        if (title) title.textContent = "الشخص";
+        return;
+      }
+      const n = Array.from(sourceTreeExtraChildren.querySelectorAll("[data-extra-child-row]")).filter((x) => x.dataset.cardRole !== "person").indexOf(row) + 1;
+      if (title) title.textContent = "الابن " + n;
+      if (order && !order.value) order.value = String(n);
+    });
+  }
+
+  function ensureSourceTreeFirstChildRow() {
+    if (!sourceTreeExtraChildren) return;
+    if (!sourceTreeExtraChildren.querySelector("[data-extra-child-row]")) {
+      addSourceTreeExtraChildField("", 1);
+    }
+  }
+
+  function hideSourceTreeLegacyChildFields() { return;
+    [
+      "source-tree-name",
+      "source-tree-order",
+      "source-tree-birth-g",
+      "source-tree-birth-h",
+      "source-tree-age",
+      "source-tree-death-g",
+      "source-tree-death-h",
+      "source-tree-city",
+      "source-tree-area"
+    ].forEach((id) => {
+      const el = document.getElementById(id);
+      const wrap = el ? el.closest(".field") : null;
+      if (wrap) wrap.style.display = "none";
+    });
+    if (sourceTreeDeceased) {
+      const wrap = sourceTreeDeceased.closest("label");
+      if (wrap) wrap.style.display = "none";
+    }
   }
   function getSourceTreeExtraChildrenPayloads(basePayload) {
     if (!sourceTreeExtraChildren || !basePayload) return [];
-    const rows = Array.from(
-      sourceTreeExtraChildren.querySelectorAll("[data-extra-child-row]"),
-    );
-    return rows
-      .map((row) => {
-        const nameEl = row.querySelector("[data-extra-child-name]");
-        const orderEl = row.querySelector("[data-extra-child-order]");
-        const name = normalizeTreeCardText(
-          nameEl && nameEl.value ? nameEl.value : "",
-        );
-        if (!name) return null;
-        const child = name.includes("/")
-          ? name
-          : basePayload.parent_name + "/" + name;
-        return Object.assign({}, basePayload, {
-          id: "",
-          person_id: "",
-          child_name: child,
-          birth_order: orderEl && orderEl.value ? String(orderEl.value) : "",
-        });
-      })
+
+    return Array.from(sourceTreeExtraChildren.querySelectorAll("[data-extra-child-row]"))
+      .slice(1)
+      .map((row) => buildPayloadFromCardRow(row))
       .filter(Boolean);
   }
 
@@ -1733,15 +1801,15 @@ where c.id = matches.id; commit;
     const parent = normalizeTreeCardText(
       sourceTreeParent && sourceTreeParent.value ? sourceTreeParent.value : "",
     );
-    const name = normalizeTreeCardText(
-      sourceTreeName && sourceTreeName.value ? sourceTreeName.value : "",
-    );
+    if (!branch || !parent) return null;
 
-    if (!branch || !parent || !name) return null;
+    ensureSourceTreeFirstChildRow();
 
-    const child = name.includes("/") ? name : parent + "/" + name;
+    const firstRow = sourceTreeExtraChildren
+      ? sourceTreeExtraChildren.querySelector("[data-extra-child-row]")
+      : null;
 
-    const rawPayload = {
+    const basePayload = {
       id: sourceTreeId && sourceTreeId.value ? sourceTreeId.value : "",
       person_id:
         sourceTreePersonId && sourceTreePersonId.value
@@ -1749,43 +1817,170 @@ where c.id = matches.id; commit;
           : "",
       branch_key: branch,
       parent_name: parent,
-      child_name: child,
-      birth_date_g:
-        sourceTreeBirthG && sourceTreeBirthG.value
-          ? sourceTreeBirthG.value
-          : "",
-      birth_date_h:
-        sourceTreeBirthH && sourceTreeBirthH.value
-          ? normalizeTreeCardText(sourceTreeBirthH.value)
-          : "",
-      birth_year: "",
-      birth_order:
-        sourceTreeOrder && sourceTreeOrder.value
-          ? String(sourceTreeOrder.value)
-          : "",
-      death_date_g:
-        sourceTreeDeathG && sourceTreeDeathG.value
-          ? sourceTreeDeathG.value
-          : "",
-      death_date_h:
-        sourceTreeDeathH && sourceTreeDeathH.value
-          ? normalizeTreeCardText(sourceTreeDeathH.value)
-          : "",
-      city:
-        sourceTreeCity && sourceTreeCity.value
-          ? normalizeTreeCardText(sourceTreeCity.value)
-          : "",
-      area:
-        sourceTreeArea && sourceTreeArea.value
-          ? normalizeTreeCardText(sourceTreeArea.value)
-          : "",
-      is_deceased: !!(sourceTreeDeceased && sourceTreeDeceased.checked),
-      deceased: !!(sourceTreeDeceased && sourceTreeDeceased.checked),
-      _age: sourceTreeAge && sourceTreeAge.value ? sourceTreeAge.value : "",
     };
+
+    return sourceTreePayloadFromChildCard(firstRow, basePayload);
+  }
+
+  function sourceTreePayloadFromChildCard(row, basePayload) {
+    if (!row || !basePayload) return null;
+
+    const val = (sel) => {
+      const el = row.querySelector(sel);
+      return el ? normalizeTreeCardText(el.value || "") : "";
+    };
+    const checked = (sel) => {
+      const el = row.querySelector(sel);
+      return !!(el && el.checked);
+    };
+
+    const name = val("[data-extra-child-name]");
+    if (!name) return null;
+
+    const child = name.includes("/") ? name : basePayload.parent_name + "/" + name;
+    const rawPayload = Object.assign({}, basePayload, {
+      child_name: child,
+      name: child,
+      birth_date_g: val("[data-extra-child-birth-g]"),
+      birth_date_h: val("[data-extra-child-birth-h]"),
+      birth_year: "",
+      birth_order: val("[data-extra-child-order]"),
+      death_date_g: val("[data-extra-child-death-g]"),
+      death_date_h: val("[data-extra-child-death-h]"),
+      city: val("[data-extra-child-city]"),
+      area: val("[data-extra-child-area]"),
+      is_deceased: checked("[data-extra-child-deceased]"),
+      deceased: checked("[data-extra-child-deceased]"),
+      _age: val("[data-extra-child-age]"),
+    });
 
     return normalizeBirthPayload(rawPayload);
   }
+
+  function sourceTreeDirectChildren(row) {
+    const target = normalizeTreeCardText(sourceTreeRowPath(row));
+    const targetPersonId = String(row && row.person_id || "");
+    if (!target && !targetPersonId) return [];
+
+    return sourceTreeRows
+      .filter((x) => {
+        if (String(x.id || "") === String(row && row.id || "")) return false;
+
+        const parentPath = normalizeTreeCardText(sourceTreeParentPath(x));
+        const childPath = normalizeTreeCardText(sourceTreeRowPath(x));
+
+        if (targetPersonId && String(x.parent_person_id || "") === targetPersonId) return true;
+        if (parentPath === target) return true;
+
+        if (childPath.indexOf(target + "/") === 0) {
+          const rest = childPath.slice((target + "/").length);
+          return rest && !rest.includes("/");
+        }
+
+        return false;
+      })
+      .sort((a, b) => {
+        const ao = Number(a.birth_order || 0);
+        const bo = Number(b.birth_order || 0);
+        if (ao && bo && ao !== bo) return ao - bo;
+        if (ao && !bo) return -1;
+        if (!ao && bo) return 1;
+        return String(sourceTreeRowPath(a)).localeCompare(String(sourceTreeRowPath(b)), "ar");
+      });
+  }
+
+  function buildPayloadFromCardRow(cardRow) {
+    if (!cardRow) return null;
+    const branch = getSourceTreeBranch();
+    const parent = normalizeTreeCardText(cardRow.dataset.parentName || (sourceTreeParent && sourceTreeParent.value ? sourceTreeParent.value : ""));
+    const basePayload = {
+      id: cardRow.dataset.id || "",
+      person_id: cardRow.dataset.personId || "",
+      parent_person_id: cardRow.dataset.parentPersonId || "",
+      branch_key: branch,
+      parent_name: parent,
+    };
+    return sourceTreePayloadFromChildCard(cardRow, basePayload);
+  }
+
+  async function reloadSourceTreeRowsKeepPlace() {
+    const y = window.scrollY || window.pageYOffset || 0;
+    const activeId = sourceTreeId && sourceTreeId.value ? String(sourceTreeId.value) : "";
+    const activePersonId = sourceTreePersonId && sourceTreePersonId.value ? String(sourceTreePersonId.value) : "";
+    await reloadSourceTreeRowsKeepPlace();
+    if (activeId || activePersonId) {
+      const found = sourceTreeRows.find((x) =>
+        (activeId && String(x.id || "") === activeId) ||
+        (activePersonId && String(x.person_id || "") === activePersonId)
+      );
+      if (found) fillSourceTreeForm(found);
+    }
+    window.scrollTo(0, y);
+  }
+
+  async function saveSourceTreeCard(cardRow) {
+    const sb = getClient();
+    const token = getAdminToken();
+    if (!sb || !token) return setSourceTreeStatus("سجل الدخول أولًا.");
+    const payload = buildPayloadFromCardRow(cardRow);
+    if (!payload) return setSourceTreeStatus("أكمل بيانات البطاقة.");
+    setSourceTreeStatus("جاري حفظ البطاقة...");
+    const { data, error } = await sb.rpc("admin_tree_child_upsert_v1", {
+      p_token: token,
+      p_row: payload,
+    });
+    if (error) return setSourceTreeStatus("تعذر حفظ البطاقة: " + formatRpcError(error));
+    setSourceTreeStatus("تم حفظ البطاقة.");
+    await reloadSourceTreeRowsKeepPlace();
+  }
+
+  async function deleteSourceTreeCard(cardRow) {
+    const sb = getClient();
+    const token = getAdminToken();
+    const branch = getSourceTreeBranch();
+    const id = Number(cardRow && cardRow.dataset.id ? cardRow.dataset.id : 0);
+    const payload = buildPayloadFromCardRow(cardRow);
+    const label = payload ? sourceTreeLeaf(payload.child_name || payload.name || "") : "هذه البطاقة";
+
+    if (!sb || !token) return setSourceTreeStatus("سجل الدخول أولًا.");
+
+    if (!id) {
+      cardRow.remove();
+      renumberSourceTreeChildCards();
+      return setSourceTreeStatus("تم حذف البطاقة غير المحفوظة.");
+    }
+
+    if (!window.confirm("حذف سجل «" + label + "» فقط؟")) return;
+
+    setSourceTreeStatus("جاري حذف السجل فقط...");
+
+    const { data, error } = await sb.rpc("admin_tree_child_delete_one_v1", {
+      p_token: token,
+      p_branch_key: branch,
+      p_id: id,
+    });
+
+    if (error) {
+      const msg = formatRpcError(error);
+      const missing =
+        msg.includes("admin_tree_child_delete_one_v1") ||
+        msg.includes("Could not find the function") ||
+        msg.includes("schema cache");
+
+      if (missing) {
+        setSourceTreeStatus("الدالة admin_tree_child_delete_one_v1 غير موجودة في القاعدة. نفّذ سكربت التهيئة/SQL أولاً.");
+      } else {
+        setSourceTreeStatus("تعذر حذف السجل فقط: " + msg);
+      }
+      return;
+    }
+
+    cardRow.remove();
+    renumberSourceTreeChildCards();
+    setSourceTreeStatus("تم حذف السجل فقط. لم يتم حذف الأبناء. عدد المحذوف: " + String(data || 0));
+    await reloadSourceTreeRowsKeepPlace();
+  }
+
   async function saveSourceTreeRow(event) {
     if (event) event.preventDefault();
     const sb = getClient();
@@ -1828,7 +2023,7 @@ where c.id = matches.id; commit;
     }
     clearSourceTreeExtraChildren();
     setSourceTreeStatus("تم الحفظ. عدد السجلات: " + String(saved));
-    await loadSourceTreeRows();
+    await reloadSourceTreeRowsKeepPlace();
   }
   async function deleteSourceTreeSubtree() {
     const sb = getClient();
@@ -1837,9 +2032,9 @@ where c.id = matches.id; commit;
     const id = Number(
       sourceTreeId && sourceTreeId.value ? sourceTreeId.value : 0,
     );
-    const name = normalizeTreeCardText(
-      sourceTreeName && sourceTreeName.value ? sourceTreeName.value : "",
-    );
+    const firstCard = sourceTreeExtraChildren ? sourceTreeExtraChildren.querySelector("[data-extra-child-row]") : null;
+    const firstPayload = firstCard ? buildPayloadFromCardRow(firstCard) : null;
+    const name = firstPayload ? sourceTreeLeaf(firstPayload.child_name || firstPayload.name || "") : "";
     if (!sb || !token) return setSourceTreeStatus("سجل الدخول أولًا.");
     if (!id) return setSourceTreeStatus("اختر شخصًا من القائمة أولًا.");
     const ok = window.confirm(
@@ -1867,7 +2062,7 @@ where c.id = matches.id; commit;
       return;
     }
     setSourceTreeStatus("تم حذف " + String(data || 0) + " سجل.");
-    await loadSourceTreeRows();
+    await reloadSourceTreeRowsKeepPlace();
   }
   function setEventsSourceStatus(message) {
     if (eventsSourceStatus) eventsSourceStatus.textContent = message || "";
@@ -2666,6 +2861,12 @@ where c.id = matches.id; commit;
     if (/^-?\d+$/.test(s)) return s;
     return s;
   }
+
+
+
+
+
+
   if (adminLoginBtn) {
     adminLoginBtn.addEventListener("click", async () => {
       hideAlert();
@@ -2797,12 +2998,12 @@ where c.id = matches.id; commit;
   if (filterKind)
     filterKind.addEventListener("change", () => {
       requestsCurrentPage = 1;
-      loadRequests();
+      reloadAdminRequestsSafe();
     });
   if (filterStatus)
     filterStatus.addEventListener("change", () => {
       requestsCurrentPage = 1;
-      loadRequests();
+      reloadAdminRequestsSafe();
     });
   if (requestSearchInput)
     requestSearchInput.addEventListener("input", () => {
@@ -3005,3 +3206,4 @@ window.addEventListener("load", () => {
     console.warn("تعذر تحميل إعداد سرعة الشريط:", e);
   }
 });
+
