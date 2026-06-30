@@ -1489,6 +1489,7 @@ where c.id = matches.id; commit;
     row.innerHTML =
       '<div data-child-card-title style="grid-column:1/-1;font-weight:800;color:#064e3b;">' + escapeHtml(titleText) + '</div>' +
       '<div class="field"><label>الاسم</label><input data-extra-child-name type="text" placeholder="اسم الابن" value="' + escapeHtml(value || sourceTreeLeaf(sourceTreeRowPath(data)) || "") + '"></div>' +
+      '<div class="field"><label>رقم الجوال</label><input data-extra-child-phone type="tel" inputmode="numeric" placeholder="05XXXXXXXX" value="' + escapeHtml(data.phone || "") + '"></div>' +
       '<div class="field"><label>الترتيب</label><input data-extra-child-order type="number" min="1" inputmode="numeric" value="' + escapeHtml(nextOrder == null ? "" : String(nextOrder)) + '"></div>' +
       '<div class="field"><label>تاريخ الميلاد ميلادي</label><input data-extra-child-birth-g type="date" value="' + escapeHtml(String(data.birth_date_g || "").slice(0,10)) + '"></div>' +
       '<div class="field"><label>تاريخ الميلاد هجري</label><input data-extra-child-birth-h type="text" placeholder="مثال: 1392/08/10" value="' + escapeHtml(data.birth_date_h || "") + '"></div>' +
@@ -1918,6 +1919,65 @@ where c.id = matches.id; commit;
     window.scrollTo(0, y);
   }
 
+
+  function normalizeMemberPhoneForAdmin(v) {
+    return String(v || "").replace(/[^\d]/g, "").trim();
+  }
+
+  async function upsertMemberProfileFromTreeCard(cardRow, payload, savedId) {
+    const phoneInput = cardRow ? cardRow.querySelector("[data-extra-child-phone]") : null;
+    const phone = normalizeMemberPhoneForAdmin(phoneInput ? phoneInput.value : "");
+    if (!phone) return { ok: true, skipped: true };
+
+    const sb = getClient();
+    if (!sb) return { ok: false, error: { message: "no supabase client" } };
+
+    const branchKey = String(payload && payload.branch_key ? payload.branch_key : "").trim();
+    const personId = String(payload && payload.person_id ? payload.person_id : "").trim();
+    const treeChildId = savedId || (payload && payload.id ? payload.id : null);
+    const childName = String(payload && (payload.child_name || payload.name) ? (payload.child_name || payload.name) : "").trim();
+    const displayName = childName.split("/").map((x) => String(x || "").trim()).filter(Boolean).slice(-1)[0] || "";
+
+    if (!branchKey || !treeChildId) return { ok: false, error: { message: "missing member profile keys" } };
+
+    const row = {
+      phone,
+      branch_key: branchKey,
+      tree_child_id: treeChildId,
+      person_id: personId || null,
+      display_name: displayName || null,
+      status: "active",
+      updated_at: new Date().toISOString()
+    };
+
+    const found = await sb
+      .from("member_profiles")
+      .select("id")
+      .eq("phone", phone)
+      .limit(1)
+      .maybeSingle();
+
+    if (found.error) return { ok: false, error: found.error };
+
+    if (found.data && found.data.id) {
+      const { error } = await sb
+        .from("member_profiles")
+        .update(row)
+        .eq("id", found.data.id);
+      if (error) return { ok: false, error };
+      return { ok: true };
+    }
+
+    row.created_at = new Date().toISOString();
+
+    const { error } = await sb
+      .from("member_profiles")
+      .insert(row);
+
+    if (error) return { ok: false, error };
+    return { ok: true };
+  }
+
   async function saveSourceTreeCard(cardRow) {
     const sb = getClient();
     const token = getAdminToken();
@@ -1930,6 +1990,13 @@ where c.id = matches.id; commit;
       p_row: payload,
     });
     if (error) return setSourceTreeStatus("تعذر حفظ البطاقة: " + formatRpcError(error));
+    const memberRes = await upsertMemberProfileFromTreeCard(cardRow, payload, data && data.id ? data.id : payload.id);
+    if (!memberRes.ok) {
+      setSourceTreeStatus("تم حفظ البطاقة، لكن تعذر حفظ رقم الجوال: " + ((memberRes.error && memberRes.error.message) || "خطأ غير معروف"));
+      await reloadSourceTreeRowsKeepPlace();
+      return;
+    }
+
     setSourceTreeStatus("تم حفظ البطاقة.");
     await reloadSourceTreeRowsKeepPlace();
   }
