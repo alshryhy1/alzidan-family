@@ -1,6 +1,16 @@
 (() => {
   "use strict";
 
+  function requestStatusLabel(status) {
+    const value = String(status || "").trim();
+    if (value === "pending") return "انتظار";
+    if (value === "approved") return "قبول";
+    if (value === "rejected") return "رفض";
+    return value || "-";
+  }
+
+
+
   const Core = window.AlzidanAdminCore || {};
   const {
     showAlert,
@@ -82,7 +92,7 @@
         : row.status === "rejected"
           ? "status-rejected"
           : "status-pending");
-    pill.textContent = statusLabel(row.status);
+    pill.textContent = requestStatusLabel(row.status);
     tdStatus.appendChild(pill);
     tr.appendChild(tdStatus);
     const tdDate = document.createElement("td");
@@ -443,7 +453,7 @@
       row.name,
       row.phone,
       row.email,
-      statusLabel(row.status),
+      requestStatusLabel(row.status),
       row.created_at,
     ]
       .map(normalizeRequestSearchText)

@@ -80,98 +80,14 @@
     if (!batchTreeStatus) return;
     batchTreeStatus.textContent = String(text || "");
   }
-  function normalizeBatchText(v) {
-    return normalizeArabicDigitsToLatin(String(v || ""))
-      .replace(/[\u064B-\u065F\u0670]/g, "")
-      .replace(/[إأآ]/g, "أ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-  function cleanBatchLine(v) {
-    let s = normalizeBatchText(v);
-    s = s.replace(/^(?:أرسلت من الـ iPhone|الاسم)\s*/i, "").trim();
-    s = s.replace(/^[\d\s/\\.\-:،,؛\])(\[]+/, "").trim();
-    s = s.replace(/\b(?:الزيدان|الشريهي|الشريهى|الشريه)\b/g, "").trim();
-    s = s.replace(/\s+/g, " ").trim();
-    return s;
-  }
-  function batchJoinAbd(words, start) {
-    const list = Array.isArray(words) ? words : [];
-    const first = normalizeBatchText(list[start] || "");
-    if (!first) return { value: "", next: start };
-    if (first === "عبد" && list[start + 1]) {
-      return {
-        value: normalizeBatchText("عبد" + String(list[start + 1] || "")),
-        next: start + 2,
-      };
-    }
-    return { value: first, next: start + 1 };
-  }
-  function batchLeaf(path) {
-    const s = normalizeBatchText(path);
-    if (!s) return "";
-    if (s.includes("/")) return s.split("/").filter(Boolean).slice(-1)[0] || s;
-    const rootMatch = s.match(/^(.+?)\s+بن\s+مطلق\s+بن\s+زيدان$/);
-    return rootMatch ? normalizeBatchText(rootMatch[1]) : s;
-  }
-  function batchParentPath(path) {
-    const s = normalizeBatchText(path);
-    if (!s || !s.includes("/")) return "";
-    const parts = s.split("/").filter(Boolean);
-    parts.pop();
-    return parts.join("/");
-  }
-  function batchSqlLiteral(v) {
-    return "'" + String(v || "").replace(/'/g, "''") + "'";
-  }
-  function parseBatchFullLineage(line, branch) {
-    const raw = cleanBatchLine(line);
-    if (!raw || !/\s+بن\s+/.test(raw) || !raw.includes("مطلق بن زيدان"))
-      return null;
-    const parts = raw
-      .split(/\s+بن\s+/g)
-      .map((p) =>
-        cleanBatchLine(p)
-          .replace(/\b(?:ناصر|مفلح|مطلق|زيدان)\b\s*$/g, "")
-          .trim(),
-      )
-      .map((p) => normalizeBatchText(p))
-      .filter(Boolean);
-    const branchKey = normalizeBatchText(branch);
-    const branchIndex = parts.findIndex((p) => p === branchKey);
-    if (branchIndex < 0) return null;
-    const lineage = parts.slice(0, branchIndex + 1).reverse();
-    if (lineage[0] !== branchKey || lineage.length < 2) return null;
-    let parent = branchKey + " بن مطلق بن زيدان";
-    const relations = [];
-    for (let i = 1; i < lineage.length; i += 1) {
-      const child = parent + "/" + lineage[i];
-      relations.push({ parent, child, source: raw });
-      parent = child;
-    }
-    return { path: parent, relations, lineage, source: raw };
-  }
-  function parseBatchShortLine(line) {
-    const raw = cleanBatchLine(line);
-    if (!raw) return null;
-    if (raw === "الاسم") return null;
-    const words = raw
-      .split(/\s+/g)
-      .map((w) => normalizeBatchText(w))
-      .filter(Boolean);
-    if (words.length < 2) return null;
-    let pos = 0;
-    const namePart = batchJoinAbd(words, pos);
-    const name = namePart.value;
-    pos = namePart.next;
-    const fatherPart = batchJoinAbd(words, pos);
-    const father = fatherPart.value;
-    pos = fatherPart.next;
-    const grandfatherPart = batchJoinAbd(words, pos);
-    const grandfather = grandfatherPart.value;
-    if (!name || !father) return null;
-    return { raw, name, father, grandfather };
-  }
+  const TreeLineage = window.TreeLineage || {};
+  const normalizeBatchText = TreeLineage.normalizeBatchText;
+  const cleanBatchLine = TreeLineage.cleanBatchLine;
+  const batchLeaf = TreeLineage.batchLeaf;
+  const batchParentPath = TreeLineage.batchParentPath;
+  const parseBatchFullLineage = TreeLineage.parseBatchFullLineage;
+  const parseBatchShortLine = TreeLineage.parseBatchShortLine;
+
   function renderBatchSummary(result) {
     if (!batchTreeSummary) return;
     const r = result || {};
