@@ -787,7 +787,44 @@ async function saveWifeForSelectedParent() {
   await loadWivesForSelectedParent();
 }
 async function linkChildToSelectedSpouse(childId) {
-  return { ok: true, skipped: true };
+  const spouseId = getSelectedChildSpouseId();
+  if (!spouseId) return { ok: true, skipped: true };
+
+  const sb = getالخدمةClient();
+  if (!sb) return { ok: false, error: { message: "تعذر الاتصال بقاعدة البيانات." } };
+
+  const childPersonId = await getTreePersonIdByName(sb, childId);
+  if (!childPersonId) {
+    return { ok: false, error: { message: "تعذر تحديد رقم الابن في قاعدة البيانات." } };
+  }
+
+  const spouseRes = await sb
+    .from("tree_spouses")
+    .select("id,wife_name,wife_is_family_member,wife_branch_key,wife_lineage")
+    .eq("id", Number(spouseId))
+    .maybeSingle();
+
+  if (spouseRes.error) return { ok: false, error: spouseRes.error };
+  const spouse = spouseRes.data || {};
+  if (!spouse.id) return { ok: false, error: { message: "تعذر تحديد الزوجة المختارة." } };
+
+  const row = {
+    child_id: Number(childPersonId),
+    spouse_id: Number(spouse.id),
+    mother_name: spouse.wife_name || null,
+    mother_is_family_member: spouse.wife_is_family_member == null ? null : spouse.wife_is_family_member,
+    mother_branch_key: spouse.wife_branch_key || null,
+    mother_lineage: spouse.wife_lineage || null,
+    confidence: "confirmed",
+    updated_at: new Date().toISOString()
+  };
+
+  const ins = await sb
+    .from("tree_mother_links")
+    .upsert(row, { onConflict: "child_id" });
+
+  if (ins.error) return { ok: false, error: ins.error };
+  return { ok: true };
 }
 async function confirmLinkAllChildrenToOnlyWife() {
   if (!state.branch) {
