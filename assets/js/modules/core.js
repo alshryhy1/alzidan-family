@@ -327,6 +327,14 @@
     return sbClient;
   }
 
+  function renderEmpty(text) {
+    const requestsBody = document.getElementById("requests-body");
+    if (!requestsBody) return;
+    requestsBody.innerHTML =
+      '<tr><td colspan="10">' + escapeHtml(text || "لا توجد بيانات.") + '</td></tr>';
+  }
+
+
   function escapeHtml(value) {
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -397,6 +405,7 @@
     formatDateTimeArSaVerbose,
     getClient,
     escapeHtml,
+    renderEmpty,
     kindLabel,
     statusLabel,
     coerceRpcId,
