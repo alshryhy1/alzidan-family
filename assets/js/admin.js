@@ -183,6 +183,44 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const bannerMessagesStatus = document.getElementById(
     "banner-messages-status",
   );
+
+  const specialCardsLoad = document.getElementById("special-cards-load");
+  const specialCardsNew = document.getElementById("special-cards-new");
+  const specialCardsList = document.getElementById("special-cards-list");
+  const specialCardsForm = document.getElementById("special-cards-form");
+  const specialCardsId = document.getElementById("special-cards-id");
+  const specialCardsType = document.getElementById("special-cards-type");
+  const specialCardsTheme = document.getElementById("special-cards-theme");
+  const specialCardsTitle = document.getElementById("special-cards-title");
+  const specialCardsSubtitle = document.getElementById("special-cards-subtitle");
+  const specialCardsPerson = document.getElementById("special-cards-person");
+  const specialCardsSecondaryPerson = document.getElementById("special-cards-secondary-person");
+  const specialCardsEventDate = document.getElementById("special-cards-event-date");
+  const specialCardsLocation = document.getElementById("special-cards-location");
+  const specialCardsDegree = document.getElementById("special-cards-degree");
+  const specialCardsUniversity = document.getElementById("special-cards-university");
+  const specialCardsImageFile = document.getElementById("special-cards-image-file");
+  const specialCardsImageUrl = document.getElementById("special-cards-image-url");
+  const specialCardsBackgroundFile = document.getElementById("special-cards-background-file");
+  const specialCardsBackgroundUrl = document.getElementById("special-cards-background-url");
+  const specialCardsGroupKey = document.getElementById("special-cards-group-key");
+  const specialCardsGroupTitle = document.getElementById("special-cards-group-title");
+  const specialCardsPriority = document.getElementById("special-cards-priority");
+  const specialCardsSequence = document.getElementById("special-cards-sequence");
+  const specialCardsDisplayMode = document.getElementById("special-cards-display-mode");
+  const specialCardsMaxSession = document.getElementById("special-cards-max-session");
+  const specialCardsStartDate = document.getElementById("special-cards-start-date");
+  const specialCardsEndDate = document.getElementById("special-cards-end-date");
+  const specialCardsMessage = document.getElementById("special-cards-message");
+  const specialCardsActive = document.getElementById("special-cards-active");
+  const specialCardsOnceDay = document.getElementById("special-cards-once-day");
+  const specialCardsShare = document.getElementById("special-cards-share");
+  const specialCardsSave = document.getElementById("special-cards-save");
+  const specialCardsGroupCard = document.getElementById("special-cards-group-card");
+  const specialCardsDelete = document.getElementById("special-cards-delete");
+  const specialCardsStatus = document.getElementById("special-cards-status");
+  let specialCardsRows = [];
+
   const adminTickerSpeed = document.getElementById("admin-ticker-speed");
   const adminTickerSpeedSave = document.getElementById(
     "admin-ticker-speed-save",
@@ -2288,6 +2326,249 @@ where c.id = matches.id; commit;
     if (bannerGeneralShowDays) bannerGeneralShowDays.value = "7";
     setBannerGeneralStatus("");
   }
+
+  function setSpecialCardsStatus(message) {
+    if (specialCardsStatus) specialCardsStatus.textContent = message || "";
+  }
+
+  function specialCardTypeLabel(type) {
+    const map = {
+      graduation: "تخرج",
+      wedding: "زواج",
+      birth: "مولود",
+      promotion: "ترقية",
+      new_house: "منزل جديد",
+      honor: "تكريم",
+      announcement: "إعلان",
+    };
+    return map[type] || type || "بطاقة";
+  }
+
+  function resetSpecialCardsForm() {
+    if (specialCardsId) specialCardsId.value = "";
+    if (specialCardsType) specialCardsType.value = "graduation";
+    if (specialCardsTheme) specialCardsTheme.value = "navy";
+    if (specialCardsTitle) specialCardsTitle.value = "مبروك التخرج";
+    if (specialCardsSubtitle) specialCardsSubtitle.value = "";
+    if (specialCardsPerson) specialCardsPerson.value = "";
+    if (specialCardsSecondaryPerson) specialCardsSecondaryPerson.value = "";
+    if (specialCardsEventDate) specialCardsEventDate.value = "";
+    if (specialCardsLocation) specialCardsLocation.value = "";
+    if (specialCardsDegree) specialCardsDegree.value = "";
+    if (specialCardsUniversity) specialCardsUniversity.value = "";
+    if (specialCardsImageUrl) specialCardsImageUrl.value = "";
+    if (specialCardsBackgroundUrl) specialCardsBackgroundUrl.value = "";
+    if (specialCardsGroupKey) specialCardsGroupKey.value = "";
+    if (specialCardsGroupTitle) specialCardsGroupTitle.value = "";
+    if (specialCardsPriority) specialCardsPriority.value = "0";
+    if (specialCardsSequence) specialCardsSequence.value = "0";
+    if (specialCardsDisplayMode) specialCardsDisplayMode.value = "manual";
+    if (specialCardsMaxSession) specialCardsMaxSession.value = "1";
+    if (specialCardsStartDate) specialCardsStartDate.value = "";
+    if (specialCardsEndDate) specialCardsEndDate.value = "";
+    if (specialCardsMessage) specialCardsMessage.value = "";
+    if (specialCardsActive) specialCardsActive.checked = true;
+    if (specialCardsOnceDay) specialCardsOnceDay.checked = true;
+    if (specialCardsShare) specialCardsShare.checked = true;
+    if (specialCardsSave) specialCardsSave.checked = true;
+    if (specialCardsGroupCard) specialCardsGroupCard.checked = false;
+    setSpecialCardsStatus("");
+  }
+
+  function renderSpecialCardsList() {
+    if (!specialCardsList) return;
+    specialCardsList.innerHTML = "";
+    if (!specialCardsRows.length) {
+      specialCardsList.innerHTML = '<div class="hint">لا توجد بطاقات خاصة محملة.</div>';
+      return;
+    }
+
+    specialCardsRows.forEach((row) => {
+      const card = document.createElement("div");
+      card.className = "source-tree-item";
+      const activeText = row.is_active === false ? "غير مفعلة" : "مفعلة";
+      card.innerHTML =
+        "<strong>#" +
+        escapeHtml(row.id) +
+        " — " +
+        escapeHtml(row.title || specialCardTypeLabel(row.type)) +
+        "</strong>" +
+        '<div class="hint">' +
+        escapeHtml(specialCardTypeLabel(row.type)) +
+        " · " +
+        escapeHtml(row.person_name || "") +
+        " · " +
+        escapeHtml(activeText) +
+        " · أولوية " +
+        escapeHtml(row.priority ?? 0) +
+        " · ترتيب " +
+        escapeHtml(row.sequence_order ?? 0) +
+        "</div>" +
+        '<div class="hint">' +
+        escapeHtml(row.group_title || row.group_key || "بدون مجموعة") +
+        "</div>" +
+        '<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">' +
+        '<button class="btn btn-outline btn-sm" type="button">تعديل</button>' +
+        "</div>";
+      const btn = card.querySelector("button");
+      if (btn) btn.addEventListener("click", () => fillSpecialCardsForm(row));
+      specialCardsList.appendChild(card);
+    });
+  }
+
+  async function loadSpecialCardsRows() {
+    const sb = getClient();
+    if (!sb) return setSpecialCardsStatus("تعذر الاتصال بقاعدة البيانات.");
+    setSpecialCardsStatus("جاري تحميل البطاقات الخاصة...");
+    const { data, error } = await sb
+      .from("special_cards")
+      .select("*")
+      .order("priority", { ascending: false })
+      .order("sequence_order", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(300);
+
+    if (error) {
+      setSpecialCardsStatus("تعذر تحميل البطاقات الخاصة.");
+      return;
+    }
+
+    specialCardsRows = Array.isArray(data) ? data : [];
+    renderSpecialCardsList();
+    setSpecialCardsStatus("تم تحميل " + specialCardsRows.length + " بطاقة خاصة.");
+  }
+
+  function fillSpecialCardsForm(row) {
+    if (!row) return;
+    if (specialCardsId) specialCardsId.value = row.id || "";
+    if (specialCardsType) specialCardsType.value = row.type || "graduation";
+    if (specialCardsTheme) specialCardsTheme.value = row.theme || "navy";
+    if (specialCardsTitle) specialCardsTitle.value = row.title || "";
+    if (specialCardsSubtitle) specialCardsSubtitle.value = row.subtitle || "";
+    if (specialCardsPerson) specialCardsPerson.value = row.person_name || "";
+    if (specialCardsSecondaryPerson) specialCardsSecondaryPerson.value = row.secondary_person || "";
+    if (specialCardsEventDate) specialCardsEventDate.value = row.event_date || "";
+    if (specialCardsLocation) specialCardsLocation.value = row.location || "";
+    if (specialCardsDegree) specialCardsDegree.value = row.degree_name || "";
+    if (specialCardsUniversity) specialCardsUniversity.value = row.university || "";
+    if (specialCardsImageUrl) specialCardsImageUrl.value = row.image_url || "";
+    if (specialCardsBackgroundUrl) specialCardsBackgroundUrl.value = row.background_url || "";
+    if (specialCardsGroupKey) specialCardsGroupKey.value = row.group_key || "";
+    if (specialCardsGroupTitle) specialCardsGroupTitle.value = row.group_title || "";
+    if (specialCardsPriority) specialCardsPriority.value = String(row.priority ?? 0);
+    if (specialCardsSequence) specialCardsSequence.value = String(row.sequence_order ?? 0);
+    if (specialCardsDisplayMode) specialCardsDisplayMode.value = row.display_mode || "manual";
+    if (specialCardsMaxSession) specialCardsMaxSession.value = String(row.max_per_session ?? 1);
+    if (specialCardsStartDate) specialCardsStartDate.value = row.start_date || "";
+    if (specialCardsEndDate) specialCardsEndDate.value = row.end_date || "";
+    if (specialCardsMessage) specialCardsMessage.value = row.message || "";
+    if (specialCardsActive) specialCardsActive.checked = row.is_active !== false;
+    if (specialCardsOnceDay) specialCardsOnceDay.checked = row.show_once_per_day !== false;
+    if (specialCardsShare) specialCardsShare.checked = row.allow_share !== false;
+    if (specialCardsSave) specialCardsSave.checked = row.allow_save !== false;
+    if (specialCardsGroupCard) specialCardsGroupCard.checked = !!row.is_group_card;
+    setSpecialCardsStatus("تعديل البطاقة رقم #" + (row.id || ""));
+  }
+
+  function collectSpecialCardPayload() {
+    return {
+      type: specialCardsType ? specialCardsType.value : "graduation",
+      title: specialCardsTitle ? specialCardsTitle.value.trim() : "",
+      subtitle: specialCardsSubtitle ? specialCardsSubtitle.value.trim() : "",
+      person_name: specialCardsPerson ? specialCardsPerson.value.trim() : "",
+      secondary_person: specialCardsSecondaryPerson ? specialCardsSecondaryPerson.value.trim() : "",
+      degree_name: specialCardsDegree ? specialCardsDegree.value.trim() : "",
+      university: specialCardsUniversity ? specialCardsUniversity.value.trim() : "",
+      event_date: specialCardsEventDate ? specialCardsEventDate.value : "",
+      location: specialCardsLocation ? specialCardsLocation.value.trim() : "",
+      message: specialCardsMessage ? specialCardsMessage.value.trim() : "",
+      image_url: specialCardsImageUrl ? specialCardsImageUrl.value.trim() : "",
+      background_url: specialCardsBackgroundUrl ? specialCardsBackgroundUrl.value.trim() : "",
+      theme: specialCardsTheme ? specialCardsTheme.value : "navy",
+      button_text: "دخول",
+      priority: specialCardsPriority ? specialCardsPriority.value : "0",
+      display_seconds: "7",
+      show_once_per_day: specialCardsOnceDay ? !!specialCardsOnceDay.checked : true,
+      allow_share: specialCardsShare ? !!specialCardsShare.checked : true,
+      allow_save: specialCardsSave ? !!specialCardsSave.checked : true,
+      template_key: "luxury_" + (specialCardsType ? specialCardsType.value : "graduation"),
+      group_key: specialCardsGroupKey ? specialCardsGroupKey.value.trim() : "",
+      group_title: specialCardsGroupTitle ? specialCardsGroupTitle.value.trim() : "",
+      sequence_order: specialCardsSequence ? specialCardsSequence.value : "0",
+      max_per_session: specialCardsMaxSession ? specialCardsMaxSession.value : "1",
+      display_mode: specialCardsDisplayMode ? specialCardsDisplayMode.value : "manual",
+      is_group_card: specialCardsGroupCard ? !!specialCardsGroupCard.checked : false,
+      start_date: specialCardsStartDate ? specialCardsStartDate.value : "",
+      end_date: specialCardsEndDate ? specialCardsEndDate.value : "",
+      is_active: specialCardsActive ? !!specialCardsActive.checked : true,
+    };
+  }
+
+  async function saveSpecialCardRow(event) {
+    if (event) event.preventDefault();
+    const sb = getClient();
+    const token = getAdminToken();
+    if (!sb || !token) return setSpecialCardsStatus("سجل الدخول أولاً.");
+
+    if (specialCardsImageFile && specialCardsImageFile.files && specialCardsImageFile.files[0]) {
+      setSpecialCardsStatus("جاري رفع صورة الشخص...");
+      const uploadedImageUrl = await uploadAdminEventMedia(sb, specialCardsImageFile.files[0], "special-card-photo");
+      if (specialCardsImageUrl) specialCardsImageUrl.value = uploadedImageUrl;
+    }
+
+    if (specialCardsBackgroundFile && specialCardsBackgroundFile.files && specialCardsBackgroundFile.files[0]) {
+      setSpecialCardsStatus("جاري رفع خلفية البطاقة...");
+      const uploadedBackgroundUrl = await uploadAdminEventMedia(sb, specialCardsBackgroundFile.files[0], "special-card-background");
+      if (specialCardsBackgroundUrl) specialCardsBackgroundUrl.value = uploadedBackgroundUrl;
+    }
+
+    const payload = collectSpecialCardPayload();
+    if (!payload.title) return setSpecialCardsStatus("اكتب عنوان البطاقة.");
+    if (!payload.person_name) return setSpecialCardsStatus("اكتب اسم الشخص.");
+
+    const id = Number(specialCardsId && specialCardsId.value ? specialCardsId.value : 0);
+    setSpecialCardsStatus("جاري حفظ البطاقة الخاصة...");
+
+    const { data, error } = await sb.rpc("admin_special_cards_save_v1", {
+      p_token: token,
+      p_id: id,
+      p_row: payload,
+    });
+
+    if (error) {
+      setSpecialCardsStatus("تعذر حفظ البطاقة الخاصة.");
+      return;
+    }
+
+    if (specialCardsId) specialCardsId.value = String(data || id || "");
+    setSpecialCardsStatus("تم حفظ البطاقة الخاصة.");
+    await loadSpecialCardsRows();
+  }
+
+  async function deleteSpecialCardRow() {
+    const sb = getClient();
+    const token = getAdminToken();
+    const id = Number(specialCardsId && specialCardsId.value ? specialCardsId.value : 0);
+    if (!sb || !token) return setSpecialCardsStatus("سجل الدخول أولاً.");
+    if (!id) return setSpecialCardsStatus("اختر بطاقة أولاً.");
+    if (!window.confirm("سيتم حذف هذه البطاقة نهائياً. هل أنت متأكد؟")) return;
+
+    setSpecialCardsStatus("جاري حذف البطاقة الخاصة...");
+    const { error } = await sb.rpc("admin_special_cards_delete_v1", {
+      p_token: token,
+      p_id: id,
+    });
+
+    if (error) {
+      setSpecialCardsStatus("تعذر حذف البطاقة الخاصة.");
+      return;
+    }
+
+    resetSpecialCardsForm();
+    setSpecialCardsStatus("تم حذف البطاقة الخاصة.");
+    await loadSpecialCardsRows();
+  }
+
   function setBannerMessagesStatus(message) {
     if (bannerMessagesStatus) bannerMessagesStatus.textContent = message || "";
   }
@@ -3120,6 +3401,19 @@ where c.id = matches.id; commit;
     bannerGeneralForm.addEventListener("submit", publishBannerGeneralNews);
   if (bannerGeneralClear)
     bannerGeneralClear.addEventListener("click", clearBannerGeneralForm);
+  if (specialCardsLoad)
+    specialCardsLoad.addEventListener("click", () =>
+      loadSpecialCardsRows().catch(() => {}),
+    );
+  if (specialCardsNew)
+    specialCardsNew.addEventListener("click", resetSpecialCardsForm);
+  if (specialCardsForm)
+    specialCardsForm.addEventListener("submit", saveSpecialCardRow);
+  if (specialCardsDelete)
+    specialCardsDelete.addEventListener("click", () =>
+      deleteSpecialCardRow().catch(() => {}),
+    );
+
   if (bannerMessagesLoad)
     bannerMessagesLoad.addEventListener("click", () =>
       loadBannerMessagesRows().catch(() => {}),
