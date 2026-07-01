@@ -35,6 +35,11 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const pickRowValue = Core.pickRowValue;
   const toIntOrNull = Core.toIntOrNull;
   const toIsoDateOrEmpty = Core.toIsoDateOrEmpty;
+  const coerceRpcId = Core.coerceRpcId;
+  const kindLabel = Core.kindLabel;
+  const statusLabel = Core.statusLabel;
+  const formatDateTimeArSaVerbose = Core.formatDateTimeArSaVerbose;
+  const tokenFromRpcResult = Core.tokenFromRpcResult;
   const sbStatus = document.getElementById("sb-status");
   const adminLockedHint = document.getElementById("admin-locked-hint");
   const adminProtectedInline = null;
@@ -729,22 +734,6 @@ where c.id = matches.id; commit;
       localStorage.setItem(ADMIN_NOTIF_LAST_KEY, k);
     } catch (e) {}
   }
-  function kindLabel(kind) {
-    const map = {
-      org_role: "صندوق / جمعية",
-      tree_delegate: "مندوب الشجرة",
-      events_delegate: "مندوب المناسبات",
-      member_registration: "تسجيل عضو",
-      tree_card: "بطاقة الشجرة",
-      tree_audit: "تعديل بيانات الشجرة",
-      events_audit: "تعديل الأخبار والمناسبات",
-      event_card: "بطاقة مناسبة",
-      test_request: "طلب اختبار",
-      unknown: "غير معروف",
-    };
-    const key = String(kind || "").trim();
-    return map[key] || key || "غير معروف";
-  }
   function showPendingRequestNotification(row) {
     if (!canShowBrowserNotifications()) return;
     if (Notification.permission !== "granted") return;
@@ -877,27 +866,7 @@ where c.id = matches.id; commit;
     for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
     return out;
   }
-      function formatDateTimeArSaVerbose(v) {
-    if (!v) return "";
-    let date;
-    if (v instanceof Date) date = v;
-    else date = new Date(v);
-    if (!date || !Number.isFinite(date.getTime())) return String(v || "");
-    let s = "";
-    try {
-      s = date.toLocaleString("ar-SA");
-    } catch (e) {
-      s = String(v || "");
-    }
-    s = String(s || "").trim();
-    if (!s) return "";
-    s = s.replace(/\s*(AM|am)\s*$/, " صباحاً");
-    s = s.replace(/\s*(PM|pm)\s*$/, " مساءً");
-    s = s.replace(/\s*ص\s*$/, " صباحاً");
-    s = s.replace(/\s*م\s*$/, " مساءً");
-    return s;
-  }
-  async function seedAuditEmailKey() {
+      async function seedAuditEmailKey() {
     const sb = getClient();
     if (!sb) return;
     const token = getAdminToken();
@@ -3068,13 +3037,6 @@ where c.id = matches.id; commit;
     return "تعذر تنفيذ العملية، حاول لاحقاً أو تواصل مع الإدارة.";
   }
 
-  function tokenFromRpcResult(data) {
-    if (!data) return "";
-    if (typeof data === "string") return data.trim();
-    if (typeof data === "object")
-      return String(data.token || data.session_token || "").trim();
-    return "";
-  }
   async function refreshAuthStatus() {
     const sb = getClient();
     if (!sb) {
@@ -3194,24 +3156,6 @@ where c.id = matches.id; commit;
     tr.appendChild(td);
     requestsBody.appendChild(tr);
   }
-  function statusLabel(status) {
-    if (status === "pending") return "انتظار";
-    if (status === "approved") return "قبول";
-    if (status === "rejected") return "رفض";
-    return status || "";
-  }
-  function coerceRpcId(v) {
-    if (v == null) return "";
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    const s = String(v || "").trim();
-    if (!s) return "";
-    if (/^-?\d+$/.test(s)) return s;
-    return s;
-  }
-
-
-
-
 
 
   if (adminLoginBtn) {
