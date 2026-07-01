@@ -178,6 +178,7 @@
     if (e.wifeFamilyName) e.wifeFamilyName.value = row.wife_family_name || "";
     e.order.value = row.marriage_order || "";
     e.lineage.value = row.wife_lineage || "";
+    updateWifeFieldsVisibility();
     status("عدّل بيانات الزوجة ثم اضغط حفظ الزوجة.");
   }
 
@@ -190,6 +191,20 @@
     if (e.wifeFamilyName) e.wifeFamilyName.value = "";
     e.order.value = "";
     e.lineage.value = "";
+    updateWifeFieldsVisibility();
+  }
+
+  function updateWifeFieldsVisibility() {
+    const e = els();
+    const isOutside = e.family && e.family.value === "no";
+    const familyNameField = e.wifeFamilyName ? e.wifeFamilyName.closest(".field") : null;
+    const branchField = e.wifeBranch ? e.wifeBranch.closest(".field") : null;
+
+    if (familyNameField) familyNameField.style.display = isOutside ? "" : "none";
+    if (branchField) branchField.style.display = isOutside ? "none" : "";
+
+    if (isOutside && e.wifeBranch) e.wifeBranch.value = "";
+    if (!isOutside && e.wifeFamilyName) e.wifeFamilyName.value = "";
   }
 
   async function saveSpouse(ev) {
@@ -397,6 +412,8 @@
     if (e.load) e.load.addEventListener("click", loadHusbands);
     if (e.branch) e.branch.addEventListener("change", () => { closeManager(); loadHusbands(); });
     if (e.husband) e.husband.addEventListener("change", loadSpouses);
+    if (e.family) e.family.addEventListener("change", updateWifeFieldsVisibility);
+    updateWifeFieldsVisibility();
     if (e.form) e.form.addEventListener("submit", saveSpouse);
   }
 

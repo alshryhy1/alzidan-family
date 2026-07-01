@@ -436,6 +436,18 @@ function setWifeAlert(type, text) {
   wifeAlert.className = "alert " + (type === "success" ? "alert-success" : "alert-error");
   wifeAlert.style.display = text ? "block" : "none";
 }
+
+function updateDelegateWifeFieldsVisibility() {
+  const isOutside = parseWifeFamilyValue() === false;
+  const familyNameField = wifeFamilyName ? wifeFamilyName.closest(".field") : null;
+  const branchField = wifeBranch ? wifeBranch.closest(".field") : null;
+
+  if (familyNameField) familyNameField.style.display = isOutside ? "" : "none";
+  if (branchField) branchField.style.display = isOutside ? "none" : "";
+
+  if (isOutside && wifeBranch) wifeBranch.value = "";
+  if (!isOutside && wifeFamilyName) wifeFamilyName.value = "";
+}
 async function getTreePersonIdByName(sb, fullName) {
   const name = normalizePersonName(fullName || "");
   if (!sb || !name) return null;
@@ -616,6 +628,7 @@ function fillWifeFormForEdit(row) {
   if (wifeOrder) wifeOrder.value = row.marriage_order || "";
   if (wifeLineage) wifeLineage.value = row.wife_lineage || "";
   window.__editingTreeSpouseId = row.id;
+  updateDelegateWifeFieldsVisibility();
   setWifeAlert("success", "عدّل بيانات الزوجة ثم اضغط حفظ الزوجة.");
 }
 
@@ -788,6 +801,7 @@ async function saveWifeForSelectedParent() {
   if (wifeFamilyName) wifeFamilyName.value = "";
   if (wifeOrder) wifeOrder.value = "";
   if (wifeLineage) wifeLineage.value = "";
+  updateDelegateWifeFieldsVisibility();
   setWifeAlert("success", "تم حفظ الزوجة.");
   await loadWivesForSelectedParent();
 }
@@ -858,6 +872,8 @@ async function confirmLinkAllChildrenToOnlyWife() {
   setWifeAlert("success", "تم الربط الجماعي. العدد: " + String(r.data || 0));
   await loadWivesForSelectedParent();
 }
+if (wifeFamily) wifeFamily.addEventListener("change", updateDelegateWifeFieldsVisibility);
+updateDelegateWifeFieldsVisibility();
 if (addWifeBtn) addWifeBtn.addEventListener("click", saveWifeForSelectedParent);
 if (linkAllWifeChildrenBtn) linkAllWifeChildrenBtn.addEventListener("click", confirmLinkAllChildrenToOnlyWife);
 
