@@ -22,6 +22,14 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c";
   let sbClient = null;
+  const Core = window.AlzidanAdminCore || {};
+  const normalizeEmail = Core.normalizeEmail;
+  const isLikelyEmail = Core.isLikelyEmail;
+  const fallbackCopyText = Core.fallbackCopyText;
+  const copyText = Core.copyText;
+  const downloadTextFile = Core.downloadTextFile;
+  const truncateText = Core.truncateText;
+  const takeLines = Core.takeLines;
   const sbStatus = document.getElementById("sb-status");
   const adminLockedHint = document.getElementById("admin-locked-hint");
   const adminProtectedInline = null;
@@ -762,78 +770,6 @@ where c.id = matches.id; commit;
       "alert " + (type === "success" ? "alert-success" : "alert-error");
     alertEl.textContent = text || "";
     alertEl.style.display = "block";
-  }
-  function normalizeEmail(v) {
-    return String(v || "")
-      .trim()
-      .toLowerCase();
-  }
-  function isLikelyEmail(v) {
-    const s = normalizeEmail(v);
-    return !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
-  }
-  function fallbackCopyText(text) {
-    const el = document.createElement("textarea");
-    el.value = String(text || "");
-    el.setAttribute("readonly", "");
-    el.style.position = "fixed";
-    el.style.opacity = "0";
-    el.style.left = "-9999px";
-    document.body.appendChild(el);
-    el.select();
-    try {
-      document.execCommand("copy");
-    } catch (e) {}
-    document.body.removeChild(el);
-  }
-  async function copyText(text) {
-    const t = String(text || "");
-    if (!t) return false;
-    try {
-      if (
-        navigator.clipboard &&
-        typeof navigator.clipboard.writeText === "function"
-      ) {
-        await navigator.clipboard.writeText(t);
-        return true;
-      }
-    } catch (e) {}
-    fallbackCopyText(t);
-    return true;
-  }
-  function downloadTextFile(filename, text, mimeType) {
-    const name = String(filename || "").trim() || "file.txt";
-    const content = String(text || "");
-    const type = String(mimeType || "").trim() || "text/plain;charset=utf-8";
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-          function truncateText(t, max) {
-    const s = String(t || "");
-    const n = Number(max || 0);
-    if (!n || s.length <= n) return s;
-    return s.slice(0, Math.max(0, n - 20)) + "\n...\n(تم الاختصار)";
-  }
-  function takeLines(text, maxLines, maxChars) {
-    const src = String(text || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n");
-    const lines = src.split("\n");
-    const out = [];
-    for (let i = 0; i < lines.length && out.length < maxLines; i += 1) {
-      const v = String(lines[i] || "");
-      if (!v.trim()) continue;
-      out.push(v);
-      if (maxChars && out.join("\n").length >= maxChars) break;
-    }
-    return out.join("\n");
   }
       async function shareTreeCsvTemplateFile() {
     const csv = treeCsvTemplateText();
