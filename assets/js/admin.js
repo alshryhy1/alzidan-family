@@ -2344,6 +2344,161 @@ where c.id = matches.id; commit;
     return map[type] || type || "بطاقة";
   }
 
+
+  function specialCardIcon(type) {
+    const map = {
+      graduation: "🎓",
+      wedding: "💍",
+      birth: "👶",
+      promotion: "⭐",
+      new_house: "🏠",
+      honor: "🏅",
+      announcement: "📣",
+    };
+    return map[type] || "✨";
+  }
+
+  function updateSpecialCardPreview() {
+    const box = document.getElementById("special-cards-preview");
+    if (!box) return;
+
+    const type = specialCardsType ? specialCardsType.value : "graduation";
+    const theme = specialCardsTheme ? specialCardsTheme.value : "navy";
+    const title = specialCardsTitle && specialCardsTitle.value.trim()
+      ? specialCardsTitle.value.trim()
+      : "مبروك التخرج";
+    const subtitle = specialCardsSubtitle && specialCardsSubtitle.value.trim()
+      ? specialCardsSubtitle.value.trim()
+      : "";
+    const person = specialCardsPerson && specialCardsPerson.value.trim()
+      ? specialCardsPerson.value.trim()
+      : "اسم الشخص";
+    const secondary = specialCardsSecondaryPerson && specialCardsSecondaryPerson.value.trim()
+      ? specialCardsSecondaryPerson.value.trim()
+      : "";
+    const date = specialCardsEventDate && specialCardsEventDate.value
+      ? specialCardsEventDate.value
+      : "";
+    const location = specialCardsLocation && specialCardsLocation.value.trim()
+      ? specialCardsLocation.value.trim()
+      : "";
+    const message = specialCardsMessage && specialCardsMessage.value.trim()
+      ? specialCardsMessage.value.trim()
+      : "";
+
+    const themes = {
+      navy: ["#07111f", "#10233f", "#d7b56d"],
+      gold: ["#19120a", "#3a2814", "#d7b56d"],
+      green: ["#071a12", "#123d2b", "#d7b56d"],
+      rose: ["#231018", "#4a1d2d", "#f3c7d3"],
+    };
+    const colorsSet = themes[theme] || themes.navy;
+    const accent = colorsSet[2];
+
+    box.style.background = "linear-gradient(160deg," + colorsSet[0] + "," + colorsSet[1] + ")";
+    box.style.borderColor = accent;
+
+    const badge = document.getElementById("special-cards-preview-badge");
+    const titleEl = document.getElementById("special-cards-preview-title");
+    const subtitleEl = document.getElementById("special-cards-preview-subtitle");
+    const personEl = document.getElementById("special-cards-preview-person");
+    const secondaryEl = document.getElementById("special-cards-preview-secondary");
+    const dateEl = document.getElementById("special-cards-preview-date");
+    const locationEl = document.getElementById("special-cards-preview-location");
+    const messageEl = document.getElementById("special-cards-preview-message");
+    const imageEl = document.getElementById("special-cards-preview-image");
+
+    if (badge) {
+      badge.textContent = specialCardIcon(type) + " " + specialCardTypeLabel(type);
+      badge.style.color = accent;
+      badge.style.borderColor = accent;
+    }
+    if (titleEl) titleEl.textContent = title;
+    if (subtitleEl) subtitleEl.textContent = subtitle;
+    if (personEl) {
+      personEl.textContent = person;
+      personEl.style.color = accent;
+    }
+    if (secondaryEl) secondaryEl.textContent = secondary;
+    if (dateEl) dateEl.textContent = date;
+    if (locationEl) locationEl.textContent = location ? "📍 " + location : "";
+    if (messageEl) messageEl.textContent = message;
+
+    if (imageEl) {
+      const file = specialCardsImageFile && specialCardsImageFile.files ? specialCardsImageFile.files[0] : null;
+      const url = specialCardsImageUrl && specialCardsImageUrl.value.trim()
+        ? specialCardsImageUrl.value.trim()
+        : "";
+      if (file) {
+        imageEl.src = URL.createObjectURL(file);
+        imageEl.style.display = "block";
+      } else if (url) {
+        imageEl.src = url;
+        imageEl.style.display = "block";
+      } else {
+        imageEl.removeAttribute("src");
+        imageEl.style.display = "none";
+      }
+      imageEl.style.borderColor = accent;
+    }
+
+    const backgroundFile = specialCardsBackgroundFile && specialCardsBackgroundFile.files
+      ? specialCardsBackgroundFile.files[0]
+      : null;
+    const backgroundUrl = specialCardsBackgroundUrl && specialCardsBackgroundUrl.value.trim()
+      ? specialCardsBackgroundUrl.value.trim()
+      : "";
+
+    if (backgroundFile) {
+      const bgUrl = URL.createObjectURL(backgroundFile);
+      box.style.background =
+        "linear-gradient(rgba(7,17,31,.72), rgba(7,17,31,.72)), url('" +
+        bgUrl +
+        "') center/cover";
+    } else if (backgroundUrl) {
+      box.style.background =
+        "linear-gradient(rgba(7,17,31,.72), rgba(7,17,31,.72)), url('" +
+        backgroundUrl +
+        "') center/cover";
+    }
+  }
+
+  function bindSpecialCardPreviewInputs() {
+    const fields = [
+      specialCardsType,
+      specialCardsTheme,
+      specialCardsTitle,
+      specialCardsSubtitle,
+      specialCardsPerson,
+      specialCardsSecondaryPerson,
+      specialCardsEventDate,
+      specialCardsLocation,
+      specialCardsDegree,
+      specialCardsUniversity,
+      specialCardsImageFile,
+      specialCardsImageUrl,
+      specialCardsBackgroundFile,
+      specialCardsBackgroundUrl,
+      specialCardsGroupKey,
+      specialCardsGroupTitle,
+      specialCardsPriority,
+      specialCardsSequence,
+      specialCardsDisplayMode,
+      specialCardsMaxSession,
+      specialCardsStartDate,
+      specialCardsEndDate,
+      specialCardsMessage,
+    ];
+
+    fields.forEach((field) => {
+      if (!field) return;
+      field.addEventListener("input", updateSpecialCardPreview);
+      field.addEventListener("change", updateSpecialCardPreview);
+    });
+
+    updateSpecialCardPreview();
+  }
+
   function resetSpecialCardsForm() {
     if (specialCardsId) specialCardsId.value = "";
     if (specialCardsType) specialCardsType.value = "graduation";
@@ -2373,6 +2528,7 @@ where c.id = matches.id; commit;
     if (specialCardsSave) specialCardsSave.checked = true;
     if (specialCardsGroupCard) specialCardsGroupCard.checked = false;
     setSpecialCardsStatus("");
+    updateSpecialCardPreview();
   }
 
   function renderSpecialCardsList() {
@@ -2468,6 +2624,7 @@ where c.id = matches.id; commit;
     if (specialCardsSave) specialCardsSave.checked = row.allow_save !== false;
     if (specialCardsGroupCard) specialCardsGroupCard.checked = !!row.is_group_card;
     setSpecialCardsStatus("تعديل البطاقة رقم #" + (row.id || ""));
+    updateSpecialCardPreview();
   }
 
   function collectSpecialCardPayload() {
@@ -2674,18 +2831,24 @@ where c.id = matches.id; commit;
         ? bannerMessagesText.value.trim()
         : "";
     if (!sb || !token) return setBannerMessagesStatus("سجل الدخول أولاً.");
-    if (!id)
-      return setBannerMessagesStatus("اختر خبراً عاماً من القائمة أولاً.");
     if (!text) return setBannerMessagesStatus("اكتب نص الخبر العام.");
-    setBannerMessagesStatus("جاري حفظ الخبر العام...");
-    const { data, error } = await sb.rpc("admin_banner_message_update_v1", {
-      p_token: token,
-      p_id: id,
-      p_branch_key: branch,
-      p_message: text,
-      p_show_days: showDays,
-      p_is_active: isActive,
-    });
+    setBannerMessagesStatus(id ? "جاري حفظ الخبر العام..." : "جاري إنشاء الخبر العام...");
+
+    const { data, error } = id
+      ? await sb.rpc("admin_banner_message_update_v1", {
+          p_token: token,
+          p_id: id,
+          p_branch_key: branch,
+          p_message: text,
+          p_show_days: showDays,
+          p_is_active: isActive,
+        })
+      : await sb.rpc("admin_banner_message_create_v1", {
+          p_token: token,
+          p_branch_key: branch,
+          p_message: text,
+          p_show_days: showDays,
+        });
     if (error) {
       setBannerMessagesStatus("تعذر الحفظ، حاول لاحقاً أو تواصل مع الإدارة.");
       return;
@@ -3401,6 +3564,7 @@ where c.id = matches.id; commit;
     bannerGeneralForm.addEventListener("submit", publishBannerGeneralNews);
   if (bannerGeneralClear)
     bannerGeneralClear.addEventListener("click", clearBannerGeneralForm);
+  bindSpecialCardPreviewInputs();
   if (specialCardsLoad)
     specialCardsLoad.addEventListener("click", () =>
       loadSpecialCardsRows().catch(() => {}),
@@ -3436,7 +3600,7 @@ where c.id = matches.id; commit;
     eventsSourceDelete.addEventListener("click", () =>
       deleteEventsSourceRow().catch(() => {}),
     );
-    window.AlzidanAdminCore = {
+    window.AlzidanAdminCore = Object.assign(window.AlzidanAdminCore || {}, {
     showAlert,
     hideAlert,
     copyText,
@@ -3458,7 +3622,7 @@ where c.id = matches.id; commit;
     truncateText,
     takeLines,
     chunkArray,
-  };
+  });
 
   if (window.AlzidanRequestActions && typeof window.AlzidanRequestActions.setReloadRequests === "function") {
     window.AlzidanRequestActions.setReloadRequests(() => window.AlzidanAdminRequests.loadRequests());
