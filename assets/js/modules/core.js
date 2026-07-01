@@ -402,4 +402,8 @@
     coerceRpcId,
     tokenFromRpcResult,
   });
+  // Backwards-compatibility: expose canonical escapeHtml as a global
+  try {
+    window.escapeHtml = escapeHtml;
+  } catch (e) {}
 })();

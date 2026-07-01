@@ -142,14 +142,18 @@ function ensureDelegateIncomingEventRequestsCard() {
 }
 
 
-function escapeHtml(value) {
-  return String(value == null ? "" : value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+const Core = window.AlzidanAdminCore || {};
+const escapeHtml =
+  typeof Core.escapeHtml === "function"
+    ? Core.escapeHtml
+    : function (value) {
+        return String(value == null ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      };
 
 function parseEventMessage(msg) {
   const raw = String(msg || "");

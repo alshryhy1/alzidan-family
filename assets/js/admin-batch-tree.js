@@ -46,17 +46,7 @@
           document.body.removeChild(a);
           setTimeout(() => URL.revokeObjectURL(url), 0);
         };
-  const escapeHtml =
-    typeof core.escapeHtml === "function"
-      ? core.escapeHtml.bind(core)
-      : function (value) {
-          return String(value == null ? "" : value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-        };
+  const escapeHtml = core.escapeHtml;
   const normalizeArabicDigitsToLatin =
     typeof core.normalizeArabicDigitsToLatin === "function"
       ? core.normalizeArabicDigitsToLatin.bind(core)
