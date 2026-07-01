@@ -194,6 +194,40 @@
     updateWifeFieldsVisibility();
   }
 
+  function wifeDuplicateKey(value) {
+    return clean(value)
+      .replace(/\b(بن|ابن|بنت)\b/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function hasThreePartWifeName(value) {
+    return wifeDuplicateKey(value).split(" ").filter(Boolean).length >= 3;
+  }
+
+  async function findDuplicateWife(c, husbandId, row) {
+    const candidate = row.wife_lineage && hasThreePartWifeName(row.wife_lineage)
+      ? row.wife_lineage
+      : row.wife_name;
+    if (!hasThreePartWifeName(candidate)) return null;
+
+    const key = wifeDuplicateKey(candidate);
+    const { data, error } = await c.from("tree_spouses")
+      .select("id,husband_id,wife_name,wife_lineage")
+      .limit(1000);
+
+    if (error) throw error;
+
+    return (Array.isArray(data) ? data : []).find((item) => {
+      if (editingSpouseId && Number(item.id) === Number(editingSpouseId)) return false;
+      if (Number(item.husband_id) === Number(husbandId)) return false;
+      const other = item.wife_lineage && hasThreePartWifeName(item.wife_lineage)
+        ? item.wife_lineage
+        : item.wife_name;
+      return hasThreePartWifeName(other) && wifeDuplicateKey(other) === key;
+    }) || null;
+  }
+
   function updateWifeFieldsVisibility() {
     const e = els();
     const isOutside = e.family && e.family.value === "no";
@@ -225,6 +259,15 @@
       updated_at: new Date().toISOString()
     };
     if (!row.wife_name) return status("اكتب اسم الزوجة.");
+
+    try {
+      const dup = await findDuplicateWife(c, husbandId, row);
+      if (dup) {
+        return status("هذه الزوجة مسجلة مسبقًا مع زوج آخر. راجع الاسم الثلاثي أو سلسلة النسب قبل الحفظ.");
+      }
+    } catch (err) {
+      return status("تعذر التحقق من تكرار اسم الزوجة، حاول لاحقًا.");
+    }
 
     const res = editingSpouseId
       ? await c.from("tree_spouses").update(row).eq("id", editingSpouseId)
