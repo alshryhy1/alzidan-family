@@ -41,6 +41,7 @@
       name: $("admin-spouses-name"),
       family: $("admin-spouses-family"),
       wifeBranch: $("admin-spouses-branch-key"),
+      wifeFamilyName: $("admin-spouses-family-name"),
       order: $("admin-spouses-order"),
       lineage: $("admin-spouses-lineage"),
       status: $("admin-spouses-status")
@@ -98,7 +99,7 @@
     if (!c || !husbandId) return;
 
     const { data, error } = await c.from("tree_spouses")
-      .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_lineage,marriage_order,status,confidence")
+      .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence")
       .eq("husband_id", Number(husbandId))
       .order("marriage_order", { ascending: true });
 
@@ -174,6 +175,7 @@
     e.name.value = row.wife_name || "";
     e.family.value = row.wife_is_family_member === false ? "no" : "yes";
     e.wifeBranch.value = row.wife_branch_key || "";
+    if (e.wifeFamilyName) e.wifeFamilyName.value = row.wife_family_name || "";
     e.order.value = row.marriage_order || "";
     e.lineage.value = row.wife_lineage || "";
     status("عدّل بيانات الزوجة ثم اضغط حفظ الزوجة.");
@@ -185,6 +187,7 @@
     e.name.value = "";
     e.family.value = "yes";
     e.wifeBranch.value = "";
+    if (e.wifeFamilyName) e.wifeFamilyName.value = "";
     e.order.value = "";
     e.lineage.value = "";
   }
@@ -198,7 +201,8 @@
       husband_id: Number(husbandId),
       wife_name: clean(e.name.value),
       wife_is_family_member: e.family.value !== "no",
-      wife_branch_key: clean(e.wifeBranch.value) || null,
+      wife_branch_key: e.family.value === "no" ? null : (clean(e.wifeBranch.value) || null),
+      wife_family_name: e.family.value === "no" ? (clean(e.wifeFamilyName && e.wifeFamilyName.value) || null) : null,
       wife_lineage: clean(e.lineage.value) || null,
       marriage_order: e.order.value ? Number(e.order.value) : null,
       status: "active",
@@ -370,6 +374,7 @@
       mother_name: st.spouse.wife_name || null,
       mother_is_family_member: st.spouse.wife_is_family_member == null ? null : st.spouse.wife_is_family_member,
       mother_branch_key: st.spouse.wife_branch_key || null,
+      mother_family_name: st.spouse.wife_family_name || null,
       mother_lineage: st.spouse.wife_lineage || null,
       confidence: "confirmed",
       updated_at: new Date().toISOString()
