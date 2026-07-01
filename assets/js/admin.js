@@ -988,6 +988,12 @@ where c.id = matches.id; commit;
     return sbClient;
   }
   function getAdminToken() {
+    if (
+      window.AlzidanAuth &&
+      typeof window.AlzidanAuth.getAdminToken === "function"
+    ) {
+      return String(window.AlzidanAuth.getAdminToken() || "").trim();
+    }
     return String(adminToken || "").trim();
   }
   function setSourceTreeStatus(text) {
@@ -3158,134 +3164,6 @@ where c.id = matches.id; commit;
   }
 
 
-  if (adminLoginBtn) {
-    adminLoginBtn.addEventListener("click", async () => {
-      hideAlert();
-      const sb = getClient();
-      if (!sb) {
-        showAlert("error", "تعذر الاتصال.");
-        return;
-      }
-      const username = String(adminUsername?.value || "").trim();
-      const password = String(adminPassword?.value || "").trim();
-      if (!username || !password) {
-        showAlert("error", "يرجى إدخال اسم المستخدم وكلمة المرور.");
-        return;
-      }
-      const { data, error } = await sb.rpc("admin_login", {
-        p_username: username,
-        p_password: password,
-      });
-      if (error) {
-        showAlert(
-          "error",
-          "تعذر تسجيل الدخول حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
-        );
-        return;
-      }
-      const token = tokenFromRpcResult(data);
-      if (!token) {
-        showAlert("error", "اسم المستخدم أو كلمة المرور غير صحيحة.");
-        return;
-      }
-      adminToken = token;
-      try {
-        sessionStorage.setItem(ADMIN_TOKEN_SESSION_KEY, token);
-      } catch (e) {}
-      try {
-        localStorage.setItem(ADMIN_TOKEN_KEY, token);
-      } catch (e) {}
-      showAlert("success", "");
-      await refreshAuthStatus();
-      loadTickerSpeedSetting().catch(() => {});
-      if (
-      window.AlzidanAdminRequests &&
-      typeof window.AlzidanAdminRequests.loadRequests === "function"
-    ) {
-      if (
-        window.AlzidanAdminRequests &&
-        typeof window.AlzidanAdminRequests.loadRequests === "function"
-      ) {
-        await window.AlzidanAdminRequests.loadRequests();
-      }
-    }
-      loadSourceTreeRows().catch(() => {});
-      if (
-        window.AlzidanRequestsStats &&
-        typeof window.AlzidanRequestsStats.loadRequestsStats === "function"
-      ) {
-        window.AlzidanRequestsStats.loadRequestsStats().catch(() => {});
-      }
-      if (
-        window.AlzidanAdminViews &&
-        typeof window.AlzidanAdminViews.loadViewsStats === "function"
-      )
-        window.AlzidanAdminViews.loadViewsStats().catch(() => {});
-      pollPendingRequestsForNotifications().catch(() => {});
-      startPendingPolling();
-    });
-  }
-  if (adminLogoutBtn) {
-    adminLogoutBtn.addEventListener("click", async () => {
-      hideAlert();
-      adminToken = "";
-      try {
-        sessionStorage.removeItem(ADMIN_TOKEN_SESSION_KEY);
-      } catch (e) {}
-      try {
-        localStorage.removeItem(ADMIN_TOKEN_KEY);
-      } catch (e) {}
-      await refreshAuthStatus();
-      if (
-      window.AlzidanAdminRequests &&
-      typeof window.AlzidanAdminRequests.loadRequests === "function"
-    ) {
-      if (
-        window.AlzidanAdminRequests &&
-        typeof window.AlzidanAdminRequests.loadRequests === "function"
-      ) {
-        await window.AlzidanAdminRequests.loadRequests();
-      }
-    }
-      stopPendingPolling();
-    });
-  }
-  if (adminRefreshBtn) {
-    adminRefreshBtn.addEventListener("click", async () => {
-      hideAlert();
-      await refreshAuthStatus();
-      if (
-      window.AlzidanAdminRequests &&
-      typeof window.AlzidanAdminRequests.loadRequests === "function"
-    ) {
-      if (
-        window.AlzidanAdminRequests &&
-        typeof window.AlzidanAdminRequests.loadRequests === "function"
-      ) {
-        await window.AlzidanAdminRequests.loadRequests();
-      }
-    }
-      loadSourceTreeRows().catch(() => {});
-      pollPendingRequestsForNotifications().catch(() => {});
-    });
-  }
-  if (adminEnableNotifsBtn) {
-    updateNotifsButtonText();
-    adminEnableNotifsBtn.addEventListener("click", async () => {
-      const ok = await ensureBrowserNotificationsEnabled();
-      updateNotifsButtonText();
-      if (!ok) return;
-      pollPendingRequestsForNotifications().catch(() => {});
-    });
-  }
-  if (adminForgotBtn) {
-    adminForgotBtn.addEventListener("click", () => {
-      showAlert(
-        "error",
-        "إذا نسيت كلمة المرور: تواصل مع مدير النظام لإعادة تعيينها.",
-      );
-    });
-  }
   if (filterKind)
     filterKind.addEventListener("change", () => {
       requestsCurrentPage = 1;
@@ -3407,6 +3285,9 @@ where c.id = matches.id; commit;
   if (window.AlzidanRequestActions && typeof window.AlzidanRequestActions.setReloadRequests === "function") {
     window.AlzidanRequestActions.setReloadRequests(() => window.AlzidanAdminRequests.loadRequests());
   }
+
+  window.loadTickerSpeedSetting = loadTickerSpeedSetting;
+  window.loadSourceTreeRows = loadSourceTreeRows;
 
   (async function init() {
     try {
