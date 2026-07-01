@@ -30,6 +30,11 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const downloadTextFile = Core.downloadTextFile;
   const truncateText = Core.truncateText;
   const takeLines = Core.takeLines;
+  const coerceBool = Core.coerceBool;
+  const normalizeArabicDigitsToLatin = Core.normalizeArabicDigitsToLatin;
+  const pickRowValue = Core.pickRowValue;
+  const toIntOrNull = Core.toIntOrNull;
+  const toIsoDateOrEmpty = Core.toIsoDateOrEmpty;
   const sbStatus = document.getElementById("sb-status");
   const adminLockedHint = document.getElementById("admin-locked-hint");
   const adminProtectedInline = null;
@@ -865,111 +870,6 @@ where c.id = matches.id; commit;
       rows.push(obj);
     }
     return rows;
-  }
-  function coerceBool(v) {
-    if (v == null) return null;
-    const s = String(v || "")
-      .trim()
-      .toLowerCase();
-    if (!s) return null;
-    if (
-      s === "1" ||
-      s === "true" ||
-      s === "yes" ||
-      s === "y" ||
-      s === "نعم" ||
-      s === "صح"
-    )
-      return true;
-    if (
-      s === "0" ||
-      s === "false" ||
-      s === "no" ||
-      s === "n" ||
-      s === "لا" ||
-      s === "خطأ"
-    )
-      return false;
-    return null;
-  }
-  function normalizeArabicDigitsToLatin(v) {
-    const s = String(v || "");
-    const map = {
-      "٠": "0",
-      "١": "1",
-      "٢": "2",
-      "٣": "3",
-      "٤": "4",
-      "٥": "5",
-      "٦": "6",
-      "٧": "7",
-      "٨": "8",
-      "٩": "9",
-      "۰": "0",
-      "۱": "1",
-      "۲": "2",
-      "۳": "3",
-      "۴": "4",
-      "۵": "5",
-      "۶": "6",
-      "۷": "7",
-      "۸": "8",
-      "۹": "9",
-    };
-    return s.replace(/[٠-٩۰-۹]/g, (ch) => map[ch] || ch);
-  }
-  function pickRowValue(row, keys) {
-    const r = row || {};
-    for (let i = 0; i < keys.length; i += 1) {
-      const k = keys[i];
-      if (!k) continue;
-      const v = r[k];
-      const s = v != null ? String(v).trim() : "";
-      if (s) return s;
-    }
-    return "";
-  }
-  function toIntOrNull(v) {
-    const s = normalizeArabicDigitsToLatin(String(v || "").trim());
-    if (!s) return null;
-    const n = parseInt(s, 10);
-    return Number.isFinite(n) ? n : null;
-  }
-  function toIsoDateOrEmpty(v) {
-    const raw = normalizeArabicDigitsToLatin(String(v || "").trim());
-    if (!raw) return "";
-    const cleaned = raw.replace(/[.\s]+/g, "/");
-    let y = null;
-    let m = null;
-    let d = null;
-    let mm = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-    if (mm) {
-      y = toIntOrNull(mm[1]);
-      m = toIntOrNull(mm[2]);
-      d = toIntOrNull(mm[3]);
-    } else {
-      mm = cleaned.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
-      if (mm) {
-        d = toIntOrNull(mm[1]);
-        m = toIntOrNull(mm[2]);
-        y = toIntOrNull(mm[3]);
-      }
-    }
-    if (!y || !m || !d) return "";
-    if (y < 1800 || y > 2100) return "";
-    if (m < 1 || m > 12) return "";
-    if (d < 1 || d > 31) return "";
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    if (
-      dt.getUTCFullYear() !== y ||
-      dt.getUTCMonth() !== m - 1 ||
-      dt.getUTCDate() !== d
-    )
-      return "";
-    const yy = String(y).padStart(4, "0");
-    const mm2 = String(m).padStart(2, "0");
-    const dd2 = String(d).padStart(2, "0");
-    return `${yy}-${mm2}-${dd2}`;
   }
   function chunkArray(arr, size) {
     const n = Math.max(1, Number(size || 1));
