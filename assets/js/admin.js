@@ -175,11 +175,18 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const specialCardsId = document.getElementById("special-cards-id");
   const specialCardsType = document.getElementById("special-cards-type");
   const specialCardsTheme = document.getElementById("special-cards-theme");
+  const specialCardsNameEffect = document.getElementById("special-cards-name-effect");
+  const specialCardsTitleColor = document.getElementById("special-cards-title-color");
+  const specialCardsSubtitleColor = document.getElementById("special-cards-subtitle-color");
+  const specialCardsPersonColor = document.getElementById("special-cards-person-color");
+  const specialCardsMetaColor = document.getElementById("special-cards-meta-color");
+  const specialCardsMessageColor = document.getElementById("special-cards-message-color");
   const specialCardsTitle = document.getElementById("special-cards-title");
   const specialCardsSubtitle = document.getElementById("special-cards-subtitle");
   const specialCardsPerson = document.getElementById("special-cards-person");
   const specialCardsSecondaryPerson = document.getElementById("special-cards-secondary-person");
   const specialCardsEventDate = document.getElementById("special-cards-event-date");
+  const specialCardsEventDateHijri = document.getElementById("special-cards-event-date-hijri");
   const specialCardsLocation = document.getElementById("special-cards-location");
   const specialCardsDegree = document.getElementById("special-cards-degree");
   const specialCardsUniversity = document.getElementById("special-cards-university");
@@ -1131,6 +1138,10 @@ where c.id = matches.id; commit;
       new_house: "منزل جديد",
       honor: "تكريم",
       announcement: "إعلان",
+      engagement: "خطوبة",
+      excellence: "إنجاز",
+      retirement: "تقاعد",
+      appreciation: "شكر وتقدير",
     };
     return map[type] || type || "بطاقة";
   }
@@ -1145,13 +1156,358 @@ where c.id = matches.id; commit;
       new_house: "🏠",
       honor: "🏅",
       announcement: "📣",
+      engagement: "💐",
+      excellence: "🏆",
+      retirement: "🕊️",
+      appreciation: "👏",
     };
     return map[type] || "✨";
+  }
+
+  function specialCardNameEffect() {
+    return specialCardsNameEffect && specialCardsNameEffect.value
+      ? String(specialCardsNameEffect.value).trim()
+      : "none";
+  }
+
+  function normalizeHexColor(value) {
+    const text = String(value || "").trim();
+    return /^#[0-9a-fA-F]{6}$/.test(text) ? text.toLowerCase() : "";
+  }
+
+  function normalizeArabicDigits(value) {
+    return String(value || "")
+      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
+  }
+
+  function normalizeHijriInput(value) {
+    const raw = normalizeArabicDigits(value)
+      .replace(/\s+/g, "")
+      .replace(/[^0-9\\\/-]/g, "")
+      .replace(/\\/g, "/")
+      .trim();
+    if (!raw) return "";
+
+    const iso = raw.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if (iso) {
+      const y = iso[1];
+      const m = String(Number(iso[2])).padStart(2, "0");
+      const d = String(Number(iso[3])).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    const dmy = raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+    if (dmy) {
+      const d = String(Number(dmy[1])).padStart(2, "0");
+      const m = String(Number(dmy[2])).padStart(2, "0");
+      const y = dmy[3];
+      return `${y}-${m}-${d}`;
+    }
+
+    return "";
+  }
+
+  function buildSpecialCardTemplateKey(type, effect, colorMap) {
+    const base = "luxury_" + String(type || "graduation").trim();
+    const fx = String(effect || "none").trim();
+    const parts = [base];
+    if (fx && fx !== "none") parts.push("fx_" + fx);
+
+    const colors = colorMap || {};
+    const title = normalizeHexColor(colors.titleColor);
+    const subtitle = normalizeHexColor(colors.subtitleColor);
+    const person = normalizeHexColor(colors.personColor);
+    const meta = normalizeHexColor(colors.metaColor);
+    const message = normalizeHexColor(colors.messageColor);
+
+    if (title) parts.push("ttl_" + title.slice(1));
+    if (subtitle) parts.push("sub_" + subtitle.slice(1));
+    if (person) parts.push("nam_" + person.slice(1));
+    if (meta) parts.push("meta_" + meta.slice(1));
+    if (message) parts.push("msg_" + message.slice(1));
+
+    return parts.join("__");
+  }
+
+  function parseSpecialCardTemplateMeta(value) {
+    const text = String(value || "").trim();
+    const meta = {
+      effect: "none",
+      titleColor: "",
+      subtitleColor: "",
+      personColor: "",
+      metaColor: "",
+      messageColor: "",
+    };
+
+    const fx = text.match(/__fx_(pulse-ornament|pulse|ornament|none)(?:__|$)/);
+    if (fx) meta.effect = fx[1];
+
+    const readColor = (key) => {
+      const match = text.match(new RegExp("__" + key + "_([0-9a-fA-F]{6})(?:__|$)"));
+      return match ? ("#" + match[1].toLowerCase()) : "";
+    };
+
+    meta.titleColor = readColor("ttl");
+    meta.subtitleColor = readColor("sub");
+    meta.personColor = readColor("nam");
+    meta.metaColor = readColor("meta");
+    meta.messageColor = readColor("msg");
+
+    return meta;
+  }
+
+  function buildSpecialCardVisualMetaUrl(effect, colorMap) {
+    const params = new URLSearchParams();
+    const fx = String(effect || 'none').trim();
+    if (fx && fx !== 'none') params.set('fx', fx);
+
+    const colors = colorMap || {};
+    const title = normalizeHexColor(colors.titleColor);
+    const subtitle = normalizeHexColor(colors.subtitleColor);
+    const person = normalizeHexColor(colors.personColor);
+    const meta = normalizeHexColor(colors.metaColor);
+    const message = normalizeHexColor(colors.messageColor);
+
+    if (title) params.set('ttl', title.slice(1));
+    if (subtitle) params.set('sub', subtitle.slice(1));
+    if (person) params.set('nam', person.slice(1));
+    if (meta) params.set('meta', meta.slice(1));
+    if (message) params.set('msg', message.slice(1));
+
+    const query = params.toString();
+    return query ? ('meta://special-card?' + query) : '';
+  }
+
+  function parseSpecialCardVisualMetaUrl(value) {
+    const text = String(value || '').trim();
+    const empty = {
+      effect: 'none',
+      titleColor: '',
+      subtitleColor: '',
+      personColor: '',
+      metaColor: '',
+      messageColor: '',
+    };
+    if (!text.startsWith('meta://special-card?')) return empty;
+
+    const query = text.slice('meta://special-card?'.length);
+    const params = new URLSearchParams(query);
+    const readColor = (key) => {
+      const raw = String(params.get(key) || '').trim();
+      return /^[0-9a-fA-F]{6}$/.test(raw) ? ('#' + raw.toLowerCase()) : '';
+    };
+
+    return {
+      effect: String(params.get('fx') || 'none').trim() || 'none',
+      titleColor: readColor('ttl'),
+      subtitleColor: readColor('sub'),
+      personColor: readColor('nam'),
+      metaColor: readColor('meta'),
+      messageColor: readColor('msg'),
+    };
+  }
+
+  function specialCardThemePalette(theme) {
+    const themes = {
+      navy: {
+        bgFrom: "#07111f",
+        bgTo: "#10233f",
+        accent: "#d7b56d",
+        title: "#f8fafc",
+        subtitle: "#dbeafe",
+        meta: "#cbd5e1",
+        message: "#f1f5f9",
+      },
+      gold: {
+        bgFrom: "#19120a",
+        bgTo: "#3a2814",
+        accent: "#d7b56d",
+        title: "#fff7db",
+        subtitle: "#f5e7bf",
+        meta: "#e7d8ad",
+        message: "#fff1c8",
+      },
+      green: {
+        bgFrom: "#071a12",
+        bgTo: "#123d2b",
+        accent: "#9ae6b4",
+        title: "#ecfdf5",
+        subtitle: "#bbf7d0",
+        meta: "#86efac",
+        message: "#dcfce7",
+      },
+      rose: {
+        bgFrom: "#231018",
+        bgTo: "#4a1d2d",
+        accent: "#f3c7d3",
+        title: "#fff1f5",
+        subtitle: "#fecdd3",
+        meta: "#fda4af",
+        message: "#ffe4e6",
+      },
+      sapphire: {
+        bgFrom: "#0a1530",
+        bgTo: "#17366b",
+        accent: "#7dd3fc",
+        title: "#e0f2fe",
+        subtitle: "#bae6fd",
+        meta: "#93c5fd",
+        message: "#f0f9ff",
+      },
+      sunset: {
+        bgFrom: "#2a1208",
+        bgTo: "#7c2d12",
+        accent: "#fdba74",
+        title: "#fff7ed",
+        subtitle: "#fed7aa",
+        meta: "#fdba74",
+        message: "#ffedd5",
+      },
+      plum: {
+        bgFrom: "#22102d",
+        bgTo: "#4c1d95",
+        accent: "#c4b5fd",
+        title: "#f5f3ff",
+        subtitle: "#ddd6fe",
+        meta: "#c4b5fd",
+        message: "#ede9fe",
+      },
+      emerald_luxe: {
+        bgFrom: "#061510",
+        bgTo: "#0f3b2e",
+        accent: "#d1fae5",
+        title: "#f0fdf4",
+        subtitle: "#bbf7d0",
+        meta: "#86efac",
+        message: "#dcfce7",
+      },
+      ruby_royal: {
+        bgFrom: "#24070e",
+        bgTo: "#6b1024",
+        accent: "#fecdd3",
+        title: "#fff1f2",
+        subtitle: "#fda4af",
+        meta: "#fda4af",
+        message: "#ffe4e6",
+      },
+      obsidian_pearl: {
+        bgFrom: "#09090b",
+        bgTo: "#27272a",
+        accent: "#f5f5f4",
+        title: "#fafaf9",
+        subtitle: "#e7e5e4",
+        meta: "#d6d3d1",
+        message: "#f5f5f4",
+      },
+      desert_lux: {
+        bgFrom: "#2b1d12",
+        bgTo: "#8b5e34",
+        accent: "#fde68a",
+        title: "#fffbeb",
+        subtitle: "#fcd34d",
+        meta: "#fbbf24",
+        message: "#fef3c7",
+      },
+    };
+    return themes[String(theme || 'navy').trim()] || themes.navy;
+  }
+
+  function syncSpecialCardColorInputsFromTheme(force) {
+    const palette = specialCardThemePalette(specialCardsTheme ? specialCardsTheme.value : 'navy');
+    const apply = (input, value) => {
+      if (!input) return;
+      if (force || input.dataset.colorChosen !== '1') input.value = value;
+    };
+    apply(specialCardsTitleColor, palette.title);
+    apply(specialCardsSubtitleColor, palette.subtitle);
+    apply(specialCardsPersonColor, palette.accent);
+    apply(specialCardsMetaColor, palette.meta);
+    apply(specialCardsMessageColor, palette.message);
+  }
+
+  function ensureSpecialCardPreviewEffectStyles() {
+    if (document.getElementById("special-card-preview-effects-style")) return;
+    const style = document.createElement("style");
+    style.id = "special-card-preview-effects-style";
+    style.textContent =
+      "@keyframes alzidanSpecialNamePulse{" +
+      "0%,100%{transform:scale(1);text-shadow:0 0 0 rgba(255,255,255,0),0 0 0 rgba(0,0,0,0);filter:drop-shadow(0 0 0 rgba(255,255,255,0));}" +
+      "50%{transform:scale(1.085);text-shadow:0 0 18px currentColor,0 0 34px rgba(255,255,255,.28);filter:drop-shadow(0 0 14px currentColor);}" +
+      "}" +
+      "@keyframes alzidanSpecialOrnamentGlow{" +
+      "0%,100%{opacity:.88;transform:translateY(0) scale(1);filter:drop-shadow(0 0 0 rgba(255,255,255,0));}" +
+      "50%{opacity:1;transform:translateY(-1px) scale(1.06);filter:drop-shadow(0 0 10px currentColor);}" +
+      "}" +
+      ".special-card-decorated-text{display:inline-flex;align-items:center;justify-content:center;gap:14px;position:relative;transition:all .25s ease;line-height:1.35;font-weight:900;max-width:100%;text-align:center;overflow-wrap:anywhere;}" +
+      ".special-card-decorated-text.is-title{gap:16px;letter-spacing:.01em;}" +
+      ".special-card-decorated-text.is-name{gap:14px;}" +
+      ".special-card-decorated-text.is-pulse{animation:alzidanSpecialNamePulse 2.2s ease-in-out infinite;transform-origin:center;will-change:transform;}" +
+      ".special-card-decorated-text.is-ornament,.special-card-decorated-text.is-pulse-ornament{text-shadow:0 2px 10px rgba(0,0,0,.18),0 0 24px rgba(255,255,255,.14);}" +
+      ".special-card-decorated-text.is-pulse-ornament{animation:alzidanSpecialNamePulse 2.2s ease-in-out infinite;}" +
+      ".special-card-decorated-main{display:inline-block;max-width:100%;overflow-wrap:anywhere;}" +
+      ".special-card-ornament-group{display:inline-flex;align-items:center;gap:6px;opacity:.98;animation:alzidanSpecialOrnamentGlow 3.2s ease-in-out infinite;}" +
+      ".special-card-ornament-line{display:inline-block;width:34px;height:1.5px;border-radius:999px;background:currentColor;box-shadow:0 0 10px currentColor;opacity:.92;}" +
+      ".special-card-decorated-text.is-title .special-card-ornament-line{width:46px;height:2px;}" +
+      ".special-card-ornament-dot{display:inline-block;width:7px;height:7px;border-radius:999px;background:currentColor;box-shadow:0 0 12px currentColor;opacity:.98;}" +
+      ".special-card-ornament-gem{display:inline-flex;align-items:center;justify-content:center;font-size:.72em;line-height:1;min-width:16px;text-shadow:0 0 10px currentColor;}";
+    document.head.appendChild(style);
+  }
+
+  function buildSpecialCardOrnamentGroup() {
+    const group = document.createElement("span");
+    group.className = "special-card-ornament-group";
+
+    const lineA = document.createElement("span");
+    lineA.className = "special-card-ornament-line";
+    const dotA = document.createElement("span");
+    dotA.className = "special-card-ornament-dot";
+    const gem = document.createElement("span");
+    gem.className = "special-card-ornament-gem";
+    gem.textContent = "✦";
+    const dotB = document.createElement("span");
+    dotB.className = "special-card-ornament-dot";
+    const lineB = document.createElement("span");
+    lineB.className = "special-card-ornament-line";
+
+    group.append(lineA, dotA, gem, dotB, lineB);
+    return group;
+  }
+
+  function renderSpecialCardPreviewDecoratedText(el, text, effect, color, variant) {
+    if (!el) return;
+
+    el.textContent = "";
+    el.className = "";
+    el.classList.add("special-card-decorated-text");
+    el.classList.add(variant === "title" ? "is-title" : "is-name");
+    if (effect === "pulse") el.classList.add("is-pulse");
+    if (effect === "ornament") el.classList.add("is-ornament");
+    if (effect === "pulse-ornament") el.classList.add("is-pulse-ornament");
+    el.style.color = color || "";
+
+    const withOrnaments = effect === "ornament" || effect === "pulse-ornament";
+    if (withOrnaments) el.appendChild(buildSpecialCardOrnamentGroup());
+
+    const center = document.createElement("span");
+    center.className = "special-card-decorated-main";
+    center.textContent = text;
+    el.appendChild(center);
+
+    if (withOrnaments) el.appendChild(buildSpecialCardOrnamentGroup());
+  }
+
+  function getSpecialCardColorOverride(input) {
+    if (!input) return "";
+    return normalizeHexColor(input.value);
   }
 
   function updateSpecialCardPreview() {
     const box = document.getElementById("special-cards-preview");
     if (!box) return;
+    ensureSpecialCardPreviewEffectStyles();
+    syncSpecialCardColorInputsFromTheme(false);
 
     const type = specialCardsType ? specialCardsType.value : "graduation";
     const theme = specialCardsTheme ? specialCardsTheme.value : "navy";
@@ -1170,23 +1526,26 @@ where c.id = matches.id; commit;
     const date = specialCardsEventDate && specialCardsEventDate.value
       ? specialCardsEventDate.value
       : "";
+    const dateHijri = specialCardsEventDateHijri && specialCardsEventDateHijri.value
+      ? normalizeHijriInput(specialCardsEventDateHijri.value)
+      : "";
     const location = specialCardsLocation && specialCardsLocation.value.trim()
       ? specialCardsLocation.value.trim()
       : "";
     const message = specialCardsMessage && specialCardsMessage.value.trim()
       ? specialCardsMessage.value.trim()
       : "";
+    const customTitleColor = getSpecialCardColorOverride(specialCardsTitleColor);
+    const customSubtitleColor = getSpecialCardColorOverride(specialCardsSubtitleColor);
+    const customPersonColor = getSpecialCardColorOverride(specialCardsPersonColor);
+    const customMetaColor = getSpecialCardColorOverride(specialCardsMetaColor);
+    const customMessageColor = getSpecialCardColorOverride(specialCardsMessageColor);
+    const nameEffect = specialCardNameEffect();
 
-    const themes = {
-      navy: ["#07111f", "#10233f", "#d7b56d"],
-      gold: ["#19120a", "#3a2814", "#d7b56d"],
-      green: ["#071a12", "#123d2b", "#d7b56d"],
-      rose: ["#231018", "#4a1d2d", "#f3c7d3"],
-    };
-    const colorsSet = themes[theme] || themes.navy;
-    const accent = colorsSet[2];
+    const colorsSet = specialCardThemePalette(theme);
+    const accent = colorsSet.accent;
 
-    box.style.background = "linear-gradient(160deg," + colorsSet[0] + "," + colorsSet[1] + ")";
+    box.style.background = "linear-gradient(160deg," + colorsSet.bgFrom + "," + colorsSet.bgTo + ")";
     box.style.borderColor = accent;
 
     const badge = document.getElementById("special-cards-preview-badge");
@@ -1204,16 +1563,32 @@ where c.id = matches.id; commit;
       badge.style.color = accent;
       badge.style.borderColor = accent;
     }
-    if (titleEl) titleEl.textContent = title;
-    if (subtitleEl) subtitleEl.textContent = subtitle;
-    if (personEl) {
-      personEl.textContent = person;
-      personEl.style.color = accent;
+    if (titleEl) {
+      titleEl.className = "";
+      titleEl.textContent = title;
+      titleEl.style.color = customTitleColor || colorsSet.title;
     }
-    if (secondaryEl) secondaryEl.textContent = secondary;
-    if (dateEl) dateEl.textContent = date;
-    if (locationEl) locationEl.textContent = location ? "📍 " + location : "";
-    if (messageEl) messageEl.textContent = message;
+    if (subtitleEl) subtitleEl.textContent = subtitle;
+    if (subtitleEl) subtitleEl.style.color = customSubtitleColor || colorsSet.subtitle;
+    if (personEl) {
+      renderSpecialCardPreviewDecoratedText(personEl, person, nameEffect, customPersonColor || accent, "name");
+    }
+    if (secondaryEl) {
+      secondaryEl.textContent = secondary;
+      secondaryEl.style.color = customSubtitleColor || colorsSet.subtitle;
+    }
+    if (dateEl) {
+      dateEl.textContent = dateHijri || date;
+      dateEl.style.color = customMetaColor || colorsSet.meta;
+    }
+    if (locationEl) {
+      locationEl.textContent = location ? "📍 " + location : "";
+      locationEl.style.color = customMetaColor || colorsSet.meta;
+    }
+    if (messageEl) {
+      messageEl.textContent = message;
+      messageEl.style.color = customMessageColor || colorsSet.message;
+    }
 
     if (imageEl) {
       const file = specialCardsImageFile && specialCardsImageFile.files ? specialCardsImageFile.files[0] : null;
@@ -1258,11 +1633,18 @@ where c.id = matches.id; commit;
     const fields = [
       specialCardsType,
       specialCardsTheme,
+      specialCardsNameEffect,
+      specialCardsTitleColor,
+      specialCardsSubtitleColor,
+      specialCardsPersonColor,
+      specialCardsMetaColor,
+      specialCardsMessageColor,
       specialCardsTitle,
       specialCardsSubtitle,
       specialCardsPerson,
       specialCardsSecondaryPerson,
       specialCardsEventDate,
+      specialCardsEventDateHijri,
       specialCardsLocation,
       specialCardsDegree,
       specialCardsUniversity,
@@ -1283,6 +1665,14 @@ where c.id = matches.id; commit;
 
     fields.forEach((field) => {
       if (!field) return;
+      if (field.type === "color") {
+        field.addEventListener("input", () => {
+          field.dataset.colorChosen = "1";
+        });
+        field.addEventListener("change", () => {
+          field.dataset.colorChosen = "1";
+        });
+      }
       field.addEventListener("input", updateSpecialCardPreview);
       field.addEventListener("change", updateSpecialCardPreview);
     });
@@ -1294,11 +1684,34 @@ where c.id = matches.id; commit;
     if (specialCardsId) specialCardsId.value = "";
     if (specialCardsType) specialCardsType.value = "graduation";
     if (specialCardsTheme) specialCardsTheme.value = "navy";
+    if (specialCardsNameEffect) specialCardsNameEffect.value = "none";
+    syncSpecialCardColorInputsFromTheme(true);
+    if (specialCardsTitleColor) {
+      specialCardsTitleColor.value = specialCardThemePalette('navy').title;
+      delete specialCardsTitleColor.dataset.colorChosen;
+    }
+    if (specialCardsSubtitleColor) {
+      specialCardsSubtitleColor.value = specialCardThemePalette('navy').subtitle;
+      delete specialCardsSubtitleColor.dataset.colorChosen;
+    }
+    if (specialCardsPersonColor) {
+      specialCardsPersonColor.value = specialCardThemePalette('navy').accent;
+      delete specialCardsPersonColor.dataset.colorChosen;
+    }
+    if (specialCardsMetaColor) {
+      specialCardsMetaColor.value = specialCardThemePalette('navy').meta;
+      delete specialCardsMetaColor.dataset.colorChosen;
+    }
+    if (specialCardsMessageColor) {
+      specialCardsMessageColor.value = specialCardThemePalette('navy').message;
+      delete specialCardsMessageColor.dataset.colorChosen;
+    }
     if (specialCardsTitle) specialCardsTitle.value = "مبروك التخرج";
     if (specialCardsSubtitle) specialCardsSubtitle.value = "";
     if (specialCardsPerson) specialCardsPerson.value = "";
     if (specialCardsSecondaryPerson) specialCardsSecondaryPerson.value = "";
     if (specialCardsEventDate) specialCardsEventDate.value = "";
+    if (specialCardsEventDateHijri) specialCardsEventDateHijri.value = "";
     if (specialCardsLocation) specialCardsLocation.value = "";
     if (specialCardsDegree) specialCardsDegree.value = "";
     if (specialCardsUniversity) specialCardsUniversity.value = "";
@@ -1390,11 +1803,54 @@ where c.id = matches.id; commit;
     if (specialCardsId) specialCardsId.value = row.id || "";
     if (specialCardsType) specialCardsType.value = row.type || "graduation";
     if (specialCardsTheme) specialCardsTheme.value = row.theme || "navy";
+    syncSpecialCardColorInputsFromTheme(true);
+    const templateMeta = parseSpecialCardTemplateMeta(row.template_key);
+    const visualMeta = parseSpecialCardVisualMetaUrl(row.audio_url);
+    const mergedMeta = {
+      effect: visualMeta.effect !== 'none' ? visualMeta.effect : templateMeta.effect,
+      titleColor: visualMeta.titleColor || templateMeta.titleColor,
+      subtitleColor: visualMeta.subtitleColor || templateMeta.subtitleColor,
+      personColor: visualMeta.personColor || templateMeta.personColor,
+      metaColor: visualMeta.metaColor || templateMeta.metaColor,
+      messageColor: visualMeta.messageColor || templateMeta.messageColor,
+    };
+    if (specialCardsNameEffect) {
+      specialCardsNameEffect.value = mergedMeta.effect;
+    }
+    if (specialCardsTitleColor) {
+      specialCardsTitleColor.value = mergedMeta.titleColor || "#000000";
+      if (mergedMeta.titleColor) specialCardsTitleColor.dataset.colorChosen = "1";
+      else delete specialCardsTitleColor.dataset.colorChosen;
+    }
+    if (specialCardsSubtitleColor) {
+      specialCardsSubtitleColor.value = mergedMeta.subtitleColor || "#000000";
+      if (mergedMeta.subtitleColor) specialCardsSubtitleColor.dataset.colorChosen = "1";
+      else delete specialCardsSubtitleColor.dataset.colorChosen;
+    }
+    if (specialCardsPersonColor) {
+      specialCardsPersonColor.value = mergedMeta.personColor || "#000000";
+      if (mergedMeta.personColor) specialCardsPersonColor.dataset.colorChosen = "1";
+      else delete specialCardsPersonColor.dataset.colorChosen;
+    }
+    if (specialCardsMetaColor) {
+      specialCardsMetaColor.value = mergedMeta.metaColor || "#000000";
+      if (mergedMeta.metaColor) specialCardsMetaColor.dataset.colorChosen = "1";
+      else delete specialCardsMetaColor.dataset.colorChosen;
+    }
+    if (specialCardsMessageColor) {
+      specialCardsMessageColor.value = mergedMeta.messageColor || "#000000";
+      if (mergedMeta.messageColor) specialCardsMessageColor.dataset.colorChosen = "1";
+      else delete specialCardsMessageColor.dataset.colorChosen;
+    }
     if (specialCardsTitle) specialCardsTitle.value = row.title || "";
     if (specialCardsSubtitle) specialCardsSubtitle.value = row.subtitle || "";
     if (specialCardsPerson) specialCardsPerson.value = row.person_name || "";
     if (specialCardsSecondaryPerson) specialCardsSecondaryPerson.value = row.secondary_person || "";
     if (specialCardsEventDate) specialCardsEventDate.value = row.event_date || "";
+    if (specialCardsEventDateHijri) {
+      const stored = String(row.event_date || "").trim();
+      specialCardsEventDateHijri.value = /^14\d{2}-\d{2}-\d{2}$/.test(stored) ? stored : "";
+    }
     if (specialCardsLocation) specialCardsLocation.value = row.location || "";
     if (specialCardsDegree) specialCardsDegree.value = row.degree_name || "";
     if (specialCardsUniversity) specialCardsUniversity.value = row.university || "";
@@ -1419,6 +1875,13 @@ where c.id = matches.id; commit;
   }
 
   function collectSpecialCardPayload() {
+    const titleColor = getSpecialCardColorOverride(specialCardsTitleColor);
+    const subtitleColor = getSpecialCardColorOverride(specialCardsSubtitleColor);
+    const personColor = getSpecialCardColorOverride(specialCardsPersonColor);
+    const metaColor = getSpecialCardColorOverride(specialCardsMetaColor);
+    const messageColor = getSpecialCardColorOverride(specialCardsMessageColor);
+    const nameEffect = specialCardNameEffect();
+
     return {
       type: specialCardsType ? specialCardsType.value : "graduation",
       title: specialCardsTitle ? specialCardsTitle.value.trim() : "",
@@ -1427,7 +1890,13 @@ where c.id = matches.id; commit;
       secondary_person: specialCardsSecondaryPerson ? specialCardsSecondaryPerson.value.trim() : "",
       degree_name: specialCardsDegree ? specialCardsDegree.value.trim() : "",
       university: specialCardsUniversity ? specialCardsUniversity.value.trim() : "",
-      event_date: specialCardsEventDate ? specialCardsEventDate.value : "",
+      event_date: (() => {
+        const hijri = specialCardsEventDateHijri
+          ? normalizeHijriInput(specialCardsEventDateHijri.value)
+          : "";
+        if (hijri) return hijri;
+        return specialCardsEventDate ? specialCardsEventDate.value : "";
+      })(),
       location: specialCardsLocation ? specialCardsLocation.value.trim() : "",
       message: specialCardsMessage ? specialCardsMessage.value.trim() : "",
       image_url: specialCardsImageUrl ? specialCardsImageUrl.value.trim() : "",
@@ -1439,7 +1908,24 @@ where c.id = matches.id; commit;
       show_once_per_day: specialCardsOnceDay ? !!specialCardsOnceDay.checked : true,
       allow_share: specialCardsShare ? !!specialCardsShare.checked : true,
       allow_save: specialCardsSave ? !!specialCardsSave.checked : true,
-      template_key: "luxury_" + (specialCardsType ? specialCardsType.value : "graduation"),
+      template_key: buildSpecialCardTemplateKey(
+        specialCardsType ? specialCardsType.value : "graduation",
+        nameEffect,
+        {
+          titleColor,
+          subtitleColor,
+          personColor,
+          metaColor,
+          messageColor,
+        },
+      ),
+      audio_url: buildSpecialCardVisualMetaUrl(nameEffect, {
+        titleColor,
+        subtitleColor,
+        personColor,
+        metaColor,
+        messageColor,
+      }),
       group_key: specialCardsGroupKey ? specialCardsGroupKey.value.trim() : "",
       group_title: specialCardsGroupTitle ? specialCardsGroupTitle.value.trim() : "",
       sequence_order: specialCardsSequence ? specialCardsSequence.value : "0",
@@ -1484,7 +1970,15 @@ where c.id = matches.id; commit;
     });
 
     if (error) {
-      setSpecialCardsStatus("تعذر حفظ البطاقة الخاصة.");
+      setSpecialCardsStatus(
+        "تعذر حفظ البطاقة الخاصة: " +
+          String(error.message || error.details || error.hint || "خطأ غير معروف"),
+      );
+      return;
+    }
+
+    if (data == null || data === false) {
+      setSpecialCardsStatus("لم يتم حفظ البطاقة الخاصة. تحقق من دالة الحفظ في القاعدة.");
       return;
     }
 
@@ -1508,7 +2002,10 @@ where c.id = matches.id; commit;
     });
 
     if (error) {
-      setSpecialCardsStatus("تعذر حذف البطاقة الخاصة.");
+      setSpecialCardsStatus(
+        "تعذر حذف البطاقة الخاصة: " +
+          String(error.message || error.details || error.hint || "خطأ غير معروف"),
+      );
       return;
     }
 
