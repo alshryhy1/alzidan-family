@@ -35,6 +35,7 @@
   const requestsPrevPageBtn = document.getElementById("requests-prev");
   const requestsNextPageBtn = document.getElementById("requests-next");
   const requestsPageInfo = document.getElementById("requests-page-info");
+  let requestsQualityFilterSelect = null;
 
   let requestsAllRows = [];
   let requestsCurrentPage = 1;
@@ -97,6 +98,200 @@
     );
     return lines.join("\n").trim() || "لا توجد تفاصيل إضافية.";
   }
+  function buildRequestSourceText(row) {
+    const raw = String(row && row.message ? row.message : "").trim();
+    return raw || "لا يوجد مصدر خام لهذا الطلب.";
+  }
+  function parseRequestEnvelopeState(message) {
+    const text = String(message || "");
+    const marker = "__JSON__:";
+    const idx = text.indexOf(marker);
+    if (idx < 0) return { hasMarker: false, parsed: null, valid: false };
+    const raw = text.slice(idx + marker.length).trim();
+    if (!raw) return { hasMarker: true, parsed: null, valid: false };
+    try {
+      const parsed = JSON.parse(raw);
+      return { hasMarker: true, parsed, valid: true };
+    } catch (e) {
+      return { hasMarker: true, parsed: null, valid: false };
+    }
+  }
+  function classifyRequestQuality(row) {
+    const kind = String(row && row.kind ? row.kind : "").trim();
+    const msg = String(row && row.message ? row.message : "");
+    const hasBranch = !!String(row && row.branch_key ? row.branch_key : "").trim();
+    const hasSender = !!String(row && (row.name || row.phone || row.email) ? (row.name || row.phone || row.email) : "").trim();
+    const env = parseRequestEnvelopeState(msg);
+
+    if (!msg.trim()) return { key: "missing", label: "ناقص", reason: "الرسالة فارغة." };
+
+    if (kind === "event_card") {
+      if (env.hasMarker && !env.valid) {
+        return { key: "review", label: "يحتاج مراجعة", reason: "يوجد JSON لكنه غير صالح للقراءة." };
+      }
+      if (env.valid && env.parsed && env.parsed.event && typeof env.parsed.event === "object") {
+        const event = env.parsed.event;
+        const hasCore =
+          !!String(event.type || "").trim() &&
+          !!String(event.person || row.name || "").trim() &&
+          !!String(event.details || "").trim();
+        if (!hasCore || !hasBranch) {
+          return { key: "missing", label: "ناقص", reason: "بيانات المناسبة الأساسية غير مكتملة." };
+        }
+        return { key: "complete", label: "مكتمل", reason: "الطلب يحتوي JSON صالح وبيانات مناسبة مكتملة." };
+      }
+      const hasTextForm =
+        msg.includes("نوع المناسبة:") &&
+        msg.includes("اسم صاحب المناسبة:") &&
+        msg.includes("النص:");
+      if (hasTextForm && hasBranch && hasSender) {
+        return { key: "complete", label: "مكتمل", reason: "الطلب مكتمل بصيغة نصية." };
+      }
+      return { key: "missing", label: "ناقص", reason: "الطلب يفتقد حقولاً مطلوبة للمناسبة." };
+    }
+
+    if (kind === "tree_card") {
+      if (env.hasMarker && !env.valid) {
+        return { key: "review", label: "يحتاج مراجعة", reason: "بيانات الشجرة بصيغة JSON غير صالحة." };
+      }
+      if (env.valid && hasBranch) {
+        return { key: "complete", label: "مكتمل", reason: "طلب الشجرة يحتوي JSON صالح." };
+      }
+      return hasBranch
+        ? { key: "review", label: "يحتاج مراجعة", reason: "لا توجد بيانات JSON للشجرة." }
+        : { key: "missing", label: "ناقص", reason: "الفرع غير محدد." };
+    }
+
+    if (!hasBranch && !hasSender) {
+      return { key: "missing", label: "ناقص", reason: "الطلب يفتقد بيانات تعريف أساسية." };
+    }
+    return { key: "complete", label: "مكتمل", reason: "لا توجد نواقص ظاهرة في الحقول العامة." };
+  }
+  function createRequestQualityPill(row) {
+    const quality = classifyRequestQuality(row);
+    const pill = document.createElement("span");
+    pill.style.display = "inline-flex";
+    pill.style.alignItems = "center";
+    pill.style.marginTop = "6px";
+    pill.style.padding = "2px 9px";
+    pill.style.borderRadius = "999px";
+    pill.style.fontSize = "11px";
+    pill.style.fontWeight = "800";
+    pill.style.border = "1px solid transparent";
+    pill.textContent = "جودة: " + quality.label;
+    pill.title = quality.reason || "";
+
+    if (quality.key === "complete") {
+      pill.style.background = "#ecfdf5";
+      pill.style.color = "#065f46";
+      pill.style.borderColor = "#a7f3d0";
+    } else if (quality.key === "missing") {
+      pill.style.background = "#fef2f2";
+      pill.style.color = "#991b1b";
+      pill.style.borderColor = "#fecaca";
+    } else {
+      pill.style.background = "#fff7ed";
+      pill.style.color = "#9a3412";
+      pill.style.borderColor = "#fed7aa";
+    }
+    return pill;
+  }
+  function ensureQualityFilterControl() {
+    if (requestsQualityFilterSelect) return requestsQualityFilterSelect;
+
+    const section = document.getElementById("admin-requests-section");
+    if (!section) return null;
+    const search = document.getElementById("requests-search");
+    if (!search || !search.parentElement) return null;
+
+    const wrapper = document.createElement("label");
+    wrapper.style.display = "inline-flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.gap = "6px";
+    wrapper.style.marginInlineStart = "8px";
+    wrapper.style.flexWrap = "nowrap";
+    wrapper.style.whiteSpace = "nowrap";
+
+    const text = document.createElement("span");
+    text.textContent = "جودة الطلب";
+    text.style.fontWeight = "800";
+    text.style.fontSize = "12px";
+
+    const select = document.createElement("select");
+    select.id = "requests-quality-filter";
+    select.className = "input";
+    select.style.minWidth = "130px";
+    select.innerHTML =
+      '<option value="all">كل الجودات</option>' +
+      '<option value="complete">مكتمل</option>' +
+      '<option value="missing">ناقص</option>' +
+      '<option value="review">يحتاج مراجعة</option>';
+
+    wrapper.appendChild(text);
+    wrapper.appendChild(select);
+    search.parentElement.appendChild(wrapper);
+
+    requestsQualityFilterSelect = select;
+    requestsQualityFilterSelect.addEventListener("change", () => {
+      requestsCurrentPage = 1;
+      renderRequestsPage();
+    });
+    return requestsQualityFilterSelect;
+  }
+  function buildRequestDetailsView(row) {
+    const wrap = document.createElement("div");
+
+    const tabs = document.createElement("div");
+    tabs.style.display = "flex";
+    tabs.style.gap = "6px";
+    tabs.style.marginBottom = "8px";
+
+    const summaryBtn = document.createElement("button");
+    summaryBtn.type = "button";
+    summaryBtn.className = "btn btn-outline btn-sm";
+    summaryBtn.textContent = "الملخص";
+
+    const sourceBtn = document.createElement("button");
+    sourceBtn.type = "button";
+    sourceBtn.className = "btn btn-outline btn-sm";
+    sourceBtn.textContent = "المصدر";
+
+    tabs.appendChild(summaryBtn);
+    tabs.appendChild(sourceBtn);
+
+    const summaryPanel = document.createElement("div");
+    summaryPanel.style.whiteSpace = "pre-wrap";
+    summaryPanel.style.lineHeight = "1.65";
+    summaryPanel.textContent = buildRequestDetailsText(row);
+
+    const sourcePanel = document.createElement("pre");
+    sourcePanel.style.whiteSpace = "pre-wrap";
+    sourcePanel.style.lineHeight = "1.65";
+    sourcePanel.style.margin = "0";
+    sourcePanel.style.display = "none";
+    sourcePanel.style.direction = "ltr";
+    sourcePanel.textContent = buildRequestSourceText(row);
+
+    function setView(mode) {
+      const isSummary = mode === "summary";
+      summaryPanel.style.display = isSummary ? "block" : "none";
+      sourcePanel.style.display = isSummary ? "none" : "block";
+      summaryBtn.className =
+        "btn btn-sm " + (isSummary ? "btn-primary" : "btn-outline");
+      sourceBtn.className =
+        "btn btn-sm " + (isSummary ? "btn-outline" : "btn-primary");
+    }
+
+    summaryBtn.addEventListener("click", () => setView("summary"));
+    sourceBtn.addEventListener("click", () => setView("source"));
+
+    wrap.appendChild(tabs);
+    wrap.appendChild(summaryPanel);
+    wrap.appendChild(sourcePanel);
+    requestActions.appendRequestMediaPreview(summaryPanel, row.message || "");
+    setView("summary");
+    return wrap;
+  }
   function formatDateShortForRequests(value) {
     if (!value) return "";
     try {
@@ -120,7 +315,12 @@
       return td;
     }
     tr.appendChild(tdText(row.request_id || ""));
-    tr.appendChild(tdText(kindLabel(row.kind)));
+    const tdKind = document.createElement("td");
+    const kindMain = document.createElement("div");
+    kindMain.textContent = kindLabel(row.kind);
+    tdKind.appendChild(kindMain);
+    tdKind.appendChild(createRequestQualityPill(row));
+    tr.appendChild(tdKind);
     tr.appendChild(tdText(row.branch_key || ""));
     tr.appendChild(tdText(row.name || ""));
     tr.appendChild(tdText(row.phone || ""));
@@ -153,11 +353,9 @@
     det.className = "msg";
     const sum = document.createElement("summary");
     sum.textContent = "عرض";
-    const body = document.createElement("div");
-    body.textContent = buildRequestDetailsText(row);
+    const body = buildRequestDetailsView(row);
     det.appendChild(sum);
     det.appendChild(body);
-    requestActions.appendRequestMediaPreview(body, row.message || "");
     tdMsg.appendChild(det);
     tr.appendChild(tdMsg);
     const tdActions = document.createElement("td");
@@ -512,11 +710,17 @@
   }
   function renderRequestsPage() {
     if (!requestsBody) return;
+    ensureQualityFilterControl();
     requestsBody.innerHTML = "";
     const query = requestSearchInput ? requestSearchInput.value : "";
-    const filtered = requestsAllRows.filter((row) =>
-      requestRowMatchesSearch(row, query),
-    );
+    const qualityFilter = requestsQualityFilterSelect
+      ? String(requestsQualityFilterSelect.value || "all")
+      : "all";
+    const filtered = requestsAllRows.filter((row) => {
+      if (!requestRowMatchesSearch(row, query)) return false;
+      if (qualityFilter === "all") return true;
+      return classifyRequestQuality(row).key === qualityFilter;
+    });
     if (!filtered.length) {
       renderEmpty("لا توجد طلبات مطابقة للبحث والفلاتر الحالية.");
     } else {
@@ -560,6 +764,7 @@
 
 
   function init() {
+    ensureQualityFilterControl();
     if (filterStatus)
       filterStatus.addEventListener("change", () => loadRequests().catch(() => {}));
     if (filterKind)
