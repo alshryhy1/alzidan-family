@@ -39,7 +39,49 @@
   let requestsAllRows = [];
   let requestsCurrentPage = 1;
 
+  function grantLabel(value) {
+    const key = String(value || "").trim();
+    if (key === "events_delegate") return "مندوب المناسبات";
+    if (key === "tree_delegate") return "مندوب الشجرة";
+    if (key === "member_registration") return "تسجيل عضو";
+    return key || "غير محدد";
+  }
+
+  function tryFormatJsonRequestMessage(message) {
+    const text = String(message || "").trim();
+    if (!text) return "";
+    if (!text.startsWith("{") || !text.endsWith("}")) return "";
+
+    try {
+      const obj = JSON.parse(text);
+      if (!obj || typeof obj !== "object") return "";
+
+      const kind = String(obj.kind || "").trim();
+      if (kind === "admin_grant") {
+        return "طلب صلاحية إداري" +
+          "\n" +
+          "نوع الصلاحية: " + grantLabel(obj.grant);
+      }
+
+      const lines = [];
+      if (kind) lines.push("النوع: " + kindLabel(kind));
+      if (obj.grant) lines.push("الصلاحية: " + grantLabel(obj.grant));
+      if (obj.at) lines.push("وقت العملية: " + formatDateTimeArSaVerbose(obj.at));
+      return lines.join("\n").trim();
+    } catch (e) {
+      return "";
+    }
+  }
+
   function buildRequestDetailsText(row) {
+    const rawMessage = requestActions.requestMessageWithoutMediaLinks
+      ? requestActions.requestMessageWithoutMediaLinks(row.message || "")
+      : String(row.message || "");
+    const jsonMarker = "__JSON__:";
+    const markerIndex = rawMessage.indexOf(jsonMarker);
+    const safeMessage = markerIndex >= 0 ? rawMessage.slice(0, markerIndex).trimEnd() : rawMessage;
+    const prettyJsonMessage = tryFormatJsonRequestMessage(safeMessage);
+
     const lines = [
       row.request_id ? "رقم الطلب: " + row.request_id : "",
       row.branch_key ? "الفرع: " + row.branch_key : "",
@@ -49,7 +91,7 @@
         ? "التاريخ الكامل: " + formatDateTimeArSaVerbose(row.created_at)
         : "",
       "",
-      requestActions.requestMessageWithoutMediaLinks(row.message || ""),
+      prettyJsonMessage || safeMessage,
     ].filter(
       (line, index, arr) => line || (index > 0 && index < arr.length - 1),
     );

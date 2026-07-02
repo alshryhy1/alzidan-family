@@ -104,7 +104,12 @@
     return media;
   }
   function requestMessageWithoutMediaLinks(message) {
-    return String(message || "")
+    const marker = "__JSON__:";
+    const rawText = String(message || "");
+    const markerIndex = rawText.indexOf(marker);
+    const visibleText = markerIndex >= 0 ? rawText.slice(0, markerIndex) : rawText;
+
+    return visibleText
       .split(/\r?\n/)
       .filter((rawLine) => {
         const line = String(rawLine || "").trim();
