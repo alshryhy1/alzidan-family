@@ -446,8 +446,9 @@ function setWifeAlert(type, text) {
 
 function updateDelegateWifeFieldsVisibility() {
   const isOutside = parseWifeFamilyValue() === false;
-  const familyNameField = wifeFamilyName ? wifeFamilyName.closest(".field") : null;
-  const branchField = wifeBranch ? wifeBranch.closest(".field") : null;
+
+  const familyNameField = document.getElementById("wife-family-name-field");
+  const branchField = document.getElementById("wife-branch-field");
 
   if (familyNameField) familyNameField.style.display = isOutside ? "" : "none";
   if (branchField) branchField.style.display = isOutside ? "none" : "";
