@@ -2,10 +2,12 @@
 	"use strict";
 
 	let treeRows = [];
+	let husbands = [];
 	let spouses = [];
 	let editingSpouseId = 0;
 	let managerState = { spouse: null, children: [], linked: new Set() };
 	let initialized = false;
+	const SpousesCore = window.AlzidanSpousesCore || {};
 
 	function $(id) { return document.getElementById(id); }
 	function clean(v) { return String(v || "").replace(/\s+/g, " ").trim(); }
@@ -41,6 +43,7 @@
 			section: $("admin-spouses-manager"),
 			branch: $("admin-spouses-branch"),
 			load: $("admin-spouses-load"),
+			husbandSearch: $("admin-spouses-husband-search"),
 			husband: $("admin-spouses-husband"),
 			list: $("admin-spouses-list"),
 			form: $("admin-spouses-form"),
@@ -67,6 +70,36 @@
 		return clean(els().husband && els().husband.value ? els().husband.value : "");
 	}
 
+	function renderHusbandOptions(query) {
+		const e = els();
+		if (!e.husband) return;
+		const q = String(query || "");
+		const current = selectedHusbandId();
+		e.husband.innerHTML = '<option value="">اختر الزوج</option>';
+
+		const list = q
+			? husbands.filter((item) => {
+				const text = item.label + " " + item.path;
+				if (SpousesCore && typeof SpousesCore.matchesOrderedSubstring === "function") {
+					return SpousesCore.matchesOrderedSubstring(q, text);
+				}
+				return String(text || "").toLowerCase().indexOf(String(q || "").toLowerCase()) !== -1;
+			})
+			: husbands.slice();
+
+		list.forEach((item) => {
+			const opt = document.createElement("option");
+			opt.value = String(item.id);
+			opt.dataset.path = item.path;
+			opt.textContent = item.label;
+			e.husband.appendChild(opt);
+		});
+
+		if (current && list.some((item) => String(item.id) === current)) {
+			e.husband.value = current;
+		}
+	}
+
 	async function loadHusbands() {
 		const c = sb(), e = els(), branch = selectedBranch();
 		if (!c || !branch) return status("تعذر الاتصال أو الفرع غير محدد.");
@@ -85,17 +118,19 @@
 			if (ch && r.id != null) map.set(String(r.id), { id: r.id, path: ch });
 		});
 
-		e.husband.innerHTML = '<option value="">اختر الزوج</option>';
-		Array.from(map.values()).sort((a, b) => leaf(a.path).localeCompare(leaf(b.path), "ar")).forEach(item => {
-			const path = item.path;
-			const opt = document.createElement("option");
-			opt.value = String(item.id);
-			opt.dataset.path = item.path;
-			const ps = parts(path);
-			const parent = ps.length > 1 ? ps[ps.length - 2] : "";
-			opt.textContent = leaf(path) + (parent ? " — " + parent : "");
-			e.husband.appendChild(opt);
-		});
+		husbands = Array.from(map.values())
+			.sort((a, b) => leaf(a.path).localeCompare(leaf(b.path), "ar"))
+			.map((item) => {
+				const ps = parts(item.path);
+				const parent = ps.length > 1 ? ps[ps.length - 2] : "";
+				return {
+					id: item.id,
+					path: item.path,
+					label: leaf(item.path) + (parent ? " — " + parent : "")
+				};
+			});
+
+		renderHusbandOptions(e.husbandSearch && e.husbandSearch.value ? e.husbandSearch.value : "");
 
 		status("تم تحميل الأزواج.");
 		await loadSpouses();
@@ -107,27 +142,18 @@
 		e.list.innerHTML = "";
 		if (!c || !husbandId) return;
 
-		const { data, error } = await c.from("tree_spouses")
-			.select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence")
-			.eq("husband_id", Number(husbandId))
-			.order("marriage_order", { ascending: true });
+		if (SpousesCore && typeof SpousesCore.loadSpousesByHusband === "function") {
+			const loaded = await SpousesCore.loadSpousesByHusband(c, husbandId);
+			if (loaded.error) return status("تعذر تحميل الزوجات: " + (loaded.error.message || "خطأ"));
+			spouses = Array.isArray(loaded.data) ? loaded.data : [];
+		} else {
+			const { data, error } = await c.from("tree_spouses")
+				.select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence")
+				.eq("husband_id", Number(husbandId))
+				.order("marriage_order", { ascending: true });
 
-		if (error) return status("تعذر تحميل الزوجات: " + (error.message || "خطأ"));
-		spouses = Array.isArray(data) ? data : [];
-
-		if (spouses.length) {
-			const ids = spouses.map((x) => Number(x.id)).filter(Boolean);
-			const counts = new Map();
-			if (ids.length) {
-				const linked = await c.from("tree_mother_links").select("spouse_id").in("spouse_id", ids).limit(5000);
-				if (!linked.error) {
-					(Array.isArray(linked.data) ? linked.data : []).forEach((r) => {
-						const k = String(r.spouse_id);
-						counts.set(k, (counts.get(k) || 0) + 1);
-					});
-				}
-			}
-			spouses = spouses.map((x) => ({ ...x, linked_children_count: counts.get(String(x.id)) || 0 }));
+			if (error) return status("تعذر تحميل الزوجات: " + (error.message || "خطأ"));
+			spouses = Array.isArray(data) ? data : [];
 		}
 
 		renderSpouses();
@@ -204,6 +230,9 @@
 	}
 
 	function wifeDuplicateKey(value) {
+		if (SpousesCore && typeof SpousesCore.wifeDuplicateKey === "function") {
+			return SpousesCore.wifeDuplicateKey(value);
+		}
 		return clean(value)
 			.replace(/\b(بن|ابن|بنت)\b/g, " ")
 			.replace(/\s+/g, " ")
@@ -211,10 +240,16 @@
 	}
 
 	function hasThreePartWifeName(value) {
+		if (SpousesCore && typeof SpousesCore.hasThreePartWifeName === "function") {
+			return SpousesCore.hasThreePartWifeName(value);
+		}
 		return wifeDuplicateKey(value).split(" ").filter(Boolean).length >= 3;
 	}
 
 	async function findDuplicateWife(c, husbandId, row) {
+		if (SpousesCore && typeof SpousesCore.findDuplicateWife === "function") {
+			return SpousesCore.findDuplicateWife(c, husbandId, row, editingSpouseId);
+		}
 		const candidate = row.wife_lineage && hasThreePartWifeName(row.wife_lineage)
 			? row.wife_lineage
 			: row.wife_name;
@@ -464,9 +499,21 @@
 		if (e.load) e.load.addEventListener("click", loadHusbands);
 		if (e.branch) e.branch.addEventListener("change", () => { closeManager(); loadHusbands(); });
 		if (e.husband) e.husband.addEventListener("change", loadSpouses);
+		if (e.husbandSearch) {
+			e.husbandSearch.addEventListener("input", () => {
+				renderHusbandOptions(e.husbandSearch.value);
+				if (!selectedHusbandId()) {
+					e.list.innerHTML = "";
+					status(husbands.length ? "اختر الزوج من النتائج." : "لا توجد نتائج مطابقة للبحث.");
+				}
+			});
+		}
 		if (e.family) e.family.addEventListener("change", updateWifeFieldsVisibility);
 		updateWifeFieldsVisibility();
 		if (e.form) e.form.addEventListener("submit", saveSpouse);
+		loadHusbands().catch(() => {
+			status("تعذر تحميل الأزواج، حاول مرة أخرى.");
+		});
 	}
 
 	function init() {

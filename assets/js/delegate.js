@@ -660,6 +660,18 @@ async function updateWifeIfEditing(row) {
 function renderWivesRows(rows) {
   if (!wivesList) return;
   const list = Array.isArray(rows) ? rows : [];
+  const SpousesCore = window.AlzidanSpousesCore || {};
+  const wivesSearchInput = document.getElementById("wives-search");
+  const searchTerm = normalizePersonName(wivesSearchInput && wivesSearchInput.value ? wivesSearchInput.value : "");
+  const filtered = searchTerm
+    ? list.filter((row) => {
+        const wifeName = normalizePersonName(row && row.wife_name ? row.wife_name : "");
+        if (SpousesCore && typeof SpousesCore.matchesOrderedSubstring === "function") {
+          return SpousesCore.matchesOrderedSubstring(searchTerm, wifeName);
+        }
+        return wifeName.toLowerCase().indexOf(searchTerm.toLowerCase()) !== -1;
+      })
+    : list;
   wivesList.innerHTML = "";
   if (childWifeSelect) {
     childWifeSelect.innerHTML = '<option value="">بدون ربط أم الآن</option>';
@@ -671,7 +683,14 @@ function renderWivesRows(rows) {
     wivesList.appendChild(empty);
     return;
   }
-  list.forEach((row) => {
+  if (!filtered.length) {
+    const emptyFiltered = document.createElement("div");
+    emptyFiltered.className = "hint";
+    emptyFiltered.textContent = "لا توجد نتائج مطابقة لبحث الزوجات.";
+    wivesList.appendChild(emptyFiltered);
+    return;
+  }
+  filtered.forEach((row) => {
     const wifeId = row.id;
     const wifeText = normalizePersonName(row.wife_name || "");
     if (childWifeSelect && wifeId != null) {
@@ -729,6 +748,7 @@ function renderWivesRows(rows) {
 async function loadWivesForSelectedParent() {
   if (!state.branch || !parentSelect) return;
   const sb = getالخدمةClient();
+  const SpousesCore = window.AlzidanSpousesCore || {};
   if (!sb) return;
   const parentName = resolveSelectedParentId(normalizePersonName(parentSelect.value), state.branch);
   if (!parentName) {
@@ -740,17 +760,27 @@ async function loadWivesForSelectedParent() {
     renderWivesRows([]);
     return;
   }
-  const r = await sb
-    .from("tree_spouse_summary")
-    .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence,linked_children_count")
-    .eq("husband_id", husbandId)
-    .order("marriage_order", { ascending: true })
-    .order("id", { ascending: true });
-  if (r.error) {
-    setWifeAlert("error", "تعذر تحميل الزوجات: " + (r.error.message || "خطأ غير معروف"));
-    return;
+  if (SpousesCore && typeof SpousesCore.loadSpousesByHusband === "function") {
+    const loaded = await SpousesCore.loadSpousesByHusband(sb, husbandId);
+    if (loaded.error) {
+      setWifeAlert("error", "تعذر تحميل الزوجات: " + (loaded.error.message || "خطأ غير معروف"));
+      return;
+    }
+    window.__delegateWivesRows = Array.isArray(loaded.data) ? loaded.data : [];
+  } else {
+    const r = await sb
+      .from("tree_spouse_summary")
+      .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence,linked_children_count")
+      .eq("husband_id", husbandId)
+      .order("marriage_order", { ascending: true })
+      .order("id", { ascending: true });
+    if (r.error) {
+      setWifeAlert("error", "تعذر تحميل الزوجات: " + (r.error.message || "خطأ غير معروف"));
+      return;
+    }
+    window.__delegateWivesRows = Array.isArray(r.data) ? r.data : [];
   }
-  renderWivesRows(r.data || []);
+  renderWivesRows(window.__delegateWivesRows);
 }
 async function refreshWivesForSelectedParent() {
   try {
@@ -767,6 +797,10 @@ async function refreshWivesForSelectedParent() {
 }
 
 function wifeDuplicateKey(value) {
+  const SpousesCore = window.AlzidanSpousesCore || {};
+  if (SpousesCore && typeof SpousesCore.wifeDuplicateKey === "function") {
+    return SpousesCore.wifeDuplicateKey(value);
+  }
   return normalizePersonName(value || "")
     .replace(/\b(بن|ابن|بنت)\b/g, " ")
     .replace(/\s+/g, " ")
@@ -778,6 +812,10 @@ function hasThreePartWifeName(value) {
 }
 
 async function findDuplicateWifeForDelegate(sb, husbandId, row) {
+  const SpousesCore = window.AlzidanSpousesCore || {};
+  if (SpousesCore && typeof SpousesCore.findDuplicateWife === "function") {
+    return SpousesCore.findDuplicateWife(sb, husbandId, row, 0);
+  }
   const candidate = row.wife_lineage && hasThreePartWifeName(row.wife_lineage)
     ? row.wife_lineage
     : row.wife_name;
@@ -939,6 +977,12 @@ async function confirmLinkAllChildrenToOnlyWife() {
 }
 if (wifeFamily) wifeFamily.addEventListener("change", updateDelegateWifeFieldsVisibility);
 updateDelegateWifeFieldsVisibility();
+const wivesSearchInput = document.getElementById("wives-search");
+if (wivesSearchInput) {
+  wivesSearchInput.addEventListener("input", () => {
+    renderWivesRows(window.__delegateWivesRows || []);
+  });
+}
 if (addWifeBtn) addWifeBtn.addEventListener("click", saveWifeForSelectedParent);
 if (linkAllWifeChildrenBtn) linkAllWifeChildrenBtn.addEventListener("click", confirmLinkAllChildrenToOnlyWife);
 
