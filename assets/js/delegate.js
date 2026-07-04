@@ -1,4 +1,14 @@
-const parentsByBranch = { "زيدان": ["خميس بن زيدان بن مطلق", "عبدالله بن زيدان بن مطلق"], "مزيد": ["خميس", "صلف", "صلال"], "زايد": [], "لاحم": [], "ملحم": [] }; const state = { branch: null, children: {}, happyEvents: [], sickEvents: [], deaths: [], forcedRahmaByBranch: {} }; let desiredParentFromUrl = ""; let desiredFocusFromUrl = ""; const FORCED_RAHMA_BY_BASE = { "صلف": " (رحمة الله)", "صلال": " (رحمه الله)", "عرفج": " (رحمه الله)", "دليميك": " (رحمه الله)" }; const treeCard = document.getElementById("tree-card"); const treeTitleEl = document.getElementById("tree-title"); const treeBranchSelect = document.getElementById("tree-branch"); const treeList = document.getElementById("tree-list"); const openDelegateBtn = document.getElementById("open-delegate"); const loginCard = document.getElementById("login-card"); const loginBtn = document.getElementById("login-btn"); const forgotBtn = document.getElementById("forgot-btn"); const loginAlert = document.getElementById("login-alert"); const branchSelectLogin = document.getElementById("branch"); const phoneInput = document.getElementById("phone"); const emailInput = document.getElementById("email"); const codeInput = document.getElementById("code"); const dashboardCard = document.getElementById("dashboard-card"); const branchTitle = document.getElementById("branch-title"); const eventsCard = document.getElementById("events-card"); const parentSelect = document.getElementById("parent-select"); const childName = document.getElementById("child-name-1"); const childBirthHijri = document.getElementById("child-hijri-1"); const childBirthGreg = document.getElementById("child-greg-1"); const childBirthOrder = document.getElementById("child-order-1"); const childCity = document.getElementById("child-city-1"); const childArea = document.getElementById("child-area-1"); const childPhone = document.getElementById("child-phone-1"); const childDeceased = document.getElementById("child-deceased-1"); const childWifeSelect = document.getElementById("child-wife-select"); const wifeName = document.getElementById("wife-name"); const wifeFamily = document.getElementById("wife-family"); const wifeBranch = document.getElementById("wife-branch");
+const parentsByBranch = { "زيدان": ["خميس بن زيدان بن مطلق", "عبدالله بن زيدان بن مطلق"], "مزيد": ["خميس", "صلف", "صلال"], "زايد": [], "لاحم": [], "ملحم": [] }; const state = { branch: null, children: {}, happyEvents: [], sickEvents: [], deaths: [], forcedRahmaByBranch: {} }; let desiredParentFromUrl = ""; let desiredFocusFromUrl = ""; const FORCED_RAHMA_BY_BASE = { "صلف": " (رحمة الله)", "صلال": " (رحمه الله)", "عرفج": " (رحمه الله)", "دليميك": " (رحمه الله)" }; const treeCard = document.getElementById("tree-card"); const treeTitleEl = document.getElementById("tree-title"); const treeBranchSelect = document.getElementById("tree-branch"); const treeList = document.getElementById("tree-list"); const openDelegateBtn = document.getElementById("open-delegate"); const loginCard = document.getElementById("login-card"); const loginBtn = document.getElementById("login-btn"); const forgotBtn = document.getElementById("forgot-btn");
+const requestDelegateBtn = document.getElementById("request-delegate-btn");
+const delegateRequestCard = document.getElementById("delegate-request-card");
+const delegateRequestName = document.getElementById("delegate-request-name");
+const delegateRequestPhone = document.getElementById("delegate-request-phone");
+const delegateRequestBranch = document.getElementById("delegate-request-branch");
+const delegateRequestTree = document.getElementById("delegate-request-tree");
+const delegateRequestEvents = document.getElementById("delegate-request-events");
+const delegateRequestSecret = document.getElementById("delegate-request-secret");
+const delegateRequestSecret2 = document.getElementById("delegate-request-secret2");
+const sendDelegateRequestBtn = document.getElementById("send-delegate-request-btn"); const loginAlert = document.getElementById("login-alert"); const branchSelectLogin = document.getElementById("branch"); const phoneInput = document.getElementById("phone"); const emailInput = document.getElementById("email"); const codeInput = document.getElementById("code"); const dashboardCard = document.getElementById("dashboard-card"); const branchTitle = document.getElementById("branch-title"); const eventsCard = document.getElementById("events-card"); const parentSelect = document.getElementById("parent-select"); const childName = document.getElementById("child-name-1"); const childBirthHijri = document.getElementById("child-hijri-1"); const childBirthGreg = document.getElementById("child-greg-1"); const childBirthOrder = document.getElementById("child-order-1"); const childCity = document.getElementById("child-city-1"); const childArea = document.getElementById("child-area-1"); const childPhone = document.getElementById("child-phone-1"); const childDeceased = document.getElementById("child-deceased-1"); const childWifeSelect = document.getElementById("child-wife-select"); const wifeName = document.getElementById("wife-name"); const wifeFamily = document.getElementById("wife-family"); const wifeBranch = document.getElementById("wife-branch");
 const wifeFamilyName = document.getElementById("wife-family-name"); const wifeOrder = document.getElementById("wife-order"); const wifeLineage = document.getElementById("wife-lineage"); const addWifeBtn = document.getElementById("add-wife-btn"); const linkAllWifeChildrenBtn = document.getElementById("link-all-wife-children-btn"); const wifeAlert = document.getElementById("wife-alert"); const wivesList = document.getElementById("wives-list"); const addChildBtn = document.getElementById("add-child-btn"); const childAlert = document.getElementById("child-alert"); const childrenContainer = document.getElementById("children-container"); const editChildCard = document.getElementById("edit-child-card"); const editChildName = document.getElementById("edit-child-name"); const editChildHijri = document.getElementById("edit-child-hijri"); const editChildGreg = document.getElementById("edit-child-greg"); const editChildBirthOrder = document.getElementById("edit-child-order"); const editChildCity = document.getElementById("edit-child-city"); const editChildArea = document.getElementById("edit-child-area"); const editChildPhone = document.getElementById("edit-child-phone"); const editChildDeceased = document.getElementById("edit-child-deceased"); const saveEditBtn = document.getElementById("save-edit-btn"); const cancelEditBtn = document.getElementById("cancel-edit-btn"); const editChildAlert = document.getElementById("edit-child-alert"); const logoutBtn = document.getElementById("logout-btn"); const happyType = document.getElementById("happy-type"); const happyPerson = document.getElementById("happy-person"); const happyDate = document.getElementById("happy-date"); const happyVisibilityDays = document.getElementById("happy-visibility-days"); const happyDetails = document.getElementById("happy-details"); const saveHappyBtn = document.getElementById("save-happy-btn"); const cancelHappyBtn = document.getElementById("cancel-happy-btn"); const happyAlert = document.getElementById("happy-alert"); const happyList = document.getElementById("happy-list"); const sickType = document.getElementById("sick-type"); const sickPerson = document.getElementById("sick-person"); const sickDate = document.getElementById("sick-date"); const sickVisibilityDays = document.getElementById("sick-visibility-days"); const sickPlace = document.getElementById("sick-place"); const sickHospitalFields = document.getElementById("sick-hospital-fields"); const sickHospitalName = document.getElementById("sick-hospital-name"); const sickHospitalDept = document.getElementById("sick-hospital-dept"); const sickHomeFields = document.getElementById("sick-home-fields"); const sickHomeCity = document.getElementById("sick-home-city"); const sickHomeArea = document.getElementById("sick-home-area"); const sickContactMethod = document.getElementById("sick-contact-method"); const sickVisitBlock = document.getElementById("sick-visit-block"); const sickVisitDateFrom = document.getElementById("sick-visit-date-from"); const sickVisitDateTo = document.getElementById("sick-visit-date-to"); const sickVisitTimeFrom = document.getElementById("sick-visit-time-from"); const sickVisitTimeTo = document.getElementById("sick-visit-time-to"); const sickVisitTimeFromHour = document.getElementById("sick-visit-time-from-hour"); const sickVisitTimeFromMinute = document.getElementById("sick-visit-time-from-minute"); const sickVisitTimeFromPeriod = document.getElementById("sick-visit-time-from-period"); const sickVisitTimeToHour = document.getElementById("sick-visit-time-to-hour"); const sickVisitTimeToMinute = document.getElementById("sick-visit-time-to-minute"); const sickVisitTimeToPeriod = document.getElementById("sick-visit-time-to-period"); const sickContactBlock = document.getElementById("sick-contact-block"); const sickContactPhone = document.getElementById("sick-contact-phone"); const sickNotes = document.getElementById("sick-notes"); const saveSickBtn = document.getElementById("save-sick-btn"); const cancelSickBtn = document.getElementById("cancel-sick-btn"); const sickAlert = document.getElementById("sick-alert"); const sickList = document.getElementById("sick-list"); const deathPerson = document.getElementById("death-person"); const deathDate = document.getElementById("death-date"); const deathVisibilityDays = document.getElementById("death-visibility-days"); const prayerPlace = document.getElementById("prayer-place"); const prayerTime = document.getElementById("prayer-time"); const burialPlace = document.getElementById("burial-place"); const burialTime = document.getElementById("burial-time"); const condolencePlace = document.getElementById("condolence-place"); const condolenceTime = document.getElementById("condolence-time"); const condolencePhone1 = document.getElementById("condolence-phone-1"); const condolencePhone2 = document.getElementById("condolence-phone-2"); const deathNotes = document.getElementById("death-notes"); const saveDeathBtn = document.getElementById("save-death-btn"); const cancelDeathBtn = document.getElementById("cancel-death-btn"); const deathAlert = document.getElementById("death-alert"); const deathsList = document.getElementById("deaths-list"); 
 function normalizeArabicDigitsToLatin(value){
   return String(value ?? "")
@@ -423,7 +433,389 @@ async function loadDelegateIncomingEventRequests(branchKey) {
 function startBranch(branchKey) { if (!branchKey || !Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) { setLoginAlert("error", "يرجى اختيار الفرع بشكل صحيح."); return false; } applyView("delegate"); hideLoginAlert(); state.branch = branchKey; ensureDelegateIncomingEventRequestsCard(); loadDelegateIncomingEventRequests(branchKey).catch(() =>{}); branchTitle.textContent = "لوحة فرع " + branchKey + " بن مطلق بن زيدان"; loginCard.style.display = "none"; dashboardCard.style.display = "block"; if (eventsCard) eventsCard.style.display = "block"; loadChildrenForBranch(branchKey, { applyToState: true }) .then(() =>{ renderParentsForBranch(branchKey); if (desiredParentFromUrl) { selectParentForAdding(desiredParentFromUrl); } else { const root = getBranchRootName(branchKey); if (root) { ensureParentOption(root); parentSelect.value = root; } } renderChildrenForParent(parentSelect.value); refreshWivesForSelectedParent().catch(() => {}); }) .catch(() =>{}); loadEventsForBranch(branchKey); loadDeathsForBranch(branchKey); return true; } async function pushDelegateRequestToالخدمة(payload, msg, secretHash) { const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const statusesToBlock = ["pending", "approved"]; const branchKey = payload.branch; const phone = String(payload.phone || "").trim(); const email = String(payload.email || "").trim(); const pickNewer = (a, b) =>{ if (!a) return b || null; if (!b) return a || null; const at = String(a.created_at || ""); const bt = String(b.created_at || ""); return bt >at ? b : a; }; const matches = { phone: null, email: null }; try { const { data, error } = await sb.rpc("tree_delegate_find_conflict_v1", { p_phone: phone || null, p_email: email || null }); if (error) return { ok: false, reason: "conflict_check_unavailable", error }; const row = Array.isArray(data) ? data[0] : data; if (row) { const status = String(row.status || "").trim(); const conflict = { status, branch_key: String(row.branch_key || "").trim(), request_id: String(row.request_id || "").trim(), created_at: row.created_at || "", secret_hash: String(row.secret_hash || "").trim() }; if (statusesToBlock.includes(status)) { matches.phone = conflict; matches.email = conflict; } } } catch (error) { return { ok: false, reason: "conflict_check_unavailable", error }; } const pendingFields = []; const approvedFields = []; let pendingMatch = null; let approvedMatch = null; if (matches.phone?.status === "pending") { pendingFields.push("phone"); pendingMatch = pickNewer(pendingMatch, matches.phone); } if (matches.email?.status === "pending") { pendingFields.push("email"); pendingMatch = pickNewer(pendingMatch, matches.email); } if (matches.phone?.status === "approved") { approvedFields.push("phone"); approvedMatch = pickNewer(approvedMatch, matches.phone); } if (matches.email?.status === "approved") { approvedFields.push("email"); approvedMatch = pickNewer(approvedMatch, matches.email); } if (pendingMatch) return { ok: false, reason: "duplicate_pending", fields: pendingFields, existing: pendingMatch, matches }; if (approvedMatch) return { ok: false, reason: "duplicate_approved", fields: approvedFields, existing: approvedMatch, matches }; const row = { request_id: payload.requestId, kind: "tree_delegate", branch_key: payload.branch, phone: payload.phone, email: payload.email, secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").insert(row); if (error) return { ok: false, reason: "error", error }; return { ok: true }; } async function requestDelegateAccess(branchKey, phone, email, secret, opts) { const options = opts || {}; const payload = { requestId: makeRequestId(), status: "pending", branch: branchKey, phone, email, secret, createdAt: new Date().toISOString() }; const msg = buildDelegateRequestMessage(payload); const secretHash = await sha256Hex(secret); const pushed = await pushDelegateRequestToالخدمة(payload, msg, secretHash); if (pushed.ok) { setLoginAlert("success", `تم إرسال طلب دخول المندوب للمراجعة (رقم الطلب: ${payload.requestId}). سيظهر الطلب لدى الإدارة.`); return true; } if (pushed.reason === "conflict_check_unavailable") { setLoginAlert( "error", "التحقق من الطلبات السابقة غير متاح مؤقتًا. لم يتم إنشاء طلب جديد، حاول مرة أخرى لاحقًا." ); return false; } if (pushed.reason === "duplicate_pending") { const id = pushed.existing?.request_id || ""; const existingBranch = String(pushed.existing?.branch_key || "").trim(); const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "success", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}) (رقم الطلب: ${id}).` : `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}).` : id ? `${prefix}. طلبك قيد المراجعة بالفعل (رقم الطلب: ${id}).` : `${prefix}. طلبك قيد المراجعة بالفعل.` ); return false; } if (pushed.reason === "duplicate_approved") { const existingBranch = String(pushed.existing?.branch_key || "").trim(); if (options.forceNew === true) { if ( secretHash && (!pushed.existing?.secret_hash || pushed.existing.secret_hash !== secretHash) && existingBranch && existingBranch === branchKey ) { const sb = getالخدمةClient(); if (!sb) { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const existingId = pushed.existing?.request_id; if (!existingId) { setLoginAlert("error", "تعذر تحديث الطلب لأن رقم الطلب السابق غير متوفر."); return false; } const row = { secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").update(row).eq("request_id", existingId); if (!error) { setLoginAlert("success", `تم إرسال طلب تغيير الرقم السري للمراجعة (رقم الطلب: ${existingId}). سيظهر الطلب لدى الإدارة.`); return true; } } } const id = pushed.existing?.request_id || ""; const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "error", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}) (رقم الطلب: ${id}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : id ? `${prefix}. تم اعتمادك مسبقًا (رقم الطلب: ${id}). جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` : `${prefix}. تم اعتمادك مسبقًا. جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` ); return false; } if (pushed.reason === "not_configured") { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const raw = pushed.error || {}; const errMsg = String(raw.message || ""); if (String(raw.code || "") === "23505" || errMsg.toLowerCase().includes("duplicate")) { setLoginAlert("error", "البيانات مسجلة مسبقًا. تأكد من المعلومات وأعد التسجيل."); return false; } setLoginAlert("error", "تعذر إرسال طلب الدخول حاليًا."); return false; } async function tryالخدمةDelegateLogin(branchKey, phone, email, secret) { const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const secretHash = await sha256Hex(secret); if (!secretHash) return { ok: false, reason: "hash_failed" }; const { data, error } = await sb.rpc("check_tree_delegate_access", { p_branch_key: branchKey, p_phone: phone, p_email: email, p_secret_hash: secretHash }); if (error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } if (!data) return { ok: false, reason: "not_found" }; if (data.allowed === true) { const requestId = String(data.request_id || "").trim(); if (!requestId) return { ok: false, reason: "secret_verification_failed" }; return { ok: true, status: "approved", requestId, secretHash }; } if (data.status === "pending") return { ok: false, reason: "pending", requestId: data.request_id || "" }; if (data.status === "rejected") return { ok: false, reason: "rejected", requestId: data.request_id || "" }; if (data.status === "approved") return { ok: false, reason: "wrong_secret", requestId: data.request_id || "" }; return { ok: false, reason: "not_found" }; } if (parentSelect) {
   parentSelect.addEventListener("change", () => refreshWivesForSelectedParent().catch(() => {}));
 }
-loginBtn.addEventListener("click", async () =>{ const branchKey = branchSelectLogin.value; const phone = normalizePhone(phoneInput ? phoneInput.value : ""); const email = normalizeEmail(emailInput ? emailInput.value : ""); const secret = String(codeInput ? codeInput.value : "").trim(); if (!branchKey || !Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) { setLoginAlert("error", "يرجى اختيار الفرع قبل المتابعة."); return; } if (!phone || phone.length< 9) { setLoginAlert("error", "يرجى إدخال رقم جوال صحيح."); return; } if (!email || !email.includes("@")) { setLoginAlert("error", "يرجى إدخال بريد إلكتروني صحيح."); return; } if (!secret || secret.length< 4) { setLoginAlert("error", "يرجى إدخال رقم سري (4 أحرف على الأقل)."); return; } const sbResult = await tryالخدمةDelegateLogin(branchKey, phone, email, secret); if (sbResult.ok && sbResult.status === "approved") { saveDelegateSession(branchKey, phone, email, sbResult.secretHash); startBranch(branchKey); return; } if (sbResult.reason === "pending") { setLoginAlert("success", `طلبك قيد المراجعة (رقم الطلب: ${sbResult.requestId}).`); return; } if (sbResult.reason === "rejected") { setLoginAlert("error", `تم رفض طلبك (رقم الطلب: ${sbResult.requestId}).`); return; } if (sbResult.reason === "wrong_secret") { setLoginAlert("error", "الرقم السري غير صحيح لهذا الطلب المعتمد. إذا نسيت الرقم السري اكتب رقمًا سريًا جديدًا ثم اضغط (نسيت الرقم السري) لإرسال طلب اعتماد جديد."); return; } if (sbResult.reason === "missing_secret_hash") { setLoginAlert("error", "لا يمكن الدخول لأن الطلب المعتمد لا يحتوي بصمة رقم سري. استخدم (نسيت الرقم السري) لإرسال طلب اعتماد جديد."); return; } if (sbResult.reason === "secret_verification_failed") { setLoginAlert("error", "تعذر التحقق الآمن من الرقم السري. لم يتم إنشاء طلب جديد."); return; } if (sbResult.reason === "rpc_missing") { setLoginAlert("error", "تعذر تسجيل الدخول لأن دالة التحقق غير متاحة. لم يتم إنشاء طلب جديد."); return; } if (sbResult.reason === "error") { setLoginAlert("error", "تعذر الاتصال بخدمة التحقق حاليًا. لم يتم إنشاء طلب جديد."); return; } if (sbResult.reason === "hash_failed") { setLoginAlert("error", "تعذر إنشاء بصمة للرقم السري على هذا الجهاز. لم يتم إنشاء طلب جديد."); return; } if (sbResult.reason === "not_configured") { setLoginAlert("error", "تعذر الاتصال بخدمة الدخول. لم يتم إنشاء طلب جديد."); return; } if (sbResult.reason === "not_found") { setLoginAlert( "error", "لا يوجد طلب مندوب بهذه البيانات. استخدم (نسيت الرقم السري) فقط إذا كان لديك طلب سابق، أو تواصل مع الإدارة لإنشاء طلب جديد." ); return; } setLoginAlert("error", "تعذر التحقق من بيانات الدخول. لم يتم إنشاء طلب جديد."); }); if (forgotBtn) { forgotBtn.addEventListener("click", async () =>{ const branchKey = branchSelectLogin.value; const phone = normalizePhone(phoneInput ? phoneInput.value : ""); const email = normalizeEmail(emailInput ? emailInput.value : ""); const secret = String(codeInput ? codeInput.value : "").trim(); if (!branchKey || !Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) { setLoginAlert("error", "يرجى اختيار الفرع قبل المتابعة."); return; } if (!phone || phone.length< 9) { setLoginAlert("error", "يرجى إدخال رقم جوال صحيح."); return; } if (!email || !email.includes("@")) { setLoginAlert("error", "يرجى إدخال بريد إلكتروني صحيح."); return; } if (!secret || secret.length< 4) { setLoginAlert("error", "اكتب رقمًا سريًا جديدًا (4 أحرف على الأقل) ثم اضغط نسيت الرقم السري لإرسال طلب اعتماد جديد."); return; } await requestDelegateAccess(branchKey, phone, email, secret, { forceNew: true }); }); } (async function () { const params = new URLSearchParams(window.location.search); const branchKey = params.get("branch"); if (!branchKey) return; if (!Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) return; branchSelectLogin.value = branchKey; const phone = normalizePhone(params.get("phone") || ""); const email = normalizeEmail(params.get("email") || ""); const secret = String(params.get("code") || "").trim(); if (phoneInput && phone) phoneInput.value = phone; if (emailInput && email) emailInput.value = email; if (codeInput && secret) codeInput.value = secret; })(); clearDelegateSession(); logoutBtn.addEventListener("click", () =>{ state.branch = null; clearDelegateSession(); parentSelect.value = ""; childrenContainer.innerHTML = ""; hideLoginAlert(); if (eventsCard) eventsCard.style.display = "none"; state.happyEvents = []; state.sickEvents = []; renderHappyEvents(); renderSickEvents(); state.deaths = []; renderDeaths(); branchSelectLogin.value = ""; if (phoneInput) phoneInput.value = ""; if (emailInput) emailInput.value = ""; if (codeInput) codeInput.value = ""; loginCard.style.display = "block"; dashboardCard.style.display = "none"; }); 
+
+if (emailInput) {
+  emailInput.value = "";
+  const emailWrap = emailInput.closest(".field") || emailInput.parentElement;
+  if (emailWrap) emailWrap.style.display = "none";
+}
+
+function ensureDelegateAccessRequestUi() {
+  if (document.querySelector("[data-delegate-access-request]")) return;
+
+  const host = loginCard || document.body;
+  const box = document.createElement("div");
+  box.setAttribute("data-delegate-access-request", "");
+  box.style.marginTop = "14px";
+  box.innerHTML = `
+    <button type="button" class="btn btn-secondary" data-open-delegate-access-request style="width:100%;margin-top:8px">
+      طلب صلاحية مندوب
+    </button>
+    <form data-delegate-access-request-form style="display:none;margin-top:14px;text-align:right">
+      <div class="grid">
+        <div class="field">
+          <label>الاسم الرباعي</label>
+          <input name="fullName" type="text" placeholder="الاسم الرباعي" required>
+        </div>
+        <div class="field">
+          <label>رقم الجوال</label>
+          <input name="phone" type="tel" inputmode="numeric" placeholder="05xxxxxxxx" required>
+        </div>
+        <div class="field">
+          <label>فرع العائلة</label>
+          <select name="branch" required>
+            <option value="">اختر الفرع</option>
+            <option value="زيدان">زيدان</option>
+            <option value="زايد">زايد</option>
+            <option value="لاحم">لاحم</option>
+            <option value="مزيد">مزيد</option>
+            <option value="ملحم">ملحم</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>الصلاحية المطلوبة</label>
+          <label style="display:flex;gap:8px;align-items:center"><input name="treeRole" type="checkbox"> مندوب الشجرة</label>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input name="eventsRole" type="checkbox"> مندوب المناسبات</label>
+        </div>
+        <div class="field">
+          <label>الرقم السري</label>
+          <input name="secret" type="password" minlength="4" placeholder="اختر رقمًا سريًا" required>
+        </div>
+        <div class="field">
+          <label>تأكيد الرقم السري</label>
+          <input name="secret2" type="password" minlength="4" placeholder="أعد كتابة الرقم السري" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:10px;width:100%">إرسال الطلب للإدارة</button>
+    </form>
+  `;
+
+  host.appendChild(box);
+
+  const openBtn = box.querySelector("[data-open-delegate-access-request]");
+  const form = box.querySelector("[data-delegate-access-request-form]");
+
+  openBtn.addEventListener("click", () => {
+    if (phoneInput && form.phone && !form.phone.value) form.phone.value = normalizePhone(phoneInput.value || "");
+    if (branchSelectLogin && form.branch && !form.branch.value) form.branch.value = branchSelectLogin.value || "";
+    if (codeInput && form.secret && !form.secret.value) form.secret.value = String(codeInput.value || "").trim();
+    form.style.display = form.style.display === "none" ? "block" : "none";
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const sb = getالخدمةClient();
+    if (!sb) {
+      setLoginAlert("error", "تعذر إرسال الطلب لأن الربط غير مُعد.");
+      return;
+    }
+
+    const fullName = String(form.fullName.value || "").trim();
+    const phone = normalizePhone(form.phone.value || "");
+    const branch = String(form.branch.value || "").trim();
+    const wantsTree = !!form.treeRole.checked;
+    const wantsEvents = !!form.eventsRole.checked;
+    const secret = String(form.secret.value || "").trim();
+    const secret2 = String(form.secret2.value || "").trim();
+
+    if (!fullName || fullName.split(/\s+/).length < 4) {
+      setLoginAlert("error", "يرجى إدخال الاسم الرباعي.");
+      return;
+    }
+    if (!phone || phone.length < 9) {
+      setLoginAlert("error", "يرجى إدخال رقم جوال صحيح.");
+      return;
+    }
+    if (!branch || !Object.prototype.hasOwnProperty.call(parentsByBranch, branch)) {
+      setLoginAlert("error", "يرجى اختيار الفرع.");
+      return;
+    }
+    if (!wantsTree && !wantsEvents) {
+      setLoginAlert("error", "اختر مندوب الشجرة أو مندوب المناسبات أو كلاهما.");
+      return;
+    }
+    if (!secret || secret.length < 4) {
+      setLoginAlert("error", "الرقم السري يجب ألا يقل عن 4 خانات.");
+      return;
+    }
+    if (secret !== secret2) {
+      setLoginAlert("error", "تأكيد الرقم السري غير مطابق.");
+      return;
+    }
+
+    const secretHash = await sha256Hex(secret);
+    if (!secretHash) {
+      setLoginAlert("error", "تعذر إنشاء بصمة الرقم السري.");
+      return;
+    }
+
+    const roles = [];
+    if (wantsTree) roles.push("tree_delegate");
+    if (wantsEvents) roles.push("events_delegate");
+
+    const createdAt = new Date().toISOString();
+    const baseRequestId = makeRequestId();
+
+    const rows = roles.map((kind) => {
+      const requestId = roles.length > 1
+        ? baseRequestId + (kind === "tree_delegate" ? "-TREE" : "-EVENTS")
+        : baseRequestId;
+
+      const message = [
+        "طلب صلاحية مندوب",
+        "",
+        "رقم الطلب: " + requestId,
+        "الاسم الرباعي: " + fullName,
+        "رقم الجوال: " + phone,
+        "الفرع: " + branch,
+        "نوع الصلاحية: " + (kind === "tree_delegate" ? "مندوب الشجرة" : "مندوب المناسبات"),
+        "التاريخ: " + new Date(createdAt).toLocaleString("ar-SA"),
+        "",
+        "__JSON__:",
+        JSON.stringify({
+          v: 2,
+          kind,
+          request_id: requestId,
+          name: fullName,
+          phone,
+          branch_key: branch,
+          delegate_roles: roles,
+          secret_hash: secretHash,
+          created_at: createdAt
+        }, null, 2)
+      ].join("\n");
+
+      return {
+        request_id: requestId,
+        kind,
+        branch_key: branch,
+        name: fullName,
+        phone,
+        email: null,
+        secret_hash: secretHash,
+        message,
+        status: "pending",
+        created_at: createdAt
+      };
+    });
+
+    const { error } = await sb.from("approval_requests").insert(rows);
+    if (error) {
+      setLoginAlert("error", "تعذر إرسال الطلب حاليًا.");
+      return;
+    }
+
+    try {
+      await sb.functions.invoke("alzidan-email-notify", {
+        body: { mode: "new_request", record: rows[0] }
+      });
+    } catch (e) {}
+
+    form.reset();
+    form.style.display = "none";
+    setLoginAlert("success", "تم إرسال طلبك إلى الإدارة. بعد الموافقة سيتم تفعيل الرقم السري الذي اخترته.");
+  });
+}
+
+ensureDelegateAccessRequestUi();
+
+
+function buildDelegateAccessRequestMessage(payload) {
+  const labels = {
+    tree_delegate: "مندوب الشجرة",
+    events_delegate: "مندوب المناسبات"
+  };
+  const lines = [];
+  lines.push("طلب صلاحية مندوب");
+  lines.push("");
+  lines.push("رقم الطلب: " + payload.requestId);
+  lines.push("الاسم الرباعي: " + payload.name);
+  lines.push("رقم الجوال: " + payload.phone);
+  lines.push("الفرع: " + payload.branch);
+  lines.push("الصلاحيات المطلوبة: " + payload.roles.map((role) => labels[role] || role).join("، "));
+  lines.push("التاريخ: " + new Date(payload.createdAt).toLocaleString("ar-SA"));
+  lines.push("");
+  lines.push("__JSON__:");
+  lines.push(JSON.stringify({
+    v: 2,
+    kind: "delegate_access_request",
+    request_id: payload.requestId,
+    name: payload.name,
+    phone: payload.phone,
+    branch_key: payload.branch,
+    delegate_roles: payload.roles,
+    secret_hash: payload.secretHash,
+    created_at: payload.createdAt
+  }, null, 2));
+  return lines.join("\n");
+}
+
+if (requestDelegateBtn && delegateRequestCard) {
+  requestDelegateBtn.addEventListener("click", () => {
+    if (delegateRequestPhone && phoneInput) delegateRequestPhone.value = normalizePhone(phoneInput.value || "");
+    if (delegateRequestBranch && branchSelectLogin) delegateRequestBranch.value = branchSelectLogin.value || "";
+    if (delegateRequestSecret && codeInput) delegateRequestSecret.value = String(codeInput.value || "").trim();
+    delegateRequestCard.style.display = delegateRequestCard.style.display === "none" ? "block" : "none";
+  });
+}
+
+if (sendDelegateRequestBtn) {
+  sendDelegateRequestBtn.addEventListener("click", async () => {
+    const sb = getالخدمةClient();
+    if (!sb) {
+      setLoginAlert("error", "تعذر إرسال الطلب لأن الربط غير مُعد.");
+      return;
+    }
+
+    const name = normalizePersonName(delegateRequestName ? delegateRequestName.value : "");
+    const phone = normalizePhone(delegateRequestPhone ? delegateRequestPhone.value : "");
+    const branch = String(delegateRequestBranch ? delegateRequestBranch.value : "").trim();
+    const wantsTree = !!(delegateRequestTree && delegateRequestTree.checked);
+    const wantsEvents = !!(delegateRequestEvents && delegateRequestEvents.checked);
+    const secret = String(delegateRequestSecret ? delegateRequestSecret.value : "").trim();
+    const secret2 = String(delegateRequestSecret2 ? delegateRequestSecret2.value : "").trim();
+
+    if (!name || name.split(/\s+/).length < 4) {
+      setLoginAlert("error", "يرجى إدخال الاسم الرباعي.");
+      return;
+    }
+    if (!phone || phone.length < 9) {
+      setLoginAlert("error", "يرجى إدخال رقم جوال صحيح.");
+      return;
+    }
+    if (!branch || !Object.prototype.hasOwnProperty.call(parentsByBranch, branch)) {
+      setLoginAlert("error", "يرجى اختيار الفرع.");
+      return;
+    }
+    if (!wantsTree && !wantsEvents) {
+      setLoginAlert("error", "اختر مندوب الشجرة أو مندوب المناسبات أو كلاهما.");
+      return;
+    }
+    if (!secret || secret.length < 4) {
+      setLoginAlert("error", "الرقم السري يجب ألا يقل عن 4 خانات.");
+      return;
+    }
+    if (secret !== secret2) {
+      setLoginAlert("error", "تأكيد الرقم السري غير مطابق.");
+      return;
+    }
+
+    const roles = [];
+    if (wantsTree) roles.push("tree_delegate");
+    if (wantsEvents) roles.push("events_delegate");
+
+    const secretHash = await sha256Hex(secret);
+    const requestId = makeRequestId();
+    const createdAt = new Date().toISOString();
+
+    const payload = {
+      requestId,
+      name,
+      phone,
+      branch,
+      roles,
+      secretHash,
+      createdAt
+    };
+
+    const msg = buildDelegateAccessRequestMessage(payload);
+
+    const row = {
+      request_id: requestId,
+      kind: roles.length === 1 ? roles[0] : "tree_delegate",
+      branch_key: branch,
+      name,
+      phone,
+      email: null,
+      secret_hash: secretHash,
+      message: msg,
+      status: "pending",
+      created_at: createdAt
+    };
+
+    const { error } = await sb.from("approval_requests").insert(row);
+    if (error) {
+      setLoginAlert("error", "تعذر إرسال الطلب حاليًا.");
+      return;
+    }
+
+    try {
+      await sb.functions.invoke("alzidan-email-notify", {
+        body: { mode: "new_request", record: row }
+      });
+    } catch (notifyError) {}
+
+    if (delegateRequestCard) delegateRequestCard.style.display = "none";
+    setLoginAlert("success", "تم إرسال طلبك إلى الإدارة. بعد الموافقة سيتم تفعيل الرقم السري الذي اخترته.");
+  });
+}
+
+loginBtn.addEventListener("click", async () =>{
+  const branchKey = branchSelectLogin.value;
+  const phone = normalizePhone(phoneInput ? phoneInput.value : "");
+  const email = "";
+  const secret = String(codeInput ? codeInput.value : "").trim();
+
+  if (!branchKey || !Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) {
+    setLoginAlert("error", "يرجى اختيار الفرع قبل المتابعة.");
+    return;
+  }
+  if (!phone || phone.length< 9) {
+    setLoginAlert("error", "يرجى إدخال رقم جوال صحيح.");
+    return;
+  }
+  if (!secret || secret.length< 4) {
+    setLoginAlert("error", "يرجى إدخال رقم سري (4 أحرف على الأقل).");
+    return;
+  }
+
+  const sbResult = await tryالخدمةDelegateLogin(branchKey, phone, email, secret);
+
+  if (sbResult.ok && sbResult.status === "approved") {
+    saveDelegateSession(branchKey, phone, email, sbResult.secretHash);
+    startBranch(branchKey);
+    return;
+  }
+  if (sbResult.reason === "pending") {
+    setLoginAlert("success", `طلبك قيد المراجعة (رقم الطلب: ${sbResult.requestId}).`);
+    return;
+  }
+  if (sbResult.reason === "rejected") {
+    setLoginAlert("error", `تم رفض طلبك (رقم الطلب: ${sbResult.requestId}).`);
+    return;
+  }
+  if (sbResult.reason === "wrong_secret") {
+    setLoginAlert("error", "الرقم السري غير صحيح. إذا نسيت الرقم السري اكتب رقمًا جديدًا ثم اضغط (نسيت الرقم السري).");
+    return;
+  }
+  if (sbResult.reason === "not_found") {
+    setLoginAlert("error", "لا يوجد طلب مندوب معتمد بهذه البيانات. استخدم زر (طلب صلاحية مندوب).");
+    return;
+  }
+
+  setLoginAlert("error", "تعذر التحقق من بيانات الدخول حاليًا.");
+}); if (forgotBtn) { forgotBtn.addEventListener("click", async () =>{
+  const branchKey = branchSelectLogin.value;
+  const phone = normalizePhone(phoneInput ? phoneInput.value : "");
+  const email = "";
+  const secret = String(codeInput ? codeInput.value : "").trim();
+
+  if (!branchKey || !Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) {
+    setLoginAlert("error", "يرجى اختيار الفرع قبل المتابعة.");
+    return;
+  }
+  if (!phone || phone.length< 9) {
+    setLoginAlert("error", "يرجى إدخال رقم جوال صحيح.");
+    return;
+  }
+  if (!secret || secret.length< 4) {
+    setLoginAlert("error", "اكتب رقمًا سريًا جديدًا (4 أحرف على الأقل) ثم اضغط نسيت الرقم السري.");
+    return;
+  }
+
+  await requestDelegateAccess(branchKey, phone, email, secret, { forceNew: true });
+}); } (async function () { const params = new URLSearchParams(window.location.search); const branchKey = params.get("branch"); if (!branchKey) return; if (!Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) return; branchSelectLogin.value = branchKey; const phone = normalizePhone(params.get("phone") || ""); const email = normalizeEmail(params.get("email") || ""); const secret = String(params.get("code") || "").trim(); if (phoneInput && phone) phoneInput.value = phone; if (emailInput && email) emailInput.value = email; if (codeInput && secret) codeInput.value = secret; })(); clearDelegateSession(); logoutBtn.addEventListener("click", () =>{ state.branch = null; clearDelegateSession(); parentSelect.value = ""; childrenContainer.innerHTML = ""; hideLoginAlert(); if (eventsCard) eventsCard.style.display = "none"; state.happyEvents = []; state.sickEvents = []; renderHappyEvents(); renderSickEvents(); state.deaths = []; renderDeaths(); branchSelectLogin.value = ""; if (phoneInput) phoneInput.value = ""; if (emailInput) emailInput.value = ""; if (codeInput) codeInput.value = ""; loginCard.style.display = "block"; dashboardCard.style.display = "none"; }); 
 function getSelectedChildSpouseId() {
   if (!childWifeSelect) return null;
   const v = String(childWifeSelect.value || "").trim();
