@@ -224,7 +224,9 @@ const { error } = await sb.from("approval_requests").insert({ request_id: payloa
 await copyText(message);
 if (error) { setEventSubmitAlert("error", "تعذر إرسال المناسبة للمراجعة حالياً، حاول لاحقاً.");
 return;
-} form.reset();
+} try { await sb.functions.invoke("alzidan-email-notify", { body: { mode: "new_request", record: { request_id: payload.requestId, kind: "event_card", branch_key: branch, name: submitterName, phone, email: email || null, message, status: "pending", created_at: payload.createdAt } } });
+} catch (notifyError) {}
+form.reset();
 updateSubmitLinks();
 setEventSubmitAlert("success", "تم إرسال المناسبة للإدارة للمراجعة. تم نسخ نص الطلب أيضًا.");
 } finally { setEventSubmitBusy(false);

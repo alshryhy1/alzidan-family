@@ -87,34 +87,6 @@ async function sendEmail(to: string, subject: string, text: string, fromEmail = 
   return body;
 }
 
-async function getDelegateEmails(branchKey: string, requestKind: string) {
-  if (!SERVICE_ROLE_KEY) return [];
-
-  const delegateKind = delegateKindForRequest(requestKind);
-  if (!delegateKind || !branchKey) return [];
-
-  const url =
-    `${SUPABASE_URL}/rest/v1/approval_requests` +
-    `?select=email,phone,request_id` +
-    `&kind=eq.${encodeURIComponent(delegateKind)}` +
-    `&branch_key=eq.${encodeURIComponent(branchKey)}` +
-    `&status=eq.approved` +
-    `&email=not.is.null`;
-
-  const res = await fetch(url, {
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      Accept: "application/json",
-    },
-  });
-
-  if (!res.ok) return [];
-
-  const rows = await res.json();
-  return [...new Set((rows || []).map((r: any) => String(r.email || "").trim()).filter(Boolean))];
-}
-
 Deno.serve(async (req) => {
   try {
     if (!RESEND_API_KEY) return json({ ok: false, error: "Missing RESEND_API_KEY" }, 500);
@@ -157,31 +129,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, sent: [toEmail], mode });
     }
 
-    const subject = `طلب جديد في عائلة الزيدان - ${title}`;
+    const toEmail = String(record.email || "").trim();
+    if (!toEmail) return json({ ok: true, skipped: "missing_request_email" });
+
+    const subject = `تم استلام طلبك في عائلة الزيدان - ${title}`;
 
     const text = [
-      "وصل طلب جديد في نظام عائلة الزيدان.",
+      "تم استلام طلبك في نظام عائلة الزيدان وهو الآن قيد المراجعة.",
       "",
       `نوع الطلب: ${title}`,
       `رقم الطلب: ${record.request_id || ""}`,
       `الفرع: ${branchKey || "غير محدد"}`,
       `الاسم: ${record.name || "غير متوفر"}`,
       `الجوال: ${record.phone || "غير متوفر"}`,
-      `البريد: ${record.email || "غير متوفر"}`,
+      `البريد: ${toEmail}`,
       `الحالة: ${record.status || ""}`,
       "",
       "نص الطلب:",
       record.message || "",
     ].join("\n");
-
-    const delegateEmails = await getDelegateEmails(branchKey, kind);
-
-    const recipients = [
-      settings.adminNotifyEmail,
-      ...delegateEmails.filter((email) => email.toLowerCase() !== settings.adminNotifyEmail.toLowerCase()),
-    ];
-
-    const uniqueRecipients = [...new Set(recipients.map((email) => String(email || "").trim()).filter(Boolean))];
 
     if (dryRun) {
       return json({
@@ -189,19 +155,12 @@ Deno.serve(async (req) => {
         dry_run: true,
         kind,
         branch_key: branchKey,
-        admin: settings.adminNotifyEmail,
-        delegates: delegateEmails,
-        recipients: uniqueRecipients,
+        recipient: toEmail,
       });
     }
 
-    const sent: string[] = [];
-    for (const email of uniqueRecipients) {
-      await sendEmail(email, subject, text, settings.fromEmail);
-      sent.push(email);
-    }
-
-    return json({ ok: true, sent });
+    await sendEmail(toEmail, subject, text, settings.fromEmail);
+    return json({ ok: true, sent: [toEmail] });
   } catch (error) {
     return json({ ok: false, error: String(error?.message || error) }, 500);
   }
