@@ -118,7 +118,8 @@ function initMemberProfileEntry() {
 
     const fullPathForName = String((profile.tree_children || {}).child_name || (profile.tree_children || {}).name || "").trim();
     const partsForName = fullPathForName.split("/").map((x) => String(x || "").trim()).filter(Boolean);
-    const tripleName = partsForName.slice(-3).reverse().join(" بن ");
+    const tripleNameParts = partsForName.slice(-3).reverse().filter((part, index, arr) => index === 0 || part !== arr[index - 1]);
+    const tripleName = tripleNameParts.join(" بن ");
     const name = tripleName || String(profile.display_name || "").trim() || "عضوي";
     const branch = String(profile.branch_key || "").trim();
     const focusId = String((profile.tree_children || {}).child_name || (profile.tree_children || {}).name || "").trim();
