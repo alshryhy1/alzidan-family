@@ -63,6 +63,31 @@
     sbStatus.textContent = text || "";
   }
 
+  function setAdminOnlySectionsVisibility(isAuthed) {
+    const ok = !!isAuthed;
+    document.querySelectorAll("section.admin-only-section").forEach((section) => {
+      section.style.display = ok ? "" : "none";
+    });
+  }
+
+  function resetProtectedUiState() {
+    if (!adminProtectedSections) return;
+
+    adminProtectedSections.querySelectorAll("details[open]").forEach((detailsEl) => {
+      detailsEl.open = false;
+    });
+
+    adminProtectedSections
+      .querySelectorAll(".maintenance-section, .extra-tools-section[data-maintenance='1']")
+      .forEach((section) => {
+        if (section.id === "bulk-name-audit-section") {
+          section.classList.remove("is-collapsed");
+        } else {
+          section.classList.add("is-collapsed");
+        }
+      });
+  }
+
   function setProtectedVisibility(isAuthed) {
     const ok = !!isAuthed;
     document.body.classList.toggle("admin-authenticated", ok);
@@ -82,6 +107,11 @@
     if (adminLogoutBtn) adminLogoutBtn.disabled = !ok;
     if (adminRefreshBtn) adminRefreshBtn.disabled = !ok;
     if (adminEnableNotifsBtn) adminEnableNotifsBtn.disabled = !ok;
+    setAdminOnlySectionsVisibility(ok);
+
+    if (!ok) {
+      resetProtectedUiState();
+    }
   }
 
   function getAdminToken() {

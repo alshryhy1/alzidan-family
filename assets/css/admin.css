@@ -506,3 +506,8 @@ tbody td{
 tbody tr:nth-child(even){
     background:#fbfdfc!important;
 }
+
+/* Auth hard-stop: never show admin-only sections when logged out */
+body:not(.admin-authenticated) section.admin-only-section {
+  display: none !important;
+}
