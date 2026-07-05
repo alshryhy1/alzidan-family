@@ -1,5 +1,7 @@
 (function () {
-  let sbClient = null;
+  var sbClient = null;
+  var allItems = [];
+  var activeKind = "";
 
   function getClient() {
     if (sbClient) return sbClient;
@@ -18,22 +20,29 @@
     return String(v || "").replace(/\s+/g, " ").trim();
   }
 
-  function getParam(name) {
-    try {
-      return new URLSearchParams(window.location.search || "").get(name) || "";
-    } catch (e) {
-      return "";
-    }
+  function setText(id, value) {
+    var node = document.getElementById(id);
+    if (node) node.textContent = String(value || 0);
   }
 
-  function setMessage(msg) {
-    const list = document.getElementById("memory-list");
+  function setListMessage(msg) {
+    var list = document.getElementById("memory-list");
     if (!list) return;
     list.innerHTML = "";
-    const div = document.createElement("div");
-    div.className = "event-meta";
+    var div = document.createElement("div");
+    div.className = "memory-empty";
     div.textContent = msg;
     list.appendChild(div);
+  }
+
+  function uiKindFromItemKind(kind) {
+    var k = text(kind).toLowerCase();
+    if (k === "video") return "video";
+    if (k === "audio") return "audio";
+    if (k === "document") return "document";
+    if (k === "story") return "story";
+    if (k === "photo_album") return "image";
+    return "other";
   }
 
   function mediaIcon(type) {
@@ -43,32 +52,49 @@
     return "📷";
   }
 
+  function mediaTypeAr(type) {
+    if (type === "video") return "فيديو";
+    if (type === "audio") return "صوت";
+    if (type === "document") return "وثيقة";
+    return "صورة";
+  }
 
-  function setText(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = String(value || 0);
+  function sourceSignature(item) {
+    var name = text(item.submitted_by_name);
+    var phone = text(item.submitted_by_phone);
+    if (!name && !phone) return "أُرسلت من الإدارة";
+
+    var parts = ["أُرسلت بواسطة المندوب"];
+    if (name) parts.push("الاسم: " + name);
+    if (phone) parts.push("الجوال: " + phone);
+    return parts.join(" — ");
   }
 
   function updateStats(items) {
-    const people = new Set();
-    let images = 0, videos = 0, audios = 0, stories = 0, docs = 0;
+    var people = new Set();
+    var images = 0;
+    var videos = 0;
+    var audios = 0;
+    var stories = 0;
+    var docs = 0;
 
-    items.forEach((item) => {
-      const personKey = text(item.person_id || item.person_name);
+    items.forEach(function (item) {
+      var personKey = text(item.person_id || item.person_name);
       if (personKey) people.add(personKey);
 
-      if (item.memory_kind === "image") images++;
-      if (item.memory_kind === "video") videos++;
-      if (item.memory_kind === "audio") audios++;
-      if (item.memory_kind === "story") stories++;
-      if (item.memory_kind === "document") docs++;
+      var kind = uiKindFromItemKind(item.memory_kind);
+      if (kind === "image") images += 1;
+      if (kind === "video") videos += 1;
+      if (kind === "audio") audios += 1;
+      if (kind === "story") stories += 1;
+      if (kind === "document") docs += 1;
 
-      const media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
-      media.forEach((m) => {
-        if (m.media_type === "image") images++;
-        if (m.media_type === "video") videos++;
-        if (m.media_type === "audio") audios++;
-        if (m.media_type === "document") docs++;
+      var media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
+      media.forEach(function (m) {
+        if (m.media_type === "image") images += 1;
+        if (m.media_type === "video") videos += 1;
+        if (m.media_type === "audio") audios += 1;
+        if (m.media_type === "document") docs += 1;
       });
     });
 
@@ -81,14 +107,14 @@
   }
 
   function renderPeople(items) {
-    const wrap = document.getElementById("memory-people");
+    var wrap = document.getElementById("memory-people");
     if (!wrap) return;
     wrap.innerHTML = "";
 
-    const people = new Map();
+    var people = new Map();
 
-    items.forEach((item) => {
-      const key = text(item.person_id || item.person_name);
+    items.forEach(function (item) {
+      var key = text(item.person_id || item.person_name);
       if (!key) return;
 
       if (!people.has(key)) {
@@ -102,38 +128,33 @@
         });
       }
 
-      const p = people.get(key);
-      if (item.memory_kind === "image") p.images++;
-      if (item.memory_kind === "video") p.videos++;
-      if (item.memory_kind === "story") p.stories++;
-
-      const media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
-      media.forEach((m) => {
-        if (m.media_type === "image") p.images++;
-        if (m.media_type === "video") p.videos++;
-      });
+      var p = people.get(key);
+      var kind = uiKindFromItemKind(item.memory_kind);
+      if (kind === "image") p.images += 1;
+      if (kind === "video") p.videos += 1;
+      if (kind === "story") p.stories += 1;
     });
 
-    const rows = Array.from(people.values()).slice(0, 12);
+    var rows = Array.from(people.values()).slice(0, 12);
 
     if (!rows.length) {
-      const empty = document.createElement("div");
-      empty.className = "event-meta";
-      empty.textContent = "لا توجد شخصيات موثقة حالياً.";
+      var empty = document.createElement("div");
+      empty.className = "memory-empty";
+      empty.textContent = "لا توجد شخصيات موثقة حاليًا.";
       wrap.appendChild(empty);
       return;
     }
 
-    rows.forEach((p) => {
-      const card = document.createElement("article");
-      card.className = "event-item";
+    rows.forEach(function (p) {
+      var card = document.createElement("article");
+      card.className = "memory-card";
 
-      const title = document.createElement("div");
-      title.className = "event-title";
+      var title = document.createElement("div");
+      title.className = "memory-card-title";
       title.textContent = p.name;
 
-      const meta = document.createElement("div");
-      meta.className = "event-meta";
+      var meta = document.createElement("div");
+      meta.className = "memory-card-meta";
       meta.textContent = [
         p.branch ? "الفرع: " + p.branch : "",
         "صور: " + p.images,
@@ -141,10 +162,10 @@
         "قصص: " + p.stories
       ].filter(Boolean).join(" — ");
 
-      const link = document.createElement("a");
-      link.className = "btn btn-outline btn-sm";
+      var link = document.createElement("a");
+      link.className = "btn btn-outline btn-small";
       link.href = "person.html?" + (p.id ? "person_id=" + encodeURIComponent(p.id) : "person_name=" + encodeURIComponent(p.name));
-      link.textContent = "فتح السيرة";
+      link.textContent = "فتح صفحة الشخصية";
 
       card.appendChild(title);
       card.appendChild(meta);
@@ -154,87 +175,161 @@
   }
 
   function renderMemory(item) {
-    const card = document.createElement("article");
-    card.className = "event-item";
+    var card = document.createElement("article");
+    card.className = "memory-card";
 
-    const title = document.createElement("div");
-    title.className = "event-title";
+    var title = document.createElement("div");
+    title.className = "memory-card-title";
     title.textContent = text(item.title || item.person_name || "ذكرى");
 
-    const meta = document.createElement("div");
-    meta.className = "event-meta";
+    var meta = document.createElement("div");
+    meta.className = "memory-card-meta";
     meta.textContent = [
       item.person_name ? "الاسم: " + item.person_name : "",
       item.branch_key ? "الفرع: " + item.branch_key : "",
-      item.memory_year ? "السنة: " + item.memory_year : ""
+      item.memory_year ? "السنة: " + item.memory_year : "",
+      item.memory_date ? "التاريخ: " + item.memory_date : ""
     ].filter(Boolean).join(" — ");
 
-    const desc = document.createElement("div");
-    desc.className = "event-meta";
+    var desc = document.createElement("div");
+    desc.className = "memory-card-desc";
     desc.textContent = text(item.description || item.story_text || "");
+
+    var source = document.createElement("div");
+    source.className = "memory-card-meta";
+    source.textContent = sourceSignature(item);
 
     card.appendChild(title);
     card.appendChild(meta);
     if (desc.textContent) card.appendChild(desc);
+    card.appendChild(source);
 
-    const media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
-    media.forEach((m) => {
-      const a = document.createElement("a");
-      a.className = "btn btn-outline btn-sm";
+    var media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
+    media.forEach(function (m) {
+      if (!m.media_url) return;
+      var a = document.createElement("a");
+      a.className = "btn btn-outline btn-small";
       a.href = m.media_url;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
-      a.textContent = mediaIcon(m.media_type) + " — " + (m.caption || "فتح الوسائط");
+      a.textContent = mediaIcon(m.media_type) + " " + mediaTypeAr(m.media_type) + " — " + (m.caption || "فتح الوسيط");
       card.appendChild(a);
     });
 
     return card;
   }
 
-  async function loadMemories() {
-    const list = document.getElementById("memory-list");
-    const subtitle = document.getElementById("memory-subtitle");
-    const sb = getClient();
+  function filteredItems() {
+    var branch = text(document.getElementById("memory-branch") && document.getElementById("memory-branch").value);
+    var q = text(document.getElementById("memory-search") && document.getElementById("memory-search").value).toLowerCase();
+
+    return allItems.filter(function (item) {
+      if (branch && text(item.branch_key) !== branch) return false;
+
+      if (activeKind) {
+        var kind = uiKindFromItemKind(item.memory_kind);
+        var media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
+        var kindHit = kind === activeKind || media.some(function (m) { return text(m.media_type) === activeKind; });
+        if (!kindHit) return false;
+      }
+
+      if (!q) return true;
+      var hay = [
+        text(item.person_name),
+        text(item.title),
+        text(item.description),
+        text(item.story_text),
+        text(item.branch_key)
+      ].join(" ").toLowerCase();
+
+      return hay.indexOf(q) >= 0;
+    });
+  }
+
+  function renderList() {
+    var list = document.getElementById("memory-list");
     if (!list) return;
-    if (!sb) return setMessage("تعذر الاتصال بالخدمة.");
 
-    const personId = text(getParam("person_id"));
-    const personName = text(getParam("person_name"));
-    const branch = text(getParam("branch"));
+    var rows = filteredItems();
+    list.innerHTML = "";
 
-    if (subtitle && (personName || branch)) {
-      subtitle.textContent = ["ذكريات", personName, branch ? "فرع " + branch : ""].filter(Boolean).join(" — ");
+    if (!rows.length) {
+      setListMessage("لا توجد نتائج مطابقة لخيارات العرض الحالية.");
+      return;
     }
 
-    let query = sb
+    rows.forEach(function (item) {
+      list.appendChild(renderMemory(item));
+    });
+  }
+
+  async function loadMemories() {
+    var sb = getClient();
+    if (!sb) {
+      setListMessage("تعذر الاتصال بالخدمة.");
+      return;
+    }
+
+    var query = sb
       .from("family_memory_items")
-      .select("id,branch_key,person_id,person_name,person_lineage,title,description,story_text,memory_kind,memory_year,is_featured,display_order,created_at,family_memory_media(media_type,media_url,thumbnail_url,caption,display_order)")
+      .select("id,branch_key,person_id,person_name,person_lineage,title,description,story_text,memory_kind,memory_date,memory_year,is_featured,display_order,submitted_by_name,submitted_by_phone,submitted_by_relation,created_at,family_memory_media(media_type,media_url,thumbnail_url,caption,display_order)")
       .eq("status", "approved")
       .order("is_featured", { ascending: false })
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(120);
 
-    if (personId) query = query.eq("person_id", personId);
-    else if (personName) query = query.ilike("person_name", "%" + personName + "%");
-    else if (branch) query = query.eq("branch_key", branch);
+    var res = await query;
+    if (res.error) {
+      console.error(res.error);
+      setListMessage("تعذر تحميل الذكريات حاليًا.");
+      return;
+    }
 
-    const { data, error } = await query;
-    if (error) return setMessage("تعذر تحميل الذكريات حالياً.");
+    allItems = Array.isArray(res.data) ? res.data : [];
 
-    const rows = Array.isArray(data) ? data : [];
-    updateStats(rows);
-    renderPeople(rows);
+    updateStats(allItems);
+    renderPeople(allItems);
 
-    if (!rows.length) return setMessage("لا توجد مواد معتمدة في من الذاكرة حالياً.");
+    if (!allItems.length) {
+      setListMessage("لا توجد مواد معتمدة في من الذاكرة حاليًا.");
+      return;
+    }
 
-    list.innerHTML = "";
-    rows.forEach((item) => list.appendChild(renderMemory(item)));
+    renderList();
+  }
+
+  function bindUi() {
+    var filters = Array.prototype.slice.call(document.querySelectorAll(".memory-filter"));
+    filters.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        filters.forEach(function (x) { x.classList.remove("is-active"); });
+        btn.classList.add("is-active");
+        activeKind = text(btn.getAttribute("data-kind"));
+        renderList();
+      });
+    });
+
+    var refresh = document.getElementById("memory-refresh");
+    if (refresh) refresh.addEventListener("click", renderList);
+
+    var search = document.getElementById("memory-search");
+    if (search) search.addEventListener("input", renderList);
+
+    var branch = document.getElementById("memory-branch");
+    if (branch) branch.addEventListener("change", renderList);
+  }
+
+  function start() {
+    bindUi();
+    loadMemories().catch(function () {
+      setListMessage("تعذر تحميل الذكريات.");
+    });
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => loadMemories().catch(() => setMessage("تعذر تحميل الذكريات.")));
+    document.addEventListener("DOMContentLoaded", start);
   } else {
-    loadMemories().catch(() => setMessage("تعذر تحميل الذكريات."));
+    start();
   }
 })();
