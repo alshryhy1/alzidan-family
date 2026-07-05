@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>من الذاكرة | عائلة الزيدان</title>
+  <link rel="stylesheet" href="../../assets/css/main.css?v=1782540604">
+  <style>
+    .memory-hero{padding:28px 18px;border-radius:28px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#fff;margin:20px 0}
+    .memory-hero h1{margin:0 0 8px;font-size:34px}.memory-hero p{margin:0;color:#d1fae5;line-height:1.9}
+    .memory-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+    .memory-stat{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:14px;text-align:center;box-shadow:0 8px 22px rgba(0,0,0,.05)}
+    .memory-stat strong{display:block;font-size:24px;color:#065f46}.memory-stat span{color:#6b7280;font-size:13px}
+    .memory-filters,.memory-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+    .memory-filter{border:1px solid #d1fae5;background:#fff;border-radius:999px;padding:10px 14px;cursor:pointer}
+    .memory-filter.is-active{background:#065f46;color:#fff}
+    .memory-toolbar input,.memory-toolbar select{padding:12px;border:1px solid #d1d5db;border-radius:14px;min-width:190px}
+    .memory-section{margin-top:22px}.memory-section h2{margin-bottom:10px}
+    .memory-card{background:#fff;border:1px solid #e5e7eb;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    .memory-card-title{font-weight:800;font-size:18px;margin-bottom:6px}.memory-card-meta{color:#6b7280;font-size:14px;line-height:1.7}
+    .memory-card-desc{margin-top:8px;line-height:1.9}.memory-empty{color:#6b7280;padding:18px 0}
+  </style>
+</head>
+<body>
+  <main class="container" style="padding:18px 16px">
+    <a class="btn btn-outline btn-small" href="../index.html">← العودة للرئيسية</a>
+
+    <section class="memory-hero">
+      <h1>من الذاكرة</h1>
+      <p>رحم الله من رحل، وحفظ الله من بقي. أرشيف عائلي يحفظ الصور والمقاطع والتسجيلات والقصص والوثائق للأجيال القادمة.</p>
+    </section>
+
+    <section class="memory-stats">
+      <div class="memory-stat"><strong id="stat-people">0</strong><span>شخصيات من الذاكرة</span></div>
+      <div class="memory-stat"><strong id="stat-images">0</strong><span>صور</span></div>
+      <div class="memory-stat"><strong id="stat-videos">0</strong><span>فيديوهات</span></div>
+      <div class="memory-stat"><strong id="stat-audios">0</strong><span>تسجيلات</span></div>
+      <div class="memory-stat"><strong id="stat-stories">0</strong><span>قصص</span></div>
+      <div class="memory-stat"><strong id="stat-docs">0</strong><span>وثائق</span></div>
+    </section>
+
+    <section class="memory-filters" aria-label="فلاتر من الذاكرة">
+      <button class="memory-filter is-active" data-kind="">الكل</button>
+      <button class="memory-filter" data-kind="image">📷 صور</button>
+      <button class="memory-filter" data-kind="video">فيديو</button>
+      <button class="memory-filter" data-kind="audio">صوت</button>
+      <button class="memory-filter" data-kind="story">📜 قصص</button>
+      <button class="memory-filter" data-kind="document">📄 وثائق</button>
+    </section>
+
+    <section class="memory-toolbar">
+      <input id="memory-search" type="search" placeholder="ابحث باسم الشخص أو العنوان">
+      <select id="memory-branch">
+        <option value="">كل الفروع</option>
+        <option value="زيدان">زيدان</option>
+        <option value="زايد">زايد</option>
+        <option value="مزيد">مزيد</option>
+        <option value="لاحم">لاحم</option>
+        <option value="ملحم">ملحم</option>
+      </select>
+      <button id="memory-refresh" class="btn btn-primary" type="button">عرض</button>
+    </section>
+
+    <section class="memory-section">
+      <h2>أحدث الذكريات</h2>
+      <div id="memory-list"></div>
+    </section>
+
+    <section class="memory-section">
+      <h2>شخصيات موثقة</h2>
+      <div id="memory-people"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/memory/home.js"></script>
+</body>
+</html>
