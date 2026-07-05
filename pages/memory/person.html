@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>شخصية من الذاكرة | عائلة الزيدان</title>
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <style>
+    .memory-hero{padding:28px 18px;border-radius:28px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#fff;margin:20px 0}
+    .memory-hero h1{margin:0 0 8px;font-size:34px}.memory-hero p{margin:0;color:#d1fae5;line-height:1.9}
+    .memory-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+    .memory-stat{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:14px;text-align:center;box-shadow:0 8px 22px rgba(0,0,0,.05)}
+    .memory-stat strong{display:block;font-size:24px;color:#065f46}.memory-stat span{color:#6b7280;font-size:13px}
+    .memory-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+    .memory-tab{border:1px solid #d1fae5;background:#fff;border-radius:999px;padding:10px 14px;cursor:pointer}
+    .memory-tab.is-active{background:#065f46;color:#fff}
+    .memory-section{margin-top:22px}.memory-section h2{margin-bottom:10px}
+    .memory-card{background:#fff;border:1px solid #e5e7eb;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+    .memory-card-title{font-weight:800;font-size:18px;margin-bottom:6px}.memory-card-meta{color:#6b7280;font-size:14px;line-height:1.7}
+    .memory-card-desc{margin-top:8px;line-height:1.9}.memory-empty{color:#6b7280;padding:18px 0}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <a class="btn btn-outline btn-small" href="./">← العودة لمن الذاكرة</a>
+
+    <section class="memory-hero">
+      <h1 id="person-title">شخصية من الذاكرة</h1>
+      <p id="person-subtitle">توثيق الصور والمقاطع والتسجيلات والقصص والوثائق الخاصة بهذه الشخصية.</p>
+    </section>
+
+    <section class="memory-stats">
+      <div class="memory-stat"><strong id="stat-images">0</strong><span>صور</span></div>
+      <div class="memory-stat"><strong id="stat-videos">0</strong><span>فيديوهات</span></div>
+      <div class="memory-stat"><strong id="stat-audios">0</strong><span>تسجيلات</span></div>
+      <div class="memory-stat"><strong id="stat-stories">0</strong><span>قصص</span></div>
+      <div class="memory-stat"><strong id="stat-docs">0</strong><span>وثائق</span></div>
+      <div class="memory-stat"><strong id="stat-total">0</strong><span>إجمالي المواد</span></div>
+    </section>
+
+    <section class="memory-tabs" aria-label="تبويبات الشخصية">
+      <button class="memory-tab is-active" data-kind="">الكل</button>
+      <button class="memory-tab" data-kind="image">صور</button>
+      <button class="memory-tab" data-kind="video">فيديو</button>
+      <button class="memory-tab" data-kind="audio">صوت</button>
+      <button class="memory-tab" data-kind="story">قصص</button>
+      <button class="memory-tab" data-kind="document">وثائق</button>
+      <button class="memory-tab" data-kind="reaction">الدعاء والتعليقات</button>
+    </section>
+
+    <section class="memory-section">
+      <h2>مواد الشخصية</h2>
+      <div id="person-memory-list"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/memory/person.js"></script>
+</body>
+</html>
