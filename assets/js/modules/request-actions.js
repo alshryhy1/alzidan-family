@@ -91,16 +91,11 @@
       .trim();
   }
   function extractRequestMediaLinks(message) {
+    const Events = window.AlzidanEvents || {};
+    if (typeof Events.extractEventMediaLinks === "function") {
+      return Events.extractEventMediaLinks(message);
+    }
     const media = { image: "", video: "" };
-    String(message || "")
-      .split(/\r?\n/)
-      .forEach((rawLine) => {
-        const line = rawLine.trim();
-        const imageMatch = line.match(/^رابط الصورة\s*:\s*(https?:\/\/\S+)/i);
-        const videoMatch = line.match(/^رابط الفيديو\s*:\s*(https?:\/\/\S+)/i);
-        if (imageMatch && !media.image) media.image = imageMatch[1];
-        if (videoMatch && !media.video) media.video = videoMatch[1];
-      });
     return media;
   }
   function requestMessageWithoutMediaLinks(message) {
@@ -159,126 +154,17 @@
     }
     parent.appendChild(wrap);
   }
-  function requestLineValue(message, labels) {
-    const wanted = (Array.isArray(labels) ? labels : [labels]).map((label) =>
-      String(label || "").trim(),
-    );
-    const lines = String(message || "").split(/\r?\n/);
-    for (const rawLine of lines) {
-      const line = String(rawLine || "").trim();
-      for (const label of wanted) {
-        const prefix = label + ":";
-        if (line.startsWith(prefix)) return line.slice(prefix.length).trim();
-      }
-    }
-    return "";
-  }
-  function parseJsonEnvelopeFromRequestMessage(message) {
-    const marker = "__JSON__:";
-    const text = String(message || "");
-    const idx = text.indexOf(marker);
-    if (idx < 0) return null;
-    const raw = text.slice(idx + marker.length).trim();
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch (e) {
-      return null;
-    }
-  }
-  function eventTypeFromLabel(label) {
-    const s = normalizeTreeCardText(label || "");
-    if (s === "مولود") return "birth";
-    if (s === "زواج") return "marriage";
-    if (s === "تخرج") return "graduation";
-    if (s === "ترقية") return "promotion";
-    if (s === "اجتماع") return "gathering";
-    if (s === "مريض") return "sick";
-    if (s === "وفاة") return "death";
-    return "gathering";
-  }
-  function buildEventCardRow(row) {
-    const requestId = String(
-      row && row.request_id ? row.request_id : "",
-    ).trim();
-    const msg = String(row && row.message ? row.message : "");
-    const envelope = parseJsonEnvelopeFromRequestMessage(msg);
-    if (envelope && envelope.event && typeof envelope.event === "object") {
-      const event = envelope.event;
-      let details = {};
-      if (typeof event.details === "string") {
-        try {
-          details = JSON.parse(event.details);
-        } catch (e) {
-          details = { text: event.details };
-        }
-      } else if (event.details && typeof event.details === "object") {
-        details = event.details;
-      }
-      details.requestId = requestId;
-      return {
-        branch_key: normalizeTreeCardText(
-          row.branch_key || event.branch_key || "",
-        ),
-        type: String(event.type || "gathering"),
-        person: String(event.person || row.name || ""),
-        date_label: String(event.date_label || ""),
-        event_date: String(event.event_date || ""),
-        details: JSON.stringify(details),
-        hospital_name: String(event.hospital_name || ""),
-        hospital_dept: String(event.hospital_dept || ""),
-        contact_method: String(event.contact_method || ""),
-        contact_phone: String(event.contact_phone || ""),
-        visit_date_from: String(event.visit_date_from || ""),
-        visit_date_to: String(event.visit_date_to || ""),
-        visit_time_from: String(event.visit_time_from || ""),
-        visit_time_to: String(event.visit_time_to || ""),
-        created_at: String(
-          event.created_at || row.created_at || new Date().toISOString(),
-        ),
-      };
-    }
-    const media = extractRequestMediaLinks(msg);
-    const typeLabel = requestLineValue(msg, ["نوع المناسبة", "النوع"]);
-    const text = requestLineValue(msg, ["النص"]);
-    const details = {
-      v: 1,
-      kind: "happy_notice",
-      requestId,
-      text,
-      imageUrl: media.image,
-      videoUrl: media.video,
-      showDays: 7,
-    };
-    return {
-      branch_key: normalizeTreeCardText(
-        row.branch_key || requestLineValue(msg, "الفرع"),
-      ),
-      type: eventTypeFromLabel(typeLabel),
-      person:
-        requestLineValue(msg, ["اسم صاحب المناسبة", "صاحب المناسبة"]) ||
-        String(row.name || ""),
-      date_label: requestLineValue(msg, "التاريخ"),
-      event_date: "",
-      details: JSON.stringify(details),
-      hospital_name: "",
-      hospital_dept: "",
-      contact_method: "",
-      contact_phone: String(row.phone || ""),
-      visit_date_from: "",
-      visit_date_to: "",
-      visit_time_from: "",
-      visit_time_to: "",
-      created_at: String(row.created_at || new Date().toISOString()),
-    };
-  }
   async function publishEventCardRequest(sb, token, row) {
     const requestId = String(
       row && row.request_id ? row.request_id : "",
     ).trim();
     if (!requestId) return { ok: false, message: "رقم الطلب ناقص." };
-    const eventRow = buildEventCardRow(row);
-    if (!eventRow.branch_key || !eventRow.type || !eventRow.person) {
+    const Events = window.AlzidanEvents || {};
+    const eventRow =
+      typeof Events.buildFamilyEventRow === "function"
+        ? Events.buildFamilyEventRow({ source: "approval_request", row })
+        : null;
+    if (!eventRow || !eventRow.branch_key || !eventRow.type || !eventRow.person) {
       return {
         ok: false,
         message:

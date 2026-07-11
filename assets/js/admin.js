@@ -2370,30 +2370,12 @@ where c.id = matches.id; commit;
     const selected =
       eventsSourceRows.find((item) => Number(item.id) === id) || {};
     const oldDetails = parseEventDetailsClean(selected.details);
-    const text =
-      eventsSourceText && eventsSourceText.value
-        ? eventsSourceText.value.trim()
-        : "";
-    const imageUrl =
-      eventsSourceImage && eventsSourceImage.value
-        ? eventsSourceImage.value.trim()
-        : "";
-    const videoUrl =
-      eventsSourceVideo && eventsSourceVideo.value
-        ? eventsSourceVideo.value.trim()
-        : "";
-    const details = {
-      ...oldDetails,
-      v: oldDetails.v || 1,
-      kind: oldDetails.kind || "happy_notice",
-      text,
-      imageUrl,
-      videoUrl,
-      showDays: Number(oldDetails.showDays || 7),
-    };
-    return {
+    const Events = window.AlzidanEvents || {};
+    if (typeof Events.buildFamilyEventRow !== "function") return null;
+    return Events.buildFamilyEventRow({
+      source: "admin_cms",
       id,
-      branch_key:
+      branch:
         eventsSourceBranch && eventsSourceBranch.value
           ? eventsSourceBranch.value
           : "",
@@ -2405,18 +2387,28 @@ where c.id = matches.id; commit;
         eventsSourcePerson && eventsSourcePerson.value
           ? eventsSourcePerson.value.trim()
           : "",
-      date_label:
+      dateLabel:
         eventsSourceTitle && eventsSourceTitle.value
           ? eventsSourceTitle.value.trim()
           : "",
-      event_date:
+      eventDate:
         eventsSourceGregorian && eventsSourceGregorian.value
           ? eventsSourceGregorian.value.trim()
           : "",
-      details: JSON.stringify(details),
-      contact_phone: "",
-      contact_method: "",
-    };
+      text:
+        eventsSourceText && eventsSourceText.value
+          ? eventsSourceText.value.trim()
+          : "",
+      imageUrl:
+        eventsSourceImage && eventsSourceImage.value
+          ? eventsSourceImage.value.trim()
+          : "",
+      videoUrl:
+        eventsSourceVideo && eventsSourceVideo.value
+          ? eventsSourceVideo.value.trim()
+          : "",
+      oldDetails,
+    });
   }
   async function saveEventsSourceRow(event) {
     if (event) event.preventDefault();

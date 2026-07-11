@@ -131,40 +131,19 @@
     return "";
   }
   function parseEventPayloadFromRow(row) {
-    const msg = String(row && row.message ? row.message : "");
-    const env = parseRequestEnvelopeState(msg);
-    let event = null;
-    let details = {};
-    if (env.valid && env.parsed && env.parsed.event && typeof env.parsed.event === "object") {
-      event = env.parsed.event;
-      if (typeof event.details === "string") {
-        try {
-          const parsed = JSON.parse(event.details);
-          details = parsed && typeof parsed === "object" ? parsed : { text: String(event.details || "") };
-        } catch (e) {
-          details = { text: String(event.details || "") };
-        }
-      } else if (event.details && typeof event.details === "object") {
-        details = event.details;
-      }
+    const Events = window.AlzidanEvents || {};
+    if (typeof Events.parseEventCardMessage !== "function") {
+      return { envelope: null, type: "", person: "", date: "", text: "", image: "", video: "" };
     }
-    const fromLines = {
-      type: readRequestLineValue(msg, ["نوع المناسبة", "النوع"]),
-      person: readRequestLineValue(msg, ["اسم صاحب المناسبة", "صاحب المناسبة"]),
-      date: readRequestLineValue(msg, ["التاريخ", "تاريخ المناسبة"]),
-      text: readRequestLineValue(msg, ["النص"]),
-    };
-    const media = requestActions.extractRequestMediaLinks
-      ? requestActions.extractRequestMediaLinks(msg)
-      : { image: "", video: "" };
+    const parsed = Events.parseEventCardMessage(row);
     return {
-      envelope: env,
-      type: String((event && event.type) || fromLines.type || "").trim(),
-      person: String((event && event.person) || fromLines.person || row.name || "").trim(),
-      date: String((event && (event.event_date || event.date_label)) || fromLines.date || "").trim(),
-      text: String((details && (details.text || details.extra || details.notes)) || fromLines.text || "").trim(),
-      image: String(media && media.image ? media.image : "").trim(),
-      video: String(media && media.video ? media.video : "").trim(),
+      envelope: parsed.envelope,
+      type: parsed.type,
+      person: parsed.person,
+      date: parsed.dateLabel || parsed.eventDate,
+      text: parsed.text || parsed.detailsText,
+      image: parsed.imageUrl,
+      video: parsed.videoUrl,
     };
   }
   function normalizeQualityKeyText(value) {

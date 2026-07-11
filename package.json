@@ -1,0 +1,7 @@
+{
+  "name": "alzidan-family",
+  "private": true,
+  "scripts": {
+    "verify:event-card": "node scripts/verify-event-card-compat.mjs"
+  }
+}
