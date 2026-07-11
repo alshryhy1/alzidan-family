@@ -215,19 +215,20 @@
         "id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name",
         "id,branch_key,parent_name,parent,child_name,name",
       ];
+      const FM = window.AlzidanFamilyPersonCore || {};
       for (const f of fields) {
         const q = await sb.from("tree_children").select(f).eq("branch_key", key).limit(5000);
         if (!q.error && Array.isArray(q.data)) {
-          q.data.forEach((row) => {
-            const childPath = normalizePersonName(row.child_name || row.name || "");
-            if (childPath && row.id != null) {
-              state.pathToRow[childPath] = {
-                id: Number(row.id),
-                person_id: row.person_id ? String(row.person_id) : "",
-                parent_person_id: row.parent_person_id ? String(row.parent_person_id) : "",
-              };
-            }
-          });
+          state.pathToRow =
+            typeof FM.buildPathToRowIndex === "function"
+              ? FM.buildPathToRowIndex(q.data, normalizePersonName)
+              : {};
+          if (opts && opts.applyToState === true && typeof FM.attachTreeRowIdsToChildren === "function") {
+            FM.attachTreeRowIdsToChildren(state.children, state.pathToRow, {
+              normalizePersonName,
+              normalizePersonBaseName,
+            });
+          }
           break;
         }
       }
@@ -252,10 +253,69 @@
     return "";
   }
 
-  function findRowIdForPath(path) {
+  function findRowIdForPath(path, childObj, parentId) {
+    const FM = window.AlzidanFamilyPersonCore || {};
+    if (typeof FM.findTreeRowId === "function") {
+      return FM.findTreeRowId(state.pathToRow, path, childObj, {
+        normalizePersonName,
+        normalizePersonBaseName,
+      }, parentId);
+    }
     const p = normalizePersonName(path || "");
     const meta = state.pathToRow[p];
     return meta && meta.id ? Number(meta.id) : 0;
+  }
+
+  async function resolveAdminTreeRowId(sb, branchKey, childIdForDelete, child, parentId) {
+    let rowId = findRowIdForPath(childIdForDelete, child, parentId);
+    if (rowId) return rowId;
+    if (!sb || !branchKey) return 0;
+    const childFull = normalizePersonName(childIdForDelete || "");
+    const childLeaf = getLeafStoredNameFromNodeId(childFull);
+    const parentFull = normalizePersonName(parentId || "");
+    const parentLeaf = getLeafStoredNameFromNodeId(parentFull);
+    const lookupValues = [childFull, childLeaf].filter(Boolean);
+    const cols = ["child_name", "name"];
+    for (let i = 0; i < lookupValues.length; i++) {
+      for (let j = 0; j < cols.length; j++) {
+        const q = await sb
+          .from("tree_children")
+          .select("id,parent_name,parent,child_name,name")
+          .eq("branch_key", branchKey)
+          .eq(cols[j], lookupValues[i])
+          .limit(20);
+        if (!q.error && Array.isArray(q.data) && q.data.length) {
+          const hit = q.data.find((row) => {
+            const dbParent = normalizePersonName(row.parent_name || row.parent || "");
+            if (!parentFull && !parentLeaf) return true;
+            if (!dbParent) return true;
+            return (
+              dbParent === parentFull ||
+              dbParent === parentLeaf ||
+              parentFull.endsWith("/" + dbParent) ||
+              parentFull.endsWith("/" + getLeafStoredNameFromNodeId(dbParent)) ||
+              dbParent.endsWith("/" + parentLeaf)
+            );
+          });
+          const chosen = hit || q.data[0];
+          if (chosen && chosen.id != null) return Number(chosen.id);
+        }
+      }
+    }
+    const personId = normalizePersonName(
+      (child && (child.personId || child.person_id)) || "",
+    );
+    if (personId) {
+      const q = await sb
+        .from("tree_children")
+        .select("id")
+        .eq("branch_key", branchKey)
+        .eq("person_id", personId)
+        .limit(1)
+        .maybeSingle();
+      if (!q.error && q.data && q.data.id != null) return Number(q.data.id);
+    }
+    return 0;
   }
 
   function getPersonRowMeta(path) {
@@ -289,7 +349,9 @@
       p_id: id,
     });
     if (error) return { ok: false, error };
-    return { ok: true, data };
+    const deleted = Number(data || 0);
+    if (!deleted) return { ok: false, error: { message: "row not found" } };
+    return { ok: true, data: deleted };
   }
 
   async function adminRpcDeleteSubtree(branchKey, rowId) {
@@ -862,7 +924,7 @@
     if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
     const parentId = normalizePersonName(payload.parentId || "");
     const child = payload.child || {};
-    const childId = normalizePersonName(child.name || "");
+    const childId = normalizePersonName(payload.childId || child.name || "");
     if (!parentId || !childId) return { ok: false, message: "تعذر تحديد السجل." };
     const deceased = !!payload.deceased;
     const hijriInput = deceased ? "" : String(payload.hijri || "").trim();
@@ -904,7 +966,7 @@
           parent_name: parentId,
           child_name: childId,
           name: childId,
-          id: findRowIdForPath(childId) || undefined,
+          id: findRowIdForPath(childId, child) || undefined,
         },
         patch,
         personId ? { person_id: personId } : {},
@@ -929,7 +991,8 @@
     if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
     const parentId = normalizePersonName(payload.parentId || "");
     const child = payload.child || {};
-    const childIdForDelete = normalizePersonName(child.name || "");
+    const childIdForDelete = normalizePersonName(payload.childId || child.name || "");
+    if (!parentId || !childIdForDelete) return { ok: false, message: "تعذر تحديد السجل." };
     const display = getDisplayNameForNodeId(childIdForDelete, state.branch ? getBranchRootName(state.branch) : "");
     const nameToConfirm = normalizePersonName(display || normalizePersonBaseName(childIdForDelete) || childIdForDelete);
     const ok = await confirmTypedText(nameToConfirm, {
@@ -941,7 +1004,9 @@
     if (!ok) return { ok: false, message: "تم الإلغاء." };
     const sb = getSupabaseClient();
     if (!sb) return { ok: false, message: "تعذر الحذف لأن الربط غير مُعد." };
-    const res = await adminRpcDeleteTreeChildOne(state.branch, findRowIdForPath(childIdForDelete));
+    const rowId = await resolveAdminTreeRowId(sb, state.branch, childIdForDelete, child, parentId);
+    if (!rowId) return { ok: false, message: "تعذر تحديد السجل." };
+    const res = await adminRpcDeleteTreeChildOne(state.branch, rowId);
     if (!res.ok) {
       if (isRpcMissingError(res.error)) return { ok: false, message: "تعذر الحذف حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
       return { ok: false, message: formatTreeChildrenDbError(res.error, "delete") };

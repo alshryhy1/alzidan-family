@@ -91,6 +91,157 @@
     gregEl.addEventListener("change", fromGreg);
   }
 
+  function parentNamesMatch(parentId, dbParentName, norm, baseName) {
+    var parentNorm = norm(parentId || "");
+    var dbParent = norm(dbParentName || "");
+    if (!parentNorm || !dbParent) return true;
+    var parentLeaf = baseName(parentId || "");
+    if (dbParent === parentNorm || dbParent === parentLeaf) return true;
+    if (parentNorm.endsWith("/" + dbParent) || parentNorm.endsWith("/" + baseName(dbParent))) return true;
+    if (dbParent.endsWith("/" + parentLeaf)) return true;
+    return false;
+  }
+
+  function buildPathToRowIndex(rows, normalizePersonName) {
+    var norm =
+      typeof normalizePersonName === "function"
+        ? normalizePersonName
+        : function (v) {
+            return String(v || "").trim();
+          };
+    var pathToRow = {};
+    (Array.isArray(rows) ? rows : []).forEach(function (row) {
+      if (!row || row.id == null) return;
+      var childPath = norm(row.child_name || row.name || "");
+      var meta = {
+        id: Number(row.id),
+        person_id: row.person_id ? String(row.person_id) : "",
+        parent_person_id: row.parent_person_id ? String(row.parent_person_id) : "",
+        db_parent_name: norm(row.parent_name || row.parent || ""),
+        db_child_name: childPath,
+      };
+      if (childPath) pathToRow[childPath] = meta;
+      if (meta.person_id) pathToRow["pid:" + norm(meta.person_id)] = meta;
+    });
+    return pathToRow;
+  }
+
+  function findTreeRowMeta(pathToRow, path, childObj, helpers, parentId) {
+    var helpersObj = helpers || {};
+    var norm =
+      typeof helpersObj.normalizePersonName === "function"
+        ? helpersObj.normalizePersonName
+        : function (v) {
+            return String(v || "").trim();
+          };
+    var baseName =
+      typeof helpersObj.normalizePersonBaseName === "function"
+        ? helpersObj.normalizePersonBaseName
+        : norm;
+    if (childObj && childObj.rowId) {
+      var wantedId = Number(childObj.rowId);
+      var keys = Object.keys(pathToRow || {});
+      for (var i = 0; i < keys.length; i++) {
+        var entry = pathToRow[keys[i]];
+        if (entry && Number(entry.id) === wantedId) return entry;
+      }
+    }
+    var p = norm(path || (childObj && childObj.name) || "");
+    if (!p) return null;
+    var meta = pathToRow && pathToRow[p] ? pathToRow[p] : null;
+    if (!meta && childObj && childObj.personId) meta = pathToRow["pid:" + norm(childObj.personId)];
+    if (!meta) {
+      var leaf = baseName(p);
+      Object.keys(pathToRow || {}).forEach(function (key) {
+        if (meta || key.indexOf("pid:") === 0) return;
+        var candidate = pathToRow[key];
+        var matchesChild =
+          key === p || key.endsWith("/" + leaf) || p.endsWith("/" + key) || p.endsWith(key);
+        if (!matchesChild) return;
+        if (!parentNamesMatch(parentId, candidate && candidate.db_parent_name, norm, baseName)) return;
+        meta = candidate;
+      });
+    }
+    return meta && meta.id ? meta : null;
+  }
+
+  function attachTreeRowIdsToChildren(childrenMap, pathToRow, helpers) {
+    var helpersObj = helpers || {};
+    var norm =
+      typeof helpersObj.normalizePersonName === "function"
+        ? helpersObj.normalizePersonName
+        : function (v) {
+            return String(v || "").trim();
+          };
+    var baseName =
+      typeof helpersObj.normalizePersonBaseName === "function"
+        ? helpersObj.normalizePersonBaseName
+        : norm;
+    Object.keys(childrenMap || {}).forEach(function (parentKey) {
+      var list = Array.isArray(childrenMap[parentKey]) ? childrenMap[parentKey] : [];
+      list.forEach(function (child) {
+        if (!child) return;
+        var name = norm(child.name || "");
+        var meta = findTreeRowMeta(pathToRow, name, child, helpersObj, parentKey);
+        if (meta && meta.id) {
+          child.rowId = meta.id;
+          if (!child.personId && meta.person_id) child.personId = meta.person_id;
+          if (name) pathToRow[name] = meta;
+        }
+      });
+    });
+  }
+
+  function findTreeRowId(pathToRow, path, childObj, helpers, parentId) {
+    var meta = findTreeRowMeta(pathToRow, path, childObj, helpers, parentId);
+    return meta && meta.id ? Number(meta.id) : 0;
+  }
+
+  function buildDeleteNameAttempts(parentId, childId, helpers) {
+    var helpersObj = helpers || {};
+    var norm =
+      typeof helpersObj.normalizePersonName === "function"
+        ? helpersObj.normalizePersonName
+        : function (v) {
+            return String(v || "").trim();
+          };
+    var leafFn =
+      typeof helpersObj.getLeafStoredNameFromNodeId === "function"
+        ? helpersObj.getLeafStoredNameFromNodeId
+        : typeof helpersObj.normalizePersonBaseName === "function"
+          ? helpersObj.normalizePersonBaseName
+          : function (v) {
+              return norm(v);
+            };
+    var parentFull = norm(parentId || "");
+    var childFull = norm(childId || "");
+    var parentLeaf = leafFn(parentId || "");
+    var childLeaf = leafFn(childId || "");
+    var seen = {};
+    var pairs = [];
+    function pushPair(p, c) {
+      var pn = norm(p || "");
+      var cn = norm(c || "");
+      if (!pn || !cn) return;
+      var key = pn + "\0" + cn;
+      if (seen[key]) return;
+      seen[key] = true;
+      pairs.push([pn, cn]);
+    }
+    var rowMeta = helpersObj.rowMeta || null;
+    if (rowMeta && rowMeta.db_parent_name && rowMeta.db_child_name) {
+      pushPair(rowMeta.db_parent_name, rowMeta.db_child_name);
+      pushPair(rowMeta.db_parent_name, leafFn(rowMeta.db_child_name));
+      pushPair(leafFn(rowMeta.db_parent_name), rowMeta.db_child_name);
+      pushPair(leafFn(rowMeta.db_parent_name), leafFn(rowMeta.db_child_name));
+    }
+    pushPair(parentFull, childFull);
+    pushPair(parentFull, childLeaf);
+    pushPair(parentLeaf, childFull);
+    pushPair(parentLeaf, childLeaf);
+    return pairs;
+  }
+
   root.AlzidanFamilyPersonCore = {
     normalizeText: normalizeText,
     escapeHtml: escapeHtml,
@@ -99,5 +250,10 @@
     setDeceasedFieldsUiMode: setDeceasedFieldsUiMode,
     bindDeceasedToggle: bindDeceasedToggle,
     bindBirthDateSync: bindBirthDateSync,
+    buildPathToRowIndex: buildPathToRowIndex,
+    attachTreeRowIdsToChildren: attachTreeRowIdsToChildren,
+    findTreeRowMeta: findTreeRowMeta,
+    findTreeRowId: findTreeRowId,
+    buildDeleteNameAttempts: buildDeleteNameAttempts,
   };
 })(typeof window !== "undefined" ? window : globalThis);

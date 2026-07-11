@@ -29,6 +29,39 @@
 
     var editingKey = "";
 
+    function resolveChildrenForPerson(childId) {
+      var state = typeof api.getState === "function" ? api.getState() : {};
+      var childrenMap = state && state.children ? state.children : {};
+      var norm = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName
+        : function (v) { return String(v || "").trim(); };
+      var baseName = typeof api.normalizePersonBaseName === "function"
+        ? api.normalizePersonBaseName
+        : norm;
+      var id = norm(childId || "");
+      if (id && Array.isArray(childrenMap[id])) return childrenMap[id];
+      if (!id) return [];
+      var leaf = baseName(id);
+      var keys = Object.keys(childrenMap);
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (
+          key === id ||
+          key.endsWith("/" + leaf) ||
+          id.endsWith("/" + key) ||
+          id.endsWith(key)
+        ) {
+          var list = childrenMap[key];
+          if (Array.isArray(list)) return list;
+        }
+      }
+      return [];
+    }
+
+    function resolveDescendantsCount(childId) {
+      return resolveChildrenForPerson(childId).length;
+    }
+
     function childDisplayParts(child, parentKey) {
       var parts = [];
       var childId = typeof api.normalizePersonName === "function"
@@ -45,6 +78,7 @@
       var suffix = forcedSuffix ? forcedSuffix : child && child.deceased ? " (رحمه الله)" : "";
       parts.push((display || childId) + suffix);
       if (child && child.order) parts.push("الترتيب: " + String(child.order));
+      parts.push("الأبناء: " + String(resolveDescendantsCount(childId)));
       var isDeceased = !!(child && child.deceased);
       if (!isDeceased) {
         var ageText = typeof api.calculateAge === "function" ? api.calculateAge(child) : "";
@@ -70,17 +104,15 @@
           : String(child && child.area ? child.area : "");
         if (city) parts.push("المدينة: " + city);
         if (area) parts.push("الحي: " + area);
-        var state = typeof api.getState === "function" ? api.getState() : {};
-        var childCount = state && state.children && state.children[childId]
-          ? state.children[childId].length
-          : 0;
-        parts.push("الأبناء: " + String(childCount));
       }
       return { parts: parts, childId: childId, parentKey: parentKey };
     }
 
     function buildInlineEdit(parentKey, child) {
       var isAdmin = api && api.mode === "admin";
+      var childId = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName(child && child.name ? child.name : "")
+        : String(child && child.name ? child.name : "");
       var wrap = document.createElement("div");
       wrap.className = "fm-inline-edit grid";
       wrap.innerHTML =
@@ -133,6 +165,41 @@
       }
 
       var editAlert = wrap.querySelector("[data-fm-edit-alert]");
+      var descendants = resolveChildrenForPerson(childId);
+      if (descendants.length) {
+        var branch = typeof api.getBranchKey === "function" ? api.getBranchKey() : "";
+        var branchRoot = typeof api.getBranchRootName === "function" ? api.getBranchRootName(branch) : "";
+        var descBlock = document.createElement("div");
+        descBlock.className = "fm-edit-descendants";
+        descBlock.style.gridColumn = "1 / -1";
+        var labels = descendants.map(function (desc) {
+          var descId = typeof api.normalizePersonName === "function"
+            ? api.normalizePersonName(desc && desc.name ? desc.name : "")
+            : String(desc && desc.name ? desc.name : "");
+          var display = typeof api.getDisplayNameForNodeId === "function"
+            ? api.getDisplayNameForNodeId(descId, branchRoot)
+            : descId;
+          var forcedSuffix = typeof api.getForcedRahmaSuffix === "function"
+            ? api.getForcedRahmaSuffix(descId, branch)
+            : "";
+          var suffix = forcedSuffix ? forcedSuffix : desc && desc.deceased ? " (رحمه الله)" : "";
+          return escapeHtml((display || descId) + suffix);
+        }).join("، ");
+        descBlock.innerHTML =
+          '<div class="field">' +
+          '<label>أبناء هذا الشخص (' + String(descendants.length) + ")</label>" +
+          '<div class="hint" style="margin-bottom:8px;line-height:1.7;">' + labels + "</div>" +
+          '<button type="button" class="btn btn-secondary btn-small" data-fm-manage-descendants>عرض وإدارة الأبناء</button>' +
+          "</div>";
+        var toolbar = wrap.querySelector(".fm-toolbar");
+        if (toolbar) wrap.insertBefore(descBlock, toolbar);
+        else wrap.appendChild(descBlock);
+        descBlock.querySelector("[data-fm-manage-descendants]").addEventListener("click", function () {
+          editingKey = "";
+          onSelectPerson(childId);
+        });
+      }
+
       wrap.querySelector("[data-fm-cancel-edit]").addEventListener("click", function () {
         editingKey = "";
         refresh();
@@ -141,6 +208,7 @@
         if (typeof api.updateChild !== "function") return;
         var res = await api.updateChild({
           parentId: parentKey,
+          childId: childId,
           child: child,
           personId: personIdEl ? personIdEl.value : "",
           phone: phoneEl ? phoneEl.value : "",
@@ -254,7 +322,7 @@
         });
         header.querySelector("[data-fm-delete-child]").addEventListener("click", async function () {
           if (typeof api.deleteChild !== "function") return;
-          var res = await api.deleteChild({ parentId: key, child: child });
+          var res = await api.deleteChild({ parentId: key, childId: info.childId, child: child });
           if (!res || !res.ok) {
             setAlert(alertEl, "error", (res && res.message) || "تعذر الحذف.");
             return;

@@ -534,6 +534,54 @@ grant execute on function public.check_events_delegate_access(text, text, text, 
 grant execute on function public.family_events_insert_v1(text, text, text, text, jsonb) to anon, authenticated;
 grant execute on function public.family_events_update_v1(text, text, text, text, text, text, jsonb) to anon, authenticated;
 grant execute on function public.family_events_delete_v1(text, text, text, text, text, text) to anon, authenticated;
+drop function if exists public.delegate_list_event_requests_v1(text, text, text, text);
+create or replace function public.delegate_list_event_requests_v1( p_branch_key text, p_phone text, p_email text, p_secret_hash text
+) returns setof public.approval_requests
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not (
+    public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+    or public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+  ) then
+    return;
+  end if;
+  return query
+    select r.*
+    from public.approval_requests r
+    where r.status = 'pending'
+      and r.kind in ('event_card', 'family_event', 'event_request')
+      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g')
+        = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g')
+    order by r.created_at desc
+    limit 100;
+end;
+$$;
+grant execute on function public.delegate_list_event_requests_v1(text, text, text, text) to anon, authenticated;
+drop function if exists public.delegate_set_approval_request_status_v1(text, bigint, text);
+drop function if exists public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text);
+create or replace function public.delegate_set_approval_request_status_v1( p_branch_key text, p_request_id bigint, p_status text, p_phone text default null, p_email text default null, p_secret_hash text default null
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_row public.approval_requests%rowtype; v_status text;
+begin
+  if p_phone is not null or p_email is not null or p_secret_hash is not null then
+    if not ( public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) or public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) ) then return false; end if;
+  end if;
+  v_status := case when lower(btrim(coalesce(p_status, ''))) = 'approved' then 'approved' when lower(btrim(coalesce(p_status, ''))) = 'rejected' then 'rejected' else null end;
+  if v_status is null then return false; end if;
+  select * into v_row from public.approval_requests r where r.id = p_request_id and r.status = 'pending' and r.kind in ('event_card', 'family_event', 'event_request') and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g') = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g') limit 1;
+  if v_row.id is null then return false; end if;
+  update public.approval_requests set status = v_status where id = p_request_id;
+  return found;
+end;
+$$;
+grant execute on function public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text) to anon, authenticated;
 grant execute on function public.admin_token_ok_v1(text) to anon, authenticated;
 grant execute on function public.admin_create_delegate_request_v1(text, text, text, text, text, text, text) to anon, authenticated;
 grant execute on function public.admin_delete_delegate_v1(text, text, text, text) to anon, authenticated; -- حذف طلب إداري : للإدارة فقط عبر التوكن

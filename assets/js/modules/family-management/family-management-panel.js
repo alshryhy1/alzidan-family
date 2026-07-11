@@ -186,7 +186,30 @@
       if (wivesStat) wivesStat.textContent = String(wivesCount);
       var state = typeof api.getState === "function" ? api.getState() : {};
       var key = typeof api.normalizePersonName === "function" ? api.normalizePersonName(selectedPersonId) : selectedPersonId;
-      var childCount = state && state.children && state.children[key] ? state.children[key].length : 0;
+      var childCount = 0;
+      if (state && state.children && key) {
+        if (Array.isArray(state.children[key])) {
+          childCount = state.children[key].length;
+        } else {
+          var baseName = typeof api.normalizePersonBaseName === "function" ? api.normalizePersonBaseName : function (v) { return String(v || "").trim(); };
+          var leaf = baseName(key);
+          Object.keys(state.children).some(function (mapKey) {
+            if (
+              mapKey === key ||
+              mapKey.endsWith("/" + leaf) ||
+              key.endsWith("/" + mapKey) ||
+              key.endsWith(mapKey)
+            ) {
+              var list = state.children[mapKey];
+              if (Array.isArray(list)) {
+                childCount = list.length;
+                return true;
+              }
+            }
+            return false;
+          });
+        }
+      }
       var childStat = personDataBody.querySelector("[data-fm-stat-children]");
       if (childStat) childStat.textContent = String(childCount);
     }
