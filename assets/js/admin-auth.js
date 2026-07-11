@@ -111,6 +111,13 @@
 
     if (!ok) {
       resetProtectedUiState();
+      destroyAdminFamilyManagement();
+    }
+    if (
+      window.AdminFamilyMgmt &&
+      typeof window.AdminFamilyMgmt.setProtectedVisibility === "function"
+    ) {
+      window.AdminFamilyMgmt.setProtectedVisibility(ok);
     }
   }
 
@@ -195,9 +202,22 @@
     return typeof fn === "function" ? fn() : Promise.resolve();
   };
 
-  const loadSourceTreeRows = async () => {
-    const fn = window.loadSourceTreeRows;
-    return typeof fn === "function" ? fn() : Promise.resolve();
+  const mountAdminFamilyManagement = async () => {
+    if (
+      window.AdminFamilyMgmt &&
+      typeof window.AdminFamilyMgmt.mountAdminFamilyManagement === "function"
+    ) {
+      window.AdminFamilyMgmt.mountAdminFamilyManagement();
+    }
+  };
+
+  const destroyAdminFamilyManagement = () => {
+    if (
+      window.AdminFamilyMgmt &&
+      typeof window.AdminFamilyMgmt.destroyAdminFamilyManagement === "function"
+    ) {
+      window.AdminFamilyMgmt.destroyAdminFamilyManagement();
+    }
   };
 
   const hasDelegateAuditToLoad = () =>
@@ -366,7 +386,11 @@
           await window.AlzidanAdminRequests.loadRequests();
         }
         loadTickerSpeedSetting().catch(() => {});
-        loadSourceTreeRows().catch(() => {});
+        mountAdminFamilyManagement().catch((err) => {
+        if (window.AdminFamilyMgmt && typeof window.AdminFamilyMgmt.refreshAdminFamilyData === "function") {
+          console.error("[AdminFamilyMgmt] mount on init failed:", err);
+        }
+      });
         if (
           window.AlzidanRequestsStats &&
           typeof window.AlzidanRequestsStats.loadRequestsStats === "function"
@@ -415,7 +439,11 @@
         ) {
           await window.AlzidanAdminRequests.loadRequests();
         }
-        loadSourceTreeRows().catch(() => {});
+        mountAdminFamilyManagement().catch((err) => {
+        if (window.AdminFamilyMgmt && typeof window.AdminFamilyMgmt.refreshAdminFamilyData === "function") {
+          console.error("[AdminFamilyMgmt] mount on init failed:", err);
+        }
+      });
         pollPendingRequestsForNotifications().catch(() => {});
       });
     }
@@ -491,7 +519,11 @@
       ) {
         window.AlzidanAdminViews.loadViewsStats().catch(() => {});
       }
-      loadSourceTreeRows().catch(() => {});
+      mountAdminFamilyManagement().catch((err) => {
+        if (window.AdminFamilyMgmt && typeof window.AdminFamilyMgmt.refreshAdminFamilyData === "function") {
+          console.error("[AdminFamilyMgmt] mount on init failed:", err);
+        }
+      });
       if (hasDelegateAuditToLoad()) {
         window.AlzidanDelegateAudit.loadDelegateAudit().catch(() => {});
       }

@@ -448,30 +448,26 @@ item.severity==="low"?"sev-low":"sev-ok");
     btn.className = "btn btn-outline btn-sm";
     btn.textContent = "فتح الفرع";
     btn.addEventListener("click", () => {
-      const branchSelect = document.getElementById("source-tree-branch");
-      const loadBtn = document.getElementById("source-tree-load");
-      const sourceSection = document.getElementById("source-tree-list");
+      const branchSelect = document.getElementById("admin-fm-branch");
+      const loadBtn = document.getElementById("admin-fm-load");
+      const sourceSection = document.getElementById("admin-family-management-section");
       if (branchSelect && item.branch) branchSelect.value = item.branch;
-      if (loadBtn) loadBtn.click();
 
-      setTimeout(() => {
-        const list = document.getElementById("source-tree-list");
-        const wanted = String(item.person || "").trim();
-        if (list && wanted) {
-          const nodes = Array.from(list.querySelectorAll(".source-tree-item"));
-          const hit = nodes.find(n => (n.textContent || "").includes(wanted));
-          if (hit) {
-            hit.scrollIntoView({ behavior: "smooth", block: "center" });
-            hit.style.outline = "3px solid #f97316";
-            hit.style.outlineOffset = "3px";
-            setTimeout(() => { hit.style.outline = ""; hit.style.outlineOffset = ""; }, 3500);
-            const edit = hit.querySelector("[data-source-tree-edit]");
-            if (edit) edit.click();
-            return;
-          }
+      const openPerson = () => {
+        if (
+          window.AdminFamilyMgmt &&
+          typeof window.AdminFamilyMgmt.refreshAdminFamilyData === "function"
+        ) {
+          const wantedPath = String(item.id || item.personId || item.person || "").trim();
+          window.AdminFamilyMgmt.refreshAdminFamilyData(wantedPath).catch(() => {});
+        } else if (loadBtn) {
+          loadBtn.click();
         }
         if (sourceSection) sourceSection.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 900);
+      };
+
+      if (loadBtn) loadBtn.click();
+      setTimeout(openPerson, 900);
     });
 
     el.appendChild(text);

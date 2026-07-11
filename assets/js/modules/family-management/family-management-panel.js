@@ -57,7 +57,11 @@
     personCard.className = "fm-person-card";
     personCard.innerHTML =
       '<div><div class="fm-person-card-title" data-fm-person-title>—</div><div class="fm-person-card-meta" data-fm-person-meta></div></div>' +
-      '<div class="fm-toolbar"><button type="button" class="btn btn-primary btn-small" data-fm-open-add>+ إضافة</button></div>';
+      '<div class="fm-toolbar"><button type="button" class="btn btn-primary btn-small" data-fm-open-add>+ إضافة</button>' +
+      (mode === "admin"
+        ? '<button type="button" class="btn btn-secondary btn-small" data-fm-delete-subtree style="border-color:rgba(239,68,68,0.5);color:#991b1b;">حذف الشجرة الفرعية</button>'
+        : "") +
+      "</div>";
     panel.appendChild(personCard);
 
     function makeAccordion(title, bodyEl) {
@@ -121,6 +125,24 @@
       if (!selectedPersonId) return;
       addSheet.open("son", { wives: spousesSection ? spousesSection.getWivesRows() : [] });
     });
+
+    var deleteSubtreeBtn = personCard.querySelector("[data-fm-delete-subtree]");
+    if (deleteSubtreeBtn) {
+      deleteSubtreeBtn.addEventListener("click", async function () {
+        if (!selectedPersonId || typeof api.deleteSubtree !== "function") return;
+        var res = await api.deleteSubtree(selectedPersonId);
+        if (!res || !res.ok) {
+          if (childrenSection && typeof childrenSection.setAlert === "function") {
+            childrenSection.setAlert("error", (res && res.message) || "تعذر حذف الشجرة الفرعية.");
+          }
+          return;
+        }
+        await refreshAll({ message: res.message, personId: getBranchKey() && typeof api.getDefaultPersonId === "function" ? api.getDefaultPersonId(getBranchKey()) : "" });
+        if (childrenSection && typeof childrenSection.setAlert === "function") {
+          childrenSection.setAlert("success", res.message || "تم حذف الشجرة الفرعية.");
+        }
+      });
+    }
 
     var personSelect = hub.querySelector("#fm-person-select");
     var searchInput = hub.querySelector("#fm-person-search");

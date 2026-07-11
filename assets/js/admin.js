@@ -913,10 +913,10 @@ where c.id = matches.id; commit;
     if (refreshViewsStatsBtn) refreshViewsStatsBtn.disabled = !ok;
     if (refreshDelegateAuditBtn) refreshDelegateAuditBtn.disabled = !ok;
     if (
-      window.AdminSourceTree &&
-      typeof window.AdminSourceTree.setProtectedVisibility === "function"
+      window.AdminFamilyMgmt &&
+      typeof window.AdminFamilyMgmt.setProtectedVisibility === "function"
     ) {
-      window.AdminSourceTree.setProtectedVisibility(ok);
+      window.AdminFamilyMgmt.setProtectedVisibility(ok);
     }
   }
   function getClient() {
@@ -2779,10 +2779,10 @@ where c.id = matches.id; commit;
       )
         window.AlzidanAdminViews.loadViewsStats().catch(() => {});
       if (
-        window.AdminSourceTree &&
-        typeof window.AdminSourceTree.loadSourceTreeRows === "function"
+        window.AdminFamilyMgmt &&
+        typeof window.AdminFamilyMgmt.mountAdminFamilyManagement === "function"
       ) {
-        window.AdminSourceTree.loadSourceTreeRows().catch(() => {});
+        window.AdminFamilyMgmt.mountAdminFamilyManagement();
       }
       if (delegateAuditDetails && delegateAuditDetails.open && window.AlzidanDelegateAudit) {
         window.AlzidanDelegateAudit.loadDelegateAudit().catch(() => {});

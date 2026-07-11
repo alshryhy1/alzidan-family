@@ -80,9 +80,13 @@
     }
 
     function buildInlineEdit(parentKey, child) {
+      var isAdmin = api && api.mode === "admin";
       var wrap = document.createElement("div");
       wrap.className = "fm-inline-edit grid";
       wrap.innerHTML =
+        (isAdmin
+          ? '<div class="field"><label>person_id (UUID)</label><input type="text" data-fm-edit-person-id dir="ltr" lang="en" placeholder="اختياري — للإدارة فقط" /></div>'
+          : "") +
         '<div class="field"><label>رقم الجوال</label><input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="05XXXXXXXX" /></div>' +
         '<div class="field"><label>تاريخ الميلاد (هجري)</label><input type="text" data-fm-edit-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
         '<div class="field"><label>تاريخ الميلاد (ميلادي)</label><input type="date" data-fm-edit-greg dir="ltr" lang="en" /></div>' +
@@ -115,6 +119,12 @@
       if (areaEl) areaEl.value = String(child && child.area ? child.area : "");
       if (deceasedEl) deceasedEl.checked = !!(child && child.deceased);
 
+      var personIdEl = wrap.querySelector("[data-fm-edit-person-id]");
+      if (personIdEl) {
+        var meta = typeof api.getPersonRowMeta === "function" ? api.getPersonRowMeta(child && child.name ? child.name : "") : null;
+        personIdEl.value = String((meta && meta.person_id) || (child && child.personId) || "");
+      }
+
       var phoneEl = wrap.querySelector("[data-fm-edit-phone]");
       if (phoneEl && typeof api.loadMemberPhone === "function") {
         api.loadMemberPhone(parentKey, child).then(function (v) {
@@ -132,6 +142,7 @@
         var res = await api.updateChild({
           parentId: parentKey,
           child: child,
+          personId: personIdEl ? personIdEl.value : "",
           phone: phoneEl ? phoneEl.value : "",
           hijri: hijriEl ? hijriEl.value : "",
           greg: gregEl ? gregEl.value : "",
