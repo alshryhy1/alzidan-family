@@ -15,24 +15,108 @@
 		return null;
 	}
 
-	function cleanVisitPathLabel(value) {
+	const VISIT_PATH_LABELS = {
+		"/": "الصفحة الرئيسية",
+		pages: "الصفحات",
+		"pages/index": "الصفحة الرئيسية",
+		"pages/admin": "صفحة الإدارة",
+		"pages/alzidan-tree": "شجرة العائلة",
+		"pages/contact": "تواصل معنا",
+		"pages/privacy": "سياسة الخصوصية",
+		"pages/terms": "الشروط والأحكام",
+		"pages/delete-account": "حذف الحساب",
+		"pages/mobile": "تطبيق الجوال",
+		"pages/memory": "ذاكرة العائلة",
+		"pages/memory/index": "ذاكرة العائلة",
+		"pages/memory/person": "صفحة شخص في الذاكرة",
+		"pages/memory/admin": "إدارة الذاكرة",
+		memory: "ذاكرة العائلة",
+		"memory/index": "ذاكرة العائلة",
+		"memory/person": "صفحة شخص في الذاكرة",
+		"memory/admin": "إدارة الذاكرة",
+		"app/mobile": "تطبيق الجوال",
+		"app/mobile/memory": "ذاكرة التطبيق",
+		mobile: "تطبيق الجوال",
+		admin: "صفحة الإدارة",
+		contact: "تواصل معنا",
+		privacy: "سياسة الخصوصية",
+		terms: "الشروط والأحكام",
+		"delete-account": "حذف الحساب",
+		"alzidan-tree": "شجرة العائلة",
+		person: "صفحة شخص",
+		delegate: "لوحة المندوب",
+	};
+
+	const VISIT_SLUG_LABELS = {
+		pages: "الصفحات",
+		memory: "ذاكرة العائلة",
+		mobile: "تطبيق الجوال",
+		admin: "صفحة الإدارة",
+		index: "الصفحة الرئيسية",
+		person: "صفحة شخص",
+		contact: "تواصل معنا",
+		privacy: "سياسة الخصوصية",
+		terms: "الشروط والأحكام",
+		"delete-account": "حذف الحساب",
+		"alzidan-tree": "شجرة العائلة",
+		delegate: "لوحة المندوب",
+		app: "التطبيق",
+	};
+
+	function normalizeVisitPath(value) {
 		let text = String(value == null ? "" : value).trim();
-		if (!text) return "الصفحة الرئيسية";
+		if (!text) return "/";
 
 		text = text.replace(/^file:\/\/\/?/i, "");
 		text = text.split(String.fromCharCode(92)).join("/");
+		text = text.replace(/\/+/g, "/");
+		text = text.replace(/\.html$/i, "");
+		text = text.replace(/^\/+/, "");
+		text = text.replace(/\/+$/, "");
+		text = text.toLowerCase();
 
-		const parts = text.split("/").filter(Boolean);
-		text = parts.length ? parts[parts.length - 1] : text;
-
-		text = text.replace(/\.html$/i, "").trim();
-
-		if (!text || text === "index") return "الصفحة الرئيسية";
-		if (/^index[_-]/i.test(text)) return "الصفحة الرئيسية";
-		if (/^sandbox$/i.test(text)) return "بيئة اختبار";
-		if (/patched|final|copy|backup|نسخة/i.test(text)) return "صفحة تجريبية";
+		if (!text || text === "index") return "/";
+		if (/^index[_-]/i.test(text)) return "/";
 
 		return text;
+	}
+
+	function lookupVisitPathLabel(normalized) {
+		if (!normalized || normalized === "/") return "الصفحة الرئيسية";
+
+		if (VISIT_PATH_LABELS[normalized]) return VISIT_PATH_LABELS[normalized];
+
+		if (normalized.endsWith("/index")) {
+			const parent = normalized.slice(0, -"/index".length);
+			if (VISIT_PATH_LABELS[parent]) return VISIT_PATH_LABELS[parent];
+			if (VISIT_PATH_LABELS[parent + "/index"]) return VISIT_PATH_LABELS[parent + "/index"];
+		}
+
+		if (normalized.startsWith("pages/")) {
+			const rest = normalized.slice("pages/".length);
+			if (VISIT_PATH_LABELS[rest]) return VISIT_PATH_LABELS[rest];
+			if (VISIT_PATH_LABELS["pages/" + rest]) return VISIT_PATH_LABELS["pages/" + rest];
+		}
+
+		const parts = normalized.split("/").filter(Boolean);
+		const last = parts[parts.length - 1] || "";
+		if (VISIT_SLUG_LABELS[last]) return VISIT_SLUG_LABELS[last];
+
+		if (/[\u0600-\u06FF]/.test(normalized)) {
+			return parts.length ? parts[parts.length - 1] : normalized;
+		}
+
+		const mapped = parts.map((part) => VISIT_SLUG_LABELS[part]).filter(Boolean);
+		if (mapped.length) return mapped.join(" — ");
+
+		return "صفحة أخرى";
+	}
+
+	function cleanVisitPathLabel(value) {
+		const normalized = normalizeVisitPath(value);
+		if (/^sandbox$/i.test(normalized)) return "بيئة اختبار";
+		if (/patched|final|copy|backup|نسخة/i.test(normalized)) return "صفحة تجريبية";
+		return lookupVisitPathLabel(normalized);
 	}
 
 	function isIgnoredVisitPathLabel(label) {
@@ -113,7 +197,7 @@
 			if (memoryTotal === 0 && appTotal === 0) {
 				lines.push("");
 				lines.push(
-					"ملاحظة: لا توجد مشاهدات مسجّلة للذاكرة أو التطبيق بعد. زُر pages/memory/index.html أو افتح تطبيق الجوال.",
+					"ملاحظة: لا توجد مشاهدات مسجّلة للذاكرة أو التطبيق بعد. زُر صفحات الذاكرة أو افتح تطبيق الجوال.",
 				);
 			}
 		}
