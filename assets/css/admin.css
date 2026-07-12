@@ -511,3 +511,10 @@ tbody tr:nth-child(even){
 body:not(.admin-authenticated) section.admin-only-section {
   display: none !important;
 }
+
+.views-stats-block {
+  white-space: pre-line;
+  line-height: 1.65;
+  font-size: 14px;
+  margin-top: 4px;
+}

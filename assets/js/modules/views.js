@@ -53,17 +53,70 @@
 		viewsStatsEl.textContent = text || "تعذر تحميل الإحصاءات.";
 	}
 
+	function num(value) {
+		const n = Number(value);
+		return isFinite(n) ? n : 0;
+	}
+
+	function hasExtendedStats(data) {
+		return !!(
+			data &&
+			("site_total" in data || "memory_total" in data || "app_total" in data)
+		);
+	}
+
+	function fmtSection(total, today, last7) {
+		return (
+			"إجمالي: " +
+			String(total) +
+			" | اليوم: " +
+			String(today) +
+			" | آخر 7 أيام: " +
+			String(last7)
+		);
+	}
+
 	function renderViewsStats(data) {
 		if (!viewsStatsEl) return;
 
-		const total = data && data.total != null ? Number(data.total) : 0;
-		const today = data && data.today != null ? Number(data.today) : 0;
-		const last7 = data && data.last_7 != null ? Number(data.last_7) : 0;
+		const total = num(data && data.total);
+		const today = num(data && data.today);
+		const last7 = num(data && data.last_7);
+		const siteTotal = num(data && data.site_total);
+		const siteToday = num(data && data.site_today);
+		const siteLast7 = num(data && data.site_last_7);
+		const memoryTotal = num(data && data.memory_total);
+		const memoryToday = num(data && data.memory_today);
+		const memoryLast7 = num(data && data.memory_last_7);
+		const appTotal = num(data && data.app_total);
+		const appToday = num(data && data.app_today);
+		const appLast7 = num(data && data.app_last_7);
 		const lines = [];
 
-		lines.push("إجمالي الزيارات: " + String(isFinite(total) ? total : 0));
-		lines.push("زيارات اليوم: " + String(isFinite(today) ? today : 0));
-		lines.push("آخر 7 أيام: " + String(isFinite(last7) ? last7 : 0));
+		lines.push("إجمالي الزيارات: " + String(total));
+		lines.push("زيارات اليوم: " + String(today) + " | آخر 7 أيام: " + String(last7));
+		lines.push("");
+
+		if (!hasExtendedStats(data)) {
+			lines.push("⚠️ التفصيل غير متاح — نفّذ ملف SQL:");
+			lines.push("supabase/sql/admin_polls_and_view_stats.sql");
+		} else {
+			lines.push("── الموقع ──");
+			lines.push(fmtSection(siteTotal, siteToday, siteLast7));
+			lines.push("");
+			lines.push("── الذاكرة (ويب) ──");
+			lines.push(fmtSection(memoryTotal, memoryToday, memoryLast7));
+			lines.push("");
+			lines.push("── التطبيق ──");
+			lines.push(fmtSection(appTotal, appToday, appLast7));
+
+			if (memoryTotal === 0 && appTotal === 0) {
+				lines.push("");
+				lines.push(
+					"ملاحظة: لا توجد مشاهدات مسجّلة للذاكرة أو التطبيق بعد. زُر pages/memory/index.html أو افتح تطبيق الجوال.",
+				);
+			}
+		}
 
 		const paths = data && Array.isArray(data.paths) ? data.paths : [];
 		const mergedPaths = new Map();

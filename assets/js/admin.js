@@ -2861,6 +2861,11 @@ where c.id = matches.id; commit;
       )
         window.AlzidanAdminViews.loadViewsStats().catch(() => {});
       if (
+        window.AlzidanAdminPolls &&
+        typeof window.AlzidanAdminPolls.loadPollsRows === "function"
+      )
+        window.AlzidanAdminPolls.loadPollsRows().catch(() => {});
+      if (
         window.AdminFamilyMgmt &&
         typeof window.AdminFamilyMgmt.mountAdminFamilyManagement === "function"
       ) {

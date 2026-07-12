@@ -67,8 +67,24 @@
     }
 
     const poll = polls[0];
+    if (poll.ends_at) {
+      const endsAt = Date.parse(poll.ends_at);
+      if (Number.isFinite(endsAt) && endsAt < Date.now()) {
+        status.textContent = "انتهى التصويت.";
+        card.querySelector("[data-poll-question]").textContent = poll.question || "تصويت عام";
+        card.querySelectorAll("[data-poll-vote]").forEach((btn) => {
+          btn.disabled = true;
+        });
+        return;
+      }
+    }
+
     card.dataset.pollId = String(poll.id);
-    card.querySelector("[data-poll-question]").textContent = poll.question || "تصويت عام";
+    const questionEl = card.querySelector("[data-poll-question]");
+    const questionText = poll.question || "تصويت عام";
+    questionEl.textContent = poll.description
+      ? questionText + " — " + poll.description
+      : questionText;
 
     const { data: votes } = await sb
       .from("family_poll_votes")
