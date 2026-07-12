@@ -13,14 +13,17 @@
     operation: "operation",
     discharge: "discharge",
     death: "death",
-    success: "general",
-    new_house: "general",
-    happy: "general",
+    success: "success",
+    new_house: "new_house",
+    travel: "travel",
+    happy: "happy",
     general: "general",
+    other: "other",
+    meeting: "gathering",
     مولود: "birth",
     زواج: "marriage",
-    "عقد قران": "marriage",
-    خطوبة: "marriage",
+    "عقد قران": "contract",
+    خطوبة: "engagement",
     تخرج: "graduation",
     ترقية: "promotion",
     "ترقية / وظيفة": "promotion",
@@ -29,21 +32,30 @@
     مريض: "sick",
     عملية: "operation",
     وفاة: "death",
-    نجاح: "general",
-    "منزل جديد": "general",
+    نجاح: "success",
+    "منزل جديد": "new_house",
+    سفر: "travel",
   };
 
   const ARABIC_LABELS = {
-    birth: "مولود",
+    birth: "عقيقة مولود",
     marriage: "زواج",
-    graduation: "تخرج",
-    promotion: "ترقية",
-    gathering: "اجتماع",
+    engagement: "خطوبة",
+    contract: "عقد قران",
+    graduation: "حفل تخرج",
+    promotion: "حفل ترقية",
+    success: "نجاح / تفوق",
+    new_house: "منزل جديد",
+    travel: "سفر",
+    gathering: "اجتماع عائلي",
+    meeting: "اجتماع عائلي",
     sick: "مريض",
     operation: "عملية",
-    discharge: "خروج",
+    discharge: "خروج من المستشفى",
     death: "وفاة",
     general: "مناسبة عامة",
+    happy: "فرح",
+    other: "أخرى",
   };
 
   function normalizeText(v) {
@@ -62,7 +74,10 @@
   }
 
   function eventTypeArabicLabel(type) {
-    return ARABIC_LABELS[normalizeEventType(type)] || "مناسبة عامة";
+    const raw = normalizeText(type).toLowerCase();
+    if (ARABIC_LABELS[raw]) return ARABIC_LABELS[raw];
+    const normalized = normalizeEventType(type);
+    return ARABIC_LABELS[normalized] || "مناسبة عامة";
   }
 
   function eventCategoryFromType(type) {

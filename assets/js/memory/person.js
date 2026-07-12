@@ -63,14 +63,13 @@
   }
 
   function sourceSignature(item) {
+    if (window.AlzidanMemorySource && typeof window.AlzidanMemorySource.format === "function") {
+      return window.AlzidanMemorySource.format(item);
+    }
     var name = text(item.submitted_by_name);
     var phone = text(item.submitted_by_phone);
-    if (!name && !phone) return "أُرسلت من الإدارة";
-
-    var parts = ["أُرسلت بواسطة المندوب"];
-    if (name) parts.push("الاسم: " + name);
-    if (phone) parts.push("الجوال: " + phone);
-    return parts.join(" — ");
+    if (!name && !phone) return "تم الرفع بواسطة الإدارة";
+    return [name, phone].filter(Boolean).join(" — ");
   }
 
   function updateHeader(items) {

@@ -1,35 +1,47 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html dir="rtl" lang="ar">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>شخصية من الذاكرة | عائلة الزيدان</title>
+  <meta name="theme-color" content="#064e3b">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23065f46' d='M32 6c-10.6 0-19.2 7.3-19.2 16.3 0 7 5 13 12.2 15.4-1.7 1.1-2.8 2.6-3.5 4.3h21c-.7-1.7-1.8-3.2-3.5-4.3 7.2-2.4 12.2-8.4 12.2-15.4C51.2 13.3 42.6 6 32 6z'/%3E%3Cpath fill='%23065f46' d='M30 34h4v24h-4z'/%3E%3Cpath fill='%23065f46' d='M22 58h20v-4H22z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="../../assets/css/main.css?v=1782540604">
-  <style>
-    .memory-hero{padding:28px 18px;border-radius:28px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#fff;margin:20px 0}
-    .memory-hero h1{margin:0 0 8px;font-size:34px}.memory-hero p{margin:0;color:#d1fae5;line-height:1.9}
-    .memory-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
-    .memory-stat{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:14px;text-align:center;box-shadow:0 8px 22px rgba(0,0,0,.05)}
-    .memory-stat strong{display:block;font-size:24px;color:#065f46}.memory-stat span{color:#6b7280;font-size:13px}
-    .memory-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
-    .memory-tab{border:1px solid #d1fae5;background:#fff;border-radius:999px;padding:10px 14px;cursor:pointer}
-    .memory-tab.is-active{background:#065f46;color:#fff}
-    .memory-section{margin-top:22px}.memory-section h2{margin-bottom:10px}
-    .memory-card{background:#fff;border:1px solid #e5e7eb;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 8px 24px rgba(0,0,0,.06)}
-    .memory-card-title{font-weight:800;font-size:18px;margin-bottom:6px}.memory-card-meta{color:#6b7280;font-size:14px;line-height:1.7}
-    .memory-card-desc{margin-top:8px;line-height:1.9}.memory-empty{color:#6b7280;padding:18px 0}
-  </style>
+  <link rel="stylesheet" href="../../assets/css/legal.css?v=2026071207">
+  <link rel="stylesheet" href="../../assets/css/memory.css?v=2026071219">
 </head>
 <body>
-  <main class="container">
-    <a class="btn btn-outline btn-small" href="./">← العودة لمن الذاكرة</a>
+  <div class="page page--memory">
+    <header>
+      <div class="header-left">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 64 64">
+              <path d="M32 6c-10.6 0-19.2 7.3-19.2 16.3 0 7 5 13 12.2 15.4-1.7 1.1-2.8 2.6-3.5 4.3h21c-.7-1.7-1.8-3.2-3.5-4.3 7.2-2.4 12.2-8.4 12.2-15.4C51.2 13.3 42.6 6 32 6z"></path>
+              <path d="M30 34h4v24h-4z"></path>
+              <path d="M22 58h20v-4H22z"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-text-main">شجرة عائلة الزيدان</div>
+            <div class="brand-text-sub">شخصية من الذاكرة</div>
+          </div>
+        </div>
+      </div>
+      <nav>
+        <a href="./">من الذاكرة</a>
+        <a href="../index.html">الرئيسية</a>
+      </nav>
+    </header>
+
+    <a class="legal-back" href="./">← العودة لمن الذاكرة</a>
 
     <section class="memory-hero">
       <h1 id="person-title">شخصية من الذاكرة</h1>
       <p id="person-subtitle">توثيق الصور والمقاطع والتسجيلات والقصص والوثائق الخاصة بهذه الشخصية.</p>
     </section>
 
-    <section class="memory-stats">
+    <section class="memory-stats" aria-label="إحصائيات الشخصية">
       <div class="memory-stat"><strong id="stat-images">0</strong><span>صور</span></div>
       <div class="memory-stat"><strong id="stat-videos">0</strong><span>فيديوهات</span></div>
       <div class="memory-stat"><strong id="stat-audios">0</strong><span>تسجيلات</span></div>
@@ -39,23 +51,39 @@
     </section>
 
     <section class="memory-tabs" aria-label="تبويبات الشخصية">
-      <button class="memory-tab is-active" data-kind="">الكل</button>
-      <button class="memory-tab" data-kind="image">صور</button>
-      <button class="memory-tab" data-kind="video">فيديو</button>
-      <button class="memory-tab" data-kind="audio">صوت</button>
-      <button class="memory-tab" data-kind="story">قصص</button>
-      <button class="memory-tab" data-kind="document">وثائق</button>
-      <button class="memory-tab" data-kind="reaction">الدعاء والتعليقات</button>
+      <button class="memory-tab is-active" type="button" data-kind="">الكل</button>
+      <button class="memory-tab" type="button" data-kind="image">📷 صور</button>
+      <button class="memory-tab" type="button" data-kind="video">🎬 فيديو</button>
+      <button class="memory-tab" type="button" data-kind="audio">🎙️ صوت</button>
+      <button class="memory-tab" type="button" data-kind="story">📜 قصص</button>
+      <button class="memory-tab" type="button" data-kind="document">📄 وثائق</button>
+      <button class="memory-tab" type="button" data-kind="reaction">الدعاء والتعليقات</button>
     </section>
 
-    <section class="memory-section">
-      <h2>مواد الشخصية</h2>
+    <section class="section memory-section">
+      <div class="section-header">
+        <div class="section-title">مواد الشخصية</div>
+      </div>
       <div id="person-memory-list"></div>
     </section>
-  </main>
+  </div>
+
+  <div class="site-footer-wrap">
+    <footer class="site-footer" role="contentinfo">
+      <nav class="site-footer-links" aria-label="روابط قانونية">
+        <a href="../privacy.html">سياسة الخصوصية</a>
+        <span class="site-footer-sep" aria-hidden="true">|</span>
+        <a href="../terms.html">شروط الاستخدام</a>
+        <span class="site-footer-sep" aria-hidden="true">|</span>
+        <a href="../contact.html">تواصل معنا</a>
+      </nav>
+      <p class="site-footer-copy">© عائلة الزيدان — alzidan.org</p>
+    </footer>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/memory/source-label.js?v=2026071216"></script>
   <script src="../../assets/js/memory/person.js"></script>
 </body>
 </html>

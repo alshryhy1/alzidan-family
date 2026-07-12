@@ -5,315 +5,50 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>إدارة من الذاكرة | عائلة الزيدان</title>
   <link rel="stylesheet" href="../../assets/css/main.css?v=1782540604">
+  <link rel="stylesheet" href="../../assets/css/memory-submit.css?v=2026071223">
   <style>
-    .memory-admin-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 14px; }
-    .memory-admin-head { margin-bottom: 14px; }
-    .memory-admin-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 16px; }
-    .memory-admin-tab { border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; color: #0f172a; padding: 8px 14px; font-weight: 700; cursor: pointer; }
-    .memory-admin-tab.is-active { background: #065f46; color: #fff; border-color: #065f46; }
-    .memory-admin-panel { display: none; }
-    .memory-admin-panel.is-active { display: block; }
-    .memory-admin-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
-    .memory-admin-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 14px; }
-    .memory-admin-card h2 { margin: 0 0 10px; font-size: 20px; }
-    .memory-admin-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .memory-admin-fields .full { grid-column: 1 / -1; }
-    .memory-admin-fields label { display: block; font-size: 13px; margin-bottom: 5px; color: #374151; }
-    .memory-admin-fields input,
-    .memory-admin-fields textarea,
-    .memory-admin-fields select { width: 100%; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
-    .memory-admin-fields textarea { min-height: 96px; }
-    .memory-admin-subtitle { margin: 0 0 10px; color: #6b7280; font-size: 13px; }
-    .memory-badge { display: inline-block; padding: 5px 10px; border-radius: 999px; background: #e2e8f0; color: #0f172a; font-size: 12px; font-weight: 700; }
-    .memory-surface { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; background: #f8fafc; }
-    .memory-selected-person { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .memory-selected-person .full { grid-column: 1 / -1; }
-    .memory-status-info { margin-top: 8px; color: #1d4ed8; font-size: 13px; font-weight: 700; }
-    .memory-inline-row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .memory-inline-row > * { flex: 1; min-width: 180px; }
-    .memory-list-card { border: 1px solid #dbeafe; background: #eff6ff; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
-    .memory-list-card h4 { margin: 0 0 4px; font-size: 15px; }
-    .memory-list-card p { margin: 0; font-size: 12px; color: #334155; }
-    .memory-list-actions { margin-top: 8px; display: flex; gap: 6px; }
-    .memory-list-actions button { border: 1px solid #93c5fd; background: #fff; color: #1e3a8a; border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
-    .is-hidden { display: none !important; }
-    #memory-tree-results { margin-top: 6px; border: 1px solid #e5e7eb; border-radius: 10px; max-height: 220px; overflow: auto; display: none; }
-    #memory-tree-results .source-tree-item { width: 100%; text-align: right; border: 0; border-bottom: 1px solid #eef2f7; background: #fff; padding: 10px; cursor: pointer; }
-    #memory-list { display: grid; gap: 8px; max-height: 580px; overflow: auto; }
-    #memory-list .source-tree-item { width: 100%; text-align: right; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 10px; cursor: pointer; }
-    #memory-items-list { display: grid; gap: 8px; max-height: 580px; overflow: auto; }
-    #memory-items-list .source-tree-item { width: 100%; text-align: right; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; padding: 10px; cursor: pointer; }
-    #memory-admin-status { margin-top: 10px; font-weight: 700; min-height: 24px; }
-    #memory-item-status { margin-top: 10px; font-weight: 700; min-height: 24px; }
-    @media (max-width: 900px) { .memory-admin-grid { grid-template-columns: 1fr; } }
+    .memory-admin-wrap { max-width: 960px; margin: 0 auto; padding: 20px 14px; }
+    .memory-admin-card { background: linear-gradient(135deg, #ecfdf5, #f0fdf4); border: 1px solid #bbf7d0; border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+    .memory-admin-card h2 { margin: 0 0 12px; font-size: 20px; color: #064e3b; }
+    .memory-item-row { border: 1px solid #bbf7d0; background: #fff; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+    .memory-item-row h4 { margin: 0 0 4px; font-size: 15px; color: #064e3b; }
+    .memory-item-row p { margin: 0; font-size: 12px; color: #475569; }
+    .memory-item-actions { margin-top: 8px; display: flex; gap: 6px; }
+    .memory-item-actions button { border: 1px solid #6ee7b7; background: #ecfdf5; color: #065f46; border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+    #memory-status { margin-top: 12px; font-weight: 700; min-height: 22px; color: #065f46; }
+    #memory-status.is-error { color: #991b1b; }
+    #memory-delete { margin-top: 10px; border-color: #fecaca !important; color: #991b1b !important; background: #fff !important; }
   </style>
 </head>
 <body>
   <main class="memory-admin-wrap">
-    <div class="memory-admin-head">
-      <a class="btn btn-outline btn-small" href="./">العودة إلى من الذاكرة</a>
-      <h1 style="margin:10px 0 0;">إدارة من الذاكرة (مستقلة)</h1>
-      <p class="hint" style="margin:6px 0 0;">هذه الصفحة مستقلة عن إدارة الموقع الحالية حتى يتم استقرار auth.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <a class="btn btn-outline btn-small" href="../admin.html">لوحة الإدارة</a>
+      <a class="btn btn-outline btn-small" href="./">من الذاكرة (عام)</a>
     </div>
 
-    <section class="memory-admin-tabs" aria-label="تبويبات إدارة من الذاكرة">
-      <button class="memory-admin-tab is-active" type="button" data-memory-panel="profiles">إضافة شخصية</button>
-      <button class="memory-admin-tab" type="button" data-memory-panel="items">إضافة مادة</button>
-    </section>
+    <h1 style="margin:0 0 6px; color:#064e3b;">إدارة من الذاكرة</h1>
+    <p class="hint" style="margin:0 0 6px;">نفس نموذج المندوب — الفرق: التوقيع «تم الإرسال من الإدارة» ويُحفظ معتمداً.</p>
+    <div id="memory-auth-hint" class="hint" style="color:#92400e; margin-bottom:14px;"></div>
 
-    <section class="memory-admin-panel is-active" data-memory-panel="profiles">
-      <div class="memory-admin-grid">
-      <article class="memory-admin-card">
-        <h2>اختيار الشخص الأساسي</h2>
-        <p class="memory-admin-subtitle">المرحلة 2: البحث بالشجرة مفعل عبر memory_tree_search_v1 مع اعتماد الشخص محليًا.</p>
-        <input id="memory-profile-id" type="hidden" value="">
-        <div class="memory-admin-fields">
-          <div class="full">
-            <label for="memory-person-name">الاسم الكامل</label>
-            <input id="memory-person-name" type="text" placeholder="ابحث أو اكتب الاسم الكامل">
-            <div id="memory-tree-results"></div>
-          </div>
-          <div>
-            <label for="memory-person-branch">الفرع</label>
-            <select id="memory-person-branch">
-              <option value="">غير محدد</option>
-              <option value="زيدان">زيدان</option>
-              <option value="مزيد">مزيد</option>
-              <option value="زايد">زايد</option>
-              <option value="لاحم">لاحم</option>
-              <option value="ملحم">ملحم</option>
-            </select>
-          </div>
-          <div>
-            <label for="memory-person-id">معرّف الشخص (person_id)</label>
-            <input id="memory-person-id" type="text" placeholder="سيعبأ تلقائيًا بعد تفعيل بحث الشجرة" readonly>
-          </div>
-          <div>
-            <label for="memory-person-lineage">مسار النسب</label>
-            <input id="memory-person-lineage" type="text" placeholder="سيعبأ تلقائيًا بعد الاختيار" readonly>
-          </div>
-        </div>
-        <div class="memory-surface" style="margin-top:10px;">
-          <div class="memory-inline-row">
-            <div>
-              <div class="memory-badge">الشخص المختار</div>
-              <div id="memory-selected-person-summary" style="margin-top:8px; color:#334155;">لم يتم اختيار شخص بعد.</div>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-          <button id="memory-person-new" class="btn btn-outline" type="button">تفريغ النموذج</button>
-          <button id="memory-person-save" class="btn btn-primary" type="button">اعتماد الشخص محليًا</button>
-          <button id="memory-person-delete" class="btn btn-outline" type="button" style="border-color:#fecaca;color:#991b1b;">إلغاء الاختيار</button>
-        </div>
-        <div id="memory-admin-status"></div>
-      </article>
+    <div id="memory-submit-root"></div>
 
-      <article class="memory-admin-card">
-        <h2>الشخصيات المعتمدة محليًا</h2>
-        <p class="hint" style="margin:0 0 8px;">هذه القائمة محلية لمرحلة التصميم الأولى، وستتغذى من البيانات الفعلية بعد تفعيل مراحل الربط.</p>
-        <div id="memory-list"></div>
-      </article>
-      </div>
-    </section>
+    <div style="margin-top:10px;">
+      <button id="memory-delete" class="btn btn-outline" type="button">حذف المادة المحددة</button>
+      <div id="memory-status"></div>
+    </div>
 
-    <section class="memory-admin-panel" data-memory-panel="items">
-      <div class="memory-admin-grid">
-      <article class="memory-admin-card">
-        <h2>إضافة / تعديل مادة</h2>
-        <p class="memory-admin-subtitle">المرحلة 3: حفظ المادة مفعل على family_memory_items، بينما الوسائط والأشخاص الإضافيون ما زالوا محليين حتى مراحلهم.</p>
-        <input id="memory-item-id" type="hidden">
-        <div class="memory-admin-fields">
-          <div class="full">
-            <label for="memory-item-profile">الشخصية المرتبطة</label>
-            <select id="memory-item-profile">
-              <option value="">اختر شخصية أولاً</option>
-            </select>
-          </div>
-          <div>
-            <label for="memory-item-type">نوع المادة</label>
-            <select id="memory-item-type">
-              <option value="image">صورة</option>
-              <option value="video">فيديو</option>
-              <option value="audio">تسجيل صوتي</option>
-              <option value="document">وثيقة / PDF</option>
-              <option value="article">مقالة</option>
-              <option value="story">قصة</option>
-            </select>
-          </div>
-          <div>
-            <label for="memory-item-order">الترتيب</label>
-            <input id="memory-item-order" type="number" min="0" step="1" value="0">
-          </div>
-          <div class="full">
-            <label for="memory-item-title">عنوان المادة</label>
-            <input id="memory-item-title" type="text" placeholder="عنوان المادة">
-          </div>
-          <div>
-            <label for="memory-item-date">تاريخ الذاكرة</label>
-            <input id="memory-item-date" type="text" placeholder="مثال: 1402/03/10">
-          </div>
-          <div>
-            <label for="memory-item-year">سنة الذاكرة</label>
-            <input id="memory-item-year" type="text" placeholder="مثال: 1402">
-          </div>
-          <div>
-            <label for="memory-item-location-name">اسم المكان</label>
-            <input id="memory-item-location-name" type="text" placeholder="مثال: مجلس العائلة">
-          </div>
-          <div>
-            <label for="memory-item-location-city">المدينة</label>
-            <input id="memory-item-location-city" type="text" placeholder="مثال: الرياض">
-          </div>
-          <div>
-            <label for="memory-item-location-area">الحي / المنطقة</label>
-            <input id="memory-item-location-area" type="text" placeholder="مثال: الشفا">
-          </div>
-          <div>
-            <label for="memory-item-tags">الوسوم (مفصولة بفاصلة)</label>
-            <input id="memory-item-tags" type="text" placeholder="تراث, مناسبة, قصة">
-          </div>
-          <div>
-            <label for="memory-item-featured">مادة مميزة</label>
-            <select id="memory-item-featured">
-              <option value="false">لا</option>
-              <option value="true">نعم</option>
-            </select>
-          </div>
-          <div>
-            <label for="memory-item-status-select">حالة المادة</label>
-            <select id="memory-item-status-select">
-              <option value="pending" selected>بانتظار المراجعة</option>
-              <option value="approved">مقبولة</option>
-              <option value="rejected">مرفوضة</option>
-              <option value="archived">مؤرشفة</option>
-            </select>
-          </div>
-          <div class="full">
-            <label for="memory-item-file-url">رابط الملف</label>
-            <input id="memory-item-file-url" type="url" placeholder="https://...">
-          </div>
-          <div class="full">
-            <label for="memory-item-thumbnail">رابط الصورة المصغرة (اختياري)</label>
-            <input id="memory-item-thumbnail" type="url" placeholder="https://...">
-          </div>
-          <div class="full">
-            <label for="memory-item-description">وصف المادة</label>
-            <textarea id="memory-item-description" placeholder="وصف مختصر"></textarea>
-          </div>
-          <div class="full">
-            <label for="memory-item-story-text">نص القصة (عند نوع قصة)</label>
-            <textarea id="memory-item-story-text" placeholder="نص القصة الكامل" disabled></textarea>
-          </div>
-        </div>
-
-        <div class="memory-surface" style="margin-top:10px;">
-          <h3 style="margin:0 0 8px; font-size:16px;">توقيع المصدر</h3>
-          <div class="memory-admin-fields">
-            <div>
-              <label for="memory-source-type">نوع المصدر</label>
-              <select id="memory-source-type">
-                <option value="admin" selected>من الإدارة</option>
-                <option value="delegate">من مندوب</option>
-              </select>
-            </div>
-            <div>
-              <label for="memory-source-relation">صفة المرسل</label>
-              <input id="memory-source-relation" type="text" placeholder="مثال: مندوب فرع مزيد">
-            </div>
-            <div>
-              <label for="memory-source-name">اسم المرسل</label>
-              <input id="memory-source-name" type="text" placeholder="اسم المندوب أو اسم إداري">
-            </div>
-            <div>
-              <label for="memory-source-phone">جوال المرسل</label>
-              <input id="memory-source-phone" type="text" placeholder="05xxxxxxxx">
-            </div>
-          </div>
-          <div id="memory-source-hint" class="memory-status-info">سيتم عرض التوقيع لاحقًا أسفل المادة في العرض العام.</div>
-        </div>
-
-        <div class="memory-surface" style="margin-top:10px;">
-          <h3 style="margin:0 0 8px; font-size:16px;">وسائط المادة (متعددة)</h3>
-          <div class="memory-admin-fields">
-            <div>
-              <label for="memory-media-type">نوع الوسيط</label>
-              <select id="memory-media-type">
-                <option value="image">صورة</option>
-                <option value="video">فيديو</option>
-                <option value="audio">صوت</option>
-                <option value="document">وثيقة</option>
-              </select>
-            </div>
-            <div>
-              <label for="memory-media-order">ترتيب الوسيط</label>
-              <input id="memory-media-order" type="number" min="0" step="1" value="0">
-            </div>
-            <div class="full">
-              <label for="memory-media-url">رابط الوسيط</label>
-              <input id="memory-media-url" type="url" placeholder="https://...">
-            </div>
-            <div class="full">
-              <label for="memory-media-thumbnail">رابط المصغرة (اختياري)</label>
-              <input id="memory-media-thumbnail" type="url" placeholder="https://...">
-            </div>
-            <div class="full">
-              <label for="memory-media-caption">وصف الوسيط</label>
-              <input id="memory-media-caption" type="text" placeholder="وصف موجز">
-            </div>
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-            <button id="memory-media-add" class="btn btn-outline" type="button">إضافة وسيط للقائمة</button>
-            <button id="memory-media-clear" class="btn btn-outline" type="button">تفريغ حقول الوسيط</button>
-          </div>
-          <div id="memory-media-list" style="margin-top:10px;"></div>
-        </div>
-
-        <div class="memory-surface" style="margin-top:10px;">
-          <h3 style="margin:0 0 8px; font-size:16px;">أشخاص إضافيون للمادة</h3>
-          <div class="memory-admin-fields">
-            <div>
-              <label for="memory-extra-person-id">person_id (اختياري)</label>
-              <input id="memory-extra-person-id" type="text" placeholder="uuid أو نص حسب الشجرة">
-            </div>
-            <div>
-              <label for="memory-extra-person-name">الاسم</label>
-              <input id="memory-extra-person-name" type="text" placeholder="اسم الشخص المرتبط">
-            </div>
-            <div class="full">
-              <label for="memory-extra-person-lineage">النسب</label>
-              <input id="memory-extra-person-lineage" type="text" placeholder="نص النسب">
-            </div>
-            <div class="full">
-              <label for="memory-extra-person-note">ملاحظة العلاقة</label>
-              <input id="memory-extra-person-note" type="text" placeholder="مثال: صاحب القصة / أحد الحضور">
-            </div>
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-            <button id="memory-extra-person-add" class="btn btn-outline" type="button">إضافة شخص للقائمة</button>
-            <button id="memory-extra-person-clear" class="btn btn-outline" type="button">تفريغ حقول الشخص</button>
-          </div>
-          <div id="memory-extra-people-list" style="margin-top:10px;"></div>
-        </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-          <button id="memory-item-new" class="btn btn-outline" type="button">مادة جديدة</button>
-          <button id="memory-item-save" class="btn btn-primary" type="button">حفظ المادة</button>
-          <button id="memory-item-delete" class="btn btn-outline" type="button" style="border-color:#fecaca;color:#991b1b;">حذف المادة</button>
-        </div>
-        <div id="memory-item-status"></div>
-      </article>
-
-      <article class="memory-admin-card">
-        <h2>قائمة مواد الشخصية (محليًا)</h2>
-        <p class="hint" style="margin:0 0 8px;">ستتحول هذه القائمة إلى القراءة الفعلية من الجداول الرسمية بعد اكتمال مراحل الحفظ.</p>
-        <div id="memory-items-list"></div>
-      </article>
-      </div>
-    </section>
+    <article class="memory-admin-card" style="margin-top:18px;">
+      <h2>مواد هذا الشخص</h2>
+      <p class="hint" style="margin:0 0 8px;">تُحمَّل من القاعدة بعد اختيار الاسم من الشجرة.</p>
+      <div id="memory-items-list"></div>
+    </article>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
   <script src="../../assets/js/config.js"></script>
-  <script src="../../assets/js/memory/admin.js"></script>
+  <script src="../../assets/js/memory/source-label.js?v=2026071220"></script>
+  <script src="../../assets/js/memory/submit.js?v=2026071223"></script>
+  <script src="../../assets/js/memory/admin.js?v=2026071223"></script>
 </body>
 </html>

@@ -403,6 +403,12 @@
         ) {
           window.AlzidanAdminViews.loadViewsStats().catch(() => {});
         }
+        if (
+          window.AlzidanAdminMemoryQueueModule &&
+          typeof window.AlzidanAdminMemoryQueueModule.loadMemoryQueue === "function"
+        ) {
+          window.AlzidanAdminMemoryQueueModule.loadMemoryQueue().catch(() => {});
+        }
         pollPendingRequestsForNotifications().catch(() => {});
         startPendingPolling();
       });
@@ -444,6 +450,12 @@
           console.error("[AdminFamilyMgmt] mount on init failed:", err);
         }
       });
+        if (
+          window.AlzidanAdminMemoryQueueModule &&
+          typeof window.AlzidanAdminMemoryQueueModule.loadMemoryQueue === "function"
+        ) {
+          window.AlzidanAdminMemoryQueueModule.loadMemoryQueue().catch(() => {});
+        }
         pollPendingRequestsForNotifications().catch(() => {});
       });
     }

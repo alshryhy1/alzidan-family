@@ -132,6 +132,7 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const waFileTextEl = document.getElementById("wa-file-text");
   const waFileStatusEl = document.getElementById("wa-file-status");
   const eventsSourceLoad = document.getElementById("events-source-load");
+  const eventsSourceNew = document.getElementById("events-source-new");
   const eventsSourceList = document.getElementById("events-source-list");
   const eventsSourceForm = document.getElementById("events-source-form");
   const eventsSourceId = document.getElementById("events-source-id");
@@ -1019,17 +1020,29 @@ where c.id = matches.id; commit;
     if (eventsSourceStatus) eventsSourceStatus.textContent = message || "";
   }
   function eventTypeLabel(type) {
+    const Events = window.AlzidanEvents || {};
+    if (typeof Events.eventTypeArabicLabel === "function") {
+      return Events.eventTypeArabicLabel(type);
+    }
     const map = {
-      happy: "فرح",
-      death: "وفاة",
+      birth: "عقيقة مولود",
+      marriage: "زواج",
+      graduation: "حفل تخرج",
+      promotion: "حفل ترقية",
+      new_house: "منزل جديد",
+      gathering: "اجتماع عائلي",
+      general: "مناسبة عامة",
       sick: "مريض",
-      birth: "مولود",
-      graduation: "تخرج",
-      promotion: "ترقية",
+      operation: "عملية",
+      death: "وفاة",
+      happy: "فرح",
       meeting: "اجتماع",
       other: "أخرى",
     };
-    return map[type] || type || "مناسبة";
+    return map[type] || "مناسبة عامة";
+  }
+  function eventSourceTypeLabel(type) {
+    return eventTypeLabel(type);
   }
   function renderEventsSourceList() {
     if (!eventsSourceList) return;
@@ -1082,24 +1095,6 @@ where c.id = matches.id; commit;
     return String(
       details.title || row.person || getEventCleanText(row) || "بدون عنوان",
     );
-  }
-  function eventSourceTypeLabel(type) {
-    const map = {
-      birth: "عقيقة مولود",
-      marriage: "زواج",
-      graduation: "حفل تخرج",
-      promotion: "حفل ترقية",
-      new_house: "منزل جديد",
-      gathering: "اجتماع عائلي",
-      general: "مناسبة عامة",
-      sick: "مريض",
-      operation: "عملية",
-      death: "وفاة",
-      happy: "فرح",
-      meeting: "اجتماع",
-      other: "أخرى",
-    };
-    return map[type] || type || "أخرى";
   }
   function setBannerGeneralStatus(message) {
     if (bannerGeneralStatus) bannerGeneralStatus.textContent = message || "";
@@ -2341,6 +2336,22 @@ where c.id = matches.id; commit;
       "تعديل الخبر: " + (row.person || getEventCleanTitle(row) || row.id),
     );
   }
+  function resetEventsSourceForm() {
+    if (eventsSourceId) eventsSourceId.value = "";
+    if (eventsSourceBranch) eventsSourceBranch.value = "زيدان";
+    if (eventsSourceType) eventsSourceType.value = "birth";
+    if (eventsSourcePerson) eventsSourcePerson.value = "";
+    if (eventsSourceTitle) eventsSourceTitle.value = "";
+    if (eventsSourceGregorian) eventsSourceGregorian.value = "";
+    if (eventsSourceText) eventsSourceText.value = "";
+    if (eventsSourceImage) eventsSourceImage.value = "";
+    if (eventsSourceVideo) eventsSourceVideo.value = "";
+    const adminImageFile = document.getElementById("admin-event-image-file");
+    const adminVideoFile = document.getElementById("admin-event-video-file");
+    if (adminImageFile) adminImageFile.value = "";
+    if (adminVideoFile) adminVideoFile.value = "";
+    setEventsSourceStatus("إضافة خبر / مناسبة جديد — املأ البيانات ثم اضغط حفظ.");
+  }
   function adminEventFileExtFromName(name, fallback) {
     const raw = String(name || "")
       .split("?")[0]
@@ -2501,6 +2512,18 @@ where c.id = matches.id; commit;
       setEventsSourceStatus("تعذر الحفظ: " + msg);
       return;
     }
+    const saveOk =
+      data === true ||
+      data === null ||
+      data === undefined ||
+      (data && typeof data === "object" && data.ok !== false) ||
+      (typeof data === "number" && data > 0);
+    if (!saveOk) {
+      setEventsSourceStatus(
+        "تعذر الحفظ: لم يتم العثور على المناسبة أو رُفضت العملية.",
+      );
+      return;
+    }
     try {
       const d =
         payload && payload.details ? JSON.parse(String(payload.details)) : {};
@@ -2557,6 +2580,15 @@ where c.id = matches.id; commit;
   function formatRpcError(error) {
     if (!error) return "تعذر تنفيذ العملية، حاول لاحقاً أو تواصل مع الإدارة.";
     console.warn("Admin operation error:", error);
+    const code = String(error.code || "").trim();
+    const msg = String(error.message || error.details || error.hint || "").trim();
+    if (
+      code === "42883" ||
+      /Could not find the function|function .* does not exist/i.test(msg)
+    ) {
+      return "دالة الحفظ غير منشورة في القاعدة. نفّذ ملف supabase/sql/admin_family_events_rpc.sql في Supabase.";
+    }
+    if (msg) return msg.length > 160 ? msg.slice(0, 160) + "…" : msg;
     return "تعذر تنفيذ العملية، حاول لاحقاً أو تواصل مع الإدارة.";
   }
 
@@ -2715,6 +2747,8 @@ where c.id = matches.id; commit;
     eventsSourceLoad.addEventListener("click", () =>
       loadEventsSourceRows().catch(() => {}),
     );
+  if (eventsSourceNew)
+    eventsSourceNew.addEventListener("click", resetEventsSourceForm);
   if (bannerGeneralForm)
     bannerGeneralForm.addEventListener("submit", publishBannerGeneralNews);
   if (bannerGeneralClear)
@@ -2834,6 +2868,12 @@ where c.id = matches.id; commit;
       }
       if (delegateAuditDetails && delegateAuditDetails.open && window.AlzidanDelegateAudit) {
         window.AlzidanDelegateAudit.loadDelegateAudit().catch(() => {});
+      }
+      if (
+        window.AlzidanAdminMemoryQueueModule &&
+        typeof window.AlzidanAdminMemoryQueueModule.loadMemoryQueue === "function"
+      ) {
+        window.AlzidanAdminMemoryQueueModule.loadMemoryQueue().catch(() => {});
       }
       pollPendingRequestsForNotifications().catch(() => {});
       startPendingPolling();

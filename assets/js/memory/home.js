@@ -9,8 +9,8 @@
       sbClient = window.__alzidanConfig.getClient();
       return sbClient;
     }
-    if (window.__alzidanالخدمةClient) {
-      sbClient = window.__alzidanالخدمةClient;
+    if (window.__alzidanSupabaseClient) {
+      sbClient = window.__alzidanSupabaseClient;
       return sbClient;
     }
     return null;
@@ -25,14 +25,40 @@
     if (node) node.textContent = String(value || 0);
   }
 
-  function setListMessage(msg) {
+  function formatLineage(raw) {
+    var s = text(raw);
+    if (!s) return "";
+    return s.split("/").map(text).filter(Boolean).join(" / ");
+  }
+
+  function personInitial(name) {
+    var n = text(name);
+    if (!n) return "؟";
+    var parts = n.split(/\s+/);
+    return parts[0].charAt(0) || "؟";
+  }
+
+  function showLoading(listId) {
+    var list = document.getElementById(listId);
+    if (!list) return;
+    list.innerHTML =
+      '<div class="memory-loading" aria-busy="true">' +
+      '<div class="memory-skeleton"></div>' +
+      '<div class="memory-skeleton"></div>' +
+      '<div class="memory-skeleton"></div>' +
+      "</div>";
+  }
+
+  function setListMessage(msg, icon) {
     var list = document.getElementById("memory-list");
     if (!list) return;
     list.innerHTML = "";
     var div = document.createElement("div");
     div.className = "memory-empty";
-    div.textContent = msg;
+    div.innerHTML =
+      '<span class="memory-empty-icon" aria-hidden="true">' + (icon || "🕊️") + "</span>" + msg;
     list.appendChild(div);
+    setText("memory-list-count", 0);
   }
 
   function uiKindFromItemKind(kind) {
@@ -41,8 +67,17 @@
     if (k === "audio") return "audio";
     if (k === "document") return "document";
     if (k === "story") return "story";
-    if (k === "photo_album") return "image";
+    if (k === "photo_album" || k === "general") return "image";
     return "other";
+  }
+
+  function kindLabel(kind) {
+    if (kind === "video") return "🎬 فيديو";
+    if (kind === "audio") return "🎙️ صوت";
+    if (kind === "document") return "📄 وثيقة";
+    if (kind === "story") return "📜 قصة";
+    if (kind === "image") return "📷 صورة";
+    return "📁 مادة";
   }
 
   function mediaIcon(type) {
@@ -60,14 +95,20 @@
   }
 
   function sourceSignature(item) {
+    if (window.AlzidanMemorySource && typeof window.AlzidanMemorySource.format === "function") {
+      return window.AlzidanMemorySource.format(item);
+    }
     var name = text(item.submitted_by_name);
     var phone = text(item.submitted_by_phone);
-    if (!name && !phone) return "أُرسلت من الإدارة";
+    if (!name && !phone) return "تم الإرسال من الإدارة";
+    return [name, phone].filter(Boolean).join(" — ");
+  }
 
-    var parts = ["أُرسلت بواسطة المندوب"];
-    if (name) parts.push("الاسم: " + name);
-    if (phone) parts.push("الجوال: " + phone);
-    return parts.join(" — ");
+  function makeBadge(cls, label) {
+    var span = document.createElement("span");
+    span.className = "memory-badge " + cls;
+    span.textContent = label;
+    return span;
   }
 
   function updateStats(items) {
@@ -104,6 +145,7 @@
     setText("stat-audios", audios);
     setText("stat-stories", stories);
     setText("stat-docs", docs);
+    setText("memory-people-count", people.size);
   }
 
   function renderPeople(items) {
@@ -136,18 +178,31 @@
     });
 
     var rows = Array.from(people.values()).slice(0, 12);
+    setText("memory-people-count", rows.length);
 
     if (!rows.length) {
       var empty = document.createElement("div");
       empty.className = "memory-empty";
-      empty.textContent = "لا توجد شخصيات موثقة حاليًا.";
+      empty.style.gridColumn = "1 / -1";
+      empty.innerHTML =
+        '<span class="memory-empty-icon" aria-hidden="true">👤</span>لا توجد شخصيات موثقة حاليًا.';
       wrap.appendChild(empty);
       return;
     }
 
     rows.forEach(function (p) {
       var card = document.createElement("article");
-      card.className = "memory-card";
+      card.className = "memory-card memory-person-card";
+
+      var top = document.createElement("div");
+      top.className = "memory-person-top";
+
+      var avatar = document.createElement("span");
+      avatar.className = "memory-person-avatar";
+      avatar.textContent = personInitial(p.name);
+      avatar.setAttribute("aria-hidden", "true");
+
+      var info = document.createElement("div");
 
       var title = document.createElement("div");
       title.className = "memory-card-title";
@@ -155,66 +210,152 @@
 
       var meta = document.createElement("div");
       meta.className = "memory-card-meta";
-      meta.textContent = [
-        p.branch ? "الفرع: " + p.branch : "",
-        "صور: " + p.images,
-        "فيديو: " + p.videos,
-        "قصص: " + p.stories
-      ].filter(Boolean).join(" — ");
+      meta.textContent = p.branch ? "الفرع: " + p.branch : "";
+
+      info.appendChild(title);
+      info.appendChild(meta);
+      top.appendChild(avatar);
+      top.appendChild(info);
+
+      var stats = document.createElement("div");
+      stats.className = "memory-person-stats";
+      stats.innerHTML =
+        '<span class="memory-person-stat">📷 ' + p.images + "</span>" +
+        '<span class="memory-person-stat">🎬 ' + p.videos + "</span>" +
+        '<span class="memory-person-stat">📜 ' + p.stories + "</span>";
 
       var link = document.createElement("a");
       link.className = "btn btn-outline btn-small";
-      link.href = "person.html?" + (p.id ? "person_id=" + encodeURIComponent(p.id) : "person_name=" + encodeURIComponent(p.name));
+      link.href =
+        "person.html?" +
+        (p.id ? "person_id=" + encodeURIComponent(p.id) : "person_name=" + encodeURIComponent(p.name));
       link.textContent = "فتح صفحة الشخصية";
 
-      card.appendChild(title);
-      card.appendChild(meta);
-      card.appendChild(link);
+      var body = document.createElement("div");
+      body.className = "memory-card-body";
+      body.appendChild(top);
+      body.appendChild(stats);
+      card.appendChild(body);
+
+      var footer = document.createElement("div");
+      footer.className = "memory-card-footer";
+      footer.appendChild(link);
+      card.appendChild(footer);
       wrap.appendChild(card);
     });
+  }
+
+  function firstImageMedia(item) {
+    var media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
+    for (var i = 0; i < media.length; i++) {
+      if (media[i].media_url && text(media[i].media_type) === "image") return media[i];
+    }
+    return null;
   }
 
   function renderMemory(item) {
     var card = document.createElement("article");
     card.className = "memory-card";
 
-    var title = document.createElement("div");
+    var kind = uiKindFromItemKind(item.memory_kind);
+    var imgMedia = firstImageMedia(item);
+
+    if (imgMedia && imgMedia.media_url) {
+      var thumbLink = document.createElement("a");
+      thumbLink.href = imgMedia.media_url;
+      thumbLink.target = "_blank";
+      thumbLink.rel = "noopener noreferrer";
+      var thumb = document.createElement("img");
+      thumb.className = "memory-thumb";
+      thumb.src = imgMedia.thumbnail_url || imgMedia.media_url;
+      thumb.alt = text(item.title || item.person_name || "صورة من الذاكرة");
+      thumb.loading = "lazy";
+      thumbLink.appendChild(thumb);
+      card.appendChild(thumbLink);
+    }
+
+    var body = document.createElement("div");
+    body.className = "memory-card-body";
+
+    var head = document.createElement("div");
+    head.className = "memory-card-head";
+
+    var title = document.createElement("h3");
     title.className = "memory-card-title";
     title.textContent = text(item.title || item.person_name || "ذكرى");
 
+    var badges = document.createElement("div");
+    badges.className = "memory-card-badges";
+    badges.appendChild(makeBadge("memory-badge--kind", kindLabel(kind)));
+    if (item.branch_key) badges.appendChild(makeBadge("memory-badge--branch", item.branch_key));
+    if (item.memory_year) badges.appendChild(makeBadge("memory-badge--year", item.memory_year));
+
+    head.appendChild(title);
+    head.appendChild(badges);
+
     var meta = document.createElement("div");
     meta.className = "memory-card-meta";
-    meta.textContent = [
-      item.person_name ? "الاسم: " + item.person_name : "",
-      item.branch_key ? "الفرع: " + item.branch_key : "",
-      item.memory_year ? "السنة: " + item.memory_year : "",
-      item.memory_date ? "التاريخ: " + item.memory_date : ""
-    ].filter(Boolean).join(" — ");
+    meta.textContent = item.person_name ? "👤 " + item.person_name : "";
 
-    var desc = document.createElement("div");
-    desc.className = "memory-card-desc";
-    desc.textContent = text(item.description || item.story_text || "");
+    var lineage = formatLineage(item.person_lineage);
+    if (lineage) {
+      var lin = document.createElement("div");
+      lin.className = "memory-card-lineage";
+      lin.textContent = lineage;
+      body.appendChild(head);
+      body.appendChild(meta);
+      body.appendChild(lin);
+    } else {
+      body.appendChild(head);
+      body.appendChild(meta);
+    }
+
+    var descText = text(item.description || item.story_text || "");
+    if (descText) {
+      var desc = document.createElement("div");
+      desc.className = "memory-card-desc";
+      desc.textContent = descText.length > 180 ? descText.slice(0, 180) + "…" : descText;
+      body.appendChild(desc);
+    }
 
     var source = document.createElement("div");
-    source.className = "memory-card-meta";
-    source.textContent = sourceSignature(item);
+    source.className = "memory-card-source";
+    source.textContent = "✍️ " + sourceSignature(item);
+    body.appendChild(source);
 
-    card.appendChild(title);
-    card.appendChild(meta);
-    if (desc.textContent) card.appendChild(desc);
-    card.appendChild(source);
+    card.appendChild(body);
 
     var media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
-    media.forEach(function (m) {
-      if (!m.media_url) return;
-      var a = document.createElement("a");
-      a.className = "btn btn-outline btn-small";
-      a.href = m.media_url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = mediaIcon(m.media_type) + " " + mediaTypeAr(m.media_type) + " — " + (m.caption || "فتح الوسيط");
-      card.appendChild(a);
+    var nonImageMedia = media.filter(function (m) {
+      return m.media_url && text(m.media_type) !== "image";
     });
+
+    if (nonImageMedia.length) {
+      var footer = document.createElement("div");
+      footer.className = "memory-card-footer";
+      nonImageMedia.forEach(function (m) {
+        var a = document.createElement("a");
+        a.className = "btn btn-outline btn-small";
+        a.href = m.media_url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent =
+          mediaIcon(m.media_type) + " " + mediaTypeAr(m.media_type) + " — " + (m.caption || "فتح الوسيط");
+        footer.appendChild(a);
+      });
+      card.appendChild(footer);
+    } else if (imgMedia && imgMedia.media_url) {
+      var imgFooter = document.createElement("div");
+      imgFooter.className = "memory-card-footer";
+      var imgBtn = document.createElement("a");
+      imgBtn.className = "btn btn-outline btn-small";
+      imgBtn.href = imgMedia.media_url;
+      imgBtn.target = "_blank";
+      imgBtn.rel = "noopener noreferrer";
+      imgBtn.textContent = "📷 فتح الصورة";
+      imgFooter.appendChild(imgBtn);
+      card.appendChild(imgFooter);
+    }
 
     return card;
   }
@@ -229,7 +370,8 @@
       if (activeKind) {
         var kind = uiKindFromItemKind(item.memory_kind);
         var media = Array.isArray(item.family_memory_media) ? item.family_memory_media : [];
-        var kindHit = kind === activeKind || media.some(function (m) { return text(m.media_type) === activeKind; });
+        var kindHit =
+          kind === activeKind || media.some(function (m) { return text(m.media_type) === activeKind; });
         if (!kindHit) return false;
       }
 
@@ -239,8 +381,11 @@
         text(item.title),
         text(item.description),
         text(item.story_text),
-        text(item.branch_key)
-      ].join(" ").toLowerCase();
+        text(item.branch_key),
+        text(item.person_lineage)
+      ]
+        .join(" ")
+        .toLowerCase();
 
       return hay.indexOf(q) >= 0;
     });
@@ -252,9 +397,10 @@
 
     var rows = filteredItems();
     list.innerHTML = "";
+    setText("memory-list-count", rows.length);
 
     if (!rows.length) {
-      setListMessage("لا توجد نتائج مطابقة لخيارات العرض الحالية.");
+      setListMessage("لا توجد نتائج مطابقة لخيارات العرض الحالية.", "🔍");
       return;
     }
 
@@ -264,15 +410,20 @@
   }
 
   async function loadMemories() {
+    showLoading("memory-list");
+    showLoading("memory-people");
+
     var sb = getClient();
     if (!sb) {
-      setListMessage("تعذر الاتصال بالخدمة.");
+      setListMessage("تعذر الاتصال بالخدمة.", "⚠️");
       return;
     }
 
     var query = sb
       .from("family_memory_items")
-      .select("id,branch_key,person_id,person_name,person_lineage,title,description,story_text,memory_kind,memory_date,memory_year,is_featured,display_order,submitted_by_name,submitted_by_phone,submitted_by_relation,created_at,family_memory_media(media_type,media_url,thumbnail_url,caption,display_order)")
+      .select(
+        "id,branch_key,person_id,person_name,person_lineage,title,description,story_text,memory_kind,memory_date,memory_year,is_featured,display_order,submitted_by_name,submitted_by_phone,submitted_by_relation,created_at,family_memory_media(media_type,media_url,thumbnail_url,caption,display_order)"
+      )
       .eq("status", "approved")
       .order("is_featured", { ascending: false })
       .order("display_order", { ascending: true })
@@ -282,7 +433,7 @@
     var res = await query;
     if (res.error) {
       console.error(res.error);
-      setListMessage("تعذر تحميل الذكريات حاليًا.");
+      setListMessage("تعذر تحميل الذكريات حاليًا.", "⚠️");
       return;
     }
 
@@ -292,7 +443,7 @@
     renderPeople(allItems);
 
     if (!allItems.length) {
-      setListMessage("لا توجد مواد معتمدة في من الذاكرة حاليًا.");
+      setListMessage("لا توجد مواد معتمدة في من الذاكرة حاليًا.", "🕊️");
       return;
     }
 
@@ -323,7 +474,7 @@
   function start() {
     bindUi();
     loadMemories().catch(function () {
-      setListMessage("تعذر تحميل الذكريات.");
+      setListMessage("تعذر تحميل الذكريات.", "⚠️");
     });
   }
 
