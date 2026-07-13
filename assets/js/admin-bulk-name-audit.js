@@ -57,23 +57,19 @@
     return s;
   }
 
-  function normalizeText(value) {
-    return String(value == null ? "" : value).trim();
-  }
-
   function relationKey(branchKey, parentName, childName) {
     return [
       normalizeForCompare(branchKey),
-      normalizeForCompare(parentName),
-      normalizeForCompare(childName),
+      normalizeForCompare(normalizeBatchText(parentName)),
+      normalizeForCompare(normalizeBatchText(childName)),
     ].join("||");
   }
 
   function buildTreeRows(rows) {
     return (Array.isArray(rows) ? rows : []).map((row) => {
-      const branchKey = normalizeText(row && row.branch_key ? row.branch_key : "");
-      const parentName = normalizeText(row && (row.parent_name || row.parent || "") ? (row.parent_name || row.parent || "") : "");
-      const childName = normalizeText(row && (row.child_name || row.name || "") ? (row.child_name || row.name || "") : "");
+      const branchKey = normalizeBatchText(row && row.branch_key ? row.branch_key : "");
+      const parentName = normalizeBatchText(row && (row.parent_name || row.parent || "") ? (row.parent_name || row.parent || "") : "");
+      const childName = normalizeBatchText(row && (row.child_name || row.name || "") ? (row.child_name || row.name || "") : "");
       return {
         ...row,
         branch_key: branchKey,
@@ -84,16 +80,45 @@
     });
   }
 
-  function buildExistingRelationSet() {
-    const set = new Set();
-    state.treeRows.forEach((row) => {
-      if (row.relationKey) set.add(row.relationKey);
-    });
-    return set;
+  function parentNamesMatch(expectedParent, dbParent) {
+    const expected = normalizeForCompare(normalizeBatchText(expectedParent));
+    const stored = normalizeForCompare(normalizeBatchText(dbParent));
+    if (!expected || !stored) return true;
+    const expectedLeaf = normalizeForCompare(batchLeaf(expectedParent));
+    const storedLeaf = normalizeForCompare(batchLeaf(dbParent));
+    if (stored === expected || stored === expectedLeaf || expected === storedLeaf) return true;
+    if (expected.endsWith("/" + stored) || expected.endsWith("/" + storedLeaf)) return true;
+    if (stored.endsWith("/" + expectedLeaf)) return true;
+    return false;
+  }
+
+  function childNamesMatch(expectedChild, dbChild) {
+    const expected = normalizeForCompare(normalizeBatchText(expectedChild));
+    const stored = normalizeForCompare(normalizeBatchText(dbChild));
+    if (!expected || !stored) return false;
+    if (stored === expected) return true;
+    const expectedLeaf = normalizeForCompare(batchLeaf(expectedChild));
+    const storedLeaf = normalizeForCompare(batchLeaf(dbChild));
+    if (stored === expectedLeaf || storedLeaf === expected) return true;
+    if (stored.endsWith("/" + expectedLeaf) || expected.endsWith("/" + storedLeaf)) return true;
+    if (expected.endsWith("/" + stored) || expected.endsWith(stored)) return true;
+    return false;
   }
 
   function treeHasRelation(branchKey, parentName, childName) {
-    return buildExistingRelationSet().has(relationKey(branchKey, parentName, childName));
+    const branchNorm = normalizeForCompare(branchKey);
+    return state.treeRows.some((row) => {
+      if (normalizeForCompare(row.branch_key) !== branchNorm) return false;
+      return parentNamesMatch(parentName, row.parent_name) && childNamesMatch(childName, row.child_name);
+    });
+  }
+
+  function treeRowChildPath(row) {
+    const child = normalizeBatchText(row && row.child_name ? row.child_name : "");
+    if (!child) return "";
+    if (child.includes("/")) return child;
+    const parent = normalizeBatchText(row && row.parent_name ? row.parent_name : "");
+    return parent ? parent + "/" + child : child;
   }
 
   function getSelectedBranch() {
@@ -127,12 +152,28 @@
       if (!knownByLeaf.has(leaf)) knownByLeaf.set(leaf, []);
       knownByLeaf.get(leaf).push({ path: p, seq: (seq += 1) });
     }
+    function rememberPathSegments(path) {
+      const p = normalizeBatchText(path);
+      if (!p) return;
+      if (!p.includes("/")) {
+        remember(p);
+        return;
+      }
+      const parts = p.split("/").filter(Boolean);
+      let built = parts[0];
+      remember(built);
+      for (let i = 1; i < parts.length; i += 1) {
+        built = built + "/" + parts[i];
+        remember(built);
+      }
+    }
     remember(root);
     state.treeRows.forEach((row) => {
       if (normalizeForCompare(row.branch_key) !== normalizeForCompare(branch)) return;
-      remember(row.child_name);
+      if (row.parent_name) rememberPathSegments(row.parent_name);
+      rememberPathSegments(treeRowChildPath(row));
     });
-    return { remember, seqRef: () => seq, bumpSeq: () => { seq += 1; return seq; } };
+    return { remember: rememberPathSegments, seqRef: () => seq, bumpSeq: () => { seq += 1; return seq; } };
   }
 
   function resolveParentPath(knownByLeaf, father, grandfather) {
@@ -149,7 +190,6 @@
   function analyzeLines(lines) {
     const branch = getSelectedBranch();
     const root = branch + " بن مطلق بن زيدان";
-    const existing = buildExistingRelationSet();
     const knownByLeaf = new Map();
     const { remember, bumpSeq } = seedKnownByLeaf(knownByLeaf, branch);
     const pendingByKey = new Map();
@@ -160,9 +200,9 @@
       const c = normalizeBatchText(child);
       if (!p || !c || p === c) return null;
       const key = relationKey(branch, p, c);
-      const exists = existing.has(key) || pendingByKey.has(key);
+      const exists = treeHasRelation(branch, p, c) || pendingByKey.has(key);
       const row = { branch_key: branch, parent_name: p, child_name: c, sourceLine, relationKey: key };
-      if (!existing.has(key) && !pendingByKey.has(key)) {
+      if (!treeHasRelation(branch, p, c) && !pendingByKey.has(key)) {
         pendingByKey.set(key, row);
       }
       remember(c);
@@ -292,7 +332,9 @@
     });
 
     state.auditRows = auditRows;
-    state.pendingRelations = Array.from(pendingByKey.values()).filter((row) => !existing.has(row.relationKey));
+    state.pendingRelations = Array.from(pendingByKey.values()).filter(
+      (row) => !treeHasRelation(row.branch_key, row.parent_name, row.child_name),
+    );
     renderResults();
     renderSummary();
   }
