@@ -65,7 +65,9 @@ function formatFormalNotificationText(input: {
 }
 
 async function fetchEnabledTokens() {
-  if (!SERVICE_ROLE_KEY) return [];
+  if (!SERVICE_ROLE_KEY) {
+    throw new Error("missing_service_role_key");
+  }
 
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/push_tokens?select=token,platform&enabled=eq.true`,
@@ -144,7 +146,7 @@ Deno.serve(async (req) => {
 
     const tokens = await fetchEnabledTokens();
     if (!tokens.length) {
-      return json({ ok: true, skipped: "no_push_tokens", formatted });
+      return json({ ok: true, skipped: "no_push_tokens", recipients: 0, formatted });
     }
 
     const data = {

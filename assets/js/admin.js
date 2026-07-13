@@ -2469,6 +2469,39 @@ where c.id = matches.id; commit;
       oldDetails,
     });
   }
+  async function notifyFamilyEventPushClient(sb, eventRow) {
+    if (!sb || !eventRow) return { ok: false, reason: "missing_client_or_row" };
+    const { data, error } = await sb.functions.invoke("alzidan-push-notify", {
+      body: {
+        type: eventRow.type || "",
+        person: eventRow.person || "",
+        branch_key: eventRow.branch_key || "",
+        details: eventRow.details || "",
+      },
+    });
+    if (error) {
+      try {
+        console.error("PUSH_NOTIFY_INVOKE_ERROR", error);
+      } catch (_) {}
+      return { ok: false, reason: "invoke_error", error };
+    }
+    if (data && data.skipped) {
+      try {
+        console.warn("PUSH_NOTIFY_SKIPPED", data.skipped, data);
+      } catch (_) {}
+      return { ok: false, skipped: data.skipped, data };
+    }
+    if (data && data.ok === false) {
+      try {
+        console.error("PUSH_NOTIFY_FAILED", data);
+      } catch (_) {}
+      return { ok: false, data };
+    }
+    try {
+      console.log("PUSH_NOTIFY_OK", data);
+    } catch (_) {}
+    return { ok: true, data };
+  }
   async function saveEventsSourceRow(event) {
     if (event) event.preventDefault();
     const sb = getClient();
@@ -2537,16 +2570,7 @@ where c.id = matches.id; commit;
       );
       const isNewEvent = !(payload && Number(payload.id || 0) > 0);
       if (isNewEvent) {
-        try {
-          await sb.functions.invoke("alzidan-push-notify", {
-            body: {
-              type: payload.type || "",
-              person: payload.person || "",
-              branch_key: payload.branch_key || "",
-              details: payload.details || "",
-            },
-          });
-        } catch (_) {}
+        await notifyFamilyEventPushClient(sb, payload);
       }
     } catch (e) {
       setEventsSourceStatus("تم حفظ الخبر/المناسبة.");
