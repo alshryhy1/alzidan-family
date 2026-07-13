@@ -77,13 +77,75 @@
       .trim();
   }
 
+  var BRANCH_KEYS = ["زيدان", "مزيد", "زايد", "لاحم", "ملحم"];
+
+  function isMutlaqToken(token) {
+    var t = normalizeBatchText(token || "");
+    return t === "مطلق" || t.indexOf("مطلق") === 0;
+  }
+
+  function isZaidanToken(token) {
+    var t = normalizeBatchText(token || "");
+    if (!t) return true;
+    return t === "زيدان" || t === "زيد" || t.indexOf("زيدان") === 0;
+  }
+
+  function canonicalizeBranchKey(token) {
+    var raw = normalizeBatchText(token || "");
+    if (!raw) return "";
+    if (BRANCH_KEYS.indexOf(raw) >= 0) return raw;
+
+    var compact = raw
+      .replace(/[إأآ]/g, "ا")
+      .replace(/ى/g, "ي")
+      .replace(/ة/g, "ه")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+
+    var aliases = {
+      "زيدان": ["zaidan", "زيدan", "زيدان", "زيد"],
+      "زايد": ["zaid", "زايد"],
+      "مزيد": ["mzيد", "مزيد", "mzid", "mazid"],
+      "لاحم": ["لاحm", "لاحم", "lahm", "laham", "la7m"],
+      "ملحم": ["mlحم", "ملحم", "mlhm", "malham", "ml7m"],
+    };
+
+    var key;
+    for (key in aliases) {
+      if (!Object.prototype.hasOwnProperty.call(aliases, key)) continue;
+      var list = aliases[key];
+      for (var j = 0; j < list.length; j += 1) {
+        var alias = String(list[j] || "")
+          .replace(/[إأآ]/g, "ا")
+          .replace(/ى/g, "ي")
+          .replace(/ة/g, "ه")
+          .replace(/\s+/g, "")
+          .toLowerCase();
+        if (compact === alias) return key;
+      }
+    }
+    return "";
+  }
+
+  function detectBranchKeyFromParts(parts) {
+    var list = Array.isArray(parts) ? parts : [];
+    for (var i = 1; i < list.length; i += 1) {
+      if (!isMutlaqToken(list[i])) continue;
+      var branchCandidate = canonicalizeBranchKey(list[i - 1] || "");
+      if (!branchCandidate) continue;
+      if (!isZaidanToken(list[i + 1])) continue;
+      return branchCandidate;
+    }
+    return "";
+  }
+
   function findBranchPartIndex(parts, branchKey) {
     var key = normalizeBatchText(branchKey);
     if (!key) return -1;
     for (var i = 0; i < parts.length; i += 1) {
       var part = normalizeBatchText(parts[i] || "");
       if (!part) continue;
-      if (part === key || part.indexOf(key) === 0) return i;
+      if (part === key) return i;
     }
     return -1;
   }
@@ -99,7 +161,8 @@
       })
       .filter(Boolean);
 
-    var branchKey = normalizeBatchText(branch);
+    var detectedBranch = detectBranchKeyFromParts(parts);
+    var branchKey = detectedBranch || normalizeBatchText(branch);
     var branchIndex = findBranchPartIndex(parts, branchKey);
     if (branchIndex < 0) return null;
 
@@ -120,7 +183,24 @@
       parent = child;
     }
 
-    return { path: parent, relations: relations, lineage: lineage, source: raw, isContext: true };
+    return {
+      path: parent,
+      relations: relations,
+      lineage: lineage,
+      branchKey: branchKey,
+      source: raw,
+      isContext: true,
+    };
+  }
+
+  function detectContextBranchFromLines(lines, fallbackBranch) {
+    var fallback = normalizeBatchText(fallbackBranch) || "زيدان";
+    var cleaned = preprocessBatchLines(lines);
+    for (var i = 0; i < cleaned.length; i += 1) {
+      var full = parseBatchFullLineage(cleaned[i], fallback);
+      if (full && full.branchKey) return full.branchKey;
+    }
+    return fallback;
   }
 
   function parseBatchShortLine(line) {
@@ -170,6 +250,7 @@
   }
 
   window.TreeLineage = {
+    BRANCH_KEYS: BRANCH_KEYS,
     normalizeBatchText: normalizeBatchText,
     cleanBatchLine: cleanBatchLine,
     isBatchNoiseLine: isBatchNoiseLine,
@@ -177,6 +258,9 @@
     batchJoinAbd: batchJoinAbd,
     batchLeaf: batchLeaf,
     batchParentPath: batchParentPath,
+    canonicalizeBranchKey: canonicalizeBranchKey,
+    detectBranchKeyFromParts: detectBranchKeyFromParts,
+    detectContextBranchFromLines: detectContextBranchFromLines,
     parseBatchFullLineage: parseBatchFullLineage,
     parseBatchShortLine: parseBatchShortLine,
     normalizeTreeCardText: normalizeTreeCardText,

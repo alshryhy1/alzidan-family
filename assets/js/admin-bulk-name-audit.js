@@ -31,6 +31,9 @@
   const batchParentPath = TreeLineage.batchParentPath || function () { return ""; };
   const parseBatchFullLineage = TreeLineage.parseBatchFullLineage || function () { return null; };
   const parseBatchShortLine = TreeLineage.parseBatchShortLine || function () { return null; };
+  const detectContextBranchFromLines = TreeLineage.detectContextBranchFromLines || function (_lines, fallback) {
+    return normalizeBatchText(fallback) || "زيدان";
+  };
 
   const STATUS = {
     existing: "↪ موجود في الشجرة",
@@ -200,65 +203,104 @@
     return candidates.length ? candidates[0].path : "";
   }
 
+  function syncBranchSelector(branch) {
+    const next = normalizeBatchText(branch);
+    if (!next || !auditBranch) return;
+    const options = Array.from(auditBranch.options || []);
+    if (options.some((opt) => normalizeBatchText(opt.value) === next)) {
+      auditBranch.value = next;
+    }
+  }
+
   function analyzeLines(lines) {
-    const branch = getSelectedBranch();
-    const root = branch + " بن مطلق بن زيدان";
-    const knownByLeaf = new Map();
-    const { remember, bumpSeq } = seedKnownByLeaf(knownByLeaf, branch);
+    const defaultBranch = getSelectedBranch();
+    const cleanLines = preprocessBatchLines(lines);
+    const knownByBranch = new Map();
+    const seedHelpersByBranch = new Map();
     const pendingByKey = new Map();
     const auditRows = [];
+    let currentBranchContext = detectContextBranchFromLines(cleanLines, defaultBranch);
+    syncBranchSelector(currentBranchContext);
 
-    function trackRelation(parent, child, sourceLine) {
+    function ensureBranchContext(branchKey) {
+      const key = normalizeBatchText(branchKey) || defaultBranch;
+      if (!knownByBranch.has(key)) {
+        const knownByLeaf = new Map();
+        const helpers = seedKnownByLeaf(knownByLeaf, key);
+        knownByBranch.set(key, knownByLeaf);
+        seedHelpersByBranch.set(key, helpers);
+      }
+      return {
+        branchKey: key,
+        knownByLeaf: knownByBranch.get(key),
+        remember: seedHelpersByBranch.get(key).remember,
+        bumpSeq: seedHelpersByBranch.get(key).bumpSeq,
+      };
+    }
+
+    function trackRelation(branchKey, parent, child, sourceLine) {
+      const ctx = ensureBranchContext(branchKey);
       const p = normalizeBatchText(parent);
       const c = normalizeBatchText(child);
       if (!p || !c || p === c) return null;
-      const key = relationKey(branch, p, c);
-      const exists = treeHasRelation(branch, p, c) || pendingByKey.has(key);
-      const row = { branch_key: branch, parent_name: p, child_name: c, sourceLine, relationKey: key };
-      if (!treeHasRelation(branch, p, c) && !pendingByKey.has(key)) {
+      const key = relationKey(ctx.branchKey, p, c);
+      const exists = treeHasRelation(ctx.branchKey, p, c) || pendingByKey.has(key);
+      const row = {
+        branch_key: ctx.branchKey,
+        parent_name: p,
+        child_name: c,
+        sourceLine,
+        relationKey: key,
+      };
+      if (!treeHasRelation(ctx.branchKey, p, c) && !pendingByKey.has(key)) {
         pendingByKey.set(key, row);
       }
-      remember(c);
-      bumpSeq();
+      ctx.remember(c);
+      ctx.bumpSeq();
       return { ...row, exists };
     }
 
     function addFullLineageRelations(full, sourceLine) {
+      const branchKey = normalizeBatchText(full && full.branchKey ? full.branchKey : "") || defaultBranch;
+      const root = branchKey + " بن مطلق بن زيدان";
       const lineage = full && Array.isArray(full.lineage) ? full.lineage : [];
-      if (lineage.length < 2) return { targetChild: "", targetExists: false, relations: [] };
+      if (lineage.length < 2) return { branchKey, targetChild: "", targetExists: false, relations: [] };
       let parent = root;
       const relations = [];
       for (let i = 1; i < lineage.length; i += 1) {
         const leaf = normalizeBatchText(lineage[i]);
         if (!leaf) continue;
         const child = parent + "/" + leaf;
-        const tracked = trackRelation(parent, child, sourceLine);
+        const tracked = trackRelation(branchKey, parent, child, sourceLine);
         if (tracked) relations.push(tracked);
         parent = child;
       }
       const last = relations.length ? relations[relations.length - 1] : null;
       return {
+        branchKey,
         targetChild: parent,
-        targetExists: last ? last.exists : treeHasRelation(branch, batchParentPath(parent), parent),
+        targetExists: last
+          ? last.exists
+          : treeHasRelation(branchKey, batchParentPath(parent), parent),
         relations,
       };
     }
 
-    const cleanLines = preprocessBatchLines(lines);
-
     cleanLines.forEach((line) => {
-      const full = parseBatchFullLineage(line, branch);
+      const full = parseBatchFullLineage(line, currentBranchContext || defaultBranch);
       if (full && full.relations && full.relations.length) {
+        const branchKey = normalizeBatchText(full.branchKey) || currentBranchContext || defaultBranch;
+        currentBranchContext = branchKey;
         const result = addFullLineageRelations(full, line);
         const targetParent = batchParentPath(result.targetChild);
         const targetExists = result.targetChild
-          && treeHasRelation(branch, targetParent, result.targetChild);
+          && treeHasRelation(branchKey, targetParent, result.targetChild);
         if (targetExists) {
           auditRows.push({
             inputName: line,
             status: STATUS.existing,
             existingName: result.targetChild,
-            branch,
+            branch: branchKey,
             parent: targetParent,
             reason: "سياق النسب — الاسم الأخير موجود في الشجرة.",
             approved: false,
@@ -268,7 +310,7 @@
             inputName: line,
             status: STATUS.ready,
             existingName: "",
-            branch,
+            branch: branchKey,
             parent: targetParent,
             childName: result.targetChild,
             reason: "سياق النسب — جاهز لإضافة سلسلة الأجداد الناقصة.",
@@ -279,7 +321,7 @@
             inputName: line,
             status: STATUS.review,
             existingName: "",
-            branch,
+            branch: branchKey,
             parent: "",
             reason: "تعذر بناء تسلسل النسب من السطر الكامل.",
             approved: false,
@@ -289,12 +331,13 @@
       }
 
       const short = parseBatchShortLine(line);
+      const branchKey = currentBranchContext || defaultBranch;
       if (!short || !short.name || !short.father) {
         auditRows.push({
           inputName: line,
           status: STATUS.review,
           existingName: "",
-          branch,
+          branch: branchKey,
           parent: "",
           reason: "صيغة غير مفهومة. استخدم: الاسم الأب الجد أو سطراً كاملاً يحتوي «بن مطلق بن زيدان».",
           approved: false,
@@ -302,30 +345,32 @@
         return;
       }
 
-      const parentPath = resolveParentPath(knownByLeaf, short.father, short.grandfather);
+      const ctx = ensureBranchContext(branchKey);
+      const parentPath = resolveParentPath(ctx.knownByLeaf, short.father, short.grandfather);
       if (!parentPath) {
         auditRows.push({
           inputName: line,
           status: STATUS.review,
           existingName: "",
-          branch,
+          branch: branchKey,
           parent: short.father + (short.grandfather ? " " + short.grandfather : ""),
-          reason: "لم يُعثر على الأب «" + short.father + "» في الشجرة أو في الأسطر السابقة.",
+          reason: "لم يُعثر على الأب «" + short.father + "» في الشجرة أو في الأسطر السابقة (فرع: " + branchKey + ").",
           approved: false,
         });
         return;
       }
 
       const childPath = parentPath + "/" + normalizeBatchText(short.name);
-      const exists = treeHasRelation(branch, parentPath, childPath) || pendingByKey.has(relationKey(branch, parentPath, childPath));
-      trackRelation(parentPath, childPath, line);
+      const exists = treeHasRelation(branchKey, parentPath, childPath)
+        || pendingByKey.has(relationKey(branchKey, parentPath, childPath));
+      trackRelation(branchKey, parentPath, childPath, line);
 
       if (exists) {
         auditRows.push({
           inputName: line,
           status: STATUS.existing,
           existingName: childPath,
-          branch,
+          branch: branchKey,
           parent: parentPath,
           reason: "الاسم موجود في الشجرة تحت الأب المحدد.",
           approved: false,
@@ -335,7 +380,7 @@
           inputName: line,
           status: STATUS.ready,
           existingName: "",
-          branch,
+          branch: branchKey,
           parent: parentPath,
           childName: childPath,
           reason: "جاهز للإضافة — اضغط «إضافة غير الموجود فقط» لحفظه في الشجرة.",
