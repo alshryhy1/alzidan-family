@@ -2535,6 +2535,19 @@ where c.id = matches.id; commit;
           (parts.length ? " — " + parts.join(" و ") : "") +
           ".",
       );
+      const isNewEvent = !(payload && Number(payload.id || 0) > 0);
+      if (isNewEvent) {
+        try {
+          await sb.functions.invoke("alzidan-push-notify", {
+            body: {
+              type: payload.type || "",
+              person: payload.person || "",
+              branch_key: payload.branch_key || "",
+              details: payload.details || "",
+            },
+          });
+        } catch (_) {}
+      }
     } catch (e) {
       setEventsSourceStatus("تم حفظ الخبر/المناسبة.");
     }

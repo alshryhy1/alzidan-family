@@ -154,6 +154,20 @@
     }
     parent.appendChild(wrap);
   }
+  async function notifyFamilyEventPush(sb, eventRow) {
+    if (!sb || !eventRow) return;
+    try {
+      await sb.functions.invoke("alzidan-push-notify", {
+        body: {
+          type: eventRow.type || "",
+          person: eventRow.person || "",
+          branch_key: eventRow.branch_key || "",
+          details: eventRow.details || "",
+        },
+      });
+    } catch (_) {}
+  }
+
   async function publishEventCardRequest(sb, token, row) {
     const requestId = String(
       row && row.request_id ? row.request_id : "",
@@ -195,7 +209,8 @@
         ok: false,
         message: "تعذر نشر المناسبة. تحقق من صلاحية الإدارة.",
       };
-    return { ok: true };
+    await notifyFamilyEventPush(sb, eventRow);
+    return { ok: true, eventRow };
   }
   function buildTreeCardMessageFromPayload(payload, reqRow) {
     const ancestors = Array.isArray(payload.ancestors) ? payload.ancestors : [];
