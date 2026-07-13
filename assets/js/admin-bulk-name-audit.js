@@ -29,6 +29,12 @@
   const parseBatchFullLineage = TreeLineage.parseBatchFullLineage || function () { return null; };
   const parseBatchShortLine = TreeLineage.parseBatchShortLine || function () { return null; };
 
+  const STATUS = {
+    existing: "↪ موجود في الشجرة",
+    ready: "➕ جاهز للإضافة (لم يُحفظ بعد)",
+    review: "✎ تحتاج مراجعة",
+  };
+
   const state = {
     treeRows: [],
     auditRows: [],
@@ -197,7 +203,7 @@
         if (result.targetExists) {
           auditRows.push({
             inputName: line,
-            status: "✓ موجود",
+            status: STATUS.existing,
             existingName: result.targetChild,
             branch,
             parent: batchParentPath(result.targetChild),
@@ -207,18 +213,18 @@
         } else if (result.targetChild) {
           auditRows.push({
             inputName: line,
-            status: "➕ جديد",
+            status: STATUS.ready,
             existingName: "",
             branch,
             parent: batchParentPath(result.targetChild),
             childName: result.targetChild,
-            reason: "سيتم إضافة تسلسل النسب الناقص (أب ← ابن).",
+            reason: "جاهز للإضافة — اضغط «إضافة غير الموجود فقط» لحفظه في الشجرة.",
             approved: true,
           });
         } else {
           auditRows.push({
             inputName: line,
-            status: "✎ تحتاج مراجعة",
+            status: STATUS.review,
             existingName: "",
             branch,
             parent: "",
@@ -233,7 +239,7 @@
       if (!short || !short.name || !short.father) {
         auditRows.push({
           inputName: line,
-          status: "✎ تحتاج مراجعة",
+          status: STATUS.review,
           existingName: "",
           branch,
           parent: "",
@@ -247,7 +253,7 @@
       if (!parentPath) {
         auditRows.push({
           inputName: line,
-          status: "✎ تحتاج مراجعة",
+          status: STATUS.review,
           existingName: "",
           branch,
           parent: short.father + (short.grandfather ? " " + short.grandfather : ""),
@@ -264,7 +270,7 @@
       if (exists) {
         auditRows.push({
           inputName: line,
-          status: "✓ موجود",
+          status: STATUS.existing,
           existingName: childPath,
           branch,
           parent: parentPath,
@@ -274,12 +280,12 @@
       } else {
         auditRows.push({
           inputName: line,
-          status: "➕ جديد",
+          status: STATUS.ready,
           existingName: "",
           branch,
           parent: parentPath,
           childName: childPath,
-          reason: "تم تحديد الأب والمسار — جاهز للإضافة.",
+          reason: "جاهز للإضافة — اضغط «إضافة غير الموجود فقط» لحفظه في الشجرة.",
           approved: true,
         });
       }
@@ -291,17 +297,35 @@
     renderSummary();
   }
 
+  function updateSaveButton() {
+    if (!auditSaveBtn) return;
+    const count = state.pendingRelations.length;
+    auditSaveBtn.textContent = count
+      ? `إضافة غير الموجود فقط (${count} علاقة)`
+      : "إضافة غير الموجود فقط";
+    auditSaveBtn.disabled = count === 0;
+    auditSaveBtn.title = count
+      ? "اضغط لحفظ الأسماء الجاهزة في الشجرة"
+      : "لا توجد أسماء جاهزة — نفّذ التحليل أولاً أو كل الأسماء موجودة";
+  }
+
   function renderSummary() {
     const counts = {
       total: state.auditRows.length,
-      existing: state.auditRows.filter((row) => row.status === "✓ موجود").length,
-      ready: state.auditRows.filter((row) => row.status === "➕ جديد").length,
-      review: state.auditRows.filter((row) => row.status === "✎ تحتاج مراجعة").length,
+      existing: state.auditRows.filter((row) => row.status === STATUS.existing).length,
+      ready: state.auditRows.filter((row) => row.status === STATUS.ready).length,
+      review: state.auditRows.filter((row) => row.status === STATUS.review).length,
       relations: state.pendingRelations.length,
     };
-    setStatus(
-      `تم تحليل ${counts.total} سطرًا — موجود: ${counts.existing} — جديد: ${counts.ready} — يحتاج مراجعة: ${counts.review} — علاقات للإضافة: ${counts.relations}`,
-    );
+
+    let summary = `تم تحليل ${counts.total} سطرًا — موجود في الشجرة: ${counts.existing} — جاهز للإضافة: ${counts.ready} — يحتاج مراجعة: ${counts.review}`;
+    if (counts.relations) {
+      summary += ` — ${counts.relations} علاقة بانتظار الحفظ. الخطوة التالية: اضغط «إضافة غير الموجود فقط».`;
+    } else if (counts.total) {
+      summary += " — لا توجد أسماء جديدة للحفظ.";
+    }
+    setStatus(summary);
+    updateSaveButton();
   }
 
   function renderResults() {
@@ -351,8 +375,8 @@
       return false;
     }
 
-    const duplicateCount = state.auditRows.filter((row) => row.status === "✓ موجود").length;
-    const reviewCount = state.auditRows.filter((row) => row.status === "✎ تحتاج مراجعة").length;
+    const duplicateCount = state.auditRows.filter((row) => row.status === STATUS.existing).length;
+    const reviewCount = state.auditRows.filter((row) => row.status === STATUS.review).length;
 
     try {
       setStatus(`جاري إضافة ${payload.length} علاقة...`);
@@ -408,6 +432,7 @@
           state.auditRows = [];
           state.pendingRelations = [];
           renderResults();
+          updateSaveButton();
           setStatus("أدخل أسماء أولاً.");
           return;
         }
@@ -435,7 +460,8 @@
     attachEvents();
     await loadTreeRows();
     renderResults();
-    setStatus("اختر الفرع، الصق الأسماء، ثم اضغط تحليل الأسماء.");
+    updateSaveButton();
+    setStatus("خطوتان: ① الصق الأسماء واضغط «تحليل الأسماء» ② ثم «إضافة غير الموجود فقط» للحفظ.");
   }
 
   if (document.readyState === "loading") {
