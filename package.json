@@ -2,6 +2,7 @@
   "name": "alzidan-family",
   "private": true,
   "scripts": {
-    "verify:event-card": "node scripts/verify-event-card-compat.mjs"
+    "verify:event-card": "node scripts/verify-event-card-compat.mjs",
+    "verify:bulk-audit": "node scripts/test-bulk-audit-match.js"
   }
 }

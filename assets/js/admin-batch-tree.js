@@ -77,6 +77,7 @@
   const batchParentPath = TreeLineage.batchParentPath;
   const parseBatchFullLineage = TreeLineage.parseBatchFullLineage;
   const parseBatchShortLine = TreeLineage.parseBatchShortLine;
+  const preprocessBatchLines = TreeLineage.preprocessBatchLines;
 
   function renderBatchSummary(result) {
     if (!batchTreeSummary) return;
@@ -121,11 +122,7 @@
       batchTreeBranch ? batchTreeBranch.value : "",
     );
     const raw = String(batchTreeInput ? batchTreeInput.value : "");
-    const lines = raw
-      .split(/\r?\n/g)
-      .map(cleanBatchLine)
-      .filter(Boolean)
-      .filter((l) => l !== "الاسم");
+    const lines = preprocessBatchLines(raw.split(/\r?\n/g));
     const root = branch + " بن مطلق بن زيدان";
     const rows = [];
     const duplicates = [];
