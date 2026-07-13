@@ -15,17 +15,25 @@
 
   const auditSection = document.getElementById("bulk-name-audit-section");
   const auditInput = document.getElementById("bulk-name-audit-input");
+  const auditBranch = document.getElementById("bulk-name-audit-branch");
   const auditRunBtn = document.getElementById("bulk-name-audit-run");
   const auditSaveBtn = document.getElementById("bulk-name-audit-save");
   const auditBody = document.getElementById("bulk-name-audit-body");
   const auditStatus = document.getElementById("bulk-name-audit-status");
 
+  const TreeLineage = window.TreeLineage || {};
+  const normalizeBatchText = TreeLineage.normalizeBatchText || function (v) { return String(v || "").trim(); };
+  const cleanBatchLine = TreeLineage.cleanBatchLine || function (v) { return String(v || "").trim(); };
+  const batchLeaf = TreeLineage.batchLeaf || function (v) { return String(v || "").trim(); };
+  const batchParentPath = TreeLineage.batchParentPath || function () { return ""; };
+  const parseBatchFullLineage = TreeLineage.parseBatchFullLineage || function () { return null; };
+  const parseBatchShortLine = TreeLineage.parseBatchShortLine || function () { return null; };
+
   const state = {
     treeRows: [],
     auditRows: [],
+    pendingRelations: [],
   };
-
-  const TreeLineage = window.TreeLineage || {};
 
   function setStatus(text) {
     if (auditStatus) auditStatus.textContent = String(text || "");
@@ -47,66 +55,43 @@
     return String(value == null ? "" : value).trim();
   }
 
-  function buildLeafName(value) {
-    return TreeLineage.batchLeaf ? TreeLineage.batchLeaf(value) : normalizeText(value);
-  }
-
-  function buildParentPath(value) {
-    return TreeLineage.batchParentPath ? TreeLineage.batchParentPath(value) : "";
-  }
-
-  function pickBranchValue(row) {
-    return normalizeText(row && row.branch_key ? row.branch_key : "");
-  }
-
-  function pickParentValue(row) {
-    return normalizeText(row && (row.parent_name || row.parent || "") ? (row.parent_name || row.parent || "") : "");
-  }
-
-  function pickChildValue(row) {
-    return normalizeText(row && (row.child_name || row.name || "") ? (row.child_name || row.name || "") : "");
+  function relationKey(branchKey, parentName, childName) {
+    return [
+      normalizeForCompare(branchKey),
+      normalizeForCompare(parentName),
+      normalizeForCompare(childName),
+    ].join("||");
   }
 
   function buildTreeRows(rows) {
     return (Array.isArray(rows) ? rows : []).map((row) => {
-      const branchKey = pickBranchValue(row);
-      const parentName = pickParentValue(row);
-      const childName = pickChildValue(row);
-
-      const fullPath = childName.includes("/")
-        ? childName
-        : (parentName && childName ? parentName + "/" + childName : childName || parentName || "");
-
-      const parentPath = buildParentPath(fullPath) || parentName;
-      const grandParentPath = buildParentPath(parentPath);
-
-      const leafName = buildLeafName(fullPath);
-      const parentLeaf = buildLeafName(parentPath);
-      const grandParentLeaf = buildLeafName(grandParentPath);
-
-      const compactLineage = [leafName, parentLeaf, grandParentLeaf].filter(Boolean).join(" ");
-
+      const branchKey = normalizeText(row && row.branch_key ? row.branch_key : "");
+      const parentName = normalizeText(row && (row.parent_name || row.parent || "") ? (row.parent_name || row.parent || "") : "");
+      const childName = normalizeText(row && (row.child_name || row.name || "") ? (row.child_name || row.name || "") : "");
       return {
         ...row,
         branch_key: branchKey,
         parent_name: parentName,
         child_name: childName,
-        fullPath,
-        parentPath,
-        grandParentPath,
-        leafName,
-        parentLeaf,
-        grandParentLeaf,
-        compactLineage,
-        normalizedFullPath: normalizeForCompare(fullPath),
-        normalizedCompactLineage: normalizeForCompare(compactLineage),
-        normalizedChildName: normalizeForCompare(childName),
-        normalizedName: normalizeForCompare(row && row.name ? row.name : ""),
-        normalizedLeafName: normalizeForCompare(leafName),
-        normalizedParentLeaf: normalizeForCompare(parentLeaf),
-        normalizedGrandParentLeaf: normalizeForCompare(grandParentLeaf),
+        relationKey: relationKey(branchKey, parentName, childName),
       };
     });
+  }
+
+  function buildExistingRelationSet() {
+    const set = new Set();
+    state.treeRows.forEach((row) => {
+      if (row.relationKey) set.add(row.relationKey);
+    });
+    return set;
+  }
+
+  function treeHasRelation(branchKey, parentName, childName) {
+    return buildExistingRelationSet().has(relationKey(branchKey, parentName, childName));
+  }
+
+  function getSelectedBranch() {
+    return normalizeBatchText(auditBranch ? auditBranch.value : "") || "زيدان";
   }
 
   async function loadTreeRows() {
@@ -126,182 +111,197 @@
     return state.treeRows;
   }
 
-  function parseLine(raw) {
-    const text = String(raw || "").trim();
-    if (!text) {
-      return { raw: text, fullName: "", normalizedName: "" };
+  function seedKnownByLeaf(knownByLeaf, branch) {
+    const root = branch + " بن مطلق بن زيدان";
+    let seq = 0;
+    function remember(path) {
+      const p = normalizeBatchText(path);
+      const leaf = batchLeaf(p);
+      if (!leaf) return;
+      if (!knownByLeaf.has(leaf)) knownByLeaf.set(leaf, []);
+      knownByLeaf.get(leaf).push({ path: p, seq: (seq += 1) });
     }
-    const cleaned = text.replace(/^\d+[\s\-\.\):،]+/, "").trim();
-    return { raw: text, fullName: cleaned, normalizedName: normalizeForCompare(cleaned) };
-  }
-
-  function getSimilarityRatio(a, b) {
-    const s = normalizeForCompare(a || "");
-    const t = normalizeForCompare(b || "");
-    if (!s || !t) return 0;
-    if (s === t) return 1;
-
-    const m = s.length;
-    const n = t.length;
-    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i += 1) dp[i][0] = i;
-    for (let j = 0; j <= n; j += 1) dp[0][j] = j;
-    for (let i = 1; i <= m; i += 1) {
-      for (let j = 1; j <= n; j += 1) {
-        const cost = s[i - 1] === t[j - 1] ? 0 : 1;
-        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
-      }
-    }
-    const distance = dp[m][n];
-    return 1 - distance / Math.max(m, n);
-  }
-
-  function findBestMatch(normalizedName) {
-    let best = null;
-    let bestRatio = 0;
+    remember(root);
     state.treeRows.forEach((row) => {
-      const candidate = row.normalizedFullPath || row.normalizedChildName || row.normalizedName || "";
-      const ratio = getSimilarityRatio(normalizedName, candidate);
-      if (ratio > bestRatio) {
-        bestRatio = ratio;
-        best = row;
-      }
+      if (normalizeForCompare(row.branch_key) !== normalizeForCompare(branch)) return;
+      remember(row.child_name);
     });
-    return { best, bestRatio };
+    return { remember, seqRef: () => seq, bumpSeq: () => { seq += 1; return seq; } };
   }
 
-  function analyzeRow(parsed) {
-    const fullName = parsed.fullName;
-    const normalizedName = parsed.normalizedName;
+  function resolveParentPath(knownByLeaf, father, grandfather) {
+    let candidates = (knownByLeaf.get(normalizeBatchText(father)) || []).slice();
+    const gf = normalizeBatchText(grandfather);
+    if (gf) {
+      const filtered = candidates.filter((c) => batchLeaf(batchParentPath(c.path)) === gf);
+      if (filtered.length) candidates = filtered;
+    }
+    candidates.sort((a, b) => b.seq - a.seq);
+    return candidates.length ? candidates[0].path : "";
+  }
 
-    if (!normalizedName) {
+  function analyzeLines(lines) {
+    const branch = getSelectedBranch();
+    const root = branch + " بن مطلق بن زيدان";
+    const existing = buildExistingRelationSet();
+    const knownByLeaf = new Map();
+    const { remember, bumpSeq } = seedKnownByLeaf(knownByLeaf, branch);
+    const pendingByKey = new Map();
+    const auditRows = [];
+
+    function trackRelation(parent, child, sourceLine) {
+      const p = normalizeBatchText(parent);
+      const c = normalizeBatchText(child);
+      if (!p || !c || p === c) return null;
+      const key = relationKey(branch, p, c);
+      const exists = existing.has(key) || pendingByKey.has(key);
+      const row = { branch_key: branch, parent_name: p, child_name: c, sourceLine, relationKey: key };
+      if (!existing.has(key) && !pendingByKey.has(key)) {
+        pendingByKey.set(key, row);
+      }
+      remember(c);
+      bumpSeq();
+      return { ...row, exists };
+    }
+
+    function addFullLineageRelations(full, sourceLine) {
+      const lineage = full && Array.isArray(full.lineage) ? full.lineage : [];
+      if (lineage.length < 2) return { targetChild: "", targetExists: false, relations: [] };
+      let parent = root;
+      const relations = [];
+      for (let i = 1; i < lineage.length; i += 1) {
+        const leaf = normalizeBatchText(lineage[i]);
+        if (!leaf) continue;
+        const child = parent + "/" + leaf;
+        const tracked = trackRelation(parent, child, sourceLine);
+        if (tracked) relations.push(tracked);
+        parent = child;
+      }
+      const last = relations.length ? relations[relations.length - 1] : null;
       return {
-        inputName: fullName,
-        status: "✎ تحتاج مراجعة",
-        existingName: "",
-        branch: "",
-        parent: "",
-        reason: "السطر فارغ أو غير صالح.",
-        approved: false,
+        targetChild: parent,
+        targetExists: last ? last.exists : treeHasRelation(branch, batchParentPath(parent), parent),
+        relations,
       };
     }
 
-    const fullMatches = [];
-    ["زيدان", "زايد", "مزيد", "لاحم", "ملحم"].forEach((branch) => {
-      if (!TreeLineage.parseBatchFullLineage) return;
-      const full = TreeLineage.parseBatchFullLineage(fullName, branch);
-      if (full && full.path) {
-        const normalizedPath = normalizeForCompare(full.path);
-        const match = state.treeRows.find((row) => row.normalizedFullPath === normalizedPath);
-        if (match) fullMatches.push(match);
+    const cleanLines = lines
+      .map((line) => cleanBatchLine(line))
+      .filter(Boolean)
+      .filter((line) => line !== "الاسم");
+
+    cleanLines.forEach((line) => {
+      const full = parseBatchFullLineage(line, branch);
+      if (full && full.relations && full.relations.length) {
+        const result = addFullLineageRelations(full, line);
+        if (result.targetExists) {
+          auditRows.push({
+            inputName: line,
+            status: "✓ موجود",
+            existingName: result.targetChild,
+            branch,
+            parent: batchParentPath(result.targetChild),
+            reason: "الاسم موجود في الشجرة بتسلسل النسب الكامل.",
+            approved: false,
+          });
+        } else if (result.targetChild) {
+          auditRows.push({
+            inputName: line,
+            status: "➕ جديد",
+            existingName: "",
+            branch,
+            parent: batchParentPath(result.targetChild),
+            childName: result.targetChild,
+            reason: "سيتم إضافة تسلسل النسب الناقص (أب ← ابن).",
+            approved: true,
+          });
+        } else {
+          auditRows.push({
+            inputName: line,
+            status: "✎ تحتاج مراجعة",
+            existingName: "",
+            branch,
+            parent: "",
+            reason: "تعذر بناء تسلسل النسب من السطر الكامل.",
+            approved: false,
+          });
+        }
+        return;
+      }
+
+      const short = parseBatchShortLine(line);
+      if (!short || !short.name || !short.father) {
+        auditRows.push({
+          inputName: line,
+          status: "✎ تحتاج مراجعة",
+          existingName: "",
+          branch,
+          parent: "",
+          reason: "صيغة غير مفهومة. استخدم: الاسم الأب الجد أو سطراً كاملاً يحتوي «بن مطلق بن زيدان».",
+          approved: false,
+        });
+        return;
+      }
+
+      const parentPath = resolveParentPath(knownByLeaf, short.father, short.grandfather);
+      if (!parentPath) {
+        auditRows.push({
+          inputName: line,
+          status: "✎ تحتاج مراجعة",
+          existingName: "",
+          branch,
+          parent: short.father + (short.grandfather ? " " + short.grandfather : ""),
+          reason: "لم يُعثر على الأب «" + short.father + "» في الشجرة أو في الأسطر السابقة.",
+          approved: false,
+        });
+        return;
+      }
+
+      const childPath = parentPath + "/" + normalizeBatchText(short.name);
+      const exists = treeHasRelation(branch, parentPath, childPath) || pendingByKey.has(relationKey(branch, parentPath, childPath));
+      trackRelation(parentPath, childPath, line);
+
+      if (exists) {
+        auditRows.push({
+          inputName: line,
+          status: "✓ موجود",
+          existingName: childPath,
+          branch,
+          parent: parentPath,
+          reason: "الاسم موجود في الشجرة تحت الأب المحدد.",
+          approved: false,
+        });
+      } else {
+        auditRows.push({
+          inputName: line,
+          status: "➕ جديد",
+          existingName: "",
+          branch,
+          parent: parentPath,
+          childName: childPath,
+          reason: "تم تحديد الأب والمسار — جاهز للإضافة.",
+          approved: true,
+        });
       }
     });
 
-    if (fullMatches.length === 1) {
-      const m = fullMatches[0];
-      return {
-        inputName: fullName,
-        status: "✓ موجود",
-        existingName: m.fullPath || m.child_name || m.name || "",
-        branch: m.branch_key || "",
-        parent: m.parent_name || "",
-        reason: "مطابقة كاملة بتسلسل النسب.",
-        approved: false,
-      };
-    }
+    state.auditRows = auditRows;
+    state.pendingRelations = Array.from(pendingByKey.values()).filter((row) => !existing.has(row.relationKey));
+    renderResults();
+    renderSummary();
+  }
 
-    if (fullMatches.length > 1) {
-      return {
-        inputName: fullName,
-        status: "✎ تحتاج مراجعة",
-        existingName: fullMatches.slice(0, 3).map((row) => row.fullPath || row.child_name || row.name || "").join(" | "),
-        branch: "",
-        parent: "",
-        reason: "أكثر من مطابقة محتملة لتسلسل النسب.",
-        approved: false,
-      };
-    }
-
-    const short = TreeLineage.parseBatchShortLine ? TreeLineage.parseBatchShortLine(fullName) : null;
-    if (short && short.name && short.father) {
-      const nName = normalizeForCompare(short.name);
-      const nFather = normalizeForCompare(short.father);
-      const nGrand = normalizeForCompare(short.grandfather || "");
-
-      const matches = state.treeRows.filter((row) => {
-        const childOk = row.normalizedLeafName === nName;
-        const fatherOk = !nFather || row.normalizedParentLeaf === nFather;
-        const grandOk = !nGrand || row.normalizedGrandParentLeaf === nGrand;
-        return childOk && fatherOk && grandOk;
-      });
-
-      if (matches.length === 1) {
-        const m = matches[0];
-        return {
-          inputName: fullName,
-          status: "✓ موجود",
-          existingName: m.fullPath || m.child_name || m.name || "",
-          branch: m.branch_key || "",
-          parent: m.parent_name || "",
-          reason: "مطابقة بتسلسل الاسم/الأب/الجد.",
-          approved: false,
-        };
-      }
-
-      if (matches.length > 1) {
-        return {
-          inputName: fullName,
-          status: "✎ تحتاج مراجعة",
-          existingName: matches.slice(0, 3).map((row) => row.fullPath || row.child_name || row.name || "").join(" | "),
-          branch: "",
-          parent: "",
-          reason: "وجد أكثر من مطابق بنفس الاسم/الأب/الجد.",
-          approved: false,
-        };
-      }
-    }
-
-    const directMatch = state.treeRows.find((row) =>
-      row.normalizedFullPath === normalizedName ||
-      row.normalizedCompactLineage === normalizedName ||
-      row.normalizedChildName === normalizedName ||
-      row.normalizedName === normalizedName
-    );
-
-    if (directMatch) {
-      return {
-        inputName: fullName,
-        status: "✓ موجود",
-        existingName: directMatch.fullPath || directMatch.child_name || directMatch.name || "",
-        branch: directMatch.branch_key || "",
-        parent: directMatch.parent_name || "",
-        reason: "مطابقة مباشرة في الشجرة.",
-        approved: false,
-      };
-    }
-
-    const { best, bestRatio } = findBestMatch(normalizedName);
-    if (best && bestRatio >= 0.7) {
-      return {
-        inputName: fullName,
-        status: "⚠️ مشابه",
-        existingName: best.fullPath || best.child_name || best.name || "",
-        branch: best.branch_key || "",
-        parent: best.parent_name || "",
-        reason: `تشابه ${Math.round(bestRatio * 100)}% مع اسم موجود.`,
-        approved: false,
-      };
-    }
-
-    return {
-      inputName: fullName,
-      status: "✎ تحتاج مراجعة",
-      existingName: "",
-      branch: "",
-      parent: "",
-      reason: "لم تثبت المطابقة. لا يتم اعتباره غير موجود تلقائياً منعاً للتكرار.",
-      approved: false,
+  function renderSummary() {
+    const counts = {
+      total: state.auditRows.length,
+      existing: state.auditRows.filter((row) => row.status === "✓ موجود").length,
+      ready: state.auditRows.filter((row) => row.status === "➕ جديد").length,
+      review: state.auditRows.filter((row) => row.status === "✎ تحتاج مراجعة").length,
+      relations: state.pendingRelations.length,
     };
+    setStatus(
+      `تم تحليل ${counts.total} سطرًا — موجود: ${counts.existing} — جديد: ${counts.ready} — يحتاج مراجعة: ${counts.review} — علاقات للإضافة: ${counts.relations}`,
+    );
   }
 
   function renderResults() {
@@ -318,19 +318,21 @@
           <td>${index + 1}</td>
           <td>${escapeHtml(row.inputName || "")}</td>
           <td>${escapeHtml(row.status || "")}</td>
-          <td>${escapeHtml(row.existingName || "")}</td>
+          <td>${escapeHtml(row.existingName || row.childName || "")}</td>
           <td>${escapeHtml(row.branch || "")}</td>
           <td>${escapeHtml(row.parent || "")}</td>
           <td>${escapeHtml(row.reason || "")}</td>
           <td>${checkbox}</td>
         </tr>`;
     }).join("");
-
-    setStatus("النتائج جاهزة. راجع الجدول للتصنيفات والإجراء.");
   }
 
   function getPayloadRows() {
-    return [];
+    return state.pendingRelations.map((row) => ({
+      branch_key: row.branch_key,
+      parent_name: row.parent_name,
+      child_name: row.child_name,
+    }));
   }
 
   async function performSave() {
@@ -349,37 +351,46 @@
       return false;
     }
 
+    const duplicateCount = state.auditRows.filter((row) => row.status === "✓ موجود").length;
+    const reviewCount = state.auditRows.filter((row) => row.status === "✎ تحتاج مراجعة").length;
+
     try {
-      setStatus("جاري إضافة الأسماء غير الموجودة...");
+      setStatus(`جاري إضافة ${payload.length} علاقة...`);
       const { data, error } = await sb.rpc("admin_tree_children_import_v1", { p_token: token, p_rows: payload });
       if (error) {
-        setStatus("الحفظ المباشر غير متاح، يلزم ربط RPC مناسبة.");
-        showAlert("error", "الحفظ المباشر غير متاح، يلزم ربط RPC مناسبة.");
+        setStatus("فشل الحفظ: " + String(error.message || "خطأ غير معروف"));
+        showAlert("error", "تعذر الإضافة حالياً: " + String(error.message || ""));
         return false;
       }
 
-      const inserted = data && typeof data.inserted === "number" ? data.inserted : payload.length;
-      setStatus(`تمت إضافة ${inserted} اسمًا جديدًا.`);
-      showAlert("success", `تمت إضافة ${inserted} اسمًا جديدًا.`);
+      const inserted = Number(data && data.inserted != null ? data.inserted : 0) || 0;
+      const skipped = Number(data && data.skipped != null ? data.skipped : 0) || 0;
+      const updated = Number(data && data.updated != null ? data.updated : 0) || 0;
+      const failed = Math.max(0, payload.length - inserted - skipped - updated);
+
+      const summary = [
+        `تمت الإضافة: ${inserted}`,
+        `تخطّي (مكرر): ${skipped + duplicateCount}`,
+        failed ? `فشل: ${failed}` : null,
+        reviewCount ? `يحتاج مراجعة: ${reviewCount}` : null,
+      ].filter(Boolean).join(" — ");
+
+      setStatus(summary);
+      showAlert("success", summary);
+
+      await loadTreeRows();
+      const lines = String(auditInput ? auditInput.value : "")
+        .split(/\r?\n/g)
+        .map((line) => String(line || "").trim())
+        .filter(Boolean);
+      if (lines.length) analyzeLines(lines);
+
       return true;
     } catch (error) {
-      setStatus("الحفظ المباشر غير متاح، يلزم ربط RPC مناسبة.");
-      showAlert("error", "الحفظ المباشر غير متاح، يلزم ربط RPC مناسبة.");
+      setStatus("فشل الحفظ: " + String(error && error.message ? error.message : error));
+      showAlert("error", "تعذر الإضافة حالياً.");
       return false;
     }
-  }
-
-  function analyzeLines(lines) {
-    if (!lines.length) {
-      state.auditRows = [];
-      renderResults();
-      setStatus("أدخل أسماء أولاً.");
-      return;
-    }
-
-    state.auditRows = lines.map((line) => analyzeRow(parseLine(line)));
-    renderResults();
-    setStatus(`تم تحليل ${state.auditRows.length} اسمًا.`);
   }
 
   function attachEvents() {
@@ -393,6 +404,13 @@
           .split(/\r?\n/g)
           .map((line) => String(line || "").trim())
           .filter(Boolean);
+        if (!lines.length) {
+          state.auditRows = [];
+          state.pendingRelations = [];
+          renderResults();
+          setStatus("أدخل أسماء أولاً.");
+          return;
+        }
         analyzeLines(lines);
       });
     }
@@ -402,6 +420,14 @@
         await performSave();
       });
     }
+
+    if (auditBranch) {
+      auditBranch.addEventListener("change", () => {
+        if (state.auditRows.length) {
+          setStatus("غيّرت الفرع — أعد التحليل لتحديث النتائج.");
+        }
+      });
+    }
   }
 
   async function init() {
@@ -409,7 +435,7 @@
     attachEvents();
     await loadTreeRows();
     renderResults();
-    setStatus("استعد لتحليل الأسماء.");
+    setStatus("اختر الفرع، الصق الأسماء، ثم اضغط تحليل الأسماء.");
   }
 
   if (document.readyState === "loading") {
