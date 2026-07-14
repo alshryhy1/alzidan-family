@@ -97,9 +97,44 @@
     if (!parentNorm || !dbParent) return true;
     var parentLeaf = baseName(parentId || "");
     if (dbParent === parentNorm || dbParent === parentLeaf) return true;
-    if (parentNorm.endsWith("/" + dbParent) || parentNorm.endsWith("/" + baseName(dbParent))) return true;
-    if (dbParent.endsWith("/" + parentLeaf)) return true;
+    if (dbParent.includes("/") && parentNorm.endsWith("/" + dbParent)) return true;
+    if (parentNorm.includes("/") && dbParent.endsWith("/" + parentLeaf)) return true;
     return false;
+  }
+
+  function nodePathMatches(nodeId, mapKey, norm) {
+    var id = norm(nodeId || "");
+    var key = norm(mapKey || "");
+    if (!id || !key) return false;
+    if (id === key) return true;
+    if (key.includes("/") && id.endsWith("/" + key)) return true;
+    return false;
+  }
+
+  function resolveChildrenMapKey(childId, childrenMap, norm) {
+    var id = norm(childId || "");
+    if (!id) return "";
+    var map = childrenMap || {};
+    if (Array.isArray(map[id])) return id;
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+      if (nodePathMatches(id, keys[i], norm)) return keys[i];
+    }
+    return "";
+  }
+
+  function deriveParentIdFromChildPath(childPath, rawParent, norm, baseName) {
+    var childFull = norm(childPath || "");
+    var raw = norm(rawParent || "");
+    if (!raw || !childFull || childFull.indexOf("/") < 0) return "";
+    var parts = childFull.split("/").map(function (p) { return norm(p); }).filter(Boolean);
+    if (parts.length < 2) return "";
+    var derivedParent = parts.slice(0, -1).join("/");
+    var derivedLeaf = parts[parts.length - 2] || "";
+    if (derivedLeaf === raw || baseName(derivedParent) === raw || derivedParent.endsWith("/" + raw)) {
+      return derivedParent;
+    }
+    return "";
   }
 
   function buildPathToRowIndex(rows, normalizePersonName) {
@@ -155,8 +190,7 @@
       Object.keys(pathToRow || {}).forEach(function (key) {
         if (meta || key.indexOf("pid:") === 0) return;
         var candidate = pathToRow[key];
-        var matchesChild =
-          key === p || key.endsWith("/" + leaf) || p.endsWith("/" + key) || p.endsWith(key);
+        var matchesChild = nodePathMatches(p, key, norm);
         if (!matchesChild) return;
         if (!parentNamesMatch(parentId, candidate && candidate.db_parent_name, norm, baseName)) return;
         meta = candidate;
@@ -250,6 +284,10 @@
     setDeceasedFieldsUiMode: setDeceasedFieldsUiMode,
     bindDeceasedToggle: bindDeceasedToggle,
     bindBirthDateSync: bindBirthDateSync,
+    parentNamesMatch: parentNamesMatch,
+    nodePathMatches: nodePathMatches,
+    resolveChildrenMapKey: resolveChildrenMapKey,
+    deriveParentIdFromChildPath: deriveParentIdFromChildPath,
     buildPathToRowIndex: buildPathToRowIndex,
     attachTreeRowIdsToChildren: attachTreeRowIdsToChildren,
     findTreeRowMeta: findTreeRowMeta,

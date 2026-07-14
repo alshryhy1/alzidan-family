@@ -35,26 +35,10 @@
       var norm = typeof api.normalizePersonName === "function"
         ? api.normalizePersonName
         : function (v) { return String(v || "").trim(); };
-      var baseName = typeof api.normalizePersonBaseName === "function"
-        ? api.normalizePersonBaseName
-        : norm;
-      var id = norm(childId || "");
-      if (id && Array.isArray(childrenMap[id])) return childrenMap[id];
-      if (!id) return [];
-      var leaf = baseName(id);
-      var keys = Object.keys(childrenMap);
-      for (var i = 0; i < keys.length; i++) {
-        var key = keys[i];
-        if (
-          key === id ||
-          key.endsWith("/" + leaf) ||
-          id.endsWith("/" + key) ||
-          id.endsWith(key)
-        ) {
-          var list = childrenMap[key];
-          if (Array.isArray(list)) return list;
-        }
-      }
+      var mapKey = typeof PersonCore.resolveChildrenMapKey === "function"
+        ? PersonCore.resolveChildrenMapKey(childId, childrenMap, norm)
+        : norm(childId || "");
+      if (mapKey && Array.isArray(childrenMap[mapKey])) return childrenMap[mapKey];
       return [];
     }
 
@@ -119,6 +103,7 @@
         (isAdmin
           ? '<div class="field"><label>person_id (UUID)</label><input type="text" data-fm-edit-person-id dir="ltr" lang="en" placeholder="اختياري — للإدارة فقط" /></div>'
           : "") +
+        '<div class="field"><label for="fm-edit-child-name">تعديل الاسم</label><input id="fm-edit-child-name" type="text" data-fm-edit-name placeholder="اسم الابن/الابنة" /></div>' +
         '<div class="field"><label>رقم الجوال</label><input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="05XXXXXXXX" /></div>' +
         '<div class="field"><label>تاريخ الميلاد (هجري)</label><input type="text" data-fm-edit-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
         '<div class="field"><label>تاريخ الميلاد (ميلادي)</label><input type="date" data-fm-edit-greg dir="ltr" lang="en" /></div>' +
@@ -150,6 +135,16 @@
       var areaEl = wrap.querySelector("[data-fm-edit-area]");
       if (areaEl) areaEl.value = String(child && child.area ? child.area : "");
       if (deceasedEl) deceasedEl.checked = !!(child && child.deceased);
+
+      var nameEl = wrap.querySelector("[data-fm-edit-name]");
+      if (nameEl) {
+        var branch = typeof api.getBranchKey === "function" ? api.getBranchKey() : "";
+        var branchRoot = typeof api.getBranchRootName === "function" ? api.getBranchRootName(branch) : "";
+        var displayName = typeof api.getDisplayNameForNodeId === "function"
+          ? api.getDisplayNameForNodeId(childId, branchRoot)
+          : childId;
+        nameEl.value = String(displayName || childId || "");
+      }
 
       var personIdEl = wrap.querySelector("[data-fm-edit-person-id]");
       if (personIdEl) {
@@ -210,6 +205,7 @@
           parentId: parentKey,
           childId: childId,
           child: child,
+          newName: nameEl ? nameEl.value : "",
           personId: personIdEl ? personIdEl.value : "",
           phone: phoneEl ? phoneEl.value : "",
           hijri: hijriEl ? hijriEl.value : "",

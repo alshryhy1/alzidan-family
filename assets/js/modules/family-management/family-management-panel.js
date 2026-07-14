@@ -188,26 +188,14 @@
       var key = typeof api.normalizePersonName === "function" ? api.normalizePersonName(selectedPersonId) : selectedPersonId;
       var childCount = 0;
       if (state && state.children && key) {
-        if (Array.isArray(state.children[key])) {
-          childCount = state.children[key].length;
-        } else {
-          var baseName = typeof api.normalizePersonBaseName === "function" ? api.normalizePersonBaseName : function (v) { return String(v || "").trim(); };
-          var leaf = baseName(key);
-          Object.keys(state.children).some(function (mapKey) {
-            if (
-              mapKey === key ||
-              mapKey.endsWith("/" + leaf) ||
-              key.endsWith("/" + mapKey) ||
-              key.endsWith(mapKey)
-            ) {
-              var list = state.children[mapKey];
-              if (Array.isArray(list)) {
-                childCount = list.length;
-                return true;
-              }
-            }
-            return false;
-          });
+        var norm = typeof api.normalizePersonName === "function"
+          ? api.normalizePersonName
+          : function (v) { return String(v || "").trim(); };
+        var mapKey = typeof PersonCore.resolveChildrenMapKey === "function"
+          ? PersonCore.resolveChildrenMapKey(key, state.children, norm)
+          : key;
+        if (mapKey && Array.isArray(state.children[mapKey])) {
+          childCount = state.children[mapKey].length;
         }
       }
       var childStat = personDataBody.querySelector("[data-fm-stat-children]");
