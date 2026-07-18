@@ -227,9 +227,62 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   );
   const eventsSourceText = document.getElementById("events-source-text");
   const eventsSourceImage = document.getElementById("events-source-image");
-  const eventsSourceVideo = document.getElementById("events-source-video");
+  const eventsSourceHospitalName = document.getElementById("events-source-hospital-name");
+const eventsSourceHospitalDept = document.getElementById("events-source-hospital-dept");
+const eventsSourceHomeCity = document.getElementById("events-source-home-city");
+const eventsSourceHomeArea = document.getElementById("events-source-home-area");
+const eventsSourceContactMethod = document.getElementById("events-source-contact-method");
+const eventsSourceContactPhone = document.getElementById("events-source-contact-phone");
+const eventsSourceVisitDateFrom = document.getElementById("events-source-visit-date-from");
+const eventsSourceVisitDateTo = document.getElementById("events-source-visit-date-to");
+const eventsSourceVisitTimeFrom = document.getElementById("events-source-visit-time-from");
+const eventsSourceVisitTimeTo = document.getElementById("events-source-visit-time-to");
+const eventsSourcePrayerPlace = document.getElementById("events-source-prayer-place");
+const eventsSourceBurialPlace = document.getElementById("events-source-burial-place");
+const eventsSourceCondolencePlace = document.getElementById("events-source-condolence-place");
+
+const eventsSourceVideo = document.getElementById("events-source-video");
   const eventsSourceDelete = document.getElementById("events-source-delete");
-  const eventsSourceStatus = document.getElementById("events-source-status");
+  
+const eventsSourceStatus = document.getElementById("events-source-status");
+
+function toggleAdminEventFields() {
+  const t = eventsSourceType ? eventsSourceType.value : "";
+
+  const sick = [
+    "events-source-hospital-name",
+    "events-source-hospital-dept",
+    "events-source-home-city",
+    "events-source-home-area",
+    "events-source-contact-method",
+    "events-source-contact-phone",
+    "events-source-visit-date-from",
+    "events-source-visit-date-to",
+    "events-source-visit-time-from",
+    "events-source-visit-time-to"
+  ];
+
+  const death = [
+    "events-source-prayer-place",
+    "events-source-burial-place",
+    "events-source-condolence-place"
+  ];
+
+  sick.forEach(id=>{
+    const e=document.getElementById(id);
+    if(e && e.closest(".field"))
+      e.closest(".field").style.display =
+        (t==="sick" || t==="operation") ? "" : "none";
+  });
+
+  death.forEach(id=>{
+    const e=document.getElementById(id);
+    if(e && e.closest(".field"))
+      e.closest(".field").style.display =
+        (t==="death") ? "" : "none";
+  });
+}
+
   let eventsSourceRows = [];
   const TREE_SETUP_SQL = `
 create table if not exists public.tree_children ( id bigserial primary key, branch_key text not null, parent_name text not null, name text not null, child_name text null, parent text null, person_id uuid null default gen_random_uuid(), parent_person_id uuid null, birth_date_g date null, birth_date_h text null, birth_year int null, birth_order int null, city text null, area text null, is_deceased boolean null default false, deceased boolean null default false, created_at timestamptz not null default now(), created_by uuid null
@@ -2328,10 +2381,26 @@ where c.id = matches.id; commit;
         "";
     if (eventsSourceVideo)
       eventsSourceVideo.value = details.videoUrl || details.video_url || "";
+
+    if (eventsSourceHospitalName) eventsSourceHospitalName.value = row.hospital_name || "";
+    if (eventsSourceHospitalDept) eventsSourceHospitalDept.value = row.hospital_dept || "";
+    if (eventsSourceContactMethod) eventsSourceContactMethod.value = row.contact_method || "";
+    if (eventsSourceContactPhone) eventsSourceContactPhone.value = row.contact_phone || "";
+    if (eventsSourceVisitDateFrom) eventsSourceVisitDateFrom.value = row.visit_date_from || "";
+    if (eventsSourceVisitDateTo) eventsSourceVisitDateTo.value = row.visit_date_to || "";
+    if (eventsSourceVisitTimeFrom) eventsSourceVisitTimeFrom.value = row.visit_time_from || "";
+    if (eventsSourceVisitTimeTo) eventsSourceVisitTimeTo.value = row.visit_time_to || "";
+
+    if (eventsSourceHomeCity) eventsSourceHomeCity.value = details.homeCity || "";
+    if (eventsSourceHomeArea) eventsSourceHomeArea.value = details.homeArea || "";
+    if (eventsSourcePrayerPlace) eventsSourcePrayerPlace.value = details.prayerPlace || "";
+    if (eventsSourceBurialPlace) eventsSourceBurialPlace.value = details.burialPlace || "";
+    if (eventsSourceCondolencePlace) eventsSourceCondolencePlace.value = details.condolencePlace || "";
     const adminImageFile = document.getElementById("admin-event-image-file");
     const adminVideoFile = document.getElementById("admin-event-video-file");
     if (adminImageFile) adminImageFile.value = "";
     if (adminVideoFile) adminVideoFile.value = "";
+    toggleAdminEventFields();
     setEventsSourceStatus(
       "تعديل الخبر: " + (row.person || getEventCleanTitle(row) || row.id),
     );
@@ -2346,10 +2415,25 @@ where c.id = matches.id; commit;
     if (eventsSourceText) eventsSourceText.value = "";
     if (eventsSourceImage) eventsSourceImage.value = "";
     if (eventsSourceVideo) eventsSourceVideo.value = "";
+
+    if (eventsSourceHospitalName) eventsSourceHospitalName.value = "";
+    if (eventsSourceHospitalDept) eventsSourceHospitalDept.value = "";
+    if (eventsSourceContactMethod) eventsSourceContactMethod.value = "";
+    if (eventsSourceContactPhone) eventsSourceContactPhone.value = "";
+    if (eventsSourceVisitDateFrom) eventsSourceVisitDateFrom.value = "";
+    if (eventsSourceVisitDateTo) eventsSourceVisitDateTo.value = "";
+    if (eventsSourceVisitTimeFrom) eventsSourceVisitTimeFrom.value = "";
+    if (eventsSourceVisitTimeTo) eventsSourceVisitTimeTo.value = "";
+    if (eventsSourceHomeCity) eventsSourceHomeCity.value = "";
+    if (eventsSourceHomeArea) eventsSourceHomeArea.value = "";
+    if (eventsSourcePrayerPlace) eventsSourcePrayerPlace.value = "";
+    if (eventsSourceBurialPlace) eventsSourceBurialPlace.value = "";
+    if (eventsSourceCondolencePlace) eventsSourceCondolencePlace.value = "";
     const adminImageFile = document.getElementById("admin-event-image-file");
     const adminVideoFile = document.getElementById("admin-event-video-file");
     if (adminImageFile) adminImageFile.value = "";
     if (adminVideoFile) adminVideoFile.value = "";
+    toggleAdminEventFields();
     setEventsSourceStatus("إضافة خبر / مناسبة جديد — املأ البيانات ثم اضغط حفظ.");
   }
   function adminEventFileExtFromName(name, fallback) {
@@ -2466,6 +2550,19 @@ where c.id = matches.id; commit;
         eventsSourceVideo && eventsSourceVideo.value
           ? eventsSourceVideo.value.trim()
           : "",
+      hospitalName: eventsSourceHospitalName?.value || "",
+      hospitalDept: eventsSourceHospitalDept?.value || "",
+      contactMethod: eventsSourceContactMethod?.value || "",
+      contactPhone: eventsSourceContactPhone?.value || "",
+      visitDateFrom: eventsSourceVisitDateFrom?.value || "",
+      visitDateTo: eventsSourceVisitDateTo?.value || "",
+      visitTimeFrom: eventsSourceVisitTimeFrom?.value || "",
+      visitTimeTo: eventsSourceVisitTimeTo?.value || "",
+      homeCity: eventsSourceHomeCity?.value || "",
+      homeArea: eventsSourceHomeArea?.value || "",
+      prayerPlace: eventsSourcePrayerPlace?.value || "",
+      burialPlace: eventsSourceBurialPlace?.value || "",
+      condolencePlace: eventsSourceCondolencePlace?.value || "",
       oldDetails,
     });
   }
@@ -2820,6 +2917,12 @@ where c.id = matches.id; commit;
     adminTickerSpeedSave.addEventListener("click", () =>
       saveTickerSpeedSetting().catch(() => {}),
     );
+
+  if (eventsSourceType)
+    eventsSourceType.addEventListener("change", toggleAdminEventFields);
+
+  toggleAdminEventFields();
+
   if (eventsSourceForm)
     eventsSourceForm.addEventListener("submit", saveEventsSourceRow);
   if (eventsSourceDelete)

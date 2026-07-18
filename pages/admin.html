@@ -276,7 +276,39 @@
     </div>
   </div>
 </section>
-<section id="events-source-manager" class="section admin-only-section"><div class="section-header"><div><div class="section-title">إدارة الأخبار والمناسبات</div><div class="hint">تعديل أو حذف الخبر/المناسبة مباشرة من جدول المناسبات.</div></div></div><div class="card"><div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;"><button id="events-source-load" class="btn btn-outline btn-sm" type="button">تحميل الأخبار والمناسبات</button><button id="events-source-new" class="btn btn-primary btn-sm" type="button">إضافة خبر / مناسبة</button></div><div class="grid"><div><div class="hint" style="margin-bottom:8px;">اختر خبراً أو مناسبة لتعديلها أو حذفها.</div><div id="events-source-list" class="source-tree-list"></div></div><form id="events-source-form" class="card" style="box-shadow:none; border:1px solid #e5e7eb;"><div class="section-title" style="margin-bottom:10px;">بيانات الخبر / المناسبة</div><input id="events-source-id" type="hidden" /><div class="grid"><div class="field"><label for="events-source-branch">الفرع</label><select id="events-source-branch"><option value="زيدان">زيدان</option><option value="مزيد">مزيد</option><option value="زايد">زايد</option><option value="لاحم">لاحم</option><option value="ملحم">ملحم</option></select></div><div class="field"><label for="events-source-type">النوع</label><select id="events-source-type"><option value="birth">عقيقة مولود</option><option value="marriage">زواج</option><option value="graduation">حفل تخرج</option><option value="promotion">حفل ترقية</option><option value="new_house">منزل جديد</option><option value="gathering">اجتماع عائلي</option><option value="general">مناسبة عامة</option><option value="sick">مريض</option><option value="operation">عملية</option><option value="death">وفاة</option></select></div><div class="field"><label for="events-source-person">الاسم / الشخص</label><input id="events-source-person" type="text" /></div><div class="field"><label for="events-source-title">التاريخ الهجري / الوصف المختصر</label><input id="events-source-title" type="text" placeholder="مثال: 10/01/1448" /></div><div class="field"><label for="events-source-gregorian">التاريخ الميلادي إن وجد</label><input id="events-source-gregorian" type="date" /></div><div class="field" style="grid-column:1/-1;"><label for="events-source-text">التفاصيل</label><textarea id="events-source-text" style="width:100%; min-height:100px; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; direction:rtl;"></textarea></div><div class="field"><label for="events-source-image">رابط الصورة</label><input id="events-source-image" type="url" placeholder="https://..." /></div><div class="field"><label for="events-source-video">رابط الفيديو</label><input id="events-source-video" type="url" placeholder="https://..." /></div><div class="field">
+<section id="events-source-manager" class="section admin-only-section"><div class="section-header"><div><div class="section-title">إدارة الأخبار والمناسبات</div><div class="hint">تعديل أو حذف الخبر/المناسبة مباشرة من جدول المناسبات.</div></div></div><div class="card"><div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;"><button id="events-source-load" class="btn btn-outline btn-sm" type="button">تحميل الأخبار والمناسبات</button><button id="events-source-new" class="btn btn-primary btn-sm" type="button">إضافة خبر / مناسبة</button></div><div class="grid"><div><div class="hint" style="margin-bottom:8px;">اختر خبراً أو مناسبة لتعديلها أو حذفها.</div><div id="events-source-list" class="source-tree-list"></div></div><form id="events-source-form" class="card" style="box-shadow:none; border:1px solid #e5e7eb;"><div class="section-title" style="margin-bottom:10px;">بيانات الخبر / المناسبة</div><input id="events-source-id" type="hidden" /><div class="grid"><div class="field"><label for="events-source-branch">الفرع</label><select id="events-source-branch"><option value="زيدان">زيدان</option><option value="مزيد">مزيد</option><option value="زايد">زايد</option><option value="لاحم">لاحم</option><option value="ملحم">ملحم</option></select></div><div class="field"><label for="events-source-type">النوع</label><select id="events-source-type"><option value="birth">عقيقة مولود</option><option value="marriage">زواج</option><option value="graduation">حفل تخرج</option><option value="promotion">حفل ترقية</option><option value="new_house">منزل جديد</option><option value="gathering">اجتماع عائلي</option><option value="general">مناسبة عامة</option><option value="sick">مريض</option><option value="operation">عملية</option><option value="death">وفاة</option></select></div><div class="field"><label for="events-source-person">الاسم / الشخص</label><input id="events-source-person" type="text" /></div><div class="field"><label for="events-source-title">التاريخ الهجري / الوصف المختصر</label><input id="events-source-title" type="text" placeholder="مثال: 10/01/1448" /></div><div class="field"><label for="events-source-gregorian">التاريخ الميلادي إن وجد</label><input id="events-source-gregorian" type="date" /></div><div class="field" style="grid-column:1/-1;"><label for="events-source-text">التفاصيل</label><textarea id="events-source-text" style="width:100%; min-height:100px; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; direction:rtl;"></textarea>
+</div>
+
+<div class="field"><label for="events-source-hospital-name">المستشفى</label><input id="events-source-hospital-name" type="text" /></div>
+<div class="field"><label for="events-source-hospital-dept">القسم</label><input id="events-source-hospital-dept" type="text" /></div>
+
+<div class="field"><label for="events-source-home-city">المدينة</label><input id="events-source-home-city" type="text" /></div>
+<div class="field"><label for="events-source-home-area">الحي</label><input id="events-source-home-area" type="text" /></div>
+
+<div class="field"><label for="events-source-contact-method">طريقة التواصل</label>
+<select id="events-source-contact-method">
+<option value=""></option>
+<option value="visit">زيارة</option>
+<option value="phone">اتصال</option>
+<option value="whatsapp">واتساب</option>
+</select>
+</div>
+
+<div class="field"><label for="events-source-contact-phone">رقم التواصل</label><input id="events-source-contact-phone" type="text" /></div>
+
+<div class="field"><label for="events-source-visit-date-from">بداية الزيارة</label><input id="events-source-visit-date-from" type="date" /></div>
+<div class="field"><label for="events-source-visit-date-to">نهاية الزيارة</label><input id="events-source-visit-date-to" type="date" /></div>
+
+<div class="field"><label for="events-source-visit-time-from">من الساعة</label><input id="events-source-visit-time-from" type="time" /></div>
+<div class="field"><label for="events-source-visit-time-to">إلى الساعة</label><input id="events-source-visit-time-to" type="time" /></div>
+
+<div class="field"><label for="events-source-prayer-place">مكان الصلاة</label><input id="events-source-prayer-place" type="text" /></div>
+<div class="field"><label for="events-source-burial-place">مكان الدفن</label><input id="events-source-burial-place" type="text" /></div>
+
+<div class="field" style="grid-column:1/-1;"><label for="events-source-condolence-place">مكان العزاء</label><input id="events-source-condolence-place" type="text" /></div>
+
+<div class="field"><label for="events-source-image">
+رابط الصورة</label><input id="events-source-image" type="url" placeholder="https://..." /></div><div class="field"><label for="events-source-video">رابط الفيديو</label><input id="events-source-video" type="url" placeholder="https://..." /></div><div class="field">
 <label for="admin-event-image-file">رفع صورة من الجهاز (اختياري)</label>
 <input id="admin-event-image-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" />
 </div><div class="field">
