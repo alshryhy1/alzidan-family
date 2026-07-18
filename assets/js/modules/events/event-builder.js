@@ -210,30 +210,93 @@
     const text = normalizeText(input.text);
     const imageUrl = normalizeText(input.imageUrl);
     const videoUrl = normalizeText(input.videoUrl);
-    const details = {
-      ...oldDetails,
-      v: oldDetails.v || 1,
-      kind: oldDetails.kind || "happy_notice",
-      text,
-      imageUrl,
-      videoUrl,
-      showDays: Number(oldDetails.showDays || 7),
-    };
+    const type = normalizeText(input.type || "general");
+    const hospitalName =
+      normalizeText(input.hospitalName) ||
+      normalizeText(oldDetails.hospitalName || oldDetails.hospital_name);
+    const hospitalDept =
+      normalizeText(input.hospitalDept) ||
+      normalizeText(oldDetails.hospitalDept || oldDetails.hospital_dept);
+    const homeCity =
+      normalizeText(input.homeCity) ||
+      normalizeText(oldDetails.homeCity || oldDetails.home_city);
+    const homeArea =
+      normalizeText(input.homeArea) ||
+      normalizeText(oldDetails.homeArea || oldDetails.home_area);
+    const contactMethod = normalizeText(input.contactMethod);
+    const contactPhone = normalizeText(input.contactPhone);
+    const visitDateFrom =
+      contactMethod === "visit" ? normalizeText(input.visitDateFrom) : "";
+    const visitDateTo =
+      contactMethod === "visit" ? normalizeText(input.visitDateTo) : "";
+    const visitTimeFrom =
+      contactMethod === "visit" ? normalizeText(input.visitTimeFrom) : "";
+    const visitTimeTo =
+      contactMethod === "visit" ? normalizeText(input.visitTimeTo) : "";
+    const prayerPlace = normalizeText(input.prayerPlace);
+    const burialPlace = normalizeText(input.burialPlace);
+    const condolencePlace = normalizeText(input.condolencePlace);
+    const showDays = Number(oldDetails.showDays || 7) || 7;
+    const isDeath = type === "death";
+    const isHealth = type === "sick" || type === "operation" || type === "discharge";
+
+    let details;
+    if (isDeath) {
+      details = {
+        ...oldDetails,
+        v: 1,
+        kind: "death_notice",
+        notes: text || normalizeText(oldDetails.notes),
+        prayerPlace: prayerPlace || normalizeText(oldDetails.prayerPlace),
+        burialPlace: burialPlace || normalizeText(oldDetails.burialPlace),
+        condolencePlace: condolencePlace || normalizeText(oldDetails.condolencePlace),
+        showDays,
+      };
+    } else if (isHealth) {
+      let place = normalizeText(oldDetails.place) === "home" ? "home" : "hospital";
+      if (hospitalName || hospitalDept) place = "hospital";
+      else if (homeCity || homeArea) place = "home";
+      details = {
+        ...oldDetails,
+        v: 1,
+        kind: "health_notice",
+        place,
+        notes: text || normalizeText(oldDetails.notes),
+        hospitalName,
+        hospitalDept,
+        homeCity,
+        homeArea,
+        showDays,
+      };
+    } else {
+      details = {
+        ...oldDetails,
+        v: oldDetails.v || 1,
+        kind: "happy_notice",
+        text,
+        imageUrl,
+        videoUrl,
+        showDays,
+      };
+    }
+    if (imageUrl) details.imageUrl = imageUrl;
+    if (videoUrl) details.videoUrl = videoUrl;
+
     const row = {
       branch_key: normalizeText(input.branch),
-      type: normalizeText(input.type || "general"),
+      type,
       person: normalizeText(input.person),
       date_label: normalizeText(input.dateLabel),
       event_date: normalizeText(input.eventDate),
       details: stringifyDetails(details),
-      contact_phone: "",
-      contact_method: "",
-      hospital_name: "",
-      hospital_dept: "",
-      visit_date_from: "",
-      visit_date_to: "",
-      visit_time_from: "",
-      visit_time_to: "",
+      hospital_name: isHealth ? hospitalName || null : null,
+      hospital_dept: isHealth ? hospitalDept || null : null,
+      contact_method: isHealth ? contactMethod || null : null,
+      contact_phone: isHealth ? contactPhone || null : null,
+      visit_date_from: isHealth ? visitDateFrom || null : null,
+      visit_date_to: isHealth ? visitDateTo || null : null,
+      visit_time_from: isHealth ? visitTimeFrom || null : null,
+      visit_time_to: isHealth ? visitTimeTo || null : null,
     };
     if (input.id != null && Number(input.id) > 0) row.id = Number(input.id);
     return row;

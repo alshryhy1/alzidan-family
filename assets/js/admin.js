@@ -162,6 +162,9 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
     "banner-messages-active",
   );
   const bannerMessagesText = document.getElementById("banner-messages-text");
+  const bannerMessagesStartDate = document.getElementById(
+    "banner-messages-start-date",
+  );
   const bannerMessagesDelete = document.getElementById(
     "banner-messages-delete",
   );
@@ -272,7 +275,7 @@ function toggleAdminEventFields() {
     const e=document.getElementById(id);
     if(e && e.closest(".field"))
       e.closest(".field").style.display =
-        (t==="sick" || t==="operation") ? "" : "none";
+        (t==="sick" || t==="operation" || t==="discharge") ? "" : "none";
   });
 
   death.forEach(id=>{
@@ -284,6 +287,25 @@ function toggleAdminEventFields() {
 }
 
   let eventsSourceRows = [];
+  const EVENTS_REFRESH_KEY = "alzidan_events_refresh_v1";
+  function touchEventsRefresh() {
+    try {
+      localStorage.setItem(EVENTS_REFRESH_KEY, String(Date.now()));
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent("alzidan-events-refresh"));
+    } catch (e) {}
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        if (!window.__alzidanEventsRefreshBc) {
+          window.__alzidanEventsRefreshBc = new BroadcastChannel(
+            "alzidan_events_refresh_v1",
+          );
+        }
+        window.__alzidanEventsRefreshBc.postMessage({ t: Date.now() });
+      }
+    } catch (e) {}
+  }
   const TREE_SETUP_SQL = `
 create table if not exists public.tree_children ( id bigserial primary key, branch_key text not null, parent_name text not null, name text not null, child_name text null, parent text null, person_id uuid null default gen_random_uuid(), parent_person_id uuid null, birth_date_g date null, birth_date_h text null, birth_year int null, birth_order int null, city text null, area text null, is_deceased boolean null default false, deceased boolean null default false, created_at timestamptz not null default now(), created_by uuid null
 ); alter table public.tree_children add column if not exists id bigserial;
@@ -1211,7 +1233,8 @@ where c.id = matches.id; commit;
       );
     }
     if (typeof loadBannerMessagesRows === "function")
-      await loadBannerMessagesRows();
+      touchEventsRefresh();
+    await loadBannerMessagesRows();
     if (typeof loadEventsSourceRows === "function")
       await loadEventsSourceRows();
   }
@@ -2110,6 +2133,28 @@ where c.id = matches.id; commit;
     await loadSpecialCardsRows();
   }
 
+
+  function bannerStartDateValue(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const parsed = Date.parse(raw);
+    if (!Number.isFinite(parsed)) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+      return m ? m[1] + "-" + m[2] + "-" + m[3] : "";
+    }
+    const d = new Date(parsed);
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + mo + "-" + day;
+  }
+  function todayDateValue() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + mo + "-" + day;
+  }
   function setBannerMessagesStatus(message) {
     if (bannerMessagesStatus) bannerMessagesStatus.textContent = message || "";
   }
@@ -2119,6 +2164,7 @@ where c.id = matches.id; commit;
     if (bannerMessagesShowDays) bannerMessagesShowDays.value = "7";
     if (bannerMessagesActive) bannerMessagesActive.checked = true;
     if (bannerMessagesText) bannerMessagesText.value = "";
+    if (bannerMessagesStartDate) bannerMessagesStartDate.value = todayDateValue();
     setBannerMessagesStatus("");
   }
   function renderBannerMessagesList() {
@@ -2189,6 +2235,9 @@ where c.id = matches.id; commit;
     if (bannerMessagesActive)
       bannerMessagesActive.checked = row.is_active !== false;
     if (bannerMessagesText) bannerMessagesText.value = row.message || "";
+    if (bannerMessagesStartDate)
+      bannerMessagesStartDate.value =
+        bannerStartDateValue(row.created_at) || todayDateValue();
     setBannerMessagesStatus("تعديل الخبر العام رقم #" + (row.id || ""));
   }
   async function saveBannerMessageRow(event) {
@@ -2216,28 +2265,105 @@ where c.id = matches.id; commit;
         : "";
     if (!sb || !token) return setBannerMessagesStatus("سجل الدخول أولاً.");
     if (!text) return setBannerMessagesStatus("اكتب نص الخبر العام.");
+    const startDate =
+      bannerMessagesStartDate && bannerMessagesStartDate.value
+        ? String(bannerMessagesStartDate.value).trim()
+        : todayDateValue();
+    const existing = bannerMessagesRows.find((row) => Number(row.id) === id);
+    const existingDate = existing
+      ? bannerStartDateValue(existing.created_at)
+      : "";
+    const dateChanged = Boolean(id && startDate && startDate !== existingDate);
     setBannerMessagesStatus(id ? "جاري حفظ الخبر العام..." : "جاري إنشاء الخبر العام...");
 
-    const { data, error } = id
-      ? await sb.rpc("admin_banner_message_update_v1", {
+    let error = null;
+    if (id) {
+      const updatePayload = {
+        p_token: token,
+        p_id: id,
+        p_branch_key: branch,
+        p_message: text,
+        p_show_days: showDays,
+        p_is_active: isActive,
+        p_created_at: startDate ? startDate + "T12:00:00+03:00" : null,
+      };
+      let res = await sb.rpc("admin_banner_message_update_v1", updatePayload);
+      error = res.error;
+      if (
+        error &&
+        /p_created_at|created_at|Could not find the function|unexpected|function/i.test(
+          String(error.message || error.details || ""),
+        )
+      ) {
+        res = await sb.rpc("admin_banner_message_update_v1", {
           p_token: token,
           p_id: id,
           p_branch_key: branch,
           p_message: text,
           p_show_days: showDays,
           p_is_active: isActive,
-        })
-      : await sb.rpc("admin_banner_message_create_v1", {
-          p_token: token,
-          p_branch_key: branch,
-          p_message: text,
-          p_show_days: showDays,
         });
+        error = res.error;
+        if (!error && dateChanged) {
+          const del = await sb.rpc("admin_banner_message_delete_v1", {
+            p_token: token,
+            p_id: id,
+          });
+          if (del.error) {
+            error = del.error;
+          } else {
+            const created = await sb.rpc("admin_banner_message_create_v1", {
+              p_token: token,
+              p_branch_key: branch,
+              p_message: text,
+              p_show_days: showDays,
+            });
+            error = created.error;
+            if (!error && !isActive) {
+              const verify = await sb
+                .from("banner_messages")
+                .select("id")
+                .eq("message", text)
+                .order("created_at", { ascending: false })
+                .limit(1);
+              const newId =
+                verify && verify.data && verify.data[0]
+                  ? Number(verify.data[0].id)
+                  : 0;
+              if (newId) {
+                await sb.rpc("admin_banner_message_update_v1", {
+                  p_token: token,
+                  p_id: newId,
+                  p_branch_key: branch,
+                  p_message: text,
+                  p_show_days: showDays,
+                  p_is_active: false,
+                });
+              }
+            }
+          }
+        }
+      }
+    } else {
+      const created = await sb.rpc("admin_banner_message_create_v1", {
+        p_token: token,
+        p_branch_key: branch,
+        p_message: text,
+        p_show_days: showDays,
+      });
+      error = created.error;
+    }
     if (error) {
       setBannerMessagesStatus("تعذر الحفظ، حاول لاحقاً أو تواصل مع الإدارة.");
       return;
     }
-    setBannerMessagesStatus("تم حفظ الخبر العام.");
+    setBannerMessagesStatus(
+      dateChanged
+        ? "تم حفظ الخبر وتحديث تاريخ بدء الظهور."
+        : "تم حفظ الخبر العام.",
+    );
+    resetBannerMessagesForm();
+    touchEventsRefresh();
     await loadBannerMessagesRows();
   }
   async function deleteBannerMessageRow() {
@@ -2263,6 +2389,7 @@ where c.id = matches.id; commit;
     }
     resetBannerMessagesForm();
     setBannerMessagesStatus("تم حذف الخبر العام.");
+    touchEventsRefresh();
     await loadBannerMessagesRows();
   }
   async function loadTickerSpeedSetting() {
@@ -2371,7 +2498,7 @@ where c.id = matches.id; commit;
       eventsSourceGregorian.value = row.event_date || "";
     if (eventsSourceText)
       eventsSourceText.value =
-        details.text || details.extra || details.notes || "";
+        details.notes || details.text || details.extra || "";
     if (eventsSourceImage)
       eventsSourceImage.value =
         details.imageUrl ||
@@ -2382,8 +2509,12 @@ where c.id = matches.id; commit;
     if (eventsSourceVideo)
       eventsSourceVideo.value = details.videoUrl || details.video_url || "";
 
-    if (eventsSourceHospitalName) eventsSourceHospitalName.value = row.hospital_name || "";
-    if (eventsSourceHospitalDept) eventsSourceHospitalDept.value = row.hospital_dept || "";
+    if (eventsSourceHospitalName)
+      eventsSourceHospitalName.value =
+        row.hospital_name || details.hospitalName || details.hospital_name || "";
+    if (eventsSourceHospitalDept)
+      eventsSourceHospitalDept.value =
+        row.hospital_dept || details.hospitalDept || details.hospital_dept || "";
     if (eventsSourceContactMethod) eventsSourceContactMethod.value = row.contact_method || "";
     if (eventsSourceContactPhone) eventsSourceContactPhone.value = row.contact_phone || "";
     if (eventsSourceVisitDateFrom) eventsSourceVisitDateFrom.value = row.visit_date_from || "";
@@ -2672,6 +2803,7 @@ where c.id = matches.id; commit;
     } catch (e) {
       setEventsSourceStatus("تم حفظ الخبر/المناسبة.");
     }
+    touchEventsRefresh();
     await loadEventsSourceRows();
     try {
       const d =
@@ -2709,6 +2841,7 @@ where c.id = matches.id; commit;
     }
     if (eventsSourceId) eventsSourceId.value = "";
     setEventsSourceStatus("تم حذف الخبر/المناسبة .");
+    touchEventsRefresh();
     await loadEventsSourceRows();
   }
   function formatRpcError(error) {

@@ -1428,7 +1428,7 @@ function mountDelegateFamilyManagement(initialPersonId) {
 }
 
 
-const EVENTS_REFRESH_KEY = "alzidan_events_refresh_v1"; function touchEventsRefresh() { try { localStorage.setItem(EVENTS_REFRESH_KEY, String(Date.now())); } catch (e) {} } function delegateFileExtFromName(name, fallback) {
+const EVENTS_REFRESH_KEY = "alzidan_events_refresh_v1"; function touchEventsRefresh() { try { localStorage.setItem(EVENTS_REFRESH_KEY, String(Date.now())); } catch (e) {} try { window.dispatchEvent(new CustomEvent("alzidan-events-refresh")); } catch (e) {} try { if (typeof BroadcastChannel !== "undefined") { if (!window.__alzidanEventsRefreshBc) window.__alzidanEventsRefreshBc = new BroadcastChannel("alzidan_events_refresh_v1"); window.__alzidanEventsRefreshBc.postMessage({ t: Date.now() }); } } catch (e) {} } function delegateFileExtFromName(name, fallback) {
   const s = String(name || "").split("?")[0].trim();
   const m = /\.([a-z0-9]+)$/i.exec(s);
   return (m ? m[1].toLowerCase() : fallback || "bin").replace(/[^a-z0-9]/g, "") || fallback || "bin";

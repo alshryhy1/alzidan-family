@@ -214,8 +214,7 @@ if (error) { setEventSubmitAlert("error", "تعذر النشر المباشر ح
 return;
 } if (data === true) { form.reset();
 updateSubmitLinks();
-try { localStorage.setItem("alzidan_events_refresh_v1", String(Date.now()));
-} catch (e) {} setEventSubmitAlert("success", "تم نشر المناسبة مباشرة في التطبيق.");
+try { localStorage.setItem("alzidan_events_refresh_v1", String(Date.now())); window.dispatchEvent(new CustomEvent("alzidan-events-refresh")); try { if (typeof BroadcastChannel !== "undefined") { if (!window.__alzidanEventsRefreshBc) window.__alzidanEventsRefreshBc = new BroadcastChannel("alzidan_events_refresh_v1"); window.__alzidanEventsRefreshBc.postMessage({ t: Date.now() }); } } catch (_) {} } catch (e) {} setEventSubmitAlert("success", "تم نشر المناسبة مباشرة في التطبيق.");
 return;
 } setEventSubmitAlert("error", "رمز المندوب غير صحيح أو غير مخول لهذا الفرع.");
 return;
