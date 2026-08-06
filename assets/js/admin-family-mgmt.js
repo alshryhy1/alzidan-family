@@ -430,6 +430,7 @@
   async function getTreePersonIdByName(sb, fullName) {
     const name = normalizePersonName(fullName || "");
     if (!sb || !name || !state.branch) return null;
+
     const byChild = await sb
       .from("tree_children")
       .select("id")
@@ -437,7 +438,9 @@
       .eq("child_name", name)
       .limit(1)
       .maybeSingle();
-    if (!byChild.error && byChild.data && byChild.data.id != null) return byChild.data.id;
+
+    if (!byChild.error && byChild.data?.id != null) return byChild.data.id;
+
     const byName = await sb
       .from("tree_children")
       .select("id")
@@ -445,7 +448,23 @@
       .eq("name", name)
       .limit(1)
       .maybeSingle();
-    if (!byName.error && byName.data && byName.data.id != null) return byName.data.id;
+
+    if (!byName.error && byName.data?.id != null) return byName.data.id;
+
+    const leaf = name.split("/").pop();
+
+    if (leaf) {
+      const { data } = await sb
+        .from("tree_children")
+        .select("id,name,child_name")
+        .eq("branch_key", state.branch)
+        .or(`name.eq.${leaf},child_name.eq.${leaf}`);
+
+      if (Array.isArray(data) && data.length === 1) {
+        return data[0].id;
+      }
+    }
+
     return null;
   }
   
