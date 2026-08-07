@@ -346,6 +346,7 @@ document.head.appendChild(style);
     const section = document.createElement("section");
     section.id = "admin-quality-center";
     section.className = "section protected-section admin-only-section";
+    section.setAttribute("data-admin-module", "members");
     section.innerHTML = `
       <div class="section-header">
         <div>
