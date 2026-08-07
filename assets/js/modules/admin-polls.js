@@ -55,15 +55,41 @@
 
   function formatEndsAtLabel(value) {
     if (!value) return "بدون تاريخ انتهاء";
+    const raw = String(value);
+    const yearMatch = /^(\d{4})/.exec(raw.trim());
+    const rawYear = yearMatch ? Number(yearMatch[1]) : NaN;
+    if (Number.isFinite(rawYear) && rawYear >= 1200 && rawYear <= 1700) {
+      return "تاريخ غير صالح/هجري (يُتجاهل) · " + raw.slice(0, 16);
+    }
     const d = new Date(value);
-    if (!Number.isFinite(d.getTime())) return String(value).slice(0, 16);
+    if (!Number.isFinite(d.getTime())) return raw.slice(0, 16);
+    const year = d.getUTCFullYear();
+    if (year < 1900 || year > 2100) {
+      return "تاريخ غير صالح (يُتجاهل) · " + raw.slice(0, 16);
+    }
     return d.toLocaleString("ar-SA");
+  }
+
+  function isPollEnded(endsAt) {
+    if (!endsAt) return false;
+    const raw = String(endsAt);
+    const yearMatch = /^(\d{4})/.exec(raw.trim());
+    const rawYear = yearMatch ? Number(yearMatch[1]) : NaN;
+    // Hijri band (same as special cards / news): do not treat as Gregorian expiry.
+    if (Number.isFinite(rawYear) && rawYear >= 1200 && rawYear <= 1700) return false;
+    const ms = Date.parse(raw);
+    if (!Number.isFinite(ms)) return false;
+    const year = new Date(ms).getUTCFullYear();
+    if (year < 1900 || year > 2100) return false;
+    return ms < Date.now();
   }
 
   function toDatetimeLocalValue(value) {
     if (!value) return "";
     const d = new Date(value);
     if (!Number.isFinite(d.getTime())) return "";
+    const year = d.getFullYear();
+    if (year < 1900 || year > 2100) return "";
     const pad = (n) => String(n).padStart(2, "0");
     return (
       d.getFullYear() +
@@ -96,8 +122,7 @@
       const oppose = Number(row.oppose_count || 0);
       const total = support + oppose;
       const activeLabel = row.is_active ? "نشط" : "غير نشط";
-      const ended =
-        row.ends_at && Date.parse(row.ends_at) < Date.now() ? " · منتهٍ" : "";
+      const ended = isPollEnded(row.ends_at) ? " · منتهٍ" : "";
 
       card.innerHTML =
         "<strong>#" +
@@ -210,7 +235,16 @@
     const isActive = pollsActiveInput ? !!pollsActiveInput.checked : false;
     const endsAtRaw =
       pollsEndsAtInput && pollsEndsAtInput.value ? pollsEndsAtInput.value : "";
-    const endsAt = endsAtRaw ? new Date(endsAtRaw).toISOString() : null;
+    let endsAt = null;
+    if (endsAtRaw) {
+      const endsMs = new Date(endsAtRaw).getTime();
+      const endsYear = Number.isFinite(endsMs) ? new Date(endsMs).getFullYear() : NaN;
+      if (!Number.isFinite(endsMs) || endsYear < 1900 || endsYear > 2100) {
+        setPollsStatus("تاريخ الانتهاء يجب أن يكون ميلادياً (مثال: 2026).");
+        return;
+      }
+      endsAt = new Date(endsMs).toISOString();
+    }
 
     if (!sb || !token) {
       setPollsStatus("سجل الدخول أولاً.");

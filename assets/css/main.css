@@ -2362,8 +2362,8 @@ footer {
 }
 .search-poll-row > .family-poll-card,
 .search-poll-row > .family-mini-stats-card {
-  height: var(--search-poll-card-height) !important;
-  min-height: var(--search-poll-card-height) !important;
+  min-height: var(--search-poll-card-height);
+  height: auto;
 }
 .search-poll-row #search > .section-header {
   display: none;
@@ -2426,9 +2426,13 @@ footer {
   grid-template-columns: 104px 1fr;
   gap: 14px;
   align-items: center;
-  height: 160px;
-  overflow: hidden;
+  min-height: 160px;
+  height: auto;
+  overflow: visible;
   box-sizing: border-box;
+}
+.family-poll-body {
+  min-width: 0;
 }
 .family-poll-ring {
   width: 104px;
@@ -2476,6 +2480,10 @@ footer {
   font-weight: 900;
   cursor: pointer;
 }
+.family-poll-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .family-poll-support {
   background: #059669;
   color: #fff;
@@ -2503,8 +2511,8 @@ footer {
   }
   .search-poll-row > .family-poll-card,
   .search-poll-row > .family-mini-stats-card {
-    height: auto !important;
-    min-height: 160px !important;
+    height: auto;
+    min-height: 160px;
   }
   .family-poll-card {
     grid-template-columns: 88px 1fr;
