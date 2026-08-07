@@ -5,7 +5,11 @@
 *.sql
 *.txt
 *.md
+!docs/
+!docs/**/*.md
 _archive*/
 tmp/
 supabase/.temp/
 archive/
+
+backups/
