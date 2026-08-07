@@ -1,0 +1,837 @@
+{
+  "generated_at": "2026-08-07T19:35:45.624Z",
+  "mode": "read_only",
+  "policy": "No mutation. Closed cleanups 577-583 / 321 / 1730 must not be re-deleted.",
+  "totals": {
+    "tree_children": 851,
+    "missing_parent_person_id": 37,
+    "broken_parent_person_id": 9,
+    "children_bad_parent_total": 46,
+    "ambiguous_leaf_clusters": 170,
+    "spouses_without_husband": 0,
+    "short_path_suspects": 22
+  },
+  "cleanup_gate": {
+    "closed_delete_ids_still_present": [],
+    "keep_ids_missing": [],
+    "ok": true
+  },
+  "samples": {
+    "bad_parent": [
+      {
+        "id": 287,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم/دوخي/صلف/مشاري",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم/دوخي/صلف",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 288,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم/دوخي/صلف/عمر",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم/دوخي/صلف",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 491,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/صالح",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 670,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/ندا",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 733,
+        "branch_key": "ملحم",
+        "child_path": "ملحم بن مطلق بن زيدان/جاسر",
+        "parent_key": "ملحم بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 801,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/فايز",
+        "parent_key": "زيدان بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 855,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/قرينيس",
+        "parent_key": "زيدان بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 935,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/خميس",
+        "parent_key": "مزيد بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 981,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلال",
+        "parent_key": "مزيد بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 992,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف",
+        "parent_key": "مزيد بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1068,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/هليل",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1128,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/مناور",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1164,
+        "branch_key": "زايد",
+        "child_path": "زايد بن مطلق بن زيدان/عنيزان",
+        "parent_key": "زايد بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1289,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/نويران",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1551,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/فريح/فضي",
+        "parent_key": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/فريح",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1552,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/مرجي/ماجد/عبدالله",
+        "parent_key": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/مرجي/ماجد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1553,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/سعود/بدر",
+        "parent_key": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/سعود",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1554,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/سعود/مبارك",
+        "parent_key": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/سعود",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1555,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/سعود/أحمد",
+        "parent_key": "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/فضى/سعود",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1579,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/نزال بم فايز",
+        "parent_key": "زيدان بن مطلق بن زيدان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1594,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/دوخى/عبدالله",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/دوخى",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1602,
+        "branch_key": "مزيد",
+        "child_path": "سالم/عبيد/أحمد",
+        "parent_key": "سالم/عبيد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1603,
+        "branch_key": "مزيد",
+        "child_path": "سالم/عبيد/ياسر",
+        "parent_key": "سالم/عبيد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1604,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/مبارك/وافى",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/مبارك",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1605,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/مبارك/نواف",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/مبارك",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1606,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/مبارك/فيصل",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/مبارك",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1607,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/زيد/عبدالله",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/زيد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1608,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/زيد/عادل",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم/زيد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1731,
+        "branch_key": "لاحم",
+        "child_path": "عيد/عبدالعزيز",
+        "parent_key": "عيد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1732,
+        "branch_key": "لاحم",
+        "child_path": "عبدالعزيز/عبدالرحمن",
+        "parent_key": "عبدالعزيز",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1733,
+        "branch_key": "لاحم",
+        "child_path": "عبدالرحمن/محمد",
+        "parent_key": "عبدالرحمن",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1735,
+        "branch_key": "زيدان",
+        "child_path": "هاجس/عبدالله",
+        "parent_key": "هاجس",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1736,
+        "branch_key": "زيدان",
+        "child_path": "عبدالله/فيصل",
+        "parent_key": "عبدالله",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1737,
+        "branch_key": "زيدان",
+        "child_path": "عبدالله/فهد",
+        "parent_key": "عبدالله",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1738,
+        "branch_key": "لاحم",
+        "child_path": "محمد/حمد",
+        "parent_key": "محمد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1739,
+        "branch_key": "لاحم",
+        "child_path": "حمد/طعيسان",
+        "parent_key": "حمد",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 1740,
+        "branch_key": "لاحم",
+        "child_path": "طعيسان/نداء",
+        "parent_key": "طعيسان",
+        "code": "TREE-003",
+        "issue": "missing_parent_person_id"
+      },
+      {
+        "id": 196,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم/مبارك",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم",
+        "parent_person_id": "7479b82f-9bd4-488a-b09f-ac3e811a9a02",
+        "code": "TREE-003-broken",
+        "issue": "broken_parent_person_id"
+      },
+      {
+        "id": 212,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم/زيد",
+        "parent_key": "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم",
+        "parent_person_id": "7479b82f-9bd4-488a-b09f-ac3e811a9a02",
+        "code": "TREE-003-broken",
+        "issue": "broken_parent_person_id"
+      },
+      {
+        "id": 251,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/خميس/عرفج/فايض/جايز/عبدالأله",
+        "parent_key": "مزيد بن مطلق بن زيدان/خميس/عرفج/فايض/جايز",
+        "parent_person_id": "1f6b9353-5570-4f2b-8871-e9a53aa617d2",
+        "code": "TREE-003-broken",
+        "issue": "broken_parent_person_id"
+      }
+    ],
+    "ambiguous_leaf_top": [
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "محمد",
+        "n_rows": 27,
+        "n_distinct_person_id": 27,
+        "sample_ids": [
+          502,
+          523,
+          631,
+          637,
+          643,
+          695,
+          1045,
+          1069
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "عبدالله",
+        "n_rows": 18,
+        "n_distinct_person_id": 18,
+        "sample_ids": [
+          510,
+          564,
+          623,
+          640,
+          676,
+          1076,
+          1085,
+          1098
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "فهد",
+        "n_rows": 11,
+        "n_distinct_person_id": 11,
+        "sample_ids": [
+          555,
+          628,
+          1081,
+          1139,
+          1146,
+          1156,
+          1280,
+          1281
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "نواف",
+        "n_rows": 9,
+        "n_distinct_person_id": 9,
+        "sample_ids": [
+          498,
+          537,
+          540,
+          542,
+          697,
+          1138,
+          1318,
+          1521
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "عبدالرحمن",
+        "n_rows": 9,
+        "n_distinct_person_id": 9,
+        "sample_ids": [
+          507,
+          519,
+          524,
+          551,
+          677,
+          1075,
+          1293,
+          1621
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "عبدالعزيز",
+        "n_rows": 9,
+        "n_distinct_person_id": 9,
+        "sample_ids": [
+          517,
+          525,
+          528,
+          639,
+          700,
+          1122,
+          1331,
+          1523
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "سلطان",
+        "n_rows": 8,
+        "n_distinct_person_id": 8,
+        "sample_ids": [
+          534,
+          557,
+          638,
+          699,
+          1104,
+          1338,
+          1520,
+          1734
+        ]
+      },
+      {
+        "branch_key": "زيدان",
+        "leaf_name": "عبدالله",
+        "n_rows": 8,
+        "n_distinct_person_id": 8,
+        "sample_ids": [
+          824,
+          878,
+          898,
+          1474,
+          1552,
+          1564,
+          1578,
+          1735
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "نايف",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          497,
+          625,
+          701,
+          703,
+          1077,
+          1420,
+          1524
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "بدر",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          500,
+          690,
+          709,
+          1117,
+          1323,
+          1499,
+          1518
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "ماجد",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          545,
+          698,
+          1270,
+          1314,
+          1328,
+          1522,
+          1528
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "خالد",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          554,
+          571,
+          1080,
+          1125,
+          1159,
+          1327,
+          1624
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "حمد",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          685,
+          705,
+          1155,
+          1529,
+          1536,
+          1546,
+          1738
+        ]
+      },
+      {
+        "branch_key": "ملحم",
+        "leaf_name": "عبدالله",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          746,
+          755,
+          780,
+          799,
+          1357,
+          1378,
+          1381
+        ]
+      },
+      {
+        "branch_key": "زيدان",
+        "leaf_name": "محمد",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          808,
+          827,
+          884,
+          891,
+          1472,
+          1567,
+          1572
+        ]
+      },
+      {
+        "branch_key": "مزيد",
+        "leaf_name": "عبدالله",
+        "n_rows": 7,
+        "n_distinct_person_id": 7,
+        "sample_ids": [
+          938,
+          941,
+          1437,
+          1448,
+          1591,
+          1594,
+          1607
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "صالح",
+        "n_rows": 6,
+        "n_distinct_person_id": 6,
+        "sample_ids": [
+          491,
+          560,
+          568,
+          572,
+          673,
+          1269
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "ناصر",
+        "n_rows": 6,
+        "n_distinct_person_id": 6,
+        "sample_ids": [
+          493,
+          561,
+          619,
+          635,
+          1141,
+          1543
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "أحمد",
+        "n_rows": 6,
+        "n_distinct_person_id": 6,
+        "sample_ids": [
+          506,
+          567,
+          1086,
+          1121,
+          1319,
+          1530
+        ]
+      },
+      {
+        "branch_key": "لاحم",
+        "leaf_name": "ريان",
+        "n_rows": 6,
+        "n_distinct_person_id": 6,
+        "sample_ids": [
+          511,
+          556,
+          674,
+          1124,
+          1302,
+          1533
+        ]
+      }
+    ],
+    "spouses_bad": [],
+    "short_path_suspects": [
+      {
+        "id": 670,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/ندا",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 733,
+        "branch_key": "ملحم",
+        "child_path": "ملحم بن مطلق بن زيدان/جاسر",
+        "parent_key": "ملحم بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 801,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/فايز",
+        "parent_key": "زيدان بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 855,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/قرينيس",
+        "parent_key": "زيدان بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 935,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/خميس",
+        "parent_key": "مزيد بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 981,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلال",
+        "parent_key": "مزيد بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 992,
+        "branch_key": "مزيد",
+        "child_path": "مزيد بن مطلق بن زيدان/صلف",
+        "parent_key": "مزيد بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1068,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/هليل",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1128,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/مناور",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1164,
+        "branch_key": "زايد",
+        "child_path": "زايد بن مطلق بن زيدان/عنيزان",
+        "parent_key": "زايد بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1289,
+        "branch_key": "لاحم",
+        "child_path": "لاحم بن مطلق بن زيدان/نويران",
+        "parent_key": "لاحم بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1579,
+        "branch_key": "زيدان",
+        "child_path": "زيدان بن مطلق بن زيدان/نزال بم فايز",
+        "parent_key": "زيدان بن مطلق بن زيدان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1731,
+        "branch_key": "لاحم",
+        "child_path": "عيد/عبدالعزيز",
+        "parent_key": "عيد",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1732,
+        "branch_key": "لاحم",
+        "child_path": "عبدالعزيز/عبدالرحمن",
+        "parent_key": "عبدالعزيز",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1733,
+        "branch_key": "لاحم",
+        "child_path": "عبدالرحمن/محمد",
+        "parent_key": "عبدالرحمن",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1734,
+        "branch_key": "لاحم",
+        "child_path": "محمد/سلطان",
+        "parent_key": "محمد",
+        "parent_person_id": "006cde31-d867-4905-ba6b-6d708e8794e9",
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1735,
+        "branch_key": "زيدان",
+        "child_path": "هاجس/عبدالله",
+        "parent_key": "هاجس",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1736,
+        "branch_key": "زيدان",
+        "child_path": "عبدالله/فيصل",
+        "parent_key": "عبدالله",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1737,
+        "branch_key": "زيدان",
+        "child_path": "عبدالله/فهد",
+        "parent_key": "عبدالله",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1738,
+        "branch_key": "لاحم",
+        "child_path": "محمد/حمد",
+        "parent_key": "محمد",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1739,
+        "branch_key": "لاحم",
+        "child_path": "حمد/طعيسان",
+        "parent_key": "حمد",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      },
+      {
+        "id": 1740,
+        "branch_key": "لاحم",
+        "child_path": "طعيسان/نداء",
+        "parent_key": "طعيسان",
+        "parent_person_id": null,
+        "note": "short_path_review_candidate"
+      }
+    ]
+  },
+  "spouses_note": "HTTP 400 /rest/v1/tree_spouses?select=id,husband_id,husband_person_id,wife_name,branch_key&limit=5000: {\"code\":\"42703\",\"details\":null,\"hint\":null,\"message\":\"column tree_spouses.branch_key does not exist\"}",
+  "codes": [
+    "TREE-003",
+    "TREE-001",
+    "SPOUSE-001"
+  ]
+}

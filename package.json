@@ -10,6 +10,7 @@
     "verify:news-expiry": "node scripts/verify-news-expiry.mjs",
     "verify:repair": "node scripts/test-patch-repair.js",
     "verify:children-isolation": "node scripts/test-children-state-isolation.js",
+    "integrity:scan": "node scripts/integrity-scan-report.mjs",
     "repair:dry-run": "node scripts/repair-parent-person-id.mjs --snapshot",
     "repair:ali-dual": "node scripts/repair-ali-dual-children.mjs",
     "repair:ali-unlink": "node scripts/repair-ali-dual-unlink.mjs"

@@ -158,9 +158,9 @@ Validation (معايير القبول + KPI جزئية)
 | **36** | تكرار الجد في التطبيق فقط | مسار B؛ ✅ مكتمل 2026-08-07 — تقرير الموبايل `alzidan-family-mobile/docs/PATCH-MOBILE-36-REPORT.md` |
 | **4** | توحيد انتهاء الأخبار + Cache Policy | مسار C؛ ✅ مكتمل 2026-08-07 — `docs/PATCH-NEWS-EXPIRY-REPORT.md` + موبايل `PATCH-NEWS-EXPIRY-REPORT.md` |
 | **Admin-SC** | بطاقات خاصة: RPC لا يُرسل بعد STEP 5.5 | إصلاحات Admin — انظر §8ب و `BUG-SPECIAL-CARDS-RPC.md` |
-| **TREE-004** | عزل حالة الأبناء + اعتماد بـ `parent_person_id` فقط | ✅ كود+اختبار 2026-08-07 — `BUG-CHILDREN-STATE-ISOLATION.md` · `PATCH-TREE004-REPORT.md` |
-| **Repair** | Migration Scripts (مازن، علي، يتامى الاعتماد…) | dry-run ✅ 25 مرشّحًا · apply إنتاج ⏳ · تقرير `docs/PATCH-REPAIR-REPORT.md` · علي توائم: `repair:ali-dual` |
-| **Integrity** | views + `admin_integrity_report_v1` (أساس Health Center) | ✅ سكربتات جاهزة · نشر إنتاج ⏳ |
+| **TREE-004** | عزل حالة الأبناء + اعتماد بـ `parent_person_id` فقط | ✅ كود+اختبار · ✅ unlink علي `577–583` (ناصر `1417–1423` باقٍ) · ✅ حذف مختصرات `321`/`1730` (بقاء `491`/`492`) — يدوي مكتمل؛ **لا يُعاد** |
+| **Repair** | Migration Scripts (مازن، علي، يتامى الاعتماد…) | تنظيف البيانات اليدوي ✅ · أي إصلاح لاحق = dry-run أولًا ثم موافقة — `PATCH-REPAIR-REPORT.md` |
+| **Integrity** | views + `admin_integrity_report_v1` (تقرير قراءة فقط) + Health Center | سكربتات جاهزة · تقرير قراءة فقط · نشر RPC ⏳ — `PATCH-INTEGRITY-DEPLOY-SQL.md` |
 | **Tests** | Smoke + **Regression** | CI / قبل كل إصدار · `npm run verify:repair` · `npm run verify:children-isolation` |
 
 
@@ -332,4 +332,4 @@ Validation (معايير القبول + KPI جزئية)
 
 ---
 
-**الخطوة التالية:** تطبيق **TREE-004 relink** لأبناء الأحم (`repair:ali-dual --apply`) عند توفر service_role · ثم إكمال Apply إصلاح الـ 25 · Health Center UI.
+**الخطوة التالية:** Integrity **قراءة فقط** (تقرير + Health Center) · بلا حذف/تعديل تلقائي · ثم Features (بحث · عضو · إشعارات…).

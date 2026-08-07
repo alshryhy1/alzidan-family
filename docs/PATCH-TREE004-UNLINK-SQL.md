@@ -1,8 +1,11 @@
 # Patch TREE-004 Unlink — SQL للتنفيذ اليدوي في Supabase SQL Editor
 
+> ⛔ **مرجع تاريخي فقط — لا تُشغّل.**  
+> الحذف اكتمل يدويًا (`577–583` محذوفة · `1417–1423` باقية). انظر [`PATCH-DATA-CLEANUP-DONE.md`](./PATCH-DATA-CLEANUP-DONE.md).
+
 **التاريخ:** 2026-08-07  
 **النطاق:** حذف صفوف `tree_children` الخاطئة فقط تحت علي صالح الأحم  
-**الطريقة:** انسخ كل خطوة والصقها في **Supabase → SQL Editor → Run**  
+**الطريقة:** ~~انسخ كل خطوة والصقها في Supabase SQL Editor~~ — **موقوف**  
 **لا** يُستخدم `SUPABASE_SERVICE_ROLE_KEY` من الوكيل.
 
 الخلفية والتفاصيل: [`PATCH-TREE004-UNLINK-REPORT.md`](./PATCH-TREE004-UNLINK-REPORT.md)

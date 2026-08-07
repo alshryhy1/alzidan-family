@@ -1,7 +1,7 @@
 # Patch Repair / Integrity — تقرير إصلاح البيانات وأساس السلامة
 
 **التاريخ:** 2026-08-07  
-**الحالة:** Dry-run مكتمل · سكربتات SQL جاهزة · تطبيق الإنتاج معلّق على بيانات اعتماد DB/service_role  
+**الحالة:** تنظيف يدوي مكتمل (علي + مختصرات) ✅ · Integrity = قراءة فقط · أي إصلاح لاحق = dry-run ثم موافقة — لا apply تلقائي  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) بند Repair · [`ADR.md`](./ADR.md) ADR-001/002/004/007  
 **Depends on:** Patch 0–3 · Patch News Expiry
 

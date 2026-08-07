@@ -174,6 +174,11 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
 
   const specialCardsLoad = document.getElementById("special-cards-load");
   const specialCardsNew = document.getElementById("special-cards-new");
+  const healthCenterRefresh = document.getElementById("health-center-refresh");
+  const healthCenterSummary = document.getElementById("health-center-summary");
+  const healthCenterBadBody = document.getElementById("health-center-bad-body");
+  const healthCenterStatus = document.getElementById("health-center-status");
+  const healthCenterSource = document.getElementById("health-center-source");
   const specialCardsList = document.getElementById("special-cards-list");
   const specialCardsForm = document.getElementById("special-cards-form");
   const specialCardsId = document.getElementById("special-cards-id");
@@ -2073,6 +2078,245 @@ where c.id = matches.id; commit;
     renderSpecialCardsList();
   }
 
+  function setHealthCenterStatus(msg) {
+    if (healthCenterStatus) healthCenterStatus.textContent = String(msg || "");
+  }
+
+  function renderHealthCenterReport(report, sourceLabel) {
+    const counts = (report && report.counts) || (report && report.totals) || {};
+    const samples = (report && report.samples) || {};
+    const bad = Array.isArray(samples.bad_parent) ? samples.bad_parent : [];
+    const gate = report && report.cleanup_gate;
+    if (healthCenterSource) {
+      healthCenterSource.textContent = sourceLabel || "";
+    }
+    const lines = [
+      "وضع التقرير: قراءة فقط — بلا تعديل بيانات.",
+      "أبناء بلا parent_person_id: " +
+        String(counts.missing_parent_person_id ?? "—"),
+      "أبناء بـ parent_person_id مكسور: " +
+        String(counts.broken_parent_person_id ?? "—"),
+      "مجموع روابط الأب غير الصالحة: " +
+        String(
+          counts.children_bad_parent_total ??
+            (Number(counts.missing_parent_person_id || 0) +
+              Number(counts.broken_parent_person_id || 0)),
+        ),
+      "عناقيد اسم ورقة غامض: " +
+        String(counts.ambiguous_leaf_clusters ?? "—"),
+      "زوجات بلا زوج صالح: " +
+        String(counts.spouses_without_husband ?? "—"),
+    ];
+    if (counts.short_path_suspects != null) {
+      lines.push(
+        "مسارات قصيرة للمراجعة (ليست حذفًا): " +
+          String(counts.short_path_suspects),
+      );
+    }
+    if (gate) {
+      lines.push(
+        "بوابة التنظيف المكتمل: " +
+          (gate.ok
+            ? "سليمة (لا ظهور لـ 577–583/321/1730)"
+            : "تحذير — راجع cleanup_gate"),
+      );
+    }
+    if (healthCenterSummary) healthCenterSummary.textContent = lines.join("\n");
+    if (healthCenterBadBody) {
+      if (!bad.length) {
+        healthCenterBadBody.innerHTML =
+          '<tr><td colspan="5" class="hint">لا عيّنات في التقرير.</td></tr>';
+      } else {
+        healthCenterBadBody.innerHTML = bad
+          .slice(0, 25)
+          .map((row) => {
+            const id = escapeHtml(row.id != null ? row.id : row.child_id || "");
+            const branch = escapeHtml(row.branch_key || "");
+            const path = escapeHtml(row.child_path || row.child_name || "");
+            const parent = escapeHtml(row.parent_key || row.parent_name || "");
+            const code = escapeHtml(row.code || row.issue || "");
+            return (
+              "<tr><td>" +
+              id +
+              "</td><td>" +
+              branch +
+              "</td><td>" +
+              path +
+              "</td><td>" +
+              parent +
+              "</td><td>" +
+              code +
+              "</td></tr>"
+            );
+          })
+          .join("");
+      }
+    }
+  }
+
+  async function fetchTreeChildrenPaged(sb) {
+    const page = 1000;
+    let from = 0;
+    const all = [];
+    for (;;) {
+      const { data, error } = await sb
+        .from("tree_children")
+        .select(
+          "id,branch_key,child_name,name,parent_name,parent,person_id,parent_person_id",
+        )
+        .order("id")
+        .range(from, from + page - 1);
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      all.push.apply(all, rows);
+      if (rows.length < page) break;
+      from += page;
+    }
+    return all;
+  }
+
+  function buildClientIntegrityReport(children, spouses) {
+    const byPerson = new Map();
+    children.forEach((c) => {
+      if (c && c.person_id) byPerson.set(String(c.person_id), c);
+    });
+    const byId = new Map();
+    children.forEach((c) => {
+      if (c && c.id != null) byId.set(c.id, c);
+    });
+    const missing = [];
+    const broken = [];
+    children.forEach((c) => {
+      const path = c.child_name || c.name || "";
+      const parentKey = c.parent_name || c.parent || "";
+      if (!c.parent_person_id) {
+        missing.push({
+          id: c.id,
+          branch_key: c.branch_key,
+          child_path: path,
+          parent_key: parentKey,
+          code: "TREE-003",
+          issue: "missing_parent_person_id",
+        });
+        return;
+      }
+      if (!byPerson.has(String(c.parent_person_id))) {
+        broken.push({
+          id: c.id,
+          branch_key: c.branch_key,
+          child_path: path,
+          parent_key: parentKey,
+          code: "TREE-003-broken",
+          issue: "broken_parent_person_id",
+        });
+      }
+    });
+    const leafMap = new Map();
+    children.forEach((c) => {
+      const path = String(c.child_name || c.name || "");
+      const leaf = path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path;
+      const key = String(c.branch_key || "") + "||" + leaf;
+      if (!leafMap.has(key)) leafMap.set(key, []);
+      leafMap.get(key).push(c);
+    });
+    let ambiguous = 0;
+    leafMap.forEach((rows) => {
+      if (rows.length > 1) ambiguous += 1;
+    });
+    let spousesBad = 0;
+    (spouses || []).forEach((s) => {
+      if (s.husband_id == null || !byId.has(s.husband_id)) spousesBad += 1;
+    });
+    const closed = [577, 578, 579, 580, 581, 582, 583, 321, 1730];
+    const keep = [1417, 1418, 1419, 1420, 1421, 1422, 1423, 491, 492];
+    const closedStill = children.filter((c) => closed.indexOf(c.id) >= 0);
+    const keepMissing = keep.filter((id) => !byId.has(id));
+    let shortPath = 0;
+    children.forEach((c) => {
+      const path = String(c.child_name || c.name || "");
+      const parts = path.split("/").filter(Boolean);
+      if (
+        parts.length <= 2 &&
+        closed.indexOf(c.id) < 0 &&
+        keep.indexOf(c.id) < 0
+      ) {
+        shortPath += 1;
+      }
+    });
+    return {
+      mode: "read_only",
+      totals: {
+        tree_children: children.length,
+        missing_parent_person_id: missing.length,
+        broken_parent_person_id: broken.length,
+        children_bad_parent_total: missing.length + broken.length,
+        ambiguous_leaf_clusters: ambiguous,
+        spouses_without_husband: spousesBad,
+        short_path_suspects: shortPath,
+      },
+      cleanup_gate: {
+        closed_delete_ids_still_present: closedStill.map((c) => c.id),
+        keep_ids_missing: keepMissing,
+        ok: closedStill.length === 0 && keepMissing.length === 0,
+      },
+      samples: { bad_parent: missing.concat(broken).slice(0, 25) },
+    };
+  }
+
+  async function loadHealthCenterReport() {
+    const token = getAdminToken();
+    if (!token) {
+      setHealthCenterStatus("سجل الدخول أولًا لعرض مركز صحة البيانات.");
+      return;
+    }
+    setHealthCenterStatus("جاري تجهيز تقرير السلامة (قراءة فقط)...");
+    const { data, error } = await invokeAdminRpc("admin_integrity_report_v1", {
+      p_token: token,
+    });
+    if (!error && data) {
+      renderHealthCenterReport(data, "المصدر: admin_integrity_report_v1");
+      setHealthCenterStatus("تم تحديث التقرير من RPC (قراءة فقط).");
+      return;
+    }
+    // Fallback: client-side read-only scan when RPC not deployed yet.
+    const sb = getClient();
+    if (!sb) {
+      setHealthCenterStatus(
+        "دالة التقرير غير منشورة بعد، وتعذر المسح المحلي. انشر supabase/sql/20260807_integrity_engine_v1.sql (قراءة فقط) — انظر docs/PATCH-INTEGRITY-DEPLOY-SQL.md",
+      );
+      return;
+    }
+    try {
+      const children = await fetchTreeChildrenPaged(sb);
+      let spouses = [];
+      try {
+        const sp = await sb
+          .from("tree_spouses")
+          .select("id,husband_id,husband_person_id,wife_name,branch_key")
+          .limit(5000);
+        if (!sp.error) spouses = Array.isArray(sp.data) ? sp.data : [];
+      } catch (e) {
+        spouses = [];
+      }
+      const report = buildClientIntegrityReport(children, spouses);
+      renderHealthCenterReport(
+        report,
+        "المصدر: مسح محلي (RPC غير منشور بعد)",
+      );
+      setHealthCenterStatus(
+        "تم المسح المحلي قراءة فقط. لنشر RPC: docs/PATCH-INTEGRITY-DEPLOY-SQL.md — بدون أي apply بيانات.",
+      );
+    } catch (err) {
+      setHealthCenterStatus(
+        "تعذر المسح: " +
+          String((err && err.message) || err || "خطأ") +
+          (error
+            ? " · RPC: " + String(error.message || error.code || "")
+            : ""),
+      );
+    }
+  }
+
   async function loadSpecialCardsRows() {
     const token = getAdminToken();
     if (!token) return setSpecialCardsStatus("سجل الدخول أولاً.");
@@ -3275,6 +3519,10 @@ where c.id = matches.id; commit;
   if (specialCardsLoad)
     specialCardsLoad.addEventListener("click", () =>
       loadSpecialCardsRows().catch(() => {}),
+    );
+  if (healthCenterRefresh)
+    healthCenterRefresh.addEventListener("click", () =>
+      loadHealthCenterReport().catch(() => {}),
     );
   if (specialCardsNew)
     specialCardsNew.addEventListener("click", resetSpecialCardsForm);
