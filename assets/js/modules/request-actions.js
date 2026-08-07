@@ -776,13 +776,16 @@
           item && item.child_name ? item.child_name : "",
         );
         if (!parent || !child) return;
+        // Never stamp father_person_id onto every ancestor edge — only this
+        // row's own parent_person_id (pushEdge still binds the final father).
         const rowPid = normalizeTreeCardText(
-          (item && item.parent_person_id) || fatherPersonId || "",
+          (item && item.parent_person_id) || "",
         );
         pushEdge(parent, child, {
           birth_date_g: normalizeTreeCardText(item.birth_date_g || ""),
           city: normalizeTreeCardText(item.city || ""),
           area: normalizeTreeCardText(item.area || ""),
+          person_id: normalizeTreeCardText((item && item.person_id) || "") || undefined,
           parent_person_id: rowPid || undefined,
         });
       });
@@ -1122,9 +1125,169 @@
     return { count: hits.length, meta: null };
   }
 
+  function parentPathsCompatible(parentPath, dbParent) {
+    const CP = window.AlzidanCanonicalPerson;
+    if (CP && typeof CP.parentNamesCompatible === "function") {
+      return CP.parentNamesCompatible(
+        parentPath,
+        dbParent,
+        normalizeTreeCardText,
+        relationLeafName,
+      );
+    }
+    const a = normalizeTreeCardText(parentPath || "");
+    const b = normalizeTreeCardText(dbParent || "");
+    if (!a || !b) return true;
+    if (a === b) return true;
+    const aLeaf = relationLeafName(a);
+    const bLeaf = relationLeafName(b);
+    if (a === bLeaf || b === aLeaf) return true;
+    if (a.endsWith("/" + b) || b.endsWith("/" + aLeaf)) return true;
+    return false;
+  }
+
   /**
-   * TREE-004 / ADR-002: approve-add-son must use parent_person_id only.
-   * Never re-resolve father by parent_name / leaf / LIKE / limit(1).
+   * Resolve an existing tree node for reuse (not insert).
+   * Order: person_id → exact path → unique leaf under parent → unique leaf in branch.
+   * Ambiguity → TREE-001 (never silent pick).
+   */
+  function resolveExistingTreeNode(pathToRow, opts) {
+    const CP = window.AlzidanCanonicalPerson;
+    const options = opts || {};
+    const personId = normalizeTreeCardText(options.personId || "");
+    const path = normalizeTreeCardText(options.path || "");
+    const parentPersonId = normalizeTreeCardText(options.parentPersonId || "");
+    const parentPath = normalizeTreeCardText(options.parentPath || "");
+    const leaf = relationLeafName(path) || normalizeTreeCardText(options.leaf || "");
+    const label = relationPathLabel(path || leaf || personId);
+
+    function metaMatchesWantedPath(meta) {
+      if (!meta) return false;
+      if (!path && !leaf) return true;
+      const metaPath = normalizeTreeCardText(meta.db_child_name || "");
+      const metaLeaf = relationLeafName(metaPath);
+      const wantLeaf = leaf || relationLeafName(path);
+      if (path && metaPath === path) return true;
+      if (wantLeaf && metaLeaf === wantLeaf) return true;
+      if (
+        path &&
+        metaPath &&
+        (metaPath.endsWith("/" + path) ||
+          path.endsWith("/" + metaPath) ||
+          metaPath.endsWith("/" + wantLeaf))
+      ) {
+        return true;
+      }
+      return false;
+    }
+
+    if (personId) {
+      const byPid = countExactParentPersonMatches(pathToRow, personId);
+      if (byPid.count === 1 && byPid.meta) {
+        // Ignore a stamped person_id that conflicts with the edge's parent/child path
+        // (legacy tree_rows often copied father_person_id onto every ancestor edge).
+        if (metaMatchesWantedPath(byPid.meta)) {
+          return { ok: true, found: true, meta: byPid.meta };
+        }
+      } else if (byPid.count > 1) {
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
+          "تعذر تحديد «" +
+            label +
+            "» لأن المعرّف يطابق أكثر من صف (TREE-001).",
+          { matchCount: byPid.count, person_id: personId },
+        );
+      }
+    }
+
+    if (path && pathToRow && pathToRow[path] && pathToRow[path].id) {
+      return { ok: true, found: true, meta: pathToRow[path] };
+    }
+
+    if (CP && typeof CP.resolveFromPathIndex === "function" && (path || personId)) {
+      const fromIndex = CP.resolveFromPathIndex(
+        pathToRow,
+        path,
+        personId,
+        canonicalHelpers(),
+      );
+      if (fromIndex && fromIndex.ok && fromIndex.meta) {
+        return { ok: true, found: true, meta: fromIndex.meta };
+      }
+      if (fromIndex && fromIndex.code === "TREE-001") {
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
+          "تعذر تحديد «" +
+            label +
+            "» لأن الاسم يطابق أكثر من شخص في الشجرة. اختر المسار الكامل أو معرّف الشخص (TREE-001).",
+          { matchCount: fromIndex.matchCount || 0 },
+        );
+      }
+    }
+
+    if (!leaf || !pathToRow) {
+      return { ok: true, found: false, meta: null };
+    }
+
+    const hits = [];
+    const seen = {};
+    Object.keys(pathToRow).forEach((key) => {
+      if (key.indexOf("pid:") === 0) return;
+      const row = pathToRow[key];
+      if (!row || row.id == null) return;
+      const childPath = normalizeTreeCardText(row.db_child_name || key);
+      const childLeaf = relationLeafName(childPath);
+      if (childLeaf !== leaf && childPath !== path) return;
+      if (parentPersonId) {
+        if (normalizeTreeCardText(row.parent_person_id || "") !== parentPersonId) {
+          return;
+        }
+      } else if (parentPath) {
+        if (
+          !parentPathsCompatible(
+            parentPath,
+            row.db_parent_name || "",
+          )
+        ) {
+          return;
+        }
+      }
+      const id = Number(row.id);
+      if (seen[id]) return;
+      seen[id] = true;
+      hits.push(row);
+    });
+
+    if (hits.length === 1) {
+      return { ok: true, found: true, meta: hits[0] };
+    }
+    if (hits.length > 1) {
+      const distinct = {};
+      hits.forEach((h) => {
+        const p = normalizeTreeCardText(h.person_id || "");
+        if (p) distinct[p] = h;
+      });
+      const pids = Object.keys(distinct);
+      if (
+        pids.length === 1 &&
+        hits.every((h) => normalizeTreeCardText(h.person_id || "") === pids[0])
+      ) {
+        return { ok: true, found: true, meta: distinct[pids[0]] };
+      }
+      return requestFail(
+        (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
+        "تعذر تحديد «" +
+          label +
+          "» لأن الاسم يطابق أكثر من شخص في الشجرة. اختر المسار الكامل أو معرّف الشخص (TREE-001).",
+        { matchCount: hits.length },
+      );
+    }
+    return { ok: true, found: false, meta: null };
+  }
+
+  /**
+   * Bind a write edge to a resolved existing parent (canonical path + person_id).
+   * Branch-root parents have no person row.
    */
   function enrichOneTreeCardRow(row, pathToRow) {
     const CP = window.AlzidanCanonicalPerson;
@@ -1148,9 +1311,47 @@
       return { ok: true, row: payload };
     }
 
-    const parentPid = normalizeTreeCardText(
+    const parentPidHint = normalizeTreeCardText(
       payload.parent_person_id || payload.father_person_id || "",
     );
+    const resolved = resolveExistingTreeNode(pathToRow, {
+      personId: parentPidHint,
+      path: parent,
+      leaf: relationLeafName(parent),
+    });
+    if (!resolved.ok) {
+      // Prefer Arabic father-specific TREE-001 wording.
+      if (resolved.code === "TREE-001") {
+        return requestFail(
+          "TREE-001",
+          "الأب «" +
+            relationPathLabel(parent) +
+            "» يطابق أكثر من شخص في الشجرة — لن يُنشأ ابن تحت أب غامض. اختر المسار الكامل أو معرّف الأب (TREE-001).",
+          { matchCount: resolved.matchCount || 0 },
+        );
+      }
+      return resolved;
+    }
+    if (!resolved.found || !resolved.meta) {
+      if (parentPidHint) {
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
+          (CP && CP.MSG && CP.MSG.TREE_004) ||
+            "عزل حالة الأبناء: parent_person_id لا يطابق شخصًا واحدًا (TREE-004).",
+          { reason: "parent_person_id_not_in_tree", parent_person_id: parentPidHint },
+        );
+      }
+      return requestFail(
+        (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
+        "تعذر تحديد الأب «" +
+          relationPathLabel(parent) +
+          "» في الشجرة — الأب غير موجود أو بلا هوية فريدة (TREE-003).",
+        { reason: "parent_not_found" },
+      );
+    }
+
+    const meta = resolved.meta;
+    const parentPid = normalizeTreeCardText(meta.person_id || parentPidHint || "");
     if (!parentPid) {
       return requestFail(
         (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
@@ -1160,29 +1361,12 @@
       );
     }
 
-    const matches = countExactParentPersonMatches(pathToRow, parentPid);
-    if (matches.count !== 1 || !matches.meta) {
-      return requestFail(
-        matches.count > 1
-          ? (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001"
-          : (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
-        matches.count > 1
-          ? (CP && CP.MSG && CP.MSG.TREE_001) ||
-              "تعذر تحديد الشخص لأن الاسم يطابق أكثر من شخص (TREE-001)."
-          : (CP && CP.MSG && CP.MSG.TREE_004) ||
-              "عزل حالة الأبناء: parent_person_id لا يطابق شخصًا واحدًا (TREE-004).",
-        { matchCount: matches.count, parent_person_id: parentPid },
-      );
-    }
-
-    // Bind write to the UUID only — align path fields from the resolved person.
-    const meta = matches.meta;
     payload.parent_person_id = parentPid;
     if (meta.db_child_name) {
       payload.parent_name = meta.db_child_name;
       payload.parent = meta.db_child_name;
     }
-    return { ok: true, row: payload };
+    return { ok: true, row: payload, parentMeta: meta };
   }
 
   async function loadPathToRowForBranch(sb, branchKey) {
@@ -1321,9 +1505,25 @@
   }
 
   /**
-   * Patch 2 — Verified apply for tree_card / add-son.
-   * Event order: build → resolve parent_person_id → import → verify → then caller may set approved.
-   * Rows are applied sequentially so child person_id becomes available as parent for the next edge.
+   * Align child_name to canonical parent path + leaf (avoid short-path duplicates).
+   */
+  function alignChildPathUnderParent(parentPath, childPath) {
+    const parent = normalizeTreeCardText(parentPath || "");
+    const child = normalizeTreeCardText(childPath || "");
+    const leaf = relationLeafName(child) || child;
+    if (!parent || !leaf) return child;
+    if (child.indexOf("/") >= 0 && child.indexOf(parent + "/") === 0) return child;
+    if (parent.indexOf("/") >= 0 || parent.indexOf(" بن مطلق بن زيدان") >= 0) {
+      return parent + "/" + leaf;
+    }
+    return child.indexOf("/") >= 0 ? child : leaf;
+  }
+
+  /**
+   * Patch 2+ — Verified apply for tree_card / add-son.
+   * If father/ancestors already exist → reuse them; insert only missing children.
+   * Never blind-insert the full tree_rows chain (no duplicate fathers).
+   * Event order: build → resolve parent → skip-or-import child → verify → then approved.
    */
   async function importTreeCardToTree(sb, token, reqRow) {
     const CP = window.AlzidanCanonicalPerson;
@@ -1348,22 +1548,55 @@
     );
     let pathToRow = await loadPathToRowForBranch(sb, branchKey);
 
-    // Pre-approve gate: every non-root edge must carry a unique parent_person_id.
-    for (let i = 0; i < built.rows.length; i += 1) {
-      const pre = enrichOneTreeCardRow(built.rows[i], pathToRow);
-      if (!pre.ok) return pre;
-      built.rows[i] = pre.row;
-    }
-
     const appliedRows = [];
     let insertedTotal = 0;
     let updatedTotal = 0;
     let skippedTotal = 0;
 
     for (let i = 0; i < built.rows.length; i += 1) {
+      // Resolve parent against existing tree (person_id / path / unique match).
       const enriched = enrichOneTreeCardRow(built.rows[i], pathToRow);
       if (!enriched.ok) return enriched;
       const row = enriched.row;
+      row.child_name = alignChildPathUnderParent(
+        row.parent_name,
+        row.child_name,
+      );
+
+      // If child already exists under that parent → reuse; do not re-insert father/chain.
+      const existingChild = resolveExistingTreeNode(pathToRow, {
+        personId: row.person_id || "",
+        path: row.child_name,
+        parentPersonId: row.parent_person_id || "",
+        parentPath: row.parent_name || "",
+        leaf: relationLeafName(row.child_name),
+      });
+      if (!existingChild.ok) return existingChild;
+      if (existingChild.found && existingChild.meta) {
+        const meta = existingChild.meta;
+        const reuse = Object.assign({}, row, {
+          child_name: meta.db_child_name || row.child_name,
+          parent_name:
+            meta.db_parent_name || row.parent_name || row.parent || "",
+          parent: meta.db_parent_name || row.parent_name || row.parent || "",
+          person_id: meta.person_id || row.person_id || "",
+          parent_person_id:
+            meta.parent_person_id || row.parent_person_id || "",
+        });
+        pathToRow = indexImportedChild(pathToRow, {
+          id: meta.id,
+          person_id: reuse.person_id,
+          parent_person_id: reuse.parent_person_id,
+          parent_name: reuse.parent_name,
+          parent: reuse.parent_name,
+          child_name: reuse.child_name,
+          name: reuse.child_name,
+        });
+        appliedRows.push(reuse);
+        skippedTotal += 1;
+        continue;
+      }
+
       const before = await fetchTreeCardChildRow(sb, row);
       const { data, error } = await sb.rpc("admin_tree_children_import_v1", {
         p_token: token,
@@ -1375,7 +1608,10 @@
         if (low.includes("tree-001") || msg.includes("TREE-001")) {
           return requestFail(
             (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
-            (CP && CP.MSG && CP.MSG.TREE_001) || msg,
+            "الأب «" +
+              relationPathLabel(row.parent_name || "") +
+              "» غامض أو غير فريد — أوقف الاعتماد (TREE-001).",
+            { detail: msg },
           );
         }
         return requestFail(
@@ -1423,13 +1659,29 @@
       }
     }
 
+    // Verify only newly written / reused edges that should exist after apply.
     const verify = await verifyTreeCardRowsInTree(sb, appliedRows);
     if (!verify.ok) {
-      if (!(insertedTotal + updatedTotal)) {
+      if (!(insertedTotal + updatedTotal + skippedTotal)) {
         return requestFail(
           (CP && CP.ERROR && CP.ERROR.REQ_001) || "REQ-001",
           (CP && CP.MSG && CP.MSG.REQ_001) ||
             "لا يمكن قبول الطلب: لم يُثبت أي أثر في الشجرة (REQ-001).",
+          {
+            inserted: insertedTotal,
+            updated: updatedTotal,
+            skipped: skippedTotal,
+            verified: verify.verified,
+          },
+        );
+      }
+      // Reused-only apply (all ancestors existed, son linked) still needs verify ok.
+      if (!(insertedTotal + updatedTotal) && skippedTotal) {
+        // Skipped rows must still be readable; if verify failed, treat as REQ-002.
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+          (CP && CP.MSG && CP.MSG.REQ_002) ||
+            "فشل إنشاء أو ربط الابن بعد الاعتماد (REQ-002).",
           {
             inserted: insertedTotal,
             updated: updatedTotal,
@@ -1454,7 +1706,7 @@
     const parts = [];
     parts.push("جديد: " + String(insertedTotal));
     parts.push("تحديث: " + String(updatedTotal));
-    if (skippedTotal) parts.push("تخطي: " + String(skippedTotal));
+    if (skippedTotal) parts.push("موجود مسبقاً: " + String(skippedTotal));
     parts.push("متحقق: " + String(verify.verified));
     return {
       ok: true,
@@ -1481,6 +1733,8 @@
     reapplyApprovedTreeCard,
     buildTreeCardRows,
     enrichOneTreeCardRow,
+    resolveExistingTreeNode,
+    alignChildPathUnderParent,
     verifyTreeCardRowsInTree,
     countExactParentPersonMatches,
     updateBranchInRequestMessage,
