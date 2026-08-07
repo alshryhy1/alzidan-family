@@ -364,7 +364,7 @@ Health Center يبقى مركزًا مستقلًا ضمن معمارية الم�
 
 ### المرحلة 2 — Delegates v2 ← جارٍ
 
-**تقدّم الشريحة 1:** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `20260808_delegates_v2_foundation.sql`
+**تقدّم الشريحة 1:** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `20260808_delegates_v2_foundation.sql` / `COPY-ME-delegates-v2.sql` (افتح الملف → Select All؛ لا نسخ من الشات)
 
 - صلاحيات حسب الدور (Role-based) — ✅ كتالوج + تعيين
 - صلاحيات حسب الفرع (Branch-based) — ✅ على الملف الشخصي
@@ -433,3 +433,5 @@ Health Center يبقى مركزًا مستقلًا ضمن معمارية الم�
 ---
 
 **الخطوة التالية:** تطبيق SQL أساس Delegates v2 → مزامنة المناديب → فرض الصلاحيات في RPC المندوب → Multi-stage. لا UX موبايل الآن.
+
+**تسليم SQL لـ Supabase:** احفظ/حدّث ملف `.sql` ثم افتحه → Select All → Copy. لا تنسخ من الشات (أسوار ``` تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.

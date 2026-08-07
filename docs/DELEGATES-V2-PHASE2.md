@@ -19,9 +19,15 @@
 
 ## SQL المطلوب من المستخدم
 
-شغّل مرة واحدة في **Supabase SQL Editor**:
+شغّل مرة واحدة في **Supabase SQL Editor**.
 
-`supabase/sql/20260808_delegates_v2_foundation.sql`
+**طريقة النسخ (إلزامية):** افتح الملف في المحرر → **Select All** → **Copy** → الصق في SQL Editor.  
+**لا تنسخ من الشات** — أسوار Markdown (```) تكسر اللصق.
+
+ملفات نظيفة (بدون أسوار):
+
+- `supabase/sql/COPY-ME-delegates-v2.sql` — جاهز للنسخ (تعليق إنجليزي سطر واحد أعلى الملف فقط)
+- `supabase/sql/20260808_delegates_v2_foundation.sql` — المصدر الرسمي
 
 ينشئ:
 

@@ -1,0 +1,24 @@
+---
+description: Deliver Supabase SQL only via .sql files — never chat fences
+alwaysApply: true
+---
+
+# Supabase SQL delivery (no chat paste)
+
+When the user must run SQL in the **Supabase SQL Editor**:
+
+1. **Always** save or update a real `.sql` file under `supabase/sql/` (or the path already agreed in docs).
+2. Tell the user to **open that file** in the editor → **Select All** → **Copy** → paste into SQL Editor.
+3. **Never** instruct the user to copy SQL from chat. Chat Markdown fences (```sql) and Arabic/English instruction lines break the paste.
+4. In chat, **link or mention the file path only** — do not wrap the script in Markdown code fences for the user to copy.
+5. Optional helper copies (e.g. `COPY-ME-*.sql`) may include a single SQL comment line at the top only, e.g. `-- Open this file, Select All, paste in Supabase SQL Editor`.
+
+## Bad
+
+- Pasting a full migration inside ```sql ... ``` in chat and saying "انسخ من هنا"
+- Embedding Arabic "شغّل هذا" lines inside the copyable SQL body
+
+## Good
+
+- Update `supabase/sql/….sql`
+- Reply: path to open + Select All → Copy → paste in Supabase
