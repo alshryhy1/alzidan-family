@@ -2454,8 +2454,18 @@ footer {
   position: relative;
   z-index: 1;
   font-weight: 900;
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.family-poll-pct-support {
   color: #065f46;
-  font-size: 24px;
+}
+.family-poll-pct-oppose {
+  color: #991b1b;
 }
 .family-poll-title {
   font-weight: 900;
@@ -2484,6 +2494,12 @@ footer {
   opacity: 0.45;
   cursor: not-allowed;
 }
+.family-poll-actions button.is-chosen {
+  opacity: 1;
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.18);
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
 .family-poll-support {
   background: #059669;
   color: #fff;
@@ -2491,6 +2507,10 @@ footer {
 .family-poll-oppose {
   background: #fee2e2;
   color: #991b1b;
+}
+.family-poll-oppose.is-chosen {
+  background: #dc2626;
+  color: #fff;
 }
 .family-poll-stats {
   display: flex;

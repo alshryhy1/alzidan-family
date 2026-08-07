@@ -5,6 +5,9 @@
 
   console.log("[poll] module load");
 
+  /** Policy: one vote per voter_key; no edit after cast (DB unique). */
+  var ALLOW_VOTE_EDIT = false;
+
   let sbClient = null;
 
   function getClient() {
@@ -31,13 +34,69 @@
     }
   }
 
+  function voteLabel(value) {
+    if (value === "support") return "مؤيد";
+    if (value === "oppose") return "معارض";
+    return "";
+  }
+
+  function formatVoteDate(iso) {
+    if (!iso) return "";
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return "";
+    try {
+      return new Date(ms).toLocaleString("ar-SA", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (e) {
+      return String(iso).slice(0, 16);
+    }
+  }
+
+  function votedStatusMessage(value, createdAt) {
+    const label = voteLabel(value);
+    const when = formatVoteDate(createdAt);
+    if (label && when) return "تم تسجيل تصويتك («" + label + "») · " + when;
+    if (label) return "تم تسجيل تصويتك («" + label + "»)";
+    return "تم تسجيل تصويتك.";
+  }
+
   /**
    * ends_at must be a Gregorian-comparable timestamp.
    * Hijri years (≈1200–1700) stored in timestamptz look like year 1448 CE and
    * falsely trip `new Date(ends_at) < now` → "انتهى التصويت".
-   * Same year-band heuristic used elsewhere (special cards / news / events).
+   * Prefer DateEngine when loaded; keep local heuristic as fallback.
    */
   function parseGregorianEndsAtMs(value) {
+    const engine = window.AlzidanDateEngine;
+    if (engine && typeof engine.assertGregorianTimestamp === "function") {
+      const guard = engine.assertGregorianTimestamp(value, { optional: true });
+      if (guard.empty) return { ok: false, ms: null, reason: "missing" };
+      if (!guard.ok) {
+        return {
+          ok: false,
+          ms: null,
+          reason:
+            guard.code === "DATE-002"
+              ? "hijri_or_non_gregorian_year"
+              : "rejected:" + (guard.code || "date"),
+          year: guard.year,
+          raw: String(value),
+        };
+      }
+      const ms = Date.parse(guard.iso);
+      return {
+        ok: Number.isFinite(ms),
+        ms: Number.isFinite(ms) ? ms : null,
+        year: guard.year,
+        raw: String(value),
+      };
+    }
+
     if (value == null || value === "") {
       return { ok: false, ms: null, reason: "missing" };
     }
@@ -113,7 +172,10 @@
     card.className = "family-poll-card";
     card.innerHTML = `
       <div class="family-poll-ring" data-poll-ring style="--p:0%">
-        <div class="family-poll-percent" data-poll-percent>0%</div>
+        <div class="family-poll-percent" data-poll-percent>
+          <span class="family-poll-pct-support" data-poll-pct-support>0%</span>
+          <span class="family-poll-pct-oppose" data-poll-pct-oppose>0%</span>
+        </div>
       </div>
       <div class="family-poll-body">
         <div class="family-poll-title">تصويت عام</div>
@@ -123,8 +185,8 @@
           <button class="family-poll-oppose" type="button" data-poll-vote="oppose">معارض</button>
         </div>
         <div class="family-poll-stats">
-          <span data-poll-support>مؤيد: 0</span>
-          <span data-poll-oppose>معارض: 0</span>
+          <span data-poll-support>مؤيد: 0 (0%)</span>
+          <span data-poll-oppose>معارض: 0 (0%)</span>
           <span data-poll-total>الإجمالي: 0</span>
         </div>
         <div class="family-poll-status" data-poll-status></div>
@@ -133,10 +195,52 @@
     return card;
   }
 
-  function setButtonsEnabled(card, enabled) {
+  function setVoteButtonsState(card, options) {
+    const opts = options || {};
+    const myVote = opts.myVote || "";
+    const enabled = !!opts.enabled;
     card.querySelectorAll("[data-poll-vote]").forEach((btn) => {
+      const value = btn.getAttribute("data-poll-vote");
+      const base = voteLabel(value) || btn.textContent.replace(/\s*✓\s*$/, "").trim();
+      const chosen = myVote && value === myVote;
+      btn.textContent = chosen ? base + " ✓" : base;
+      btn.classList.toggle("is-chosen", !!chosen);
       btn.disabled = !enabled;
+      btn.setAttribute("aria-pressed", chosen ? "true" : "false");
     });
+  }
+
+  function renderResults(card, support, oppose, statusText) {
+    const total = support + oppose;
+    const supportPct = total ? Math.round((support / total) * 100) : 0;
+    const opposePct = total ? Math.max(0, 100 - supportPct) : 0;
+
+    card.querySelector("[data-poll-ring]").style.setProperty("--p", supportPct + "%");
+    const pctSupport = card.querySelector("[data-poll-pct-support]");
+    const pctOppose = card.querySelector("[data-poll-pct-oppose]");
+    if (pctSupport) pctSupport.textContent = supportPct + "%";
+    if (pctOppose) pctOppose.textContent = opposePct + "%";
+
+    card.querySelector("[data-poll-support]").textContent =
+      "مؤيد: " + support + " (" + supportPct + "%)";
+    card.querySelector("[data-poll-oppose]").textContent =
+      "معارض: " + oppose + " (" + opposePct + "%)";
+    card.querySelector("[data-poll-total]").textContent = "الإجمالي: " + total;
+
+    const status = card.querySelector("[data-poll-status]");
+    if (status && statusText != null) status.textContent = statusText;
+  }
+
+  async function fetchMyVote(sb, pollId) {
+    const { data, error } = await sb
+      .from("family_poll_votes")
+      .select("vote_value,created_at")
+      .eq("poll_id", pollId)
+      .eq("voter_key", getVoterKey())
+      .limit(1);
+
+    if (error || !data || !data[0]) return null;
+    return data[0];
   }
 
   async function loadPoll(card) {
@@ -183,22 +287,6 @@
       ? questionText + " — " + poll.description
       : questionText;
 
-    if (!gate.canVote) {
-      status.textContent = gate.pollEnded
-        ? "انتهى التصويت."
-        : "التصويت غير متاح حالياً.";
-      setButtonsEnabled(card, false);
-      console.log("[poll] buttons disabled", {
-        why: gate.disabledReason,
-        pollEnded: gate.pollEnded,
-        is_active: gate.isActive,
-        ends_at: gate.endsAt,
-      });
-      return;
-    }
-
-    setButtonsEnabled(card, true);
-
     const { data: votes } = await sb
       .from("family_poll_votes")
       .select("vote_value")
@@ -208,15 +296,50 @@
     const support = list.filter((v) => v.vote_value === "support").length;
     const oppose = list.filter((v) => v.vote_value === "oppose").length;
     const total = support + oppose;
-    const percent = total ? Math.round((support / total) * 100) : 0;
 
-    card.querySelector("[data-poll-ring]").style.setProperty("--p", percent + "%");
-    card.querySelector("[data-poll-percent]").textContent = percent + "%";
-    card.querySelector("[data-poll-support]").textContent = "مؤيد: " + support;
-    card.querySelector("[data-poll-oppose]").textContent = "معارض: " + oppose;
-    card.querySelector("[data-poll-total]").textContent = "الإجمالي: " + total;
-    status.textContent = total ? "نسبة التأييد الحالية" : "كن أول المصوتين";
-    console.log("[poll] loadPoll: ready", { pollId: poll.id, support, oppose, total });
+    const myVoteRow = await fetchMyVote(sb, poll.id);
+    const myVote = myVoteRow && myVoteRow.vote_value ? myVoteRow.vote_value : "";
+    card.dataset.myVote = myVote || "";
+
+    let statusText = "";
+    if (!gate.canVote) {
+      statusText = gate.pollEnded
+        ? "انتهى التصويت."
+        : "التصويت غير متاح حالياً.";
+      if (myVote) {
+        statusText =
+          votedStatusMessage(myVote, myVoteRow && myVoteRow.created_at) +
+          (gate.pollEnded ? " · انتهى التصويت." : "");
+      }
+      setVoteButtonsState(card, { enabled: false, myVote: myVote });
+      renderResults(card, support, oppose, statusText);
+      console.log("[poll] buttons disabled", {
+        why: gate.disabledReason,
+        pollEnded: gate.pollEnded,
+        is_active: gate.isActive,
+        ends_at: gate.endsAt,
+      });
+      return;
+    }
+
+    if (myVote && !ALLOW_VOTE_EDIT) {
+      statusText = votedStatusMessage(myVote, myVoteRow && myVoteRow.created_at);
+      setVoteButtonsState(card, { enabled: false, myVote: myVote });
+    } else {
+      statusText = total
+        ? "نسبة التأييد والمعارضة الحالية"
+        : "كن أول المصوتين";
+      setVoteButtonsState(card, { enabled: true, myVote: myVote });
+    }
+
+    renderResults(card, support, oppose, statusText);
+    console.log("[poll] loadPoll: ready", {
+      pollId: poll.id,
+      support,
+      oppose,
+      total,
+      myVote: myVote || null,
+    });
   }
 
   async function vote(card, value) {
@@ -247,34 +370,68 @@
       });
       return;
     }
+    if (card.dataset.myVote && !ALLOW_VOTE_EDIT) {
+      status.textContent = votedStatusMessage(card.dataset.myVote);
+      return;
+    }
 
     status.textContent = "جاري حفظ التصويت...";
+    setVoteButtonsState(card, { enabled: false, myVote: value });
     console.log("[poll] before insert", { pollId, value, canVote: true });
-    const { data, error } = await sb.from("family_poll_votes").insert({
-      poll_id: pollId,
-      voter_key: getVoterKey(),
-      vote_value: value,
-    }).select("id");
+    const { data, error } = await sb
+      .from("family_poll_votes")
+      .insert({
+        poll_id: pollId,
+        voter_key: getVoterKey(),
+        vote_value: value,
+      })
+      .select("id,vote_value,created_at");
 
     console.log("[poll] after insert", { data, error });
 
     if (error) {
       const code = String(error.code || "");
       const msg = String(error.message || "");
-      // Unique violation ≈ already voted; anything else surface clearly (incl. RLS).
       if (code === "23505" || /duplicate|unique/i.test(msg)) {
-        status.textContent = "تم تسجيل تصويتك سابقاً.";
+        const existing = await fetchMyVote(sb, pollId);
+        if (existing && existing.vote_value) {
+          card.dataset.myVote = existing.vote_value;
+          status.textContent = votedStatusMessage(
+            existing.vote_value,
+            existing.created_at,
+          );
+          setVoteButtonsState(card, {
+            enabled: ALLOW_VOTE_EDIT,
+            myVote: existing.vote_value,
+          });
+        } else {
+          status.textContent = "تم تسجيل تصويتك سابقاً.";
+          setVoteButtonsState(card, { enabled: false, myVote: value });
+        }
       } else if (/row-level security|RLS|permission|42501/i.test(msg + " " + code)) {
         status.textContent = "تعذر حفظ التصويت (صلاحيات).";
         console.error("[poll] insert blocked by RLS", error);
+        setVoteButtonsState(card, { enabled: true, myVote: "" });
       } else {
         status.textContent = "تعذر حفظ التصويت. حاول مرة أخرى.";
         console.error("[poll] insert failed", error);
+        setVoteButtonsState(card, { enabled: true, myVote: "" });
       }
+      await loadPoll(card);
       return;
     }
 
-    status.textContent = "تم تسجيل تصويتك.";
+    const saved = data && data[0] ? data[0] : null;
+    const savedValue = (saved && saved.vote_value) || value;
+    card.dataset.myVote = savedValue;
+    status.textContent = votedStatusMessage(
+      savedValue,
+      saved && saved.created_at,
+    );
+    setVoteButtonsState(card, {
+      enabled: ALLOW_VOTE_EDIT,
+      myVote: savedValue,
+    });
     await loadPoll(card);
   }
 

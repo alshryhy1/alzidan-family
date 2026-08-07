@@ -10,10 +10,15 @@
   let pollsDescriptionInput = null;
   let pollsActiveInput = null;
   let pollsEndsAtInput = null;
+  let pollsEndsAtLiveEl = null;
   let pollsDeleteBtn = null;
   let pollsStatusEl = null;
   let pollsRows = [];
   let isInitialized = false;
+
+  function getDateEngine() {
+    return window.AlzidanDateEngine || null;
+  }
 
   function getClient() {
     const core = window.AlzidanAdminCore || {};
@@ -55,27 +60,40 @@
 
   function formatEndsAtLabel(value) {
     if (!value) return "بدون تاريخ انتهاء";
-    const raw = String(value);
-    const yearMatch = /^(\d{4})/.exec(raw.trim());
-    const rawYear = yearMatch ? Number(yearMatch[1]) : NaN;
-    if (Number.isFinite(rawYear) && rawYear >= 1200 && rawYear <= 1700) {
-      return "تاريخ غير صالح/هجري (يُتجاهل) · " + raw.slice(0, 16);
+    const engine = getDateEngine();
+    if (engine && typeof engine.assertGregorianTimestamp === "function") {
+      const guard = engine.assertGregorianTimestamp(value, { optional: true });
+      if (!guard.ok) {
+        return (
+          "تاريخ غير صالح/" +
+          (guard.code === "DATE-002" ? "هجري" : "مرفوض") +
+          " (يُتجاهل) · " +
+          String(value).slice(0, 16)
+        );
+      }
+      if (guard.empty) return "بدون تاريخ انتهاء";
     }
     const d = new Date(value);
-    if (!Number.isFinite(d.getTime())) return raw.slice(0, 16);
+    if (!Number.isFinite(d.getTime())) return String(value).slice(0, 16);
     const year = d.getUTCFullYear();
     if (year < 1900 || year > 2100) {
-      return "تاريخ غير صالح (يُتجاهل) · " + raw.slice(0, 16);
+      return "تاريخ غير صالح (يُتجاهل) · " + String(value).slice(0, 16);
     }
     return d.toLocaleString("ar-SA");
   }
 
   function isPollEnded(endsAt) {
     if (!endsAt) return false;
+    const engine = getDateEngine();
+    if (engine && typeof engine.assertGregorianTimestamp === "function") {
+      const guard = engine.assertGregorianTimestamp(endsAt, { optional: true });
+      if (!guard.ok || guard.empty) return false;
+      const ms = Date.parse(guard.iso || endsAt);
+      return Number.isFinite(ms) && ms < Date.now();
+    }
     const raw = String(endsAt);
     const yearMatch = /^(\d{4})/.exec(raw.trim());
     const rawYear = yearMatch ? Number(yearMatch[1]) : NaN;
-    // Hijri band (same as special cards / news): do not treat as Gregorian expiry.
     if (Number.isFinite(rawYear) && rawYear >= 1200 && rawYear <= 1700) return false;
     const ms = Date.parse(raw);
     if (!Number.isFinite(ms)) return false;
@@ -237,13 +255,26 @@
       pollsEndsAtInput && pollsEndsAtInput.value ? pollsEndsAtInput.value : "";
     let endsAt = null;
     if (endsAtRaw) {
-      const endsMs = new Date(endsAtRaw).getTime();
-      const endsYear = Number.isFinite(endsMs) ? new Date(endsMs).getFullYear() : NaN;
-      if (!Number.isFinite(endsMs) || endsYear < 1900 || endsYear > 2100) {
-        setPollsStatus("تاريخ الانتهاء يجب أن يكون ميلادياً (مثال: 2026).");
-        return;
+      const engine = getDateEngine();
+      if (engine && typeof engine.assertGregorianTimestamp === "function") {
+        const guard = engine.assertGregorianTimestamp(endsAtRaw, { optional: false });
+        if (!guard.ok) {
+          setPollsStatus(
+            (guard.message || "تاريخ الانتهاء يجب أن يكون ميلادياً.") +
+              (guard.code ? " (" + guard.code + ")" : ""),
+          );
+          return;
+        }
+        endsAt = guard.iso;
+      } else {
+        const endsMs = new Date(endsAtRaw).getTime();
+        const endsYear = Number.isFinite(endsMs) ? new Date(endsMs).getFullYear() : NaN;
+        if (!Number.isFinite(endsMs) || endsYear < 1900 || endsYear > 2100) {
+          setPollsStatus("تاريخ الانتهاء يجب أن يكون ميلادياً (مثال: 2026).");
+          return;
+        }
+        endsAt = new Date(endsMs).toISOString();
       }
-      endsAt = new Date(endsMs).toISOString();
     }
 
     if (!sb || !token) {
@@ -352,8 +383,22 @@
     pollsDescriptionInput = document.getElementById("polls-description");
     pollsActiveInput = document.getElementById("polls-active");
     pollsEndsAtInput = document.getElementById("polls-ends-at");
+    pollsEndsAtLiveEl = document.getElementById("polls-ends-at-live");
     pollsDeleteBtn = document.getElementById("polls-delete");
     pollsStatusEl = document.getElementById("polls-status");
+
+    const engine = getDateEngine();
+    if (
+      pollsEndsAtInput &&
+      engine &&
+      typeof engine.bindLiveValidation === "function"
+    ) {
+      engine.bindLiveValidation(pollsEndsAtInput, {
+        mode: "gregorianTimestamp",
+        statusEl: pollsEndsAtLiveEl,
+        emptyHint: "اتركه فارغاً إن لم يكن للتصويت تاريخ انتهاء.",
+      });
+    }
 
     if (pollsLoadBtn) {
       pollsLoadBtn.addEventListener("click", () => loadPollsRows().catch(() => {}));
