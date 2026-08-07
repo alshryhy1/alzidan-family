@@ -22,7 +22,14 @@
 
     if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
 
-    sharedClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Avoid auth session lock hanging await sb.rpc(...) with no Network (ADMIN-RPC-001).
+    sharedClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
     window.__alzidanSupabaseClient = sharedClient;
     window.__alzidanالخدمةClient = sharedClient;
 

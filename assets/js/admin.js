@@ -1077,7 +1077,14 @@ where c.id = matches.id; commit;
     if (!window.supabase || typeof window.supabase.createClient !== "function")
       return null;
 
-    sbClient = window.supabase.createClient(url, anonKey);
+    // Admin RPCs auth via p_token — disable session lock that can hang sb.rpc with no Network.
+    sbClient = window.supabase.createClient(url, anonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
     window.__alzidanSupabaseClient = sbClient;
     window.__alzidanالخدمةClient = sbClient;
     return sbClient;
@@ -1090,6 +1097,164 @@ where c.id = matches.id; commit;
       return String(window.AlzidanAuth.getAdminToken() || "").trim();
     }
     return String(adminToken || "").trim();
+  }
+
+  /**
+   * Durable admin RPC (ADMIN-RPC-001):
+   * Direct REST fetch with timeout — bypasses supabase-js auth getSession lock
+   * that can leave await sb.rpc(...) hanging with zero Network requests.
+   */
+  async function invokeAdminRpc(fnName, params, options) {
+    const opts = options || {};
+    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 20000;
+    const label = "ADMIN_RPC " + String(fnName || "");
+    const started = Date.now();
+    const cfg = window.__alzidanConfig || {};
+    const baseUrl = String(cfg.SUPABASE_URL || SUPABASE_URL || "")
+      .trim()
+      .replace(/\/$/, "");
+    const anonKey = String(cfg.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY || "").trim();
+
+    let body = "";
+    try {
+      body = JSON.stringify(params || {});
+    } catch (serErr) {
+      const error = {
+        message: "تعذر تجهيز طلب الإدارة (ADMIN-RPC-001).",
+        code: "ADMIN-RPC-001",
+        details: String((serErr && serErr.message) || serErr || ""),
+      };
+      console.error(label, "serialize_failed", error);
+      return { data: null, error };
+    }
+
+    console.info(label, "start", {
+      timeoutMs,
+      paramKeys: Object.keys(params || {}),
+      bodyBytes: body.length,
+      via: baseUrl && anonKey ? "rest-fetch" : "sb.rpc-fallback",
+    });
+
+    if (!baseUrl || !anonKey) {
+      const sb = getClient();
+      if (!sb || typeof sb.rpc !== "function") {
+        const error = {
+          message: "عميل الإدارة غير جاهز لاستدعاء RPC (ADMIN-RPC-001).",
+          code: "ADMIN-RPC-001",
+        };
+        console.error(label, "no_client", error);
+        return { data: null, error };
+      }
+      try {
+        const raced = await Promise.race([
+          Promise.resolve(sb.rpc(fnName, params || {})).then((res) => ({
+            kind: "ok",
+            res,
+          })),
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ kind: "timeout" }), timeoutMs),
+          ),
+        ]);
+        if (raced.kind === "timeout") {
+          const error = {
+            message: "انتهت مهلة طلب الإدارة دون استجابة (ADMIN-RPC-001).",
+            code: "ADMIN-RPC-001",
+          };
+          console.error(label, "sb_rpc_timeout", { ms: Date.now() - started });
+          return { data: null, error };
+        }
+        console.info(label, "sb_rpc_done", { ms: Date.now() - started });
+        return raced.res || { data: null, error: { message: "empty rpc result", code: "ADMIN-RPC-001" } };
+      } catch (err) {
+        const error = {
+          message:
+            "تعذر استدعاء RPC: " +
+            String((err && err.message) || err || "خطأ غير معروف") +
+            " (ADMIN-RPC-001)",
+          code: "ADMIN-RPC-001",
+          details: String((err && err.message) || err || ""),
+        };
+        console.error(label, "sb_rpc_threw", { ms: Date.now() - started, error });
+        return { data: null, error };
+      }
+    }
+
+    const controller =
+      typeof AbortController === "function" ? new AbortController() : null;
+    const timer = setTimeout(() => {
+      if (controller) controller.abort();
+    }, timeoutMs);
+
+    try {
+      const res = await fetch(
+        baseUrl + "/rest/v1/rpc/" + encodeURIComponent(String(fnName || "")),
+        {
+          method: "POST",
+          headers: {
+            apikey: anonKey,
+            Authorization: "Bearer " + anonKey,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          },
+          body,
+          signal: controller ? controller.signal : undefined,
+        },
+      );
+      clearTimeout(timer);
+      const text = await res.text();
+      let parsed = null;
+      if (text) {
+        try {
+          parsed = JSON.parse(text);
+        } catch (_) {
+          parsed = text;
+        }
+      }
+      if (!res.ok) {
+        const msg =
+          (parsed &&
+            typeof parsed === "object" &&
+            (parsed.message || parsed.error || parsed.hint)) ||
+          "HTTP " + res.status;
+        const error = {
+          message: String(msg),
+          details:
+            parsed && typeof parsed === "object"
+              ? parsed.details || ""
+              : String(text || ""),
+          hint: parsed && typeof parsed === "object" ? parsed.hint || "" : "",
+          code:
+            (parsed && typeof parsed === "object" && parsed.code) ||
+            "ADMIN-RPC-001",
+          status: res.status,
+        };
+        console.error(label, "http_error", {
+          ms: Date.now() - started,
+          status: res.status,
+          error,
+        });
+        return { data: null, error };
+      }
+      console.info(label, "ok", { ms: Date.now() - started, status: res.status });
+      return { data: parsed, error: null };
+    } catch (err) {
+      clearTimeout(timer);
+      const aborted = !!(err && err.name === "AbortError");
+      const error = {
+        message: aborted
+          ? "انتهت مهلة طلب الإدارة دون استجابة (ADMIN-RPC-001)."
+          : "تعذر إرسال طلب الإدارة: " +
+            String((err && err.message) || err || "خطأ غير معروف") +
+            " (ADMIN-RPC-001)",
+        code: "ADMIN-RPC-001",
+        details: String((err && err.message) || err || ""),
+      };
+      console.error(label, aborted ? "timeout" : "fetch_failed", {
+        ms: Date.now() - started,
+        error,
+      });
+      return { data: null, error };
+    }
   }
   function setEventsSourceStatus(message) {
     if (eventsSourceStatus) eventsSourceStatus.textContent = message || "";
@@ -2057,80 +2222,126 @@ where c.id = matches.id; commit;
     };
   }
 
+
+  async function adminInvokeRpc(sb, fnName, args, opts) {
+    // Prefer invokeAdminRpc (REST-first). sb kept for call-site compatibility.
+    void sb;
+    return invokeAdminRpc(fnName, args, opts);
+  }
+
   async function saveSpecialCardRow(event) {
     if (event) event.preventDefault();
-    const sb = getClient();
-    const token = getAdminToken();
-    if (!sb || !token) return setSpecialCardsStatus("سجل الدخول أولاً.");
+    try {
+      const sb = getClient();
+      const token = getAdminToken();
+      if (!token) return setSpecialCardsStatus("سجل الدخول أولاً.");
+      if (!sb && !(window.__alzidanConfig && window.__alzidanConfig.SUPABASE_URL)) {
+        return setSpecialCardsStatus("تعذر الاتصال بقاعدة البيانات.");
+      }
 
-    if (specialCardsImageFile && specialCardsImageFile.files && specialCardsImageFile.files[0]) {
-      setSpecialCardsStatus("جاري رفع صورة الشخص...");
-      const uploadedImageUrl = await uploadAdminEventMedia(sb, specialCardsImageFile.files[0], "special-card-photo");
-      if (specialCardsImageUrl) specialCardsImageUrl.value = uploadedImageUrl;
-    }
+      if (sb && specialCardsImageFile && specialCardsImageFile.files && specialCardsImageFile.files[0]) {
+        setSpecialCardsStatus("جاري رفع صورة الشخص...");
+        const uploadedImageUrl = await uploadAdminEventMedia(
+          sb,
+          specialCardsImageFile.files[0],
+          "special-card-photo",
+        );
+        if (specialCardsImageUrl) specialCardsImageUrl.value = uploadedImageUrl;
+      }
 
-    if (specialCardsBackgroundFile && specialCardsBackgroundFile.files && specialCardsBackgroundFile.files[0]) {
-      setSpecialCardsStatus("جاري رفع خلفية البطاقة...");
-      const uploadedBackgroundUrl = await uploadAdminEventMedia(sb, specialCardsBackgroundFile.files[0], "special-card-background");
-      if (specialCardsBackgroundUrl) specialCardsBackgroundUrl.value = uploadedBackgroundUrl;
-    }
+      if (sb && specialCardsBackgroundFile && specialCardsBackgroundFile.files && specialCardsBackgroundFile.files[0]) {
+        setSpecialCardsStatus("جاري رفع خلفية البطاقة...");
+        const uploadedBackgroundUrl = await uploadAdminEventMedia(
+          sb,
+          specialCardsBackgroundFile.files[0],
+          "special-card-background",
+        );
+        if (specialCardsBackgroundUrl) specialCardsBackgroundUrl.value = uploadedBackgroundUrl;
+      }
 
-    const payload = collectSpecialCardPayload();
-    if (!payload.title) return setSpecialCardsStatus("اكتب عنوان البطاقة.");
-    if (!payload.person_name) return setSpecialCardsStatus("اكتب اسم الشخص.");
+      const payload = collectSpecialCardPayload();
+      if (!payload.title) return setSpecialCardsStatus("اكتب عنوان البطاقة.");
+      if (!payload.person_name) return setSpecialCardsStatus("اكتب اسم الشخص.");
 
-    const id = Number(specialCardsId && specialCardsId.value ? specialCardsId.value : 0);
-    setSpecialCardsStatus("جاري حفظ البطاقة الخاصة...");
+      let safeRow;
+      try {
+        safeRow = JSON.parse(JSON.stringify(payload));
+      } catch (serErr) {
+        return setSpecialCardsStatus(
+          "تعذر تجهيز بيانات البطاقة للحفظ (ADMIN-RPC-001): " +
+            String((serErr && serErr.message) || serErr || ""),
+        );
+      }
 
-    const { data, error } = await sb.rpc("admin_special_cards_save_v1", {
-      p_token: token,
-      p_id: id,
-      p_row: payload,
-    });
+      const id = Number(specialCardsId && specialCardsId.value ? specialCardsId.value : 0);
+      setSpecialCardsStatus("جاري حفظ البطاقة الخاصة...");
 
-    if (error) {
+      const { data, error } = await invokeAdminRpc("admin_special_cards_save_v1", {
+        p_token: token,
+        p_id: id,
+        p_row: safeRow,
+      });
+
+      if (error) {
+        setSpecialCardsStatus(
+          "تعذر حفظ البطاقة الخاصة: " +
+            String(error.message || error.details || error.hint || "خطأ غير معروف"),
+        );
+        return;
+      }
+
+      if (data == null || data === false) {
+        setSpecialCardsStatus(
+          "لم يتم حفظ البطاقة الخاصة. تحقق من دالة الحفظ في القاعدة (admin_special_cards_save_v1).",
+        );
+        return;
+      }
+
+      const savedId = Array.isArray(data) ? (data[0] && (data[0].id || data[0])) : data;
+      if (specialCardsId) specialCardsId.value = String(savedId || id || "");
+      setSpecialCardsStatus("تم حفظ البطاقة الخاصة.");
+      await loadSpecialCardsRows();
+    } catch (err) {
+      console.error("ADMIN_RPC admin_special_cards_save_v1 uncaught", err);
       setSpecialCardsStatus(
-        "تعذر حفظ البطاقة الخاصة: " +
-          String(error.message || error.details || error.hint || "خطأ غير معروف"),
+        "تعذر حفظ البطاقة الخاصة (ADMIN-RPC-001): " +
+          String((err && err.message) || err || "خطأ غير معروف"),
       );
-      return;
     }
-
-    if (data == null || data === false) {
-      setSpecialCardsStatus("لم يتم حفظ البطاقة الخاصة. تحقق من دالة الحفظ في القاعدة.");
-      return;
-    }
-
-    if (specialCardsId) specialCardsId.value = String(data || id || "");
-    setSpecialCardsStatus("تم حفظ البطاقة الخاصة.");
-    await loadSpecialCardsRows();
   }
 
   async function deleteSpecialCardRow() {
-    const sb = getClient();
-    const token = getAdminToken();
-    const id = Number(specialCardsId && specialCardsId.value ? specialCardsId.value : 0);
-    if (!sb || !token) return setSpecialCardsStatus("سجل الدخول أولاً.");
-    if (!id) return setSpecialCardsStatus("اختر بطاقة أولاً.");
-    if (!window.confirm("سيتم حذف هذه البطاقة نهائياً. هل أنت متأكد؟")) return;
+    try {
+      const token = getAdminToken();
+      const id = Number(specialCardsId && specialCardsId.value ? specialCardsId.value : 0);
+      if (!token) return setSpecialCardsStatus("سجل الدخول أولاً.");
+      if (!id) return setSpecialCardsStatus("اختر بطاقة أولاً.");
+      if (!window.confirm("سيتم حذف هذه البطاقة نهائياً. هل أنت متأكد؟")) return;
 
-    setSpecialCardsStatus("جاري حذف البطاقة الخاصة...");
-    const { error } = await sb.rpc("admin_special_cards_delete_v1", {
-      p_token: token,
-      p_id: id,
-    });
+      setSpecialCardsStatus("جاري حذف البطاقة الخاصة...");
+      const { error } = await invokeAdminRpc("admin_special_cards_delete_v1", {
+        p_token: token,
+        p_id: id,
+      });
 
-    if (error) {
+      if (error) {
+        setSpecialCardsStatus(
+          "تعذر حذف البطاقة الخاصة: " +
+            String(error.message || error.details || error.hint || "خطأ غير معروف"),
+        );
+        return;
+      }
+
+      resetSpecialCardsForm();
+      setSpecialCardsStatus("تم حذف البطاقة الخاصة.");
+      await loadSpecialCardsRows();
+    } catch (err) {
+      console.error("ADMIN_RPC admin_special_cards_delete_v1 uncaught", err);
       setSpecialCardsStatus(
-        "تعذر حذف البطاقة الخاصة: " +
-          String(error.message || error.details || error.hint || "خطأ غير معروف"),
+        "تعذر حذف البطاقة الخاصة (ADMIN-RPC-001): " +
+          String((err && err.message) || err || "خطأ غير معروف"),
       );
-      return;
     }
-
-    resetSpecialCardsForm();
-    setSpecialCardsStatus("تم حذف البطاقة الخاصة.");
-    await loadSpecialCardsRows();
   }
 
 
@@ -3070,6 +3281,7 @@ where c.id = matches.id; commit;
     escapeHtml,
     getClient,
     getAdminToken,
+    invokeAdminRpc,
     formatDateTimeArSaVerbose,
     kindLabel,
     coerceRpcId,
