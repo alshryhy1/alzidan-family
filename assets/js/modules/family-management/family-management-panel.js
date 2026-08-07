@@ -191,11 +191,18 @@
         var norm = typeof api.normalizePersonName === "function"
           ? api.normalizePersonName
           : function (v) { return String(v || "").trim(); };
-        var mapKey = typeof PersonCore.resolveChildrenMapKey === "function"
-          ? PersonCore.resolveChildrenMapKey(key, state.children, norm)
-          : key;
-        if (mapKey && Array.isArray(state.children[mapKey])) {
-          childCount = state.children[mapKey].length;
+        var parentPersonId = "";
+        if (typeof api.getPersonRowMeta === "function") {
+          var meta = api.getPersonRowMeta(key);
+          parentPersonId = meta && meta.person_id ? String(meta.person_id) : "";
+        }
+        if (typeof PersonCore.childrenForSelectedParent === "function") {
+          childCount = PersonCore.childrenForSelectedParent(state.children, key, {
+            normalizePersonName: norm,
+            parentPersonId: parentPersonId,
+          }).list.length;
+        } else if (Array.isArray(state.children[key])) {
+          childCount = state.children[key].length;
         }
       }
       var childStat = personDataBody.querySelector("[data-fm-stat-children]");
@@ -227,10 +234,20 @@
     function selectPerson(name, opts) {
       var n = typeof api.normalizePersonName === "function" ? api.normalizePersonName(name || "") : normalizeText(name);
       if (!n) return;
+      var prev = selectedPersonId;
       if (typeof api.ensurePersonOption === "function") api.ensurePersonOption(n);
       selectedPersonId = n;
       if (personSelect && !(opts && opts.skipSelectSync)) personSelect.value = n;
-      if (spousesSection) spousesSection.closeManager();
+      // TREE-004: father change must drop prior add/edit session — never reuse children draft.
+      if (prev && prev !== n) {
+        if (addSheet && typeof addSheet.close === "function") addSheet.close();
+        if (childrenSection && typeof childrenSection.resetSession === "function") {
+          childrenSection.resetSession();
+        }
+        if (spousesSection) spousesSection.closeManager();
+      } else if (spousesSection) {
+        spousesSection.closeManager();
+      }
       refreshSpouses();
       refreshChildren();
       updatePersonCard();

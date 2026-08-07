@@ -296,12 +296,34 @@
     if (!sb || !token) return { ok: false, error: { message: "سجل الدخول أولًا." } };
     let payload = Object.assign({}, row || {});
     if (!payload.branch_key) payload.branch_key = state.branch;
+    const parentPath = normalizePersonName(payload.parent_name || payload.parent || "");
+    const branchRoot = state.branch ? getBranchRootName(state.branch) : "";
+    const isBranchRoot = !!(branchRoot && (parentPath === branchRoot || parentPath === state.branch));
+    const FM = window.AlzidanFamilyPersonCore || {};
+    if (typeof FM.bindParentWriteContext === "function" && parentPath) {
+      const bound = FM.bindParentWriteContext(parentPath, state.pathToRow, canonicalHelpers());
+      if (typeof FM.attachBoundParentToRow === "function") {
+        payload = FM.attachBoundParentToRow(payload, bound);
+      }
+    }
     const CP = window.AlzidanCanonicalPerson;
-    if (CP && typeof CP.attachParentPersonId === "function" && payload.parent_name) {
+    if (!payload.parent_person_id && CP && typeof CP.attachParentPersonId === "function" && payload.parent_name) {
       payload = CP.attachParentPersonId(payload, state.pathToRow, payload.parent_name, canonicalHelpers());
     } else if (!payload.parent_person_id && payload.parent_name) {
       const meta = getPersonRowMeta(payload.parent_name);
       if (meta && meta.person_id) payload.parent_person_id = meta.person_id;
+    }
+    // TREE-004: refuse name-only writes for non-root parents.
+    if (!isBranchRoot && !normalizePersonName(payload.parent_person_id || "")) {
+      return {
+        ok: false,
+        error: {
+          message:
+            (CP && CP.MSG && CP.MSG.TREE_003) ||
+            "تعذر تحديد معرّف الأب (parent_person_id) لهذا المسار (TREE-003).",
+          code: "TREE-003",
+        },
+      };
     }
     const { data, error } = await sb.rpc("admin_tree_child_upsert_v1", {
       p_token: token,
@@ -512,8 +534,8 @@
       if (base && (baseCounts.get(base) || 0) > 1) {
         const parts = n.split("/").map((p) => normalizePersonName(p)).filter(Boolean);
         parts.pop();
-        const parentBase = parts.length ? parts[parts.length - 1] : "";
-        if (parentBase) label = base + " — " + parentBase;
+        const parentTrail = parts.slice(-3).join("/");
+        if (parentTrail) label = base + " — " + parentTrail;
       }
       options.push({ value: n, label: label || n });
     });
@@ -788,7 +810,28 @@
 
   async function familyApiSaveChild(payload) {
     if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
-    const selectedParentName = resolveSelectedParentId(normalizePersonName(payload.personId), state.branch);
+    const selectedParentName = resolveSelectedParentId(normalizePersonName(payload.personId || payload.boundParentPath), state.branch);
+    const FM = window.AlzidanFamilyPersonCore || {};
+    const bound =
+      typeof FM.bindParentWriteContext === "function"
+        ? FM.bindParentWriteContext(selectedParentName, state.pathToRow, {
+            normalizePersonName,
+          })
+        : { parentPath: selectedParentName, parentPersonId: "" };
+    if (selectedParentName && !bound.parentPersonId) {
+      const meta = getPersonRowMeta(selectedParentName);
+      if (meta && meta.person_id) bound.parentPersonId = String(meta.person_id);
+    }
+    const branchRoot = getBranchRootName(state.branch);
+    const isBranchRoot = !!(branchRoot && (selectedParentName === branchRoot || selectedParentName === state.branch));
+    if (!isBranchRoot && !bound.parentPersonId) {
+      return {
+        ok: false,
+        message:
+          "يلزم parent_person_id للأب المحدد قبل إضافة أبناء. أعد اختيار الأب من القائمة (TREE-003).",
+        code: "TREE-003",
+      };
+    }
     const rawName = normalizePersonName(payload.name || "");
     const deceased = !!payload.deceased;
     const hijriInput = deceased ? "" : String(payload.hijri || "").trim();

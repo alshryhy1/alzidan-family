@@ -123,6 +123,90 @@
     return "";
   }
 
+  /**
+   * Children State Isolation (TREE-004):
+   * For the selected father, use the EXACT map key only.
+   * Never reuse another father's children array via fuzzy/suffix matching.
+   * Optional parentPersonId filter when rows carry parentPersonId.
+   */
+  function childrenForSelectedParent(childrenMap, parentId, opts) {
+    var options = opts || {};
+    var norm =
+      typeof options.normalizePersonName === "function"
+        ? options.normalizePersonName
+        : normalizeText;
+    var key = norm(parentId || "");
+    if (!key) return { key: "", list: [], sharedRef: false };
+    var map = childrenMap || {};
+    var raw = Array.isArray(map[key]) ? map[key] : [];
+    var list = raw.slice();
+    var parentPersonId = norm(options.parentPersonId || "");
+    if (parentPersonId) {
+      list = list.filter(function (child) {
+        if (!child) return false;
+        var pp = norm(child.parentPersonId || child.parent_person_id || "");
+        if (!pp) return true;
+        return pp === parentPersonId;
+      });
+    }
+    return { key: key, list: list, sharedRef: false };
+  }
+
+  /** Ensure two parent keys never share the same array reference. */
+  function isolateChildrenMapArrays(childrenMap) {
+    var map = childrenMap || {};
+    var seen = new Map();
+    Object.keys(map).forEach(function (key) {
+      var list = map[key];
+      if (!Array.isArray(list)) return;
+      if (seen.has(list)) {
+        map[key] = list.slice();
+        return;
+      }
+      seen.set(list, key);
+    });
+    return map;
+  }
+
+  /**
+   * Build a write-bound parent context at selection/open time.
+   * Save paths must use this snapshot — never a stale children array.
+   */
+  function bindParentWriteContext(parentPath, pathToRow, helpers) {
+    var helpersObj = helpers || {};
+    var norm =
+      typeof helpersObj.normalizePersonName === "function"
+        ? helpersObj.normalizePersonName
+        : normalizeText;
+    var path = norm(parentPath || "");
+    var meta =
+      path && pathToRow && pathToRow[path]
+        ? pathToRow[path]
+        : path && pathToRow && pathToRow["pid:" + path]
+          ? pathToRow["pid:" + path]
+          : null;
+    var personId = meta && meta.person_id ? norm(meta.person_id) : "";
+    return {
+      parentPath: path,
+      parentPersonId: personId,
+      parentRowId: meta && meta.id ? Number(meta.id) : 0,
+      boundAt: Date.now(),
+    };
+  }
+
+  function attachBoundParentToRow(row, boundParent) {
+    var payload = Object.assign({}, row || {});
+    var bound = boundParent || {};
+    if (bound.parentPath) {
+      payload.parent_name = bound.parentPath;
+      payload.parent = bound.parentPath;
+    }
+    if (bound.parentPersonId) {
+      payload.parent_person_id = bound.parentPersonId;
+    }
+    return payload;
+  }
+
   function deriveParentIdFromChildPath(childPath, rawParent, norm, baseName) {
     var childFull = norm(childPath || "");
     var raw = norm(rawParent || "");
@@ -289,6 +373,10 @@
     parentNamesMatch: parentNamesMatch,
     nodePathMatches: nodePathMatches,
     resolveChildrenMapKey: resolveChildrenMapKey,
+    childrenForSelectedParent: childrenForSelectedParent,
+    isolateChildrenMapArrays: isolateChildrenMapArrays,
+    bindParentWriteContext: bindParentWriteContext,
+    attachBoundParentToRow: attachBoundParentToRow,
     deriveParentIdFromChildPath: deriveParentIdFromChildPath,
     buildPathToRowIndex: buildPathToRowIndex,
     attachTreeRowIdsToChildren: attachTreeRowIdsToChildren,

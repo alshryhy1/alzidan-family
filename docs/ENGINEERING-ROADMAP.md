@@ -158,9 +158,10 @@ Validation (معايير القبول + KPI جزئية)
 | **36** | تكرار الجد في التطبيق فقط | مسار B؛ ✅ مكتمل 2026-08-07 — تقرير الموبايل `alzidan-family-mobile/docs/PATCH-MOBILE-36-REPORT.md` |
 | **4** | توحيد انتهاء الأخبار + Cache Policy | مسار C؛ ✅ مكتمل 2026-08-07 — `docs/PATCH-NEWS-EXPIRY-REPORT.md` + موبايل `PATCH-NEWS-EXPIRY-REPORT.md` |
 | **Admin-SC** | بطاقات خاصة: RPC لا يُرسل بعد STEP 5.5 | إصلاحات Admin — انظر §8ب و `BUG-SPECIAL-CARDS-RPC.md` |
-| **Repair** | Migration Scripts (مازن، علي، يتامى الاعتماد…) | dry-run ✅ 25 مرشّحًا · apply إنتاج ⏳ · تقرير `docs/PATCH-REPAIR-REPORT.md` |
+| **TREE-004** | عزل حالة الأبناء + اعتماد بـ `parent_person_id` فقط | ✅ كود+اختبار 2026-08-07 — `BUG-CHILDREN-STATE-ISOLATION.md` · `PATCH-TREE004-REPORT.md` |
+| **Repair** | Migration Scripts (مازن، علي، يتامى الاعتماد…) | dry-run ✅ 25 مرشّحًا · apply إنتاج ⏳ · تقرير `docs/PATCH-REPAIR-REPORT.md` · علي توائم: `repair:ali-dual` |
 | **Integrity** | views + `admin_integrity_report_v1` (أساس Health Center) | ✅ سكربتات جاهزة · نشر إنتاج ⏳ |
-| **Tests** | Smoke + **Regression** | CI / قبل كل إصدار · `npm run verify:repair` |
+| **Tests** | Smoke + **Regression** | CI / قبل كل إصدار · `npm run verify:repair` · `npm run verify:children-isolation` |
 
 
 ---
@@ -173,6 +174,7 @@ Validation (معايير القبول + KPI جزئية)
 |---|--------|------------------|---------------|
 | **Admin-SC** | حفظ البطاقات الخاصة يتوقف عند `sb.rpc("admin_special_cards_save_v1")` بلا طلب Network | جذر: قفل `getSession` قبل fetch؛ أُصلح بـ `invokeAdminRpc` (REST+timeout) — [`BUG-SPECIAL-CARDS-RPC.md`](./BUG-SPECIAL-CARDS-RPC.md) | بعد Patch 3 · حفظ ✅ |
 | **Admin-SC-List** | بعد حفظ 200 القائمة فارغة («لا توجد بطاقات خاصة محملة») | جذر: RLS على `special_cards` تُرجع `[]` لـ anon؛ التحميل كان `.from()` وليس RPC — [`BUG-SPECIAL-CARDS-LIST.md`](./BUG-SPECIAL-CARDS-LIST.md) + `admin_special_cards_list_v1.sql` | بعد Admin-SC · **طبّق SQL** ثم تحقق |
+| **TREE-004** | تبديل الأب يبقي/يعيد كتابة نفس الأبناء لكلا الأبويين | جذر: عدم عزل جلسة الأبناء + اعتماد يعيد حل الأب بالاسم — [`BUG-CHILDREN-STATE-ISOLATION.md`](./BUG-CHILDREN-STATE-ISOLATION.md) | فوري مع مسارات الكتابة · ✅ |
 | — | Logging + Error Handling دائم حول كل `rpc` إداري | لا توقف صامت؛ رسائل عربية + رمز `ADMIN-RPC-001` | مع Admin-SC |
 
 **سياسة:** لا يُفتح Redesign الإدارة (§17) كبديل عن إصلاح مسارات الكتابة المعطّلة أعلاه.
@@ -221,6 +223,7 @@ Validation (معايير القبول + KPI جزئية)
 | `NEWS-002` | فشل تجديد كاش/ودجت الأخبار |
 | `MIG-001` | Migration فشلت / لم تُطبَّق على هذه النسخة |
 | `REPAIR-001` | مرشّح إصلاح `parent_person_id` / نتيجة dry-run أو apply |
+| `TREE-004` | عزل حالة الأبناء / اعتماد بلا `parent_person_id` فريد أو إعادة استخدام قائمة أب سابق |
 | `ADMIN-RPC-001` | استدعاء RPC إداري لم يُرسل طلبًا أو توقّف بلا خطأ ظاهر (بطاقات خاصة وغيرها) |
 
 ---
@@ -329,4 +332,4 @@ Validation (معايير القبول + KPI جزئية)
 
 ---
 
-**الخطوة التالية:** إكمال **Apply إصلاح الـ 25** على الإنتاج (DB password / service_role) ثم Health Center UI · مسارات B و C و News مكتملان · Repair dry-run + أساس Integrity جاهزان (`PATCH-REPAIR-REPORT.md`).
+**الخطوة التالية:** تطبيق **TREE-004 relink** لأبناء الأحم (`repair:ali-dual --apply`) عند توفر service_role · ثم إكمال Apply إصلاح الـ 25 · Health Center UI.

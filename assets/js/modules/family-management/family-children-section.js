@@ -35,11 +35,34 @@
       var norm = typeof api.normalizePersonName === "function"
         ? api.normalizePersonName
         : function (v) { return String(v || "").trim(); };
+      // Descendants of a child may use map-key resolve (same person path variants).
+      // Selected-father display uses childrenForSelectedParent (exact isolation).
       var mapKey = typeof PersonCore.resolveChildrenMapKey === "function"
         ? PersonCore.resolveChildrenMapKey(childId, childrenMap, norm)
         : norm(childId || "");
       if (mapKey && Array.isArray(childrenMap[mapKey])) return childrenMap[mapKey];
       return [];
+    }
+
+    function listChildrenForSelectedFather() {
+      var parentKey = getSelectedPersonId();
+      var state = typeof api.getState === "function" ? api.getState() : {};
+      var norm = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName
+        : function (v) { return String(v || "").trim(); };
+      var parentPersonId = "";
+      if (typeof api.getPersonRowMeta === "function") {
+        var meta = api.getPersonRowMeta(parentKey);
+        parentPersonId = meta && meta.person_id ? String(meta.person_id) : "";
+      }
+      if (typeof PersonCore.childrenForSelectedParent === "function") {
+        return PersonCore.childrenForSelectedParent(state && state.children, parentKey, {
+          normalizePersonName: norm,
+          parentPersonId: parentPersonId,
+        });
+      }
+      var key = norm(parentKey || "");
+      return { key: key, list: state && state.children && Array.isArray(state.children[key]) ? state.children[key].slice() : [] };
     }
 
     function resolveDescendantsCount(childId) {
@@ -274,14 +297,13 @@
     function refresh() {
       hideAlert(alertEl);
       listEl.innerHTML = "";
-      var parentKey = getSelectedPersonId();
-      if (!parentKey) {
+      var isolated = listChildrenForSelectedFather();
+      var key = isolated.key;
+      if (!key) {
         listEl.innerHTML = '<div class="hint">اختر شخصاً لعرض أبنائه.</div>';
         return;
       }
-      var state = typeof api.getState === "function" ? api.getState() : {};
-      var key = typeof api.normalizePersonName === "function" ? api.normalizePersonName(parentKey) : parentKey;
-      var list = sortChildren(state && state.children ? state.children[key] : []);
+      var list = sortChildren(isolated.list);
       if (!list.length) {
         listEl.innerHTML = '<div class="hint">لا توجد بيانات مسجلة لهذا الشخص بعد.</div>';
         return;
@@ -336,9 +358,16 @@
       });
     }
 
+    function resetSession() {
+      editingKey = "";
+      hideAlert(alertEl);
+      refresh();
+    }
+
     return {
       el: container,
       refresh: refresh,
+      resetSession: resetSession,
       setAlert: function (type, text) { setAlert(alertEl, type, text); },
     };
   }

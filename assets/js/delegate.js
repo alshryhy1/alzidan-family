@@ -1133,7 +1133,29 @@ async function familyApiLinkChildToSpouse(childId, spouseId) {
 
 async function familyApiSaveChild(payload) {
   if (!state.branch) return { ok: false, message: "يلزم تسجيل دخول المندوب أولاً." };
-  const selectedParentName = resolveSelectedParentId(normalizePersonName(payload.personId), state.branch);
+  const selectedParentName = resolveSelectedParentId(normalizePersonName(payload.personId || payload.boundParentPath), state.branch);
+  const FM = window.AlzidanFamilyPersonCore || {};
+  const bound =
+    typeof FM.bindParentWriteContext === "function"
+      ? FM.bindParentWriteContext(selectedParentName, state.pathToRow || {}, { normalizePersonName })
+      : { parentPath: selectedParentName, parentPersonId: "" };
+  if (selectedParentName && !bound.parentPersonId) {
+    const meta = typeof getDelegatePersonRowMeta === "function" ? getDelegatePersonRowMeta(selectedParentName) : null;
+    if (meta && meta.person_id) bound.parentPersonId = String(meta.person_id);
+    else {
+      const pid = findStablePersonId(selectedParentName);
+      if (pid) bound.parentPersonId = pid;
+    }
+  }
+  const branchRoot = getBranchRootName(state.branch);
+  const isBranchRoot = !!(branchRoot && (selectedParentName === branchRoot || selectedParentName === state.branch));
+  if (!isBranchRoot && !bound.parentPersonId) {
+    return {
+      ok: false,
+      message: "يلزم parent_person_id للأب المحدد قبل إضافة أبناء. أعد اختيار الأب من القائمة (TREE-003).",
+      code: "TREE-003",
+    };
+  }
   const rawName = normalizePersonName(payload.name || "");
   const deceased = !!payload.deceased;
   const hijriInput = deceased ? "" : String(payload.hijri || "").trim();

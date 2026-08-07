@@ -60,6 +60,8 @@
     var alertEl = sheet.querySelector("[data-fm-sheet-alert]");
     var currentType = "wife";
     var editingWifeId = null;
+    /** Bound at open — save must not follow a later father selection (TREE-004). */
+    var boundPersonId = "";
 
     var wifeForm = sheet.querySelector("[data-fm-form-wife]");
     var childForm = sheet.querySelector("[data-fm-form-child]");
@@ -74,6 +76,18 @@
     var childArea = sheet.querySelector("[data-fm-child-area]");
     bindDeceasedToggle(childDeceased, [childHijri, childGreg, childCity, childArea]);
     bindBirthDateSync(childHijri, childGreg, api);
+
+    function clearChildFormFields() {
+      sheet.querySelectorAll("[data-fm-form-child] input, [data-fm-form-child] select, [data-fm-form-child] textarea").forEach(function (el) {
+        if (el.type === "checkbox") el.checked = false;
+        else if (el.tagName === "SELECT") el.selectedIndex = 0;
+        else el.value = "";
+      });
+      if (childDeceased) {
+        childDeceased.checked = false;
+        childDeceased.dispatchEvent(new Event("change"));
+      }
+    }
 
     function updateWifeFieldsVisibility() {
       var v = wifeFamilySelect ? String(wifeFamilySelect.value || "").trim() : "";
@@ -111,12 +125,15 @@
     function close() {
       backdrop.classList.remove("fm-open");
       editingWifeId = null;
+      boundPersonId = "";
+      clearChildFormFields();
       hideAlert(alertEl);
     }
 
     function open(type, payload) {
       hideAlert(alertEl);
       setType(type || "wife");
+      boundPersonId = typeof getSelectedPersonId === "function" ? String(getSelectedPersonId() || "").trim() : "";
       if (payload && payload.wifeRow) {
         editingWifeId = payload.wifeRow.id;
         var row = payload.wifeRow;
@@ -172,9 +189,18 @@
 
     sheet.querySelector("[data-fm-save-sheet]").addEventListener("click", async function () {
       hideAlert(alertEl);
-      var personId = getSelectedPersonId();
+      var personId = boundPersonId || (typeof getSelectedPersonId === "function" ? getSelectedPersonId() : "");
       if (!personId) {
         setAlert(alertEl, "error", "اختر الشخص أولاً.");
+        return;
+      }
+      var liveSelected = typeof getSelectedPersonId === "function" ? String(getSelectedPersonId() || "").trim() : "";
+      if (boundPersonId && liveSelected && liveSelected !== boundPersonId) {
+        setAlert(
+          alertEl,
+          "error",
+          "تغيّر الأب المحدد بعد فتح نموذج الإضافة. أغلِق النموذج وافتحه من الأب الحالي ثم أعد الإدخال (TREE-004).",
+        );
         return;
       }
 
@@ -203,6 +229,7 @@
       if (typeof api.saveChild !== "function") return;
       var childRes = await api.saveChild({
         personId: personId,
+        boundParentPath: personId,
         gender: currentType === "daughter" ? "daughter" : "son",
         name: sheet.querySelector("[data-fm-child-name]").value,
         phone: sheet.querySelector("[data-fm-child-phone]").value,
@@ -225,6 +252,7 @@
     return {
       open: open,
       close: close,
+      getBoundPersonId: function () { return boundPersonId; },
       populateWifeOptions: populateWifeOptions,
       destroy: function () {
         if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);

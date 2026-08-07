@@ -9,6 +9,8 @@
     "verify:patch3": "node scripts/test-patch3-spouses.js",
     "verify:news-expiry": "node scripts/verify-news-expiry.mjs",
     "verify:repair": "node scripts/test-patch-repair.js",
-    "repair:dry-run": "node scripts/repair-parent-person-id.mjs --snapshot"
+    "verify:children-isolation": "node scripts/test-children-state-isolation.js",
+    "repair:dry-run": "node scripts/repair-parent-person-id.mjs --snapshot",
+    "repair:ali-dual": "node scripts/repair-ali-dual-children.mjs"
   }
 }
