@@ -2,14 +2,14 @@
 
 **الحالة:** معتمد رسميًا — 10/10  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-08 — ADR-009 DateEngine (مسار G عرضي) + أساس المكتبة وحارس `ends_at`. Phase 1 Admin Redesign جارٍ — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)  
+**آخر تحديث تخطيط:** 2026-08-08 — Phase 2 Delegates v2 بدأ (أساس أدوار/تفعيل/تدقيق) — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md). Phase 1 شِلّ مكتمل تكراريًا — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)  
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 وثيقة التنفيذ الهندسية الرسمية لمشروع عائلة الزيدان. تعالج جذور المشاكل حسب طبقات النظام، وليست قائمة مزايا فقط.
 
 **سياسة عامة للمشروع:** لا «مقبول / تم» بلا تطبيق متحقَّق — على الطلبات، الصور، الزوجات، الدمج، وأي اعتماد لاحق.
 
-**الهدف التنفيذي التالي:** إكمال **المرحلة 1 — Admin Redesign** (هجرة تدريجية + Workflow). الأساس (شِلّ + موديولات) بدأ 2026-08-07 بعد «ابدأ». UX الموبايل **بعد** مراحل الإدارة فقط.
+**الهدف التنفيذي التالي:** تنفيذ **المرحلة 2 — Delegates v2** (أساس الشريحة 1 شُحن 2026-08-08). Phase 1 الشِلّ مكتمل؛ بقية P1 تكرارية. UX الموبايل **بعد** مراحل الإدارة فقط.
 
 ---
 
@@ -85,9 +85,9 @@ Health      Health Center في الإدارة                              ✅ �
 ### التالي (المعتمد) — لا UX موبايل بعد
 
 ```
-★ Phase 1   Admin Redesign + Modules architecture                 ← جارٍ (شِلّ+Hub ✅)
+  Phase 1   Admin Redesign + Modules architecture                 ✅ شِلّ (تكراري)
     ↓
-  Phase 2   Delegates v2 (صلاحيات · اعتماد متعدد · Audit)
+★ Phase 2   Delegates v2 (صلاحيات · اعتماد متعدد · Audit)         ← جارٍ — أساسيات ✅
     ↓
   Phase 3   Admin UX (بحث · فلاتر · bulk · استيراد/تصدير · نسخ احتياطي · مهام)
     ↓
@@ -102,7 +102,7 @@ Health      Health Center في الإدارة                              ✅ �
 | **B عرض** | تكرار صالح/صالح لاحم في iOS — Patch Mobile 36 | ✅ |
 | **C أخبار/كاش** | تطبيق + ودجت + سياسة التحديث — Patch News Expiry 2026-08-07 | ✅ |
 | **D إصلاح/سلامة** | Repair يدوي + Integrity قراءة فقط + Health Center | ✅ مغلق للتخطيط |
-| **E إدارة** | Redesign → Delegates v2 → Admin UX (§17) | Phase 1 جارٍ — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md) |
+| **E إدارة** | Redesign → Delegates v2 → Admin UX (§17) | P1 شِلّ ✅ · **P2 جارٍ** — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
 | **F UX موبايل** | بحث · عضو · إشعارات · … (§18) | بعد E فقط — لا يُبدأ الآن |
 | **G تواريخ (عرضي)** | DateEngine موحّد — ADR-009 | ✅ أساس + حارس `ends_at` · هجرة `*_g`/`*_h` لاحقاً |
 
@@ -182,7 +182,7 @@ Validation (معايير القبول + KPI جزئية)
 | **Integrity** | قراءة فقط + تقرير | ✅ مغلق للتخطيط — `PATCH-INTEGRITY-REPORT.md` |
 | **Health** | Health Center في الإدارة | ✅ مكتمل (أساس قراءة فقط) |
 | **Tests** | Smoke + **Regression** | أدوات جاهزة · `npm run verify:repair` · `npm run verify:children-isolation` |
-| **Admin-P1…P3** | مراحل الإدارة (§17) | **P1 جارٍ** — شِلّ الموديولات [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md) |
+| **Admin-P1…P3** | مراحل الإدارة (§17) | P1 شِلّ ✅ · **P2 جارٍ** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
 | **Mobile-UX** | UX الموبايل (§18) | بعد Admin P1–P3 فقط |
 
 
@@ -343,9 +343,9 @@ Health Center يبقى مركزًا مستقلًا ضمن معمارية الم�
 **بدء التنفيذ:** عند قول المستخدم «ابدأ» فقط — المرحلة 1 أولًا.  
 **صريح:** اقتراح «UX موبايل أولًا» **مرفوض**؛ لا يُقفز فوق هذه المراحل.
 
-### المرحلة 1 — Admin Redesign ← جارٍ
+### المرحلة 1 — Admin Redesign ✅ أساس الشِلّ (تكراري)
 
-**تقدّم:** شِلّ جانبي + Hub + توجيه `#module=` + ترحيل عرض الأقسام الحالية — انظر [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md).
+**تقدّم:** شِلّ جانبي + Hub + توجيه `#module=` + ترحيل عرض الأقسام — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md). بقية البنود (تحميل كسول · Workflow أعمق) تُكمَل تدريجيًا وليست حاجزًا أمام P2.
 
 - لوحة تحكم جديدة ✅ (Hub)
 - إعادة تنظيم كل الأقسام ✅ (موديولات؛ الهجرة المنطقية تدريجية)
@@ -357,19 +357,21 @@ Health Center يبقى مركزًا مستقلًا ضمن معمارية الم�
   - إدارة الأعضاء ✅
   - إدارة المناسبات ✅
   - إدارة الذكريات ✅
-  - إدارة المندوبين — **stub فقط** (Phase 2)
+  - إدارة المندوبين — **Phase 2 بدأ** (قائمة · تفعيل · أدوار · تدقيق)
   - مركز الصحة (Health Center) ✅ كموديول
   - مركز السجل (Audit) ✅
   - الطلبات · البطاقات الخاصة · التصويت · الإحصاءات · أدوات ✅
 
-### المرحلة 2 — Delegates v2
+### المرحلة 2 — Delegates v2 ← جارٍ
 
-- صلاحيات حسب الدور (Role-based)
-- صلاحيات حسب الفرع (Branch-based)
-- صلاحيات حسب نوع العملية
-- اعتماد متعدد المراحل (Multi-stage approval)
-- سجل تدقيق كامل (Full Audit Trail)
-- تفعيل / تعطيل المندوبين
+**تقدّم الشريحة 1:** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `20260808_delegates_v2_foundation.sql`
+
+- صلاحيات حسب الدور (Role-based) — ✅ كتالوج + تعيين
+- صلاحيات حسب الفرع (Branch-based) — ✅ على الملف الشخصي
+- صلاحيات حسب نوع العملية — ✅ جدول صلاحيات (فرض لاحق في RPC)
+- اعتماد متعدد المراحل (Multi-stage approval) — 🟡 هيكل جدول فقط
+- سجل تدقيق كامل (Full Audit Trail) — ✅ `admin_audit_log` + واجهة
+- تفعيل / تعطيل المندوبين — ✅
 
 ### المرحلة 3 — Admin UX
 
@@ -411,7 +413,7 @@ Health Center يبقى مركزًا مستقلًا ضمن معمارية الم�
 - إحصائيات تجميلية فوق بيانات غير موثوقة
 - «إصلاح بيانات صالح» كحل أول لمشكلة العرض 36
 - كسر أي ADR مقفل دون وثيقة قرار جديدة
-- قفز إلى UX الموبايل أو Delegates v2 قبل إغلاق/تقدم Phase 1 المتفق عليه
+- قفز إلى UX الموبايل قبل تقدم مراحل الإدارة المتفق عليها
 - `new Date(...)` لتواريخ أعمال (ميلاد/وفاة/مناسبة/انتهاء تصويت) خارج DateEngine (ADR-009)
 - تخزين سنة هجرية في أعمدة timestamp ميلادية (`ends_at` وغيرها)
 
@@ -422,11 +424,12 @@ Health Center يبقى مركزًا مستقلًا ضمن معمارية الم�
 | الحالة | المحتوى |
 |--------|---------|
 | ✅ مكتمل | Patch 0–4 · Mobile 36 · News · Repair يدوي · Integrity قراءة فقط · Health Center |
-| ← جارٍ | **المرحلة 1 — Admin Redesign + Modules** (§17) — أساس الشِلّ ✅ |
-| بعد ذلك | Delegates v2 → Admin UX → ثم UX الموبايل (§18) |
+| ✅ أساس | **المرحلة 1 — Admin Redesign** (§17) — شِلّ مكتمل (تكراري) |
+| ← جارٍ | **المرحلة 2 — Delegates v2** — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
+| بعد ذلك | إكمال P2 → Admin UX → ثم UX الموبايل (§18) |
 
 المرجع طويل الأمد: Versioning · Rollback · KPI · Definition of Done · Matrix · Cache · Error Codes · Diagnostics · ADR.
 
 ---
 
-**الخطوة التالية:** إكمال Phase 1 (تحميل كسول للموديولات · تعميق Workflow · اختبار دخان بعد النشر). ثم Phase 2 Delegates v2. لا UX موبايل الآن.
+**الخطوة التالية:** تطبيق SQL أساس Delegates v2 → مزامنة المناديب → فرض الصلاحيات في RPC المندوب → Multi-stage. لا UX موبايل الآن.

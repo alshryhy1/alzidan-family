@@ -294,3 +294,65 @@ body.admin-shell-ready.admin-authenticated .page > footer {
   grid-column: 1 / -1;
   padding: 16px;
 }
+
+
+/* Delegates v2 module */
+.delegates-v2-card {
+  margin-top: 8px;
+}
+.delegates-v2-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.delegates-v2-sql-hint {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff7ed;
+  border: 1px solid rgba(194, 65, 12, 0.25);
+  color: #9a3412;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.delegates-v2-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.delegates-v2-pill.is-on {
+  background: rgba(4, 120, 87, 0.12);
+  color: #047857;
+}
+.delegates-v2-pill.is-off {
+  background: rgba(185, 28, 28, 0.1);
+  color: #b91c1c;
+}
+.delegates-v2-role {
+  max-width: 160px;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--admin-shell-line);
+  background: #fff;
+}
+.delegates-v2-audit-block {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--admin-shell-line);
+}
+.delegates-v2-audit-block h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 900;
+}
+.delegates-v2-code {
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

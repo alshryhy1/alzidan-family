@@ -61,10 +61,9 @@
     {
       id: "delegates",
       title: "المندوبون",
-      desc: "مدخل المرحلة 2 — Delegates v2 (صلاحيات واعتماد متعدد)",
+      desc: "Delegates v2 — أدوار، فروع، تفعيل/تعطيل، سجل تدقيق",
       icon: "🛡",
       sections: ["admin-module-delegates"],
-      stub: true,
       phase: 2,
       group: "ops",
     },
@@ -178,7 +177,7 @@
     aside.id = "admin-shell-sidebar";
     aside.setAttribute("aria-label", "موديولات الإدارة");
     aside.innerHTML =
-      '<div class="admin-shell-brand"><strong>مراكز الإدارة</strong><span>المرحلة 1 — معمارية الموديولات</span></div>' +
+      '<div class="admin-shell-brand"><strong>مراكز الإدارة</strong><span>المرحلة 1 مكتملة الأساس · المرحلة 2 جارية</span></div>' +
       '<nav class="admin-shell-nav" id="admin-shell-nav"></nav>';
 
     const login = document.getElementById("admin-login-section");
@@ -248,7 +247,7 @@
     }
 
     ensureHubPanel();
-    ensureDelegatesStub();
+    ensureDelegatesHost();
     shellBuilt = true;
   }
 
@@ -281,7 +280,11 @@
           m.desc +
           "</span>" +
           '<div class="hub-meta">' +
-          (m.stub ? "مرحلة 2 — مدخل فقط" : "افتح الموديول") +
+          (m.stub
+            ? "قريبًا"
+            : m.phase === 2
+              ? "المرحلة 2 — افتح"
+              : "افتح الموديول") +
           "</div></button>"
         );
       })
@@ -290,7 +293,7 @@
     section.innerHTML =
       '<div class="admin-hub-hero">' +
       "<h1>لوحة تحكم عائلة الزيدان</h1>" +
-      "<p>اختر مركزًا مستقلًا بدل التمرير في صفحة واحدةحدة مزدحمة. الصلاحيات ومسارات الاعتماد (RPC) كما هي — التغيير في التنظيم والعرض.</p>" +
+      "<p>اختر مركزًا مستقلًا. أساس المرحلة 1 جاهز؛ موديول المندوبين يعمل الآن ضمن Delegates v2.</p>" +
       '<div class="admin-workflow-strip">' +
       '<span class="admin-workflow-chip">١ مراجعة</span>' +
       '<span class="admin-workflow-chip">٢ اعتماد</span>' +
@@ -312,7 +315,8 @@
     else host.appendChild(section);
   }
 
-  function ensureDelegatesStub() {
+  function ensureDelegatesHost() {
+    // Host section only — UI filled by modules/admin-delegates-v2.js (Phase 2)
     if (document.getElementById("admin-module-delegates")) return;
     const host =
       document.getElementById("admin-protected-sections") ||
@@ -321,28 +325,13 @@
 
     const section = document.createElement("section");
     section.id = "admin-module-delegates";
-    section.className = "section admin-only-section admin-module-stub";
+    section.className = "section admin-only-section";
     section.setAttribute("data-admin-module", "delegates");
     section.innerHTML =
       '<div class="section-header"><div>' +
-      '<div class="section-title">المندوبون — مدخل المرحلة 2</div>' +
-      '<div class="hint">لا إعادة كتابة عميقة في المرحلة 1. إدارة الصلاحيات الحالية تبقى في «مركز السجل».</div>' +
-      "</div></div>" +
-      '<div class="card">' +
-      "<p class=\"hint\" style=\"margin:0; line-height:1.8;\">" +
-      "Delegates v2 (المرحلة 2) ستشمل: صلاحيات حسب الدور والفرع ونوع العملية، اعتماد متعدد المراحل، سجل تدقيق كامل، وتفعيل/تعطيل المندوبين." +
-      "</p>" +
-      '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">' +
-      '<button type="button" class="btn btn-outline btn-sm" data-go-module="audit">فتح مركز السجل الآن</button>' +
-      '<button type="button" class="btn btn-outline btn-sm" data-go-module="requests">طلبات المناديب</button>' +
+      '<div class="section-title">المندوبون — Delegates v2</div>' +
+      '<div class="hint">جاري تجهيز الواجهة…</div>' +
       "</div></div>";
-
-    section.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-go-module]");
-      if (!btn) return;
-      navigate(btn.getAttribute("data-go-module"));
-    });
-
     host.appendChild(section);
   }
 

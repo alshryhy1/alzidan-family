@@ -1,7 +1,7 @@
 # المرحلة 1 — Admin Redesign + Modules
 
-**الحالة:** قيد التنفيذ (أساس الشِلّ + التوجيه)  
-**التاريخ:** 2026-08-07  
+**الحالة:** أساس الشِلّ مكتمل — بقية البنود تكرارية (لا حاجز أمام Phase 2)  
+**التاريخ:** 2026-08-07 · تحديث حالة: 2026-08-08  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §17 · [`ADR.md`](./ADR.md)
 
 ## الهدف
@@ -43,7 +43,7 @@ pages/admin.html
 | `members` | الأعضاء | `admin-quality-center` · `admin-review-shortcut` | ✅ مُرحَّل للعرض |
 | `events` | المناسبات | `events-source-manager` · `banner-messages-manager` | ✅ مُرحَّل للعرض |
 | `memories` | الذكريات | `admin-memory-section` | ✅ مُرحَّل للعرض |
-| `delegates` | المندوبون | stub فقط | ✅ مدخل Phase 2 — **بدون** Delegates v2 |
+| `delegates` | المندوبون | `admin-module-delegates` | ✅ Phase 2 بدأ — انظر [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
 | `health` | مركز الصحة | `health-center-section` | ✅ مُرحَّل (Integrity قراءة فقط) |
 | `audit` | مركز السجل | `delegate-audit` | ✅ مُرحَّل للعرض |
 | `special-cards` | البطاقات الخاصة | `special-cards-manager` | ✅ مُرحَّل (حفظ/قائمة RPC) |
@@ -66,7 +66,7 @@ Cache-bust الحالي للأصول: `?v=20260807p1`.
 - توحيد كل عمليات الاعتماد تحت معالج Workflow واحد في الواجهة
 - تنظيف أقسام الصيانة القديمة من DOM العام
 - تحسينات Admin UX (بحث/فلاتر/bulk) → **المرحلة 3**
-- Delegates v2 العميق → **المرحلة 2**
+- Delegates v2 → **المرحلة 2 جارية** — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md)
 - UX الموبايل → **المرحلة 4** (ممنوع الآن)
 
 ## Compatibility
@@ -85,3 +85,8 @@ Cache-bust الحالي للأصول: `?v=20260807p1`.
 - [x] Stub المندوبون
 - [x] وثيقة المرحلة + تحديث الخارطة
 - [ ] اختبار دخان يدوي بعد النشر (دخول → Hub → طلبات/شجرة/صحة/بطاقات)
+
+## تحديث 2026-08-08
+
+**قرار:** لا فجوة حرجة في التنقل (الشِلّ يعمل). Phase 1 = **shell done, continue iteratively**.  
+التركيز التنفيذي انتقل إلى **Phase 2 — Delegates v2**.
