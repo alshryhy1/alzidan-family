@@ -2,7 +2,9 @@
 
 **التاريخ:** 2026-08-07  
 **النطاق:** بيانات فقط — حذف صفوف `tree_children` المكرّرة خطأ تحت الأحم  
-**الحالة:** Dry-run ✅ · Apply معلّق على `SUPABASE_SERVICE_ROLE_KEY`
+**الحالة:** Dry-run ✅ · Apply عبر **Supabase SQL Editor** (يدوي)
+
+**SQL الجاهز للنسخ:** [`PATCH-TREE004-UNLINK-SQL.md`](./PATCH-TREE004-UNLINK-SQL.md)
 
 ---
 
@@ -58,19 +60,19 @@
 
 ---
 
-## Apply
+## Apply (يدوي — SQL Editor فقط)
 
-```bash
-# يتطلب SUPABASE_SERVICE_ROLE_KEY لمشروع wbskjfdqpugnwvrykqcn
-SUPABASE_SERVICE_ROLE_KEY=… node scripts/repair-ali-dual-unlink.mjs --apply
-```
+نفّذ الخطوات A→B→C→D من [`PATCH-TREE004-UNLINK-SQL.md`](./PATCH-TREE004-UNLINK-SQL.md) في Supabase SQL Editor.
 
-السكربت يحذف فقط معرفات القائمة أعلاه، ثم يتحقق أن روابط ناصر ما زالت موجودة وأن أبناء الأحم المباشرين أصبحوا صفرًا لهذه الأسماء.
+- الحذف مقيّد بـ `WHERE id IN (577,578,579,580,581,582,583)` فقط.
+- صفوف ناصر `1417–1423` تبقى كما هي.
+- **لا** يُعاد ربط `parent_person_id` الميت إلى UUID الأحم الحي (يفاقم الخلل في واجهات تعتمد UUID).
 
-**لا** يستخدم مسار `--apply` القديم لـ `repair-ali-dual-children.mjs` لأنه يعيد ربط `parent_person_id` الميت إلى UUID الأحم الحي (يفاقم الخلل في واجهات تعتمد UUID).
+السكربت `scripts/repair-ali-dual-unlink.mjs` يبقى للـ dry-run المحلي فقط؛ التطبيق المعتمد هو SQL اليدوي أعلاه.
 
 ---
 
 ## نتيجة التطبيق
 
-انظر `backups/patch-tree004-ali-unlink-20260807/apply-result.json` بعد التشغيل.
+بعد تشغيل Step C/D في SQL Editor، احفظ لقطة النتائج إن رغبت في  
+`backups/patch-tree004-ali-unlink-20260807/apply-result.json` (اختياري).
