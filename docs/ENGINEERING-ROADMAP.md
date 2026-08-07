@@ -170,7 +170,8 @@ Validation (معايير القبول + KPI جزئية)
 
 | # | البند | التشخيص المختصر | الأولوية بعد |
 |---|--------|------------------|---------------|
-| **Admin-SC** | حفظ البطاقات الخاصة يتوقف عند `sb.rpc("admin_special_cards_save_v1")` بلا طلب Network | Promise معلّقة / استثناء غير ملتقط / عميل غير موحّد / Wrapper يمنع rpc — تفاصيل: [`BUG-SPECIAL-CARDS-RPC.md`](./BUG-SPECIAL-CARDS-RPC.md) | **Patch 3 (زوجات)** |
+| **Admin-SC** | حفظ البطاقات الخاصة يتوقف عند `sb.rpc("admin_special_cards_save_v1")` بلا طلب Network | جذر: قفل `getSession` قبل fetch؛ أُصلح بـ `invokeAdminRpc` (REST+timeout) — [`BUG-SPECIAL-CARDS-RPC.md`](./BUG-SPECIAL-CARDS-RPC.md) | بعد Patch 3 · حفظ ✅ |
+| **Admin-SC-List** | بعد حفظ 200 القائمة فارغة («لا توجد بطاقات خاصة محملة») | جذر: RLS على `special_cards` تُرجع `[]` لـ anon؛ التحميل كان `.from()` وليس RPC — [`BUG-SPECIAL-CARDS-LIST.md`](./BUG-SPECIAL-CARDS-LIST.md) + `admin_special_cards_list_v1.sql` | بعد Admin-SC · **طبّق SQL** ثم تحقق |
 | — | Logging + Error Handling دائم حول كل `rpc` إداري | لا توقف صامت؛ رسائل عربية + رمز `ADMIN-RPC-001` | مع Admin-SC |
 
 **سياسة:** لا يُفتح Redesign الإدارة (§17) كبديل عن إصلاح مسارات الكتابة المعطّلة أعلاه.
@@ -326,4 +327,4 @@ Validation (معايير القبول + KPI جزئية)
 
 ---
 
-**الخطوة التالية:** Patch 3 (زوجات) مُغلق أو قيد الإغلاق → ثم **Admin-SC** (بطاقات خاصة RPC) أو المسارات المتوازية B/C بإشارة المستخدم.
+**الخطوة التالية:** طبّق `supabase/sql/admin_special_cards_list_v1.sql` على الإنتاج ثم تحقق قائمة البطاقات الخاصة · المسارات B/C بانتظار إشارة المستخدم.

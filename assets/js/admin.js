@@ -2060,20 +2060,43 @@ where c.id = matches.id; commit;
     });
   }
 
+  function upsertSpecialCardRowLocal(row) {
+    if (!row || row.id == null || row.id === "") return;
+    const idKey = String(row.id);
+    const next = { ...row, id: Number(row.id) || row.id };
+    const idx = specialCardsRows.findIndex((r) => String(r && r.id) === idKey);
+    if (idx >= 0) {
+      specialCardsRows[idx] = { ...specialCardsRows[idx], ...next };
+    } else {
+      specialCardsRows = [next].concat(specialCardsRows);
+    }
+    renderSpecialCardsList();
+  }
+
   async function loadSpecialCardsRows() {
-    const sb = getClient();
-    if (!sb) return setSpecialCardsStatus("تعذر الاتصال بقاعدة البيانات.");
+    const token = getAdminToken();
+    if (!token) return setSpecialCardsStatus("سجل الدخول أولاً.");
+    if (!(window.__alzidanConfig && window.__alzidanConfig.SUPABASE_URL) && !getClient()) {
+      return setSpecialCardsStatus("تعذر الاتصال بقاعدة البيانات.");
+    }
+
     setSpecialCardsStatus("جاري تحميل البطاقات الخاصة...");
-    const { data, error } = await sb
-      .from("special_cards")
-      .select("*")
-      .order("priority", { ascending: false })
-      .order("sequence_order", { ascending: true })
-      .order("created_at", { ascending: false })
-      .limit(300);
+    // RLS hides special_cards from anon SELECT (returns []). Admin list must use
+    // security-definer RPC via invokeAdminRpc — same path as save/delete.
+    const { data, error } = await invokeAdminRpc("admin_special_cards_list_v1", {
+      p_token: token,
+      p_limit: 300,
+    });
 
     if (error) {
-      setSpecialCardsStatus("تعذر تحميل البطاقات الخاصة.");
+      setSpecialCardsStatus(
+        "تعذر تحميل البطاقات الخاصة: " +
+          String(error.message || error.details || error.hint || "خطأ غير معروف") +
+          (String(error.code || "").indexOf("PGRST202") >= 0 ||
+          /admin_special_cards_list_v1/i.test(String(error.message || ""))
+            ? " — طبّق supabase/sql/admin_special_cards_list_v1.sql على القاعدة."
+            : ""),
+      );
       return;
     }
 
@@ -2297,8 +2320,25 @@ where c.id = matches.id; commit;
         return;
       }
 
-      const savedId = Array.isArray(data) ? (data[0] && (data[0].id || data[0])) : data;
+      const savedRow =
+        Array.isArray(data) && data[0] && typeof data[0] === "object"
+          ? data[0]
+          : data && typeof data === "object" && !Array.isArray(data)
+            ? data
+            : null;
+      const savedId = savedRow
+        ? savedRow.id
+        : Array.isArray(data)
+          ? data[0] && (data[0].id || data[0])
+          : data;
       if (specialCardsId) specialCardsId.value = String(savedId || id || "");
+      // Optimistic local row so the list is not blank if list RPC is pending deploy,
+      // or while refresh is in flight. loadSpecialCardsRows replaces with server truth.
+      upsertSpecialCardRowLocal(
+        savedRow && savedRow.id != null
+          ? savedRow
+          : { ...safeRow, id: savedId || id },
+      );
       setSpecialCardsStatus("تم حفظ البطاقة الخاصة.");
       await loadSpecialCardsRows();
     } catch (err) {
