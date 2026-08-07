@@ -1,9 +1,41 @@
+function canonicalHelpers() {
+  return {
+    normalizePersonName,
+    normalizePersonBaseName,
+    getLeafStoredNameFromNodeId,
+  };
+}
+
+function lastWriteIdentityError(result) {
+  if (!result || result.ok) return "";
+  return result.message || (window.AlzidanCanonicalPerson && window.AlzidanCanonicalPerson.MSG
+    ? window.AlzidanCanonicalPerson.MSG.NOT_FOUND
+    : "تعذر تحديد رقم الشخص في قاعدة البيانات.");
+}
+
+async function resolveTreeRowIdForWrite(sb, nodePath, opts) {
+  const options = opts || {};
+  const CP = window.AlzidanCanonicalPerson;
+  if (!CP || typeof CP.resolveTreeRowIdForWrite !== "function") {
+    const meta = state.pathToRow && state.pathToRow[normalizePersonName(nodePath || "")];
+    if (meta && meta.id) return { ok: true, rowId: Number(meta.id), personId: meta.person_id || "", code: "", message: "" };
+    return { ok: false, rowId: 0, personId: "", code: "SPOUSE-001", message: "وحدة الهوية غير محمّلة." };
+  }
+  return CP.resolveTreeRowIdForWrite({
+    sb,
+    branchKey: state.branch,
+    nodePath,
+    personId: options.personId || "",
+    parentPath: options.parentPath || "",
+    pathToRow: state.pathToRow,
+    helpers: canonicalHelpers(),
+  });
+}
+
 async function getTreePersonIdByName(sb, fullName) {
-  const name = normalizePersonName(fullName || "");
-  if (!sb || !name) return null;
-  const r = await sb.from("tree_children").select("id,name").eq("name", name).limit(1).maybeSingle();
-  if (r.error || !r.data || r.data.id == null) return null;
-  return r.data.id;
+  const resolved = await resolveTreeRowIdForWrite(sb, fullName, {});
+  if (!resolved.ok || !resolved.rowId) return null;
+  return resolved.rowId;
 }
 
 function delegateBirthYearFromAge(ageValue) {
@@ -185,8 +217,11 @@ async function familyApiConfirmLinkAllChildrenToOnlyWife(personName) {
   const sb = getالخدمةClient();
   const parentName = resolveSelectedParentId(normalizePersonName(personName), state.branch);
   if (!sb || !parentName) return { ok: false, message: "اختر الشخص أولاً." };
-  const husbandId = await getTreePersonIdByName(sb, parentName);
-  if (!husbandId) return { ok: false, message: "تعذر تحديد رقم الشخص." };
+  const husbandResolved = await resolveTreeRowIdForWrite(sb, parentName, {});
+  if (!husbandResolved.ok || !husbandResolved.rowId) {
+    return { ok: false, message: lastWriteIdentityError(husbandResolved), code: husbandResolved.code || "SPOUSE-001" };
+  }
+  const husbandId = husbandResolved.rowId;
   const ok = window.confirm("تأكيد مهم: سيتم ربط كل أبناء هذا الشخص بزوجته الوحيدة المسجلة. هل أنت متأكد؟");
   if (!ok) return { ok: false, message: "تم الإلغاء." };
   const r = await sb.rpc("confirm_link_all_children_to_only_spouse", { p_husband_id: husbandId });
@@ -200,8 +235,11 @@ async function familyApiSaveWife(payload) {
   if (!sb) return { ok: false, message: "تعذر الاتصال بقاعدة البيانات." };
   const parentName = resolveSelectedParentId(normalizePersonName(payload.personId), state.branch);
   if (!parentName) return { ok: false, message: "اختر الشخص أولاً." };
-  const husbandId = await getTreePersonIdByName(sb, parentName);
-  if (!husbandId) return { ok: false, message: "تعذر تحديد رقم الشخص في قاعدة البيانات." };
+  const husbandResolved = await resolveTreeRowIdForWrite(sb, parentName, {});
+  if (!husbandResolved.ok || !husbandResolved.rowId) {
+    return { ok: false, message: lastWriteIdentityError(husbandResolved), code: husbandResolved.code || "SPOUSE-001" };
+  }
+  const husbandId = husbandResolved.rowId;
   const name = normalizePersonName(payload.name || "");
   if (!name) return { ok: false, message: "أدخل اسم الزوجة." };
   const orderRaw = payload.order ? normalizeArabicDigitsToLatin(String(payload.order).trim()) : "";
@@ -246,8 +284,11 @@ async function familyApiLinkChildToSpouse(childId, spouseId) {
   if (!spouseId) return { ok: true, skipped: true };
   const sb = getالخدمةClient();
   if (!sb) return { ok: false, error: { message: "تعذر الاتصال بقاعدة البيانات." } };
-  const childPersonId = await getTreePersonIdByName(sb, childId);
-  if (!childPersonId) return { ok: false, error: { message: "تعذر تحديد رقم الابن في قاعدة البيانات." } };
+  const childResolved = await resolveTreeRowIdForWrite(sb, childId, {});
+  if (!childResolved.ok || !childResolved.rowId) {
+    return { ok: false, error: { message: lastWriteIdentityError(childResolved) || "تعذر تحديد رقم الابن في قاعدة البيانات.", code: childResolved.code || "TREE-001" } };
+  }
+  const childPersonId = childResolved.rowId;
   const spouseRes = await sb
     .from("tree_spouses")
     .select("id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage")

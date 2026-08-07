@@ -268,54 +268,21 @@
 
   async function resolveAdminTreeRowId(sb, branchKey, childIdForDelete, child, parentId) {
     let rowId = findRowIdForPath(childIdForDelete, child, parentId);
-    if (rowId) return rowId;
-    if (!sb || !branchKey) return 0;
-    const childFull = normalizePersonName(childIdForDelete || "");
-    const childLeaf = getLeafStoredNameFromNodeId(childFull);
-    const parentFull = normalizePersonName(parentId || "");
-    const parentLeaf = getLeafStoredNameFromNodeId(parentFull);
-    const lookupValues = [childFull, childLeaf].filter(Boolean);
-    const cols = ["child_name", "name"];
-    for (let i = 0; i < lookupValues.length; i++) {
-      for (let j = 0; j < cols.length; j++) {
-        const q = await sb
-          .from("tree_children")
-          .select("id,parent_name,parent,child_name,name")
-          .eq("branch_key", branchKey)
-          .eq(cols[j], lookupValues[i])
-          .limit(20);
-        if (!q.error && Array.isArray(q.data) && q.data.length) {
-          const hit = q.data.find((row) => {
-            const dbParent = normalizePersonName(row.parent_name || row.parent || "");
-            if (!parentFull && !parentLeaf) return true;
-            if (!dbParent) return true;
-            return (
-              dbParent === parentFull ||
-              dbParent === parentLeaf ||
-              parentFull.endsWith("/" + dbParent) ||
-              parentFull.endsWith("/" + getLeafStoredNameFromNodeId(dbParent)) ||
-              dbParent.endsWith("/" + parentLeaf)
-            );
-          });
-          const chosen = hit || q.data[0];
-          if (chosen && chosen.id != null) return Number(chosen.id);
-        }
-      }
-    }
+    if (rowId) return { ok: true, rowId, message: "" };
     const personId = normalizePersonName(
       (child && (child.personId || child.person_id)) || "",
     );
-    if (personId) {
-      const q = await sb
-        .from("tree_children")
-        .select("id")
-        .eq("branch_key", branchKey)
-        .eq("person_id", personId)
-        .limit(1)
-        .maybeSingle();
-      if (!q.error && q.data && q.data.id != null) return Number(q.data.id);
-    }
-    return 0;
+    const resolved = await resolveTreeRowIdForWrite(sb, childIdForDelete, {
+      personId,
+      parentPath: parentId || "",
+    });
+    if (resolved.ok && resolved.rowId) return { ok: true, rowId: resolved.rowId, message: "" };
+    return {
+      ok: false,
+      rowId: 0,
+      message: lastWriteIdentityError(resolved) || "تعذر تحديد السجل.",
+      code: resolved.code || "",
+    };
   }
 
   function getPersonRowMeta(path) {
@@ -327,8 +294,15 @@
     const sb = getSupabaseClient();
     const token = getAdminToken();
     if (!sb || !token) return { ok: false, error: { message: "سجل الدخول أولًا." } };
-    const payload = Object.assign({}, row || {});
+    let payload = Object.assign({}, row || {});
     if (!payload.branch_key) payload.branch_key = state.branch;
+    const CP = window.AlzidanCanonicalPerson;
+    if (CP && typeof CP.attachParentPersonId === "function" && payload.parent_name) {
+      payload = CP.attachParentPersonId(payload, state.pathToRow, payload.parent_name, canonicalHelpers());
+    } else if (!payload.parent_person_id && payload.parent_name) {
+      const meta = getPersonRowMeta(payload.parent_name);
+      if (meta && meta.person_id) payload.parent_person_id = meta.person_id;
+    }
     const { data, error } = await sb.rpc("admin_tree_child_upsert_v1", {
       p_token: token,
       p_row: payload,
@@ -427,45 +401,46 @@
   }
 
 
-  async function getTreePersonIdByName(sb, fullName) {
-    const name = normalizePersonName(fullName || "");
-    if (!sb || !name || !state.branch) return null;
+  function canonicalHelpers() {
+    return {
+      normalizePersonName,
+      normalizePersonBaseName,
+      getLeafStoredNameFromNodeId,
+    };
+  }
 
-    const byChild = await sb
-      .from("tree_children")
-      .select("id")
-      .eq("branch_key", state.branch)
-      .eq("child_name", name)
-      .limit(1)
-      .maybeSingle();
+  function lastWriteIdentityError(result) {
+    if (!result || result.ok) return "";
+    return result.message || (window.AlzidanCanonicalPerson && window.AlzidanCanonicalPerson.MSG
+      ? window.AlzidanCanonicalPerson.MSG.NOT_FOUND
+      : "تعذر تحديد رقم الشخص في قاعدة البيانات.");
+  }
 
-    if (!byChild.error && byChild.data?.id != null) return byChild.data.id;
-
-    const byName = await sb
-      .from("tree_children")
-      .select("id")
-      .eq("branch_key", state.branch)
-      .eq("name", name)
-      .limit(1)
-      .maybeSingle();
-
-    if (!byName.error && byName.data?.id != null) return byName.data.id;
-
-    const leaf = name.split("/").pop();
-
-    if (leaf) {
-      const { data } = await sb
-        .from("tree_children")
-        .select("id,name,child_name")
-        .eq("branch_key", state.branch)
-        .or(`name.eq.${leaf},child_name.eq.${leaf}`);
-
-      if (Array.isArray(data) && data.length === 1) {
-        return data[0].id;
-      }
+  /** Resolve tree_children.id for writes via person_id / Node Path — never ambiguous name pick. */
+  async function resolveTreeRowIdForWrite(sb, nodePath, opts) {
+    const options = opts || {};
+    const CP = window.AlzidanCanonicalPerson;
+    if (!CP || typeof CP.resolveTreeRowIdForWrite !== "function") {
+      const meta = getPersonRowMeta(nodePath);
+      if (meta && meta.id) return { ok: true, rowId: Number(meta.id), personId: meta.person_id || "", code: "", message: "" };
+      return { ok: false, rowId: 0, personId: "", code: "SPOUSE-001", message: "وحدة الهوية غير محمّلة." };
     }
+    return CP.resolveTreeRowIdForWrite({
+      sb,
+      branchKey: state.branch,
+      nodePath,
+      personId: options.personId || "",
+      parentPath: options.parentPath || "",
+      pathToRow: state.pathToRow,
+      helpers: canonicalHelpers(),
+    });
+  }
 
-    return null;
+  /** @deprecated name kept for call-sites — returns row id or null; never silent multi-match. */
+  async function getTreePersonIdByName(sb, fullName) {
+    const resolved = await resolveTreeRowIdForWrite(sb, fullName, {});
+    if (!resolved.ok || !resolved.rowId) return null;
+    return resolved.rowId;
   }
   
 
@@ -577,8 +552,11 @@
     if (!sb) return { ok: false, message: "تعذر الاتصال بقاعدة البيانات." };
     const parentName = resolveSelectedParentId(normalizePersonName(payload.personId), state.branch);
     if (!parentName) return { ok: false, message: "اختر الشخص أولاً." };
-    const husbandId = await getTreePersonIdByName(sb, parentName);
-    if (!husbandId) return { ok: false, message: "تعذر تحديد رقم الشخص في قاعدة البيانات." };
+    const husbandResolved = await resolveTreeRowIdForWrite(sb, parentName, {});
+    if (!husbandResolved.ok || !husbandResolved.rowId) {
+      return { ok: false, message: lastWriteIdentityError(husbandResolved), code: husbandResolved.code || "SPOUSE-001" };
+    }
+    const husbandId = husbandResolved.rowId;
     const name = normalizePersonName(payload.name || "");
     if (!name) return { ok: false, message: "أدخل اسم الزوجة." };
     const orderRaw = payload.order ? normalizeArabicDigitsToLatin(String(payload.order).trim()) : "";
@@ -693,8 +671,11 @@
     const sb = getSupabaseClient();
     const parentName = resolveSelectedParentId(normalizePersonName(personName), state.branch);
     if (!sb || !parentName) return { ok: false, message: "اختر الشخص أولاً." };
-    const husbandId = await getTreePersonIdByName(sb, parentName);
-    if (!husbandId) return { ok: false, message: "تعذر تحديد رقم الشخص." };
+    const husbandResolved = await resolveTreeRowIdForWrite(sb, parentName, {});
+    if (!husbandResolved.ok || !husbandResolved.rowId) {
+      return { ok: false, message: lastWriteIdentityError(husbandResolved), code: husbandResolved.code || "SPOUSE-001" };
+    }
+    const husbandId = husbandResolved.rowId;
     const ok = window.confirm("تأكيد مهم: سيتم ربط كل أبناء هذا الشخص بزوجته الوحيدة المسجلة. هل أنت متأكد؟");
     if (!ok) return { ok: false, message: "تم الإلغاء." };
     const r = await sb.rpc("confirm_link_all_children_to_only_spouse", { p_husband_id: husbandId });
@@ -706,8 +687,11 @@
     if (!spouseId) return { ok: true, skipped: true };
     const sb = getSupabaseClient();
     if (!sb) return { ok: false, error: { message: "تعذر الاتصال بقاعدة البيانات." } };
-    const childPersonId = await getTreePersonIdByName(sb, childId);
-    if (!childPersonId) return { ok: false, error: { message: "تعذر تحديد رقم الابن في قاعدة البيانات." } };
+    const childResolved = await resolveTreeRowIdForWrite(sb, childId, {});
+    if (!childResolved.ok || !childResolved.rowId) {
+      return { ok: false, error: { message: lastWriteIdentityError(childResolved) || "تعذر تحديد رقم الابن في قاعدة البيانات.", code: childResolved.code || "TREE-001" } };
+    }
+    const childPersonId = childResolved.rowId;
     const spouseRes = await sb
       .from("tree_spouses")
       .select("id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage")
@@ -1044,8 +1028,9 @@
     if (!ok) return { ok: false, message: "تم الإلغاء." };
     const sb = getSupabaseClient();
     if (!sb) return { ok: false, message: "تعذر الحذف لأن الربط غير مُعد." };
-    const rowId = await resolveAdminTreeRowId(sb, state.branch, childIdForDelete, child, parentId);
-    if (!rowId) return { ok: false, message: "تعذر تحديد السجل." };
+    const resolvedRow = await resolveAdminTreeRowId(sb, state.branch, childIdForDelete, child, parentId);
+    const rowId = resolvedRow && resolvedRow.ok ? resolvedRow.rowId : 0;
+    if (!rowId) return { ok: false, message: (resolvedRow && resolvedRow.message) || "تعذر تحديد السجل." };
     const res = await adminRpcDeleteTreeChildOne(state.branch, rowId);
     if (!res.ok) {
       if (isRpcMissingError(res.error)) return { ok: false, message: "تعذر الحذف حالياً، حاول لاحقاً أو تواصل مع الإدارة." };

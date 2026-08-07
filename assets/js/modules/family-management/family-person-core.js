@@ -186,15 +186,17 @@
     var meta = pathToRow && pathToRow[p] ? pathToRow[p] : null;
     if (!meta && childObj && childObj.personId) meta = pathToRow["pid:" + norm(childObj.personId)];
     if (!meta) {
-      var leaf = baseName(p);
+      var leafMatches = [];
       Object.keys(pathToRow || {}).forEach(function (key) {
-        if (meta || key.indexOf("pid:") === 0) return;
+        if (key.indexOf("pid:") === 0) return;
         var candidate = pathToRow[key];
         var matchesChild = nodePathMatches(p, key, norm);
         if (!matchesChild) return;
         if (!parentNamesMatch(parentId, candidate && candidate.db_parent_name, norm, baseName)) return;
-        meta = candidate;
+        leafMatches.push(candidate);
       });
+      if (leafMatches.length === 1) meta = leafMatches[0];
+      // >1 matches: leave unresolved (ADR-002 — no silent first pick)
     }
     return meta && meta.id ? meta : null;
   }
