@@ -988,51 +988,396 @@
       await reloadRequests();
     });
   }
-  async function importTreeCardToTree(sb, token, reqRow) {
-    const built = buildTreeCardRows(reqRow);
-    if (!built.ok) return built;
-    const rows = built.rows;
-    const { data, error } = await sb.rpc("admin_tree_children_import_v1", {
-      p_token: token,
-      p_rows: rows,
-    });
-    if (error) {
-      const msg = String(error.message || "");
-      const low = msg.toLowerCase();
-      const isMissing =
-        low.includes("could not find the function") ||
-        low.includes("does not exist") ||
-        String(error.code || "").toLowerCase() === "pgrst202";
-      if (isMissing) {
-        return {
-          ok: false,
-          message:
-            "تعذر إضافة البيانات للشجرة حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
-        };
-      }
-      return {
-        ok: false,
-        message:
-          "تعذر إضافة البيانات للشجرة حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
-      };
-    }
-    const inserted =
-      data && data.inserted != null ? Number(data.inserted) : null;
-    const updated = data && data.updated != null ? Number(data.updated) : null;
-    const skipped = data && data.skipped != null ? Number(data.skipped) : null;
-    const parts = [];
-    if (Number.isFinite(inserted)) parts.push("جديد: " + String(inserted));
-    if (Number.isFinite(updated)) parts.push("تحديث: " + String(updated));
-    if (Number.isFinite(skipped)) parts.push("تخطي: " + String(skipped));
-    return { ok: true, message: parts.length ? parts.join("، ") : "" };
+  function canonicalHelpers() {
+    return {
+      normalizePersonName: normalizeTreeCardText,
+      getLeafStoredNameFromNodeId: function (v) {
+        const n = normalizeTreeCardText(v || "");
+        if (!n) return "";
+        if (n.indexOf("/") < 0) return n;
+        const parts = n.split("/").map((p) => normalizeTreeCardText(p)).filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : n;
+      },
+    };
   }
 
+  function requestFail(code, message, extra) {
+    const out = {
+      ok: false,
+      code: code || "",
+      message: message || "",
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      verified: 0,
+      rows: [],
+    };
+    if (extra && typeof extra === "object") Object.assign(out, extra);
+    return out;
+  }
+
+  function countDistinctParentMatches(pathToRow, parentName) {
+    const parent = normalizeTreeCardText(parentName || "");
+    if (!parent || !pathToRow) return { count: 0, personIds: [] };
+    const leaf = parent.includes("/")
+      ? parent.split("/").filter(Boolean).slice(-1)[0]
+      : parent;
+    const seen = {};
+    Object.keys(pathToRow).forEach((key) => {
+      if (key.indexOf("pid:") === 0) return;
+      const meta = pathToRow[key];
+      if (!meta || !meta.person_id) return;
+      const k = normalizeTreeCardText(key);
+      const kLeaf = k.includes("/")
+        ? k.split("/").filter(Boolean).slice(-1)[0]
+        : k;
+      if (k === parent || kLeaf === parent || kLeaf === leaf || k.endsWith("/" + leaf)) {
+        seen[String(meta.person_id)] = true;
+      }
+    });
+    const personIds = Object.keys(seen);
+    return { count: personIds.length, personIds };
+  }
+
+  async function loadPathToRowForBranch(sb, branchKey) {
+    const key = normalizeTreeCardText(branchKey || "");
+    if (!sb || !key) return {};
+    const fields = [
+      "id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name",
+      "id,branch_key,parent_name,parent,child_name,name,person_id",
+    ];
+    const FM = window.AlzidanFamilyPersonCore || {};
+    for (let i = 0; i < fields.length; i += 1) {
+      const q = await sb
+        .from("tree_children")
+        .select(fields[i])
+        .eq("branch_key", key)
+        .limit(5000);
+      if (!q.error && Array.isArray(q.data)) {
+        if (typeof FM.buildPathToRowIndex === "function") {
+          return FM.buildPathToRowIndex(q.data, normalizeTreeCardText);
+        }
+        const index = {};
+        q.data.forEach((row) => {
+          if (!row || row.id == null) return;
+          const childPath = normalizeTreeCardText(row.child_name || row.name || "");
+          const meta = {
+            id: Number(row.id),
+            person_id: row.person_id ? String(row.person_id) : "",
+            parent_person_id: row.parent_person_id
+              ? String(row.parent_person_id)
+              : "",
+            db_parent_name: normalizeTreeCardText(
+              row.parent_name || row.parent || "",
+            ),
+            db_child_name: childPath,
+          };
+          if (childPath) index[childPath] = meta;
+          if (meta.person_id) index["pid:" + meta.person_id] = meta;
+        });
+        return index;
+      }
+    }
+    return {};
+  }
+
+  function enrichOneTreeCardRow(row, pathToRow) {
+    const CP = window.AlzidanCanonicalPerson;
+    const helpers = canonicalHelpers();
+    const payload = Object.assign({}, row || {});
+    const parent = normalizeTreeCardText(payload.parent_name || "");
+    if (!parent) {
+      return requestFail(
+        (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+        (CP && CP.MSG && CP.MSG.REQ_002) ||
+          "فشل إنشاء أو ربط الابن بعد الاعتماد (REQ-002).",
+      );
+    }
+    if (payload.parent_person_id) return { ok: true, row: payload };
+
+    const matches = countDistinctParentMatches(pathToRow, parent);
+    if (matches.count > 1) {
+      return requestFail(
+        (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
+        (CP && CP.MSG && CP.MSG.TREE_001) ||
+          "تعذر تحديد الشخص لأن الاسم يطابق أكثر من شخص (TREE-001).",
+        { matchCount: matches.count },
+      );
+    }
+    let next = payload;
+    if (CP && typeof CP.attachParentPersonId === "function") {
+      next = CP.attachParentPersonId(payload, pathToRow, parent, helpers);
+    } else if (matches.count === 1) {
+      next = Object.assign({}, payload, {
+        parent_person_id: matches.personIds[0],
+      });
+    }
+    if (!next.parent_person_id && pathToRow && pathToRow[parent] && pathToRow[parent].person_id) {
+      next.parent_person_id = pathToRow[parent].person_id;
+    }
+    if (!next.parent_person_id) {
+      const branch = normalizeTreeCardText(next.branch_key || "");
+      const branchRoot = branch ? branch + " بن مطلق بن زيدان" : "";
+      const isBranchRoot =
+        !!branch && (parent === branch || parent === branchRoot);
+      if (!isBranchRoot) {
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
+          (CP && CP.MSG && CP.MSG.TREE_003) ||
+            "تعذر تحديد معرّف الأب (parent_person_id) لهذا المسار (TREE-003).",
+        );
+      }
+      // Branch root anchors are not always stored as tree_children rows.
+    }
+    return { ok: true, row: next };
+  }
+
+  function indexImportedChild(pathToRow, dbRow) {
+    if (!pathToRow || !dbRow || dbRow.id == null) return pathToRow;
+    const childPath = normalizeTreeCardText(dbRow.child_name || dbRow.name || "");
+    const meta = {
+      id: Number(dbRow.id),
+      person_id: dbRow.person_id ? String(dbRow.person_id) : "",
+      parent_person_id: dbRow.parent_person_id
+        ? String(dbRow.parent_person_id)
+        : "",
+      db_parent_name: normalizeTreeCardText(
+        dbRow.parent_name || dbRow.parent || "",
+      ),
+      db_child_name: childPath,
+    };
+    if (childPath) pathToRow[childPath] = meta;
+    if (meta.person_id) pathToRow["pid:" + meta.person_id] = meta;
+    return pathToRow;
+  }
+
+  async function fetchTreeCardChildRow(sb, row) {
+    const branch = normalizeTreeCardText(row.branch_key || "");
+    const parent = normalizeTreeCardText(row.parent_name || "");
+    const child = normalizeTreeCardText(row.child_name || "");
+    if (!sb || !branch || !parent || !child) return null;
+    let res = await sb
+      .from("tree_children")
+      .select("id,person_id,parent_person_id,parent_name,parent,child_name,name")
+      .eq("branch_key", branch)
+      .eq("parent_name", parent)
+      .eq("child_name", child)
+      .limit(3);
+    if (res.error || !Array.isArray(res.data) || !res.data.length) {
+      res = await sb
+        .from("tree_children")
+        .select("id,person_id,parent_person_id,parent_name,parent,child_name,name")
+        .eq("branch_key", branch)
+        .eq("parent_name", parent)
+        .eq("name", child)
+        .limit(3);
+    }
+    if (res.error || !Array.isArray(res.data) || !res.data.length) return null;
+    const parentPid = normalizeTreeCardText(row.parent_person_id || "");
+    if (parentPid) {
+      const linked = res.data.find(
+        (r) => String(r.parent_person_id || "") === parentPid,
+      );
+      return linked || null;
+    }
+    return res.data[0];
+  }
+
+  async function verifyTreeCardRowsInTree(sb, rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (!sb || !list.length) {
+      return { ok: false, verified: 0, missing: list.length };
+    }
+    let verified = 0;
+    const missing = [];
+    for (let i = 0; i < list.length; i += 1) {
+      const row = list[i] || {};
+      const hit = await fetchTreeCardChildRow(sb, row);
+      if (!hit) {
+        missing.push(row);
+        continue;
+      }
+      const parentPid = normalizeTreeCardText(row.parent_person_id || "");
+      const branch = normalizeTreeCardText(row.branch_key || "");
+      const parent = normalizeTreeCardText(row.parent_name || "");
+      const branchRoot = branch ? branch + " بن مطلق بن زيدان" : "";
+      const isBranchRoot =
+        !!branch && (parent === branch || parent === branchRoot);
+      if (parentPid) {
+        if (String(hit.parent_person_id || "") !== parentPid) {
+          missing.push(row);
+          continue;
+        }
+      } else if (!isBranchRoot) {
+        // Non-root edges must be linked via parent_person_id after apply
+        if (!hit.parent_person_id) {
+          missing.push(row);
+          continue;
+        }
+      }
+      verified += 1;
+    }
+    return {
+      ok: missing.length === 0 && verified === list.length,
+      verified,
+      missing: missing.length,
+      missingRows: missing,
+    };
+  }
+
+  /**
+   * Patch 2 — Verified apply for tree_card / add-son.
+   * Event order: build → resolve parent_person_id → import → verify → then caller may set approved.
+   * Rows are applied sequentially so child person_id becomes available as parent for the next edge.
+   */
+  async function importTreeCardToTree(sb, token, reqRow) {
+    const CP = window.AlzidanCanonicalPerson;
+    const built = buildTreeCardRows(reqRow);
+    if (!built.ok) {
+      return requestFail(
+        (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+        built.message ||
+          ((CP && CP.MSG && CP.MSG.REQ_002) ||
+            "فشل إنشاء أو ربط الابن بعد الاعتماد (REQ-002)."),
+      );
+    }
+    if (!built.rows || !built.rows.length) {
+      return requestFail(
+        (CP && CP.ERROR && CP.ERROR.REQ_001) || "REQ-001",
+        (CP && CP.MSG && CP.MSG.REQ_001) ||
+          "لا يمكن قبول الطلب: لم يُثبت أي أثر في الشجرة (REQ-001).",
+      );
+    }
+    const branchKey = normalizeTreeCardText(
+      (built.rows[0] && built.rows[0].branch_key) || reqRow.branch_key || "",
+    );
+    let pathToRow = await loadPathToRowForBranch(sb, branchKey);
+    const appliedRows = [];
+    let insertedTotal = 0;
+    let updatedTotal = 0;
+    let skippedTotal = 0;
+
+    for (let i = 0; i < built.rows.length; i += 1) {
+      const enriched = enrichOneTreeCardRow(built.rows[i], pathToRow);
+      if (!enriched.ok) return enriched;
+      const row = enriched.row;
+      const before = await fetchTreeCardChildRow(sb, row);
+      const { data, error } = await sb.rpc("admin_tree_children_import_v1", {
+        p_token: token,
+        p_rows: [row],
+      });
+      if (error) {
+        const msg = String(error.message || "");
+        const low = msg.toLowerCase();
+        if (low.includes("tree-001") || msg.includes("TREE-001")) {
+          return requestFail(
+            (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
+            (CP && CP.MSG && CP.MSG.TREE_001) || msg,
+          );
+        }
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+          "تعذر إضافة البيانات للشجرة حالياً، حاول لاحقاً أو تواصل مع الإدارة. (REQ-002)",
+          { detail: msg, rows: appliedRows },
+        );
+      }
+      const inserted =
+        data && data.inserted != null ? Number(data.inserted) : 0;
+      const updated = data && data.updated != null ? Number(data.updated) : 0;
+      const skipped = data && data.skipped != null ? Number(data.skipped) : 0;
+      insertedTotal += Number.isFinite(inserted) ? inserted : 0;
+      updatedTotal += Number.isFinite(updated) ? updated : 0;
+      skippedTotal += Number.isFinite(skipped) ? skipped : 0;
+
+      const after = await fetchTreeCardChildRow(sb, row);
+      const parent = normalizeTreeCardText(row.parent_name || "");
+      const branch = normalizeTreeCardText(row.branch_key || "");
+      const branchRoot = branch ? branch + " بن مطلق بن زيدان" : "";
+      const isBranchRoot =
+        !!branch && (parent === branch || parent === branchRoot);
+      const linkedOk = row.parent_person_id
+        ? after &&
+          String(after.parent_person_id || "") === String(row.parent_person_id)
+        : !!after && (isBranchRoot || !!after.parent_person_id);
+      if (!linkedOk) {
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+          (CP && CP.MSG && CP.MSG.REQ_002) ||
+            "فشل إنشاء أو ربط الابن بعد الاعتماد (REQ-002).",
+          {
+            inserted: insertedTotal,
+            updated: updatedTotal,
+            skipped: skippedTotal,
+            rows: appliedRows,
+          },
+        );
+      }
+      pathToRow = indexImportedChild(pathToRow, after);
+      appliedRows.push(row);
+      // If RPC reported 0/0 but row existed and is linked, count as verified update path
+      if (!inserted && !updated && before && after) {
+        updatedTotal += 1;
+      }
+    }
+
+    const verify = await verifyTreeCardRowsInTree(sb, appliedRows);
+    if (!verify.ok) {
+      if (!(insertedTotal + updatedTotal)) {
+        return requestFail(
+          (CP && CP.ERROR && CP.ERROR.REQ_001) || "REQ-001",
+          (CP && CP.MSG && CP.MSG.REQ_001) ||
+            "لا يمكن قبول الطلب: لم يُثبت أي أثر في الشجرة (REQ-001).",
+          {
+            inserted: insertedTotal,
+            updated: updatedTotal,
+            skipped: skippedTotal,
+            verified: verify.verified,
+          },
+        );
+      }
+      return requestFail(
+        (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+        (CP && CP.MSG && CP.MSG.REQ_002) ||
+          "فشل إنشاء أو ربط الابن بعد الاعتماد (REQ-002).",
+        {
+          inserted: insertedTotal,
+          updated: updatedTotal,
+          skipped: skippedTotal,
+          verified: verify.verified,
+        },
+      );
+    }
+
+    const parts = [];
+    parts.push("جديد: " + String(insertedTotal));
+    parts.push("تحديث: " + String(updatedTotal));
+    if (skippedTotal) parts.push("تخطي: " + String(skippedTotal));
+    parts.push("متحقق: " + String(verify.verified));
+    return {
+      ok: true,
+      code: "",
+      message: parts.join("، "),
+      inserted: insertedTotal,
+      updated: updatedTotal,
+      skipped: skippedTotal,
+      verified: verify.verified,
+      rows: appliedRows,
+    };
+  }
+
+  /** Re-apply for already-approved orphan tree_card requests (no status change). */
+  async function reapplyApprovedTreeCard(sb, token, reqRow) {
+    return importTreeCardToTree(sb, token, reqRow);
+  }
 
   window.AlzidanRequestActions = {
     setReloadRequests,
     publishEventCardRequest,
     openTreeCardEditor,
     importTreeCardToTree,
+    reapplyApprovedTreeCard,
+    buildTreeCardRows,
+    verifyTreeCardRowsInTree,
     updateBranchInRequestMessage,
     extractRequestMediaLinks,
     appendRequestMediaPreview,

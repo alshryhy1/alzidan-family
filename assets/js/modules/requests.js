@@ -499,8 +499,18 @@
     rejectBtn.disabled = !canReject;
     editBranchBtn.disabled =
       row.status !== "pending" && row.status !== "approved";
+    const reapplyBtn = document.createElement("button");
+    reapplyBtn.type = "button";
+    reapplyBtn.className = "btn btn-outline btn-sm";
+    reapplyBtn.textContent = "إعادة تطبيق";
+    reapplyBtn.title = "إعادة تطبيق بطاقة الشجرة دون تغيير الحالة (إصلاح يتيم)";
+    const canReapply =
+      row.kind === "tree_card" &&
+      (row.status === "approved" || row.status === "pending");
+    reapplyBtn.disabled = !canReapply;
     actions.appendChild(approveBtn);
     actions.appendChild(rejectBtn);
+    if (row.kind === "tree_card") actions.appendChild(reapplyBtn);
     if (row.kind === "event_card") actions.appendChild(publishEventBtn);
     actions.appendChild(editBranchBtn);
     actions.appendChild(deleteBtn);
@@ -550,7 +560,10 @@
       );
       let treeRows = [];
       if (row.status === "approved" && row.kind === "tree_card") {
-        const built = buildTreeCardRows(row, currentBranch);
+        const built =
+          typeof requestActions.buildTreeCardRows === "function"
+            ? requestActions.buildTreeCardRows(row, currentBranch)
+            : { ok: false, message: "تعذر قراءة بيانات بطاقة الشجرة." };
         if (!built.ok) {
           showAlert(
             "error",
@@ -615,6 +628,41 @@
       );
       await loadRequests();
     });
+    reapplyBtn.addEventListener("click", async () => {
+      hideAlert();
+      const sb = getClient();
+      if (!sb) {
+        showAlert("error", "تعذر الاتصال.");
+        return;
+      }
+      const token = getAdminToken();
+      if (!token) {
+        showAlert("error", "يلزم تسجيل الدخول أولاً.");
+        return;
+      }
+      if (row.kind !== "tree_card") return;
+      reapplyBtn.disabled = true;
+      const applied =
+        typeof requestActions.reapplyApprovedTreeCard === "function"
+          ? await requestActions.reapplyApprovedTreeCard(sb, token, row)
+          : await requestActions.importTreeCardToTree(sb, token, row);
+      reapplyBtn.disabled = !canReapply;
+      if (!applied.ok) {
+        showAlert(
+          "error",
+          (applied.message || "تعذر إعادة التطبيق.") +
+            (applied.code ? " [" + applied.code + "]" : ""),
+        );
+        return;
+      }
+      showAlert(
+        "success",
+        "تمت إعادة التطبيق بتحقق: " +
+          (row.request_id || "") +
+          (applied.message ? " (" + applied.message + ")" : ""),
+      );
+      await loadRequests();
+    });
     approveBtn.addEventListener("click", async () => {
       hideAlert();
       const sb = getClient();
@@ -632,15 +680,24 @@
         showAlert("error", "بيانات الطلب ناقصة.");
         return;
       }
+      approveBtn.disabled = true;
+      let applyInfo = null;
+      // ADR-006 / Patch 2: verified apply BEFORE status becomes «قبول»
       if (row.kind === "tree_card") {
-        const imported = await requestActions.importTreeCardToTree(sb, token, row);
-        if (!imported.ok) {
-          showAlert("error", imported.message || "تعذر إضافة البطاقة للشجرة.");
+        applyInfo = await requestActions.importTreeCardToTree(sb, token, row);
+        if (!applyInfo.ok) {
+          approveBtn.disabled = false;
+          showAlert(
+            "error",
+            (applyInfo.message || "تعذر إضافة البطاقة للشجرة.") +
+              (applyInfo.code ? " [" + applyInfo.code + "]" : ""),
+          );
           return;
         }
       } else if (row.kind === "event_card") {
         const published = await requestActions.publishEventCardRequest(sb, token, row);
         if (!published.ok) {
+          approveBtn.disabled = false;
           showAlert("error", published.message || "تعذر نشر المناسبة.");
           window.alert(published.message || "تعذر نشر المناسبة.");
           return;
@@ -652,13 +709,17 @@
         p_status: "approved",
       });
       if (error) {
+        approveBtn.disabled = false;
         showAlert(
           "error",
-          "تعذر اعتماد الطلب حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
+          row.kind === "tree_card"
+            ? "طُبّقت بيانات الشجرة لكن تعذر ضبط الحالة على «قبول». استخدم إعادة التطبيق عند الحاجة."
+            : "تعذر اعتماد الطلب حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
         );
         return;
       }
       if (data === false) {
+        approveBtn.disabled = false;
         showAlert(
           "error",
           "تعذر اعتماد الطلب. انتهت الجلسة أو لا توجد صلاحية.",
@@ -666,9 +727,10 @@
         return;
       }
       if (row.kind === "tree_card") {
+        const extra = applyInfo && applyInfo.message ? " (" + applyInfo.message + ")" : "";
         showAlert(
           "success",
-          `تم قبول الطلب وإضافة البيانات للشجرة: ${row.request_id}`,
+          `تم قبول الطلب بعد تطبيق متحقَّق في الشجرة: ${row.request_id}` + extra,
         );
       } else if (row.kind === "event_card") {
         showAlert(
