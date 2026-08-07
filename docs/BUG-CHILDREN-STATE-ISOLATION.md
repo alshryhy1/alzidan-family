@@ -1,7 +1,7 @@
 # BUG — Children State Isolation / Approve parent_person_id-only (TREE-004)
 
 **التاريخ:** 2026-08-07  
-**الحالة:** إصلاح مسار الكتابة + عزل حالة الواجهة ✅ · إصلاح بيانات: dry-run + relink آمِن؛ حذف التوائم يحتاج `--delete-ids` صريح  
+**الحالة:** إصلاح مسار الكتابة + عزل حالة الواجهة ✅ · Unlink dry-run جاهز (`PATCH-TREE004-UNLINK-REPORT.md`) · Apply يحتاج `SUPABASE_SERVICE_ROLE_KEY`  
 **الرمز:** `TREE-004`  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · ADR-001/002/006
 

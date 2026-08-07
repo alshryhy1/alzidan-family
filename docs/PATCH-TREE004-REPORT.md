@@ -59,6 +59,11 @@ npm run repair:ali-dual -- --snapshot
 
 ---
 
+## 6b) Unlink (2026-08-07 — توضيح المستخدم)
+
+المستخدم طلب **حذف الروابط الخاطئة فقط** تحت علي صالح الأحم (توائم ناصر)، وليس relink.
+انظر [`PATCH-TREE004-UNLINK-REPORT.md`](./PATCH-TREE004-UNLINK-REPORT.md) و `npm run repair:ali-unlink`.
+
 ## 6) الخطوة التالية
 
 1. تطبيق relink الآمن بمفتاح service_role.  
