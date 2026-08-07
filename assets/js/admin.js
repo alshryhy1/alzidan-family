@@ -2090,18 +2090,22 @@ where c.id = matches.id; commit;
     if (healthCenterSource) {
       healthCenterSource.textContent = sourceLabel || "";
     }
+    const errCount =
+      counts.error_broken_parent_uuid ??
+      counts.children_bad_parent_total ??
+      counts.broken_parent_person_id ??
+      "—";
+    const warnCount =
+      counts.warning_needs_uuid_link ??
+      counts.missing_parent_person_id ??
+      "—";
+    const healthyCount = counts.healthy_root_or_tree_parent ?? "—";
     const lines = [
-      "وضع التقرير: قراءة فقط — بلا تعديل بيانات.",
-      "أبناء بلا parent_person_id: " +
-        String(counts.missing_parent_person_id ?? "—"),
-      "أبناء بـ parent_person_id مكسور: " +
-        String(counts.broken_parent_person_id ?? "—"),
-      "مجموع روابط الأب غير الصالحة: " +
-        String(
-          counts.children_bad_parent_total ??
-            (Number(counts.missing_parent_person_id || 0) +
-              Number(counts.broken_parent_person_id || 0)),
-        ),
+      "وضع التقرير: قراءة فقط (Integrity v2) — بلا تعديل بيانات.",
+      "🟢 أبناء جذر الفرع / tree_parents (سليمون): " + String(healthyCount),
+      "🟡 يحتاج ربط UUID فقط: " + String(warnCount),
+      "🔴 أخطاء TREE-003 الحقيقية (أب UUID مكسور): " + String(errCount),
+      "مجموع الأخطاء الحقيقية فقط: " + String(errCount),
       "عناقيد اسم ورقة غامض: " +
         String(counts.ambiguous_leaf_clusters ?? "—"),
       "زوجات بلا زوج صالح: " +
@@ -2125,7 +2129,7 @@ where c.id = matches.id; commit;
     if (healthCenterBadBody) {
       if (!bad.length) {
         healthCenterBadBody.innerHTML =
-          '<tr><td colspan="5" class="hint">لا عيّنات في التقرير.</td></tr>';
+          '<tr><td colspan="6" class="hint">لا عيّنات أخطاء/تحذيرات في التقرير.</td></tr>';
       } else {
         healthCenterBadBody.innerHTML = bad
           .slice(0, 25)
@@ -2134,6 +2138,19 @@ where c.id = matches.id; commit;
             const branch = escapeHtml(row.branch_key || "");
             const path = escapeHtml(row.child_path || row.child_name || "");
             const parent = escapeHtml(row.parent_key || row.parent_name || "");
+            const reason = escapeHtml(
+              row.reason_ar ||
+                row.reason ||
+                (row.severity === "error"
+                  ? "أب UUID مكسور"
+                  : "يحتاج ربط UUID فقط"),
+            );
+            const sev =
+              row.severity === "error"
+                ? "🔴 "
+                : row.severity === "warning"
+                  ? "🟡 "
+                  : "";
             const code = escapeHtml(row.code || row.issue || "");
             return (
               "<tr><td>" +
@@ -2144,6 +2161,9 @@ where c.id = matches.id; commit;
               path +
               "</td><td>" +
               parent +
+              "</td><td>" +
+              sev +
+              reason +
               "</td><td>" +
               code +
               "</td></tr>"
@@ -2175,42 +2195,54 @@ where c.id = matches.id; commit;
     return all;
   }
 
-  function buildClientIntegrityReport(children, spouses) {
-    const byPerson = new Map();
-    children.forEach((c) => {
-      if (c && c.person_id) byPerson.set(String(c.person_id), c);
-    });
+  function buildClientIntegrityReport(children, spouses, parents) {
+    const V2 = window.AlzidanIntegrityTree003V2;
     const byId = new Map();
     children.forEach((c) => {
       if (c && c.id != null) byId.set(c.id, c);
     });
-    const missing = [];
-    const broken = [];
-    children.forEach((c) => {
-      const path = c.child_name || c.name || "";
-      const parentKey = c.parent_name || c.parent || "";
-      if (!c.parent_person_id) {
-        missing.push({
-          id: c.id,
-          branch_key: c.branch_key,
-          child_path: path,
-          parent_key: parentKey,
-          code: "TREE-003",
-          issue: "missing_parent_person_id",
-        });
-        return;
-      }
-      if (!byPerson.has(String(c.parent_person_id))) {
-        broken.push({
-          id: c.id,
-          branch_key: c.branch_key,
-          child_path: path,
-          parent_key: parentKey,
-          code: "TREE-003-broken",
-          issue: "broken_parent_person_id",
-        });
-      }
-    });
+    let healthy = [];
+    let warnings = [];
+    let errors = [];
+    if (V2 && typeof V2.classifyAll === "function") {
+      const classified = V2.classifyAll(children, parents || []);
+      healthy = classified.healthy || [];
+      warnings = classified.warnings || [];
+      errors = classified.errors || [];
+    } else {
+      // Fallback if module not loaded: still exclude branch roots.
+      children.forEach((c) => {
+        const path = c.child_name || c.name || "";
+        const parentKey = c.parent_name || c.parent || "";
+        const branch = String(c.branch_key || "");
+        const root = branch ? branch + " بن مطلق بن زيدان" : "";
+        const isRoot = !!(parentKey && (parentKey === branch || parentKey === root));
+        if (isRoot) {
+          healthy.push({
+            id: c.id,
+            branch_key: branch,
+            child_path: path,
+            parent_key: parentKey,
+            severity: "healthy",
+            reason: "root_parent",
+            reason_ar: "أصل الفرع (Root Parent)",
+          });
+          return;
+        }
+        if (!c.parent_person_id) {
+          warnings.push({
+            id: c.id,
+            branch_key: branch,
+            child_path: path,
+            parent_key: parentKey,
+            severity: "warning",
+            code: "TREE-003-warn",
+            reason: "missing_uuid",
+            reason_ar: "يحتاج ربط UUID فقط",
+          });
+        }
+      });
+    }
     const leafMap = new Map();
     children.forEach((c) => {
       const path = String(c.child_name || c.name || "");
@@ -2245,11 +2277,16 @@ where c.id = matches.id; commit;
     });
     return {
       mode: "read_only",
+      schema: "integrity_report_v2",
       totals: {
         tree_children: children.length,
-        missing_parent_person_id: missing.length,
-        broken_parent_person_id: broken.length,
-        children_bad_parent_total: missing.length + broken.length,
+        tree_parents: Array.isArray(parents) ? parents.length : 0,
+        healthy_root_or_tree_parent: healthy.length,
+        warning_needs_uuid_link: warnings.length,
+        error_broken_parent_uuid: errors.length,
+        missing_parent_person_id: warnings.length,
+        broken_parent_person_id: errors.length,
+        children_bad_parent_total: errors.length,
         ambiguous_leaf_clusters: ambiguous,
         spouses_without_husband: spousesBad,
         short_path_suspects: shortPath,
@@ -2259,7 +2296,11 @@ where c.id = matches.id; commit;
         keep_ids_missing: keepMissing,
         ok: closedStill.length === 0 && keepMissing.length === 0,
       },
-      samples: { bad_parent: missing.concat(broken).slice(0, 25) },
+      samples: {
+        bad_parent: errors.concat(warnings).slice(0, 25),
+        errors: errors.slice(0, 25),
+        warnings: warnings.slice(0, 25),
+      },
     };
   }
 
@@ -2289,6 +2330,7 @@ where c.id = matches.id; commit;
     try {
       const children = await fetchTreeChildrenPaged(sb);
       let spouses = [];
+      let parents = [];
       try {
         const sp = await sb
           .from("tree_spouses")
@@ -2298,13 +2340,22 @@ where c.id = matches.id; commit;
       } catch (e) {
         spouses = [];
       }
-      const report = buildClientIntegrityReport(children, spouses);
+      try {
+        const tp = await sb
+          .from("tree_parents")
+          .select("id,branch_key,name,created_at")
+          .limit(5000);
+        if (!tp.error) parents = Array.isArray(tp.data) ? tp.data : [];
+      } catch (e) {
+        parents = [];
+      }
+      const report = buildClientIntegrityReport(children, spouses, parents);
       renderHealthCenterReport(
         report,
-        "المصدر: مسح محلي (RPC غير منشور بعد)",
+        "المصدر: مسح محلي Integrity v2 (RPC غير منشور بعد)",
       );
       setHealthCenterStatus(
-        "تم المسح المحلي قراءة فقط. لنشر RPC: docs/PATCH-INTEGRITY-DEPLOY-SQL.md — بدون أي apply بيانات.",
+        "تم المسح المحلي قراءة فقط (v2). لنشر RPC: supabase/sql/20260808_integrity_engine_v2.sql — بدون أي apply بيانات.",
       );
     } catch (err) {
       setHealthCenterStatus(

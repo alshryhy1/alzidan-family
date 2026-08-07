@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Read-only Integrity scan (ADR-004).
- * No UPDATE/DELETE. Produces a JSON report of similar integrity issues.
+ * Read-only Integrity scan v2 (ADR-004).
+ * No UPDATE/DELETE. Classifies TREE-003 into healthy / warning / error.
  *
  * Usage:
  *   node scripts/integrity-scan-report.mjs
@@ -10,6 +10,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { classifyAll } from "./lib/integrity-tree003-v2.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -58,6 +59,16 @@ async function fetchAllChildren() {
   return all;
 }
 
+async function fetchParents() {
+  try {
+    return await rest(
+      `/rest/v1/tree_parents?select=id,branch_key,name,created_at&limit=5000`,
+    );
+  } catch (e) {
+    return { error: String(e.message || e), rows: [] };
+  }
+}
+
 async function fetchSpouses() {
   try {
     return await rest(
@@ -82,39 +93,14 @@ function parentKey(row) {
   return row.parent_name || row.parent || "";
 }
 
-function buildReport(children, spousesRaw) {
-  const byPerson = new Map();
-  for (const c of children) {
-    if (c.person_id) byPerson.set(String(c.person_id), c);
-  }
+function buildReport(children, parentsRaw, spousesRaw) {
+  const parents = Array.isArray(parentsRaw)
+    ? parentsRaw
+    : Array.isArray(parentsRaw?.rows)
+      ? parentsRaw.rows
+      : [];
+  const { healthy, warnings, errors } = classifyAll(children, parents);
   const byId = new Map(children.map((c) => [c.id, c]));
-
-  const missing = [];
-  const broken = [];
-  for (const c of children) {
-    if (!c.parent_person_id) {
-      missing.push({
-        id: c.id,
-        branch_key: c.branch_key,
-        child_path: childPath(c),
-        parent_key: parentKey(c),
-        code: "TREE-003",
-        issue: "missing_parent_person_id",
-      });
-      continue;
-    }
-    if (!byPerson.has(String(c.parent_person_id))) {
-      broken.push({
-        id: c.id,
-        branch_key: c.branch_key,
-        child_path: childPath(c),
-        parent_key: parentKey(c),
-        parent_person_id: c.parent_person_id,
-        code: "TREE-003-broken",
-        issue: "broken_parent_person_id",
-      });
-    }
-  }
 
   const leafMap = new Map();
   for (const c of children) {
@@ -156,7 +142,6 @@ function buildReport(children, spousesRaw) {
     }
   }
 
-  // Short-path candidates (similar class to deleted 321 / 1730) — report only
   const shortPathSuspects = [];
   for (const c of children) {
     const p = childPath(c);
@@ -179,16 +164,25 @@ function buildReport(children, spousesRaw) {
     .map((c) => ({ id: c.id, child_path: childPath(c) }));
   const keepMissing = [...KEEP_IDS].filter((id) => !byId.has(id));
 
+  const badParentSamples = [...errors, ...warnings].slice(0, 40);
+
   return {
     generated_at: new Date().toISOString(),
     mode: "read_only",
+    schema: "integrity_report_v2",
     policy:
-      "No mutation. Closed cleanups 577-583 / 321 / 1730 must not be re-deleted.",
+      "No mutation. Closed cleanups 577-583 / 321 / 1730 must not be re-deleted. TREE-003 v2: root/tree_parents = healthy.",
     totals: {
       tree_children: children.length,
-      missing_parent_person_id: missing.length,
-      broken_parent_person_id: broken.length,
-      children_bad_parent_total: missing.length + broken.length,
+      tree_parents: parents.length,
+      healthy_root_or_tree_parent: healthy.length,
+      warning_needs_uuid_link: warnings.length,
+      error_broken_parent_uuid: errors.length,
+      // Real errors only (v2) — false-positive roots excluded
+      missing_parent_person_id: warnings.filter((w) => !w.parent_person_id)
+        .length,
+      broken_parent_person_id: errors.length,
+      children_bad_parent_total: errors.length,
       ambiguous_leaf_clusters: ambiguous.length,
       spouses_without_husband: spousesBad.length,
       short_path_suspects: shortPathSuspects.length,
@@ -199,13 +193,18 @@ function buildReport(children, spousesRaw) {
       ok: closedStillPresent.length === 0 && keepMissing.length === 0,
     },
     samples: {
-      bad_parent: [...missing, ...broken].slice(0, 40),
+      bad_parent: badParentSamples,
+      errors: errors.slice(0, 40),
+      warnings: warnings.slice(0, 40),
+      healthy_root: healthy.slice(0, 20),
       ambiguous_leaf_top: ambiguous.slice(0, 20),
       spouses_bad: spousesBad.slice(0, 20),
       short_path_suspects: shortPathSuspects.slice(0, 40),
     },
     spouses_note: spousesNote,
-    codes: ["TREE-003", "TREE-001", "SPOUSE-001"],
+    parents_note:
+      parentsRaw && parentsRaw.error ? parentsRaw.error : null,
+    codes: ["TREE-003", "TREE-003-warn", "TREE-001", "SPOUSE-001"],
   };
 }
 
@@ -215,11 +214,12 @@ async function main() {
     ? path.resolve(ROOT, outArg.slice(6))
     : path.join(ROOT, "docs", "integrity-scan-latest.json");
 
-  console.log("Integrity scan (READ-ONLY)");
+  console.log("Integrity scan v2 (READ-ONLY)");
   console.log("URL:", SUPABASE_URL);
   const children = await fetchAllChildren();
+  const parents = await fetchParents();
   const spouses = await fetchSpouses();
-  const report = buildReport(children, spouses);
+  const report = buildReport(children, parents, spouses);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(report, null, 2) + "\n");
   console.log(JSON.stringify(report.totals, null, 2));
