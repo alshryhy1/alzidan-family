@@ -1,12 +1,12 @@
 # Data / Schema / Migration Versions
 
-خط الأساس بعد Patch 3 — Spouses via person_id (2026-08-07).
+خط الأساس بعد Patch Repair / Integrity foundation (2026-08-07).
 
 | الحقل | القيمة | المعنى |
 |--------|--------|--------|
-| Schema Version | `baseline+spouses.husband_person_id` | إضافة اختيارية لعمود `tree_spouses.husband_person_id` دون كسر `husband_id` |
-| Data Version | `3` | زوجات/ربط أم عبر هوية كانونية (`person_id` / row id من التحديد) — بلا ربط اسم غامض |
-| Migration Version | `3` | سكربت `supabase/sql/20260807_patch3_spouse_person_id.sql` (+ `tree_verify_spouse_husband_v1`) — ✅ طُبّق على الإنتاج 2026-08-07 |
+| Schema Version | `baseline+spouses.husband_person_id+integrity_v1` | عمود زوجات + views/تقرير سلامة (`admin_integrity_report_v1`) |
+| Data Version | `4` | إصلاح روابط `parent_person_id` غير الغامضة (exact + ى→ي) — dry-run 25؛ apply إنتاج ⏳ |
+| Migration Version | `4` | `20260807_patch_repair_parent_links.sql` + `20260807_integrity_engine_v1.sql` — ✅ في المستودع؛ ⏳ نشر/apply على الإنتاج بانتظار DB credentials |
 
 ## تاريخ مختصر
 
@@ -16,5 +16,6 @@
 | 2026-08-07 | `1` | `1` | Patch 1 — هوية كانونية في مسارات الكتابة (Admin/Delegate) |
 | 2026-08-07 | `2` | `2` | Patch 2 — قبول طلبات الإضافة = تطبيق متحقَّق (REQ-001/002) |
 | 2026-08-07 | `3` | `3` | Patch 3 — زوجات عبر person_id (SPOUSE-001 / TREE-001)؛ SQL طُبّق + backfill 50/50 |
+| 2026-08-07 | `4` | `4` | Repair + Integrity foundation — dry-run 25 مرشّحًا؛ apply معلّق على service_role/DB |
 
 يُحدَّث هذا الملف مع كل Patch يغلق بنجاح (ومع Health Center لاحقًا).

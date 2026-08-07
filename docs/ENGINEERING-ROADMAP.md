@@ -158,8 +158,9 @@ Validation (معايير القبول + KPI جزئية)
 | **36** | تكرار الجد في التطبيق فقط | مسار B؛ ✅ مكتمل 2026-08-07 — تقرير الموبايل `alzidan-family-mobile/docs/PATCH-MOBILE-36-REPORT.md` |
 | **4** | توحيد انتهاء الأخبار + Cache Policy | مسار C؛ ✅ مكتمل 2026-08-07 — `docs/PATCH-NEWS-EXPIRY-REPORT.md` + موبايل `PATCH-NEWS-EXPIRY-REPORT.md` |
 | **Admin-SC** | بطاقات خاصة: RPC لا يُرسل بعد STEP 5.5 | إصلاحات Admin — انظر §8ب و `BUG-SPECIAL-CARDS-RPC.md` |
-| **Repair** | Migration Scripts (مازن، علي، يتامى الاعتماد…) | dry-run → تطبيق → تحقق |
-| **Tests** | Smoke + **Regression** | CI / قبل كل إصدار |
+| **Repair** | Migration Scripts (مازن، علي، يتامى الاعتماد…) | dry-run ✅ 25 مرشّحًا · apply إنتاج ⏳ · تقرير `docs/PATCH-REPAIR-REPORT.md` |
+| **Integrity** | views + `admin_integrity_report_v1` (أساس Health Center) | ✅ سكربتات جاهزة · نشر إنتاج ⏳ |
+| **Tests** | Smoke + **Regression** | CI / قبل كل إصدار · `npm run verify:repair` |
 
 
 ---
@@ -219,6 +220,7 @@ Validation (معايير القبول + KPI جزئية)
 | `NEWS-001` | خبر منتهٍ ما زال ظاهرًا |
 | `NEWS-002` | فشل تجديد كاش/ودجت الأخبار |
 | `MIG-001` | Migration فشلت / لم تُطبَّق على هذه النسخة |
+| `REPAIR-001` | مرشّح إصلاح `parent_person_id` / نتيجة dry-run أو apply |
 | `ADMIN-RPC-001` | استدعاء RPC إداري لم يُرسل طلبًا أو توقّف بلا خطأ ظاهر (بطاقات خاصة وغيرها) |
 
 ---
@@ -327,4 +329,4 @@ Validation (معايير القبول + KPI جزئية)
 
 ---
 
-**الخطوة التالية:** مسار **Repair / Integrity** (Migration Scripts + محرك السلامة) · مسارات B و C مكتملان.
+**الخطوة التالية:** إكمال **Apply إصلاح الـ 25** على الإنتاج (DB password / service_role) ثم Health Center UI · مسارات B و C و News مكتملان · Repair dry-run + أساس Integrity جاهزان (`PATCH-REPAIR-REPORT.md`).
