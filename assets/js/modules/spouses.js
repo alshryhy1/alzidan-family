@@ -105,7 +105,7 @@
 		if (!c || !branch) return status("تعذر الاتصال أو الفرع غير محدد.");
 		status("جاري تحميل الأزواج...");
 		const { data, error } = await c.from("tree_children")
-			.select("id,branch_key,parent_name,parent,child_name,name,birth_order")
+			.select("id,person_id,branch_key,parent_name,parent,child_name,name,birth_order")
 			.eq("branch_key", branch)
 			.limit(20000);
 		if (error) return status("تعذر تحميل الشجرة: " + (error.message || "خطأ"));
@@ -115,7 +115,7 @@
 
 		treeRows.forEach(r => {
 			const ch = clean(r.child_name || r.name || "");
-			if (ch && r.id != null) map.set(String(r.id), { id: r.id, path: ch });
+			if (ch && r.id != null) map.set(String(r.id), { id: r.id, path: ch, person_id: r.person_id || "" });
 		});
 
 		husbands = Array.from(map.values())
@@ -126,6 +126,7 @@
 				return {
 					id: item.id,
 					path: item.path,
+					person_id: item.person_id || "",
 					label: leaf(item.path) + (parent ? " — " + parent : "")
 				};
 			});
@@ -290,8 +291,15 @@
 		const c = sb(), e = els(), husbandId = selectedHusbandId();
 		if (!c || !husbandId) return status("اختر الزوج أولاً.");
 
+		const husbandOpt = e.husband && e.husband.selectedOptions && e.husband.selectedOptions[0]
+			? e.husband.selectedOptions[0]
+			: null;
+		const husbandPersonId = husbandOpt && husbands.find((h) => String(h.id) === String(husbandId))
+			? (husbands.find((h) => String(h.id) === String(husbandId)).person_id || "")
+			: "";
 		const row = {
 			husband_id: Number(husbandId),
+			husband_person_id: husbandPersonId || null,
 			wife_name: clean(e.name.value),
 			wife_is_family_member: e.family.value !== "no",
 			wife_branch_key: e.family.value === "no" ? null : (clean(e.wifeBranch.value) || null),
@@ -313,9 +321,16 @@
 			return status("تعذر التحقق من تكرار اسم الزوجة، حاول لاحقًا.");
 		}
 
-		const res = editingSpouseId
+		let res = editingSpouseId
 			? await c.from("tree_spouses").update(row).eq("id", editingSpouseId)
 			: await c.from("tree_spouses").insert(row);
+		if (res.error && /husband_person_id/i.test(String(res.error.message || ""))) {
+			const fallback = Object.assign({}, row);
+			delete fallback.husband_person_id;
+			res = editingSpouseId
+				? await c.from("tree_spouses").update(fallback).eq("id", editingSpouseId)
+				: await c.from("tree_spouses").insert(fallback);
+		}
 
 		if (res.error) return status("تعذر حفظ الزوجة: " + (res.error.message || "خطأ"));
 		clearForm();
@@ -381,13 +396,13 @@
 		const candidates = [husbandPath, leaf(husbandPath)].filter(Boolean);
 
 		const p1 = await c.from("tree_children")
-			.select("id,branch_key,parent_name,parent,child_name,name,birth_order")
+			.select("id,person_id,branch_key,parent_name,parent,child_name,name,birth_order")
 			.eq("branch_key", branch)
 			.in("parent_name", candidates)
 			.limit(500);
 
 		const p2 = await c.from("tree_children")
-			.select("id,branch_key,parent_name,parent,child_name,name,birth_order")
+			.select("id,person_id,branch_key,parent_name,parent,child_name,name,birth_order")
 			.eq("branch_key", branch)
 			.in("parent", candidates)
 			.limit(500);
