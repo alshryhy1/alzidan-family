@@ -1,8 +1,10 @@
 # المرحلة 2 — Delegates v2 (أساس)
 
-**الحالة:** جارية (شريحة 1 — Foundation)  
+**الحالة:** 🟡 كود مكتمل — بانتظار SQL على الإنتاج + اختبار دخان (شريحة 1 — Foundation)؛ فرض RPC / Multi-stage = ⚪  
 **التاريخ:** 2026-08-08  
-**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §17 · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)
+**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 مرحلة 2 · برنامج (ب) تطوير الإدارة · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)
+
+> **ملاحظة إدارة مشروع:** لا تُعلَّم الشريحة 🟢 «منشور ومختبر» قبل تطبيق `COPY-ME-delegates-v2.sql` ونجاح دخان الإنتاج. وجود SQL في المستودع = 🟡 فقط.
 
 ## الهدف من هذه الشريحة
 
