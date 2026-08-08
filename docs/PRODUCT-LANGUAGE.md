@@ -1,12 +1,13 @@
 # Product Language — لغة المنتج
 
-**الحالة:** دستور المنصة (معتمد) — مرحلة Product Foundation  
+**الحالة:** دستور المنصة / دستور حي (معتمد) — بوابة Product Foundation  
 **التاريخ:** 2026-08-08  
 **المراجع:** [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md)
 
 هذه الوثيقة هي **هوية المنتج اللغوية**. كل نص يظهر للزائر أو المندوب أو الإدارة يُراجع هنا قبل الشحن.
 
-**الفرق:** الخارطة تجيب «ماذا نبني؟» — هذه الوثيقة تجيب «بأي كلمات يتكلم المنتج؟».
+**الفرق:** الخارطة تجيب «ماذا نبني؟» — هذه الوثيقة تجيب «بأي كلمات يتكلم المنتج؟».  
+**قاعدة ب (دستور):** كل واجهة تُصمم بلغة المستخدم أولًا، ثم تُربط بالمحرك — [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md).
 
 ---
 

@@ -2,7 +2,7 @@
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-08 — Workflow Engine v1 foundation في المستودع · Delegates enforce مُطبَّق (بانتظار قبول) · دستور المنصة  
+**آخر تحديث تخطيط:** 2026-08-08 — بوابتان قبل مراحل المنتج · Validation Engine مرحلة مستقلة · سلّم SSOT محدَّث · Truth Before Speed  
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 ### دستور المنصة مقابل هذه الخارطة
@@ -10,20 +10,71 @@
 | | تجيب عن |
 |--|---------|
 | **هذه الخارطة (Roadmap)** | **ماذا نبني؟** ومتى — المراحل · الحالة · الدين · الانحدار |
-| **دستور المنصة (Constitution)** | **كيف نفكر؟ وكيف نبني؟ وما الذي يُمنع؟** |
+| **دستور المنصة (Constitution)** | **كيف نفكر؟ وكيف نبني؟ وما الذي يُمنع؟** — **دستور حي** لا «مرحلة وثائق» |
 
-**الوثائق الأربع (دستور):**
+**الوثائق الأربع (دستور حي):**
 
 1. [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) — لغة المنتج · Human First · ثلاث لغات · محظورات  
 2. [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) — حالات · انتقالات · تعيين · Audit · إشعارات *(≡ `WORKFLOW-SPECIFICATION.md`)*  
 3. [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) — فهرس النوايا · المرجع الوحيد لإضافة عملية  
-4. [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) — المبادئ · SSOT · Zero Duplicate Logic  
+4. [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) — المبادئ · قواعد الطبقة · لغة المستخدم · Truth Before Speed · SSOT · Single Write Rule  
+
+مرجع مرحلة مستقلة: [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md).
 
 وثيقة التنفيذ الهندسية الرسمية لمشروع عائلة الزيدان. المنصة = **معرفة عائلية + سير اعتماد** — ليست شجرة فقط. تُدار كـ**برنامج مشاريع** بثلاثة مسارات + طبقات معمارية ثابتة + بنية تحتية مشتركة.
 
-**سياسة عامة للمشروع:** لا «مقبول / تم» بلا تطبيق متحقَّق — على الطلبات، الصور، الزوجات، الدمج، وأي اعتماد لاحق.
+**سياسة عامة للمشروع:** لا «مقبول / تم» بلا تطبيق متحقَّق — على الطلبات، الصور، الزوجات، الدمج، وأي اعتماد لاحق.  
+**بعد القواعد الدستورية:** لا تطوير خارج المسار — أي فكرة تُسأل أولًا: «في أي مرحلة/طبقة؟»
 
-**الهدف التنفيذي الحالي:** إغلاق **Delegates v2** باختبار قبول (SQL enforce مُطبَّق → 🟢) → **تجميد المرحلة 0** → إكمال دخان **Workflow Engine v1** (🟡→🟢) → **Request Experience** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment**. UX الموبايل **بعد** المراحل الكانونية فقط.
+### بوابتان قبل بدء مراحل المنتج (Request Experience فما بعد)
+
+الحالة صادقة: **البوابتان ما زالتا 🟡** — لا تُعلَنان 🟢 إلا بعد القبول / التجميد.  
+**لا يُشترط** Workflow Engine 🟢 قبل Request Experience. إغلاق المحرك (سلامة + إزالة مسار اعتماد قديم + إعلان استقرار) يحدث **عند الوصول لمرحلته في السلّم**.
+
+| البوابة | الاسم | الحالة | المعنى |
+|---------|--------|--------|--------|
+| **1** | **Delegates v2** | 🟡 | اختبار قبول فقط — ليس برمجة جديدة |
+| **2** | **Product Foundation** = **دستور المنصة / دستور حي** | 🟡 | تجميد الدستور + **Truth Before Speed** — ليست «مرحلة وثائق» |
+
+**بوابة 1 — Delegates v2 🟡→🟢** (قبول فقط):
+
+- اختبار الصلاحيات  
+- اختبار الأدوار  
+- اختبار التفعيل والتعطيل  
+- اختبار سجل التدقيق  
+
+**بوابة 2 — Product Foundation 🟡→🟢** (**دستور المنصة / دستور حي** — ليس «مرحلة docs»):
+
+- تجميد الوثائق الأربع كدستور حي  
+- اعتماد Product Language · Workflow Specification · Request Catalog · Platform Principles  
+- اعتماد **Truth Before Speed** — الصحة قبل سرعة الاعتماد؛ كل الفحوصات قبل طفرة الشجرة  
+- يمنع أي تطوير يخالفها إلا بقرار معماري  
+
+### السلّم الرسمي (SSOT ladder)
+
+```
+Delegates v2
+        ↓
+Product Foundation
+        ↓
+Request Experience
+        ↓
+Validation Engine          ← مرحلة مستقلة جديدة
+        ↓
+Workflow Engine            ← إغلاق/توسيع عند هذه المرحلة (لا بوابة قبل RX)
+        ↓
+Delegate Workspace
+        ↓
+Admin UX
+        ↓
+Family Engine Alignment
+        ↓
+iOS Experience Rebuild
+```
+
+**ملاحظة Workflow على main:** أساس Workflow Engine v1 الموجود = **مؤقت / provisional** — لا يُوسَّع كإنتاج حتى تُنشأ مرحلة Validation Engine وتتم المواءمة.
+
+**الهدف التنفيذي الحالي:** إغلاق البوابتين 1→2 (🟡 الآن) → Request Experience → Validation Engine → ثم إغلاق Workflow على السلّم. iOS **بعد** المراحل الكانونية فقط.
 
 ---
 
@@ -55,13 +106,14 @@
 | **DateEngine على كل النماذج** | ⚪ | ميلاد/وفاة/مناسبات — دين تقني (§ دين تقني) |
 | **Admin-SC / قائمة البطاقات** | 🟡 | حفظ ✅؛ قائمة **بانتظار SQL** `admin_special_cards_list_v1` إن لم يُطبَّق |
 | **TREE-004** | 🟢 | عزل أبناء + unlink يدوي مكتمل؛ **لا يُعاد** |
-| **Product Foundation (مرحلة 0)** | 🔵 | وثائق الدستور الأربع — تصميم لا برمجة؛ تجميد بعد 🟢 Delegates |
-| **Workflow Engine v1** | 🟡 | أساس في المستودع (مخطط+RPCs+لوحة حالة) — **بانتظار COPY-ME + دخان** — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
-| **Request Experience** | ⚪ | المرحلة الكانونية 2 — **التالي بعد دخان Engine** |
-| **Delegate Workspace v1** | ⚪ | المرحلة الكانونية 3 — بعد Engine + تجميد Foundation |
-| **Admin UX (مراقبة)** | ⚪ | المرحلة الكانونية 4 |
-| **Family Engine Alignment** | ⚪ | المرحلة الكانونية 5 — مواءمة خدمات لا إعادة بناء |
-| **UX الموبايل** | ⬛ | بعد إغلاق/موافقة المراحل الكانونية فقط |
+| **Product Foundation (بوابة 2)** | 🟡 | **دستور حي** + Truth Before Speed — **بانتظار التجميد** بعد 🟢 Delegates — ليست مرحلة docs |
+| **Request Experience** | ⚪ | بعد البوابتين 1+2 🟢 فقط — **لا يُشترط** Workflow 🟢 |
+| **Validation Engine** | ⚪ | مرحلة مستقلة بعد RX — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
+| **Workflow Engine v1** | 🟡 | أساس **provisional** على main — إغلاق (سلامة + إزالة مسار قديم) **عند مرحلته** بعد Validation — لا توسيع قبلها — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
+| **Delegate Workspace v1** | ⚪ | بعد Workflow على السلّم |
+| **Admin UX (مراقبة)** | ⚪ | بعد Delegate Workspace |
+| **Family Engine Alignment** | ⚪ | مواءمة + **Single Write Rule** — لا إعادة بناء |
+| **iOS Experience Rebuild** | ⬛ | بعد إغلاق المراحل الكانونية فقط |
 
 ---
 
@@ -73,7 +125,10 @@
                 المستخدم
                    │
                    ▼
-      Request Experience     ← ماذا يريد أن يفعل؟ (نية)
+      Request Experience     ← ماذا يريد أن يفعل؟ (نية / حقائق)
+                   │
+                   ▼
+      Validation Engine      ← يتحقق — لا ينفّذ (تعارض · تكرار · اكتمال · سلامة)
                    │
                    ▼
         Workflow Engine      ← إنشاء · حالات · تعيين · سجل · إشعارات (مستقل عن الواجهة)
@@ -85,7 +140,7 @@
                    │
                    ▼
         Family Engine / Business Services
-     (شجرة · مناسبات · ذكريات · بطاقات · …)
+     (شجرة · مناسبات · ذكريات · بطاقات · …)  ← Single Write Rule
                    │
                    ▼
               Data Layer
@@ -105,15 +160,16 @@ Presentation
 | الطبقة | المسؤولية | تعرف عن الواجهة؟ |
 |--------|-----------|------------------|
 | **Delegates v2** | من لديه صلاحية (دور · فرع · عمليات مسموحة · تفعيل) | لا — كتالوج وصلاحيات |
+| **Request Experience** | كيف يعبّر الزائر عن النية ويتابع العملية | واجهة نية فقط |
+| **Validation Engine** | فحص الحقائق قبل المندوب/الشجرة — يتحقق ولا ينفّذ | لا — طبقة محرك |
 | **Workflow Engine** | ماذا يحدث للطلب (إنشاء · تعيين · انتقال حالة · إشعار · Audit · deep link) | **لا شيء** عن شكل الشاشة |
-| **Request Experience** | كيف يعبّر الزائر عن النية ويتابع العملية | واجهة نية فقط — تستدعي المحرك |
 | **Delegate Workspace** | كيف يعمل المندوب (استلام · مراجعة · أدوات في سياق الطلب · قرار · التالي) | واجهة تنفيذ فقط |
 | **Admin Workspace** | كيف يراقب المدير التدفق (أين عالق · الحمل · التأخير · الاختناقات) | واجهة مراقبة فقط |
-| **Family Engine (خدمات)** | أثر البيانات بعد الاعتماد — عقود واضحة تحت المحرك | لا تعرف الواجهة |
+| **Family Engine (خدمات)** | أثر البيانات بعد الاعتماد — عقود واضحة؛ لا كتابة مباشرة من UI | لا تعرف الواجهة |
 
-- Workflow Engine **ليس** جزءًا من Delegate Workspace ولا Admin UI ولا Request Experience.
+- Validation Engine وWorkflow Engine **ليسا** جزءًا من Delegate Workspace ولا Admin UI ولا Request Experience.
 - كل أنواع الطلبات تشترك في **نفس عُقد المحرك** — الفرق = **Request Type** من [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md).
-- المواصفة: [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · القرار: **ADR-010** · المبادئ: [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md).
+- المواصفة: [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · التحقق: [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · القرار: **ADR-010** · المبادئ: [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md).
 
 ---
 
@@ -123,24 +179,39 @@ Presentation
 
 | # | المبدأ |
 |---|--------|
-| 1 | **Human First** + **No Database Thinking** |
+| 1 | **Human First** + **No Database Thinking** + **لغة المستخدم أولًا** |
 | 2 | **الطلب محور العمل** · الطلب = **جلسة عمل** |
 | 3 | كل طلب له **مالك واحد واضح في كل لحظة** |
 | 4 | كل انتقال حالة **يُسجَّل** (Audit) |
-| 5 | **Workflow = مصدر الحقيقة** لحالة الطلب — لا كتابة خدمات مباشرة لعمليات الفهرس |
-| 6 | الواجهات **بلا منطق أعمال** — تستخدم المحرك |
-| 7 | **واجهة واحدة لكل دور** · الإدارة تراقب · المندوب ينجز · الزائر يبدأ/يتابع |
-| 8 | أي إشعار من **انتقال حالة** — لا من زر/شاشة |
-| 9 | **قاعدة الثلاث لغات** · **SSOT** · **Zero Duplicate Logic** |
-| 10 | الصلاحيات **لا** تعتمد على إخفاء الأزرار فقط |
+| 5 | **Truth Before Speed** — الصحة قبل سرعة الاعتماد |
+| 6 | **Validation Engine** يتحقق ولا ينفّذ — قبل المندوب/الشجرة |
+| 7 | **Workflow = مصدر الحقيقة** لحالة الطلب |
+| 8 | **Single Write Rule** — لا كتابة شجرة مباشرة من UI؛ عبر Workflow + Validation |
+| 9 | الواجهات **بلا منطق أعمال** — تستخدم المحركات |
+| 10 | **واجهة واحدة لكل دور** · الحقائق تُقدَّم — النظام يتحقق ويربط |
+| 11 | أي إشعار من **انتقال حالة** — لا من زر/شاشة |
+| 12 | **قاعدة الثلاث لغات** · **SSOT** · **Zero Duplicate Logic** |
+| 13 | الصلاحيات **لا** تعتمد على إخفاء الأزرار فقط |
+
+### قواعد دستورية (مرآة [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md))
+
+| | القاعدة |
+|--|---------|
+| **أ — الطبقة أولًا** | لا يجوز إنشاء أي شاشة/نموذج/ميزة قبل تحديد طبقتها: Product Language؟ · Request Experience؟ · **Validation Engine**؟ · Workflow؟ · Delegate Workspace؟ · Admin UX؟ · Family Engine؟ — إن تعذّر → **لا يبدأ التنفيذ**. |
+| **ب — لغة المستخدم أولًا** | كل واجهة تُصمم بلغة المستخدم أولًا، ثم تُربط بالمحرك، ولا تُبنى مباشرة فوق قاعدة البيانات. |
+| **ج — Truth Before Speed** | الصحة وجودة الشجرة أهم من سرعة الاعتماد؛ كل الفحوصات قبل طفرة الشجرة. |
+
+بعدها: **لا تطوير خارج المسار** — أي فكرة: «في أي مرحلة/طبقة؟»
 
 ### قاعدة بوابة الميزة (Feature Gate) — قبل أي كود ميزة جديدة
 
+0. **أي طبقة؟** (قاعدة أ) — بلا جواب → لا كود  
 1. نية/عملية جديدة؟ → [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) أولًا + لغة المنتج  
 2. صلاحية جديدة؟ → **Delegates v2**  
-3. تضيف/تغيّر حالة طلب؟ → **Workflow Engine**  
-4. عرض نية الزائر؟ → **Request Experience**  
-5. عرض/تنفيذ مندوب أو مراقبة؟ → **Delegate Workspace** أو **Admin UX**
+3. فحص حقائق/تعارض/اكتمال؟ → **Validation Engine**  
+4. تضيف/تغيّر حالة طلب؟ → **Workflow Engine**  
+5. عرض نية الزائر؟ → **Request Experience** (بعد البوابتين 🟢)  
+6. عرض/تنفيذ مندوب أو مراقبة؟ → **Delegate Workspace** أو **Admin UX**
 
 خرق البوابة = رفض التصميم قبل التنفيذ.
 
@@ -153,10 +224,12 @@ Presentation
 | E3 | محرك الموبايل = منطق الويب في بناء العقد (ADR-005) |
 | E4 | حماية البيانات قبل أي إصلاح (Backup → Scan → تقرير) |
 | E5 | كل Patch: Validation + مسار Rollback |
-| E6 | الترتيب الكانوني: **إغلاق Delegates v2 → Product Foundation (تجميد) → Workflow Engine → Request Experience → Delegate Workspace → Admin UX → Family Engine Alignment** ثم UX الموبايل |
-| E7 | ممنوع القفز إلى UX الموبايل قبل إغلاق/موافقة المراحل الكانونية |
+| E6 | السلّم: **بوابتان (Delegates · Foundation) → Request Experience → Validation Engine → Workflow Engine → Delegate Workspace → Admin UX → Family Engine Alignment → iOS** |
+| E7 | ممنوع القفز إلى iOS قبل إغلاق البوابتين والمراحل الكانونية |
 | E8 | **قواعد الانحدار (§8) غير قابلة للتفاوض** |
-| E9 | مواصفة السير + دستور المنصة معتمدان قبل شاشات Request Experience / Delegate Workspace الإنتاجية |
+| E9 | تجميد الدستور الحي قبل Request Experience؛ إغلاق Workflow عند مرحلته (بعد Validation) — لا توسيع provisional قبلها |
+| E10 | **قواعد أ+ب+ج** دستورية — بلا طبقة / بلا لغة مستخدم / بلا Truth Before Speed = لا تنفيذ |
+| E11 | **Single Write Rule** — لا كتابة شجرة خارج Workflow + Validation |
 
 ---
 
@@ -212,13 +285,14 @@ Search Name        ← للبحث/التطبيع
 | المسار | المحتوى | الحالة |
 |--------|---------|--------|
 | **Admin Hub / Redesign** | شِلّ موديولات (عرض فقط — بلا منطق سير) | 🟢 أساس · تكراري |
-| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 SQL مُطبَّق — بانتظار قبول — **بوابة قبل المراحل 0→5** |
-| **Product Foundation** | دستور المنصة (لغة · مواصفة · فهرس · مبادئ) — تصميم لا برمجة | 🔵 وثائق معتمدة — تجميد بعد 🟢 Delegates |
-| **Workflow Engine v1** | حالات موحّدة · آلة حالات · تعيين بالفرع · سجل انتقال · deep links · أحداث إشعار | 🟡 أساس جاهز — بانتظار SQL+دخان — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
-| **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | ⚪ — **مرحلة 2** |
-| **Delegate Workspace v1** | موديولات تنفيذ المندوب فوق المحرك | ⚪ — **مرحلة 3** |
-| **Admin UX / مراقبة** | لوحة تدفق · تأخير · حمل مندوبين · بحث · bulk · تقارير | ⚪ — **مرحلة 4** |
-| **Family Engine Alignment** | توحيد الدخول · منع كتابة خارج Workflow · خدمات واضحة · إزالة تكرار الأدوار | ⚪ — **مرحلة 5** (مواءمة لا إعادة بناء) |
+| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 **بوابة 1** — SQL مُطبَّق؛ بانتظار اختبار قبول |
+| **Product Foundation** | **دستور حي** + Truth Before Speed — تجميد لا «مرحلة docs» | 🟡 **بوابة 2** — بانتظار التجميد بعد 🟢 Delegates |
+| **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | ⚪ — بعد البوابتين 🟢 |
+| **Validation Engine** | تحقق قبل المندوب/الشجرة — لا تنفيذ | ⚪ — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
+| **Workflow Engine v1** | حالات · تعيين · سجل · إزالة مسار اعتماد قديم · إعلان استقرار | 🟡 أساس **provisional** — إغلاق عند مرحلته بعد Validation — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
+| **Delegate Workspace v1** | موديولات تنفيذ المندوب فوق المحرك | ⚪ — بعد Workflow على السلّم |
+| **Admin UX / مراقبة** | لوحة تدفق · تأخير · حمل مندوبين · بحث · bulk · تقارير | ⚪ |
+| **Family Engine Alignment** | مواءمة + **Single Write Rule** · خدمات واضحة | ⚪ (مواءمة لا إعادة بناء) |
 | **Audit** | سجل صلاحيات + انتقالات (المحرك يكتب انتقالات الحالة) | 🟡 بانتظار SQL أساس المناديب · واجهة موجودة |
 
 ### ج) برنامج تطوير التطبيق
@@ -296,7 +370,8 @@ Search Name        ← للبحث/التطبيع
 | **R-5** | **كل تواريخ الأعمال عبر DateEngine** — لا `new Date(...)` لتواريخ المجال (ADR-009) |
 | **R-6** | **تغييرات الشجرة → Audit** — كل اعتماد/إصلاح/دمج/نقل يكتب سجلًا قابلًا للمراجعة |
 | **R-7** | **Health Center قراءة فقط** — ممنوع auto-repair من واجهة مركز الصحة |
-| **R-8** | **لا منطق سير في الواجهة** — انتقالات الحالة والصلاحيات عبر Workflow Engine + Delegates فقط (ADR-010) |
+| **R-8** | **لا منطق سير/تحقق في الواجهة** — الحالات عبر Workflow · التحقق عبر Validation Engine · الصلاحيات عبر Delegates (ADR-010) |
+| **R-9** | **Single Write Rule** — لا كتابة شجرة مباشرة من UI؛ كل إضافة/تعديل عبر Workflow + Validation |
 
 خرق أي قاعدة أعلاه يوقف إغلاق البند حتى التصحيح أو ADR جديد صريح.
 
@@ -342,34 +417,37 @@ DateEngine  مكتبة + حارس ends_at
 TREE-004    عزل حالة الأبناء
 ```
 
-### بانتظار نشر/قبول 🟡
+### بانتظار نشر/قبول — البوابتان 🟡 + أساس مؤقت
 
 ```
-Delegates v2 — SQL مُطبَّق؛ اختبار قبول إنتاج فقط
-Workflow Engine v1 COPY-ME + دخان إداري
-tree-import reuse SQL (COPY-ME)
-Integrity Engine v2 SQL
-Admin-SC-List SQL (إن لم يُطبَّق)
+بوابة 1  Delegates v2 — اختبار قبول (صلاحيات·أدوار·تفعيل·تدقيق) فقط
+بوابة 2  Product Foundation — تجميد الدستور الحي + Truth Before Speed (ليس docs phase)
+—        Workflow Engine v1 foundation = provisional على main (لا توسيع قبل Validation)
+—        tree-import reuse SQL · Integrity Engine v2 SQL · Admin-SC-List (إن لزم)
 ```
 
-### الترتيب الكانوني للمراحل (معتمد — لا يُعاد ترتيبه بلا قرار)
+### الترتيب الكانوني / السلّم الرسمي (معتمد — لا يُعاد ترتيبه بلا قرار)
 
 ```
-★    Delegates v2                 صلاحيات — SQL مُطبَّق؛ بانتظار قبول → 🟢                    🟡
-  0  Product Foundation           دستور المنصة — أربع وثائق                                    🔵
-  1  Workflow Engine v1           أساس في المستودع — بانتظار COPY-ME + دخان                     🟡
-  2  Request Experience           نية المستخدم → تستدعي المحرك فقط                             ⚪ ← التالي بعد Engine
-  3  Delegate Workspace v1        تنفيذ فوق المحرك                                             ⚪
-  4  Admin UX                     مراقبة تدفق · تأخير · حمل · بحث · bulk                       ⚪
-  5  Family Engine Alignment      مواءمة خدمات تحت المحرك — لا إعادة بناء                      ⚪
-  —  Tree Engine v2               مرحلة بيانات مستقلة (§6) — لا تستبدل الترتيب أعلاه            ⚪
-  ⬛ UX الموبايل                  برنامج (ج) — بعد المراحل الكانونية
+═══ بوابتان قبل مراحل المنتج (🟡 الآن) ═══
+★ 1  Delegates v2                 اختبار قبول — ليس برمجة جديدة                               🟡
+★ 2  Product Foundation           دستور حي + Truth Before Speed — تجميد                       🟡
+═══ بعد البوابتين 🟢 — السلّم ═══
+     Request Experience           نية المستخدم                                               ⚪
+     Validation Engine            تحقق مستقل — لا تنفيذ                                      ⚪
+     Workflow Engine              سلامة + إزالة مسار اعتماد قديم + إعلان استقرار             🟡 provisional
+     Delegate Workspace v1        تنفيذ فوق المحرك                                           ⚪
+     Admin UX                     مراقبة تدفق                                                  ⚪
+     Family Engine Alignment      مواءمة + Single Write Rule                                 ⚪
+     iOS Experience Rebuild       إعادة بناء تجربة iOS                                       ⬛
+  —  Tree Engine v2               مرحلة بيانات مستقلة (§6) — لا تستبدل السلّم                 ⚪
 ```
 
-**بوابة:** لا شاشات إنتاج لـ Request Experience / Delegate Workspace قبل تجميد Product Foundation + أساس Workflow Engine.  
-**دستور:** [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md).
+**بوابة صارمة:** ممنوع القفز من قبول Delegates إلى Request Experience دون تجميد الدستور الحي.  
+**ليس بوابة:** Workflow Engine 🟢 — يحدث عند مرحلته بعد Validation Engine.  
+**دستور حي:** [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md).
 
-Roadmap = ماذا نبني · Constitution = كيف نفكر وما يُمنع.
+Roadmap = ماذا نبني · Constitution = كيف نفكر وما يُمنع (دستور حي — ليس docs phase).
 
 ### مسارات متوازية بعد Patch 0
 
@@ -379,11 +457,12 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر وما يُمنع.
 | **B عرض** | Patch Mobile 36 | ج (عرض) | 🟢 |
 | **C أخبار/كاش** | Patch News Expiry | ج/كاش | 🟢 |
 | **D إصلاح/سلامة** | Repair · Integrity · Health | أ | 🟢 أساس · 🟡 Integrity v2 SQL |
-| **E إدارة/سير** | Delegates → Foundation → Engine → Request Exp → Delegate WS → Admin UX → Family Align | ب | 🟢 P1 · 🟡 D2 (SQL✓) · 🔵 Foundation · 🟡 Engine · ⚪ الباقي |
-| **F UX موبايل** | بحث · عضو · إشعارات · … | ج | ⬛ |
+| **E إدارة/سير** | بوابتان 🟡 → RX → Validation → Workflow → DW → Admin UX → Family Align → iOS | ب | 🟢 P1 · 🟡 Gates 1–2 · 🟡 WE provisional · ⚪ الباقي |
+| **F UX موبايل / iOS** | إعادة بناء تجربة iOS · بحث · عضو · إشعارات · … | ج | ⬛ |
 | **I بنية تحتية** | DateEngine عبر كل الأسطح | — | 🟢 أساس · ⚪ تعميم النماذج |
 | **T Tree Engine v2** | person_id-only · merge · move · dry-run | أ/ب | ⚪ |
-| **W Workflow** | محرك سير مستقل عن الواجهات | ب (طبقة) | 🟡 أساس v1 — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
+| **V Validation** | محرك تحقق مستقل | ب (طبقة) | ⚪ — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
+| **W Workflow** | محرك سير مستقل — provisional حتى مرحلة السلّم | ب (طبقة) | 🟡 أساس v1 — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
 
 ---
 
@@ -444,14 +523,15 @@ Validation (معايير القبول + KPI جزئية)
 | **Tests** | Smoke + Regression | 🟢 أدوات | `verify:repair` · `verify:children-isolation` · `verify:tree-import-reuse` |
 | **Admin-P1** | Redesign شِلّ | 🟢 | تكراري |
 | **Admin-P2** | Delegates v2 | 🟡 | SQL أساس+فرض مُطبَّق — بانتظار قبول — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
-| **PF-0** | Product Foundation | 🔵 | دستور المنصة — أربع وثائق |
-| **WE-v1** | Workflow Engine v1 | 🟡 | أساس foundation — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
-| **RX-v1** | Request Experience | ⚪ | مرحلة كانونية 2 — التالي بعد دخان Engine |
-| **DW-v1** | Delegate Workspace v1 | ⚪ | مرحلة كانونية 3 |
-| **Admin-P3** | Admin UX (مراقبة) | ⚪ | مرحلة كانونية 4 — قائمة موسّعة أدناه |
-| **FE-Align** | Family Engine Alignment | ⚪ | مرحلة كانونية 5 — مواءمة لا إعادة بناء |
+| **PF-0** | Product Foundation | 🟡 | بوابة 2 — دستور حي + Truth Before Speed؛ بانتظار التجميد |
+| **RX-v1** | Request Experience | ⚪ | بعد البوابتين 1+2 🟢 |
+| **VE-v1** | Validation Engine | ⚪ | مرحلة مستقلة — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
+| **WE-v1** | Workflow Engine v1 | 🟡 | provisional على main — إغلاق عند مرحلته بعد VE |
+| **DW-v1** | Delegate Workspace v1 | ⚪ | بعد Workflow على السلّم |
+| **Admin-P3** | Admin UX (مراقبة) | ⚪ | قائمة موسّعة أدناه |
+| **FE-Align** | Family Engine Alignment | ⚪ | مواءمة + Single Write Rule |
 | **Tree Engine v2** | مرحلة مستقلة | ⚪ | §6 |
-| **Mobile-UX** | برنامج (ج) | ⬛ | بعد المراحل الكانونية |
+| **Mobile-UX / iOS** | برنامج (ج) | ⬛ | بعد المراحل الكانونية |
 
 ---
 
@@ -582,13 +662,13 @@ Validation (معايير القبول + KPI جزئية)
 
 ---
 
-## 22) المراحل الكانونية — برنامج (ب) + Workflow + دستور المنصة
+## 22) المراحل الكانونية — برنامج (ب) + Validation + Workflow + دستور حي
 
 **بدء الشرائح الجديدة:** عند قول المستخدم «ابدأ» أو تكليف صريح.  
-**صريح:** اقتراح «UX موبايل أولًا» **مرفوض**.  
-**الترتيب الكانوني:** إغلاق Delegates v2 → **0 Product Foundation** → **1 Workflow Engine** → **2 Request Experience** → **3 Delegate Workspace** → **4 Admin UX** → **5 Family Engine Alignment**.
+**صريح:** «UX موبايل أولًا» أو القفز إلى Request Experience قبل البوابتين **مرفوض**.  
+**السلّم:** بوابتان (Delegates · Foundation) → **Request Experience** → **Validation Engine** → **Workflow Engine** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment** → **iOS Experience Rebuild**.
 
-Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع — [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md).
+Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع — [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) (**دستور حي**).
 
 ### أساس الشِلّ — Admin Redesign 🟢 (تكراري · ليس مرحلة كانونية مستقلة)
 
@@ -598,66 +678,81 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 - شريط/عدّادات التدفق في الـ Hub تُغذَّى لاحقًا من **Workflow Engine** (لا منطق سير داخل الواجهة)
 - موديولات: شجرة · أعضاء · مناسبات · ذكريات · مندوبون · صحة · سجل · طلبات · بطاقات · تصويت · إحصاءات · أدوات
 
-### بوابة — Delegates v2 🟡 ← **SQL مُطبَّق · بانتظار قبول → 🟢**
+### بوابة 1 — Delegates v2 🟡 ← **قبول فقط · ليس برمجة جديدة**
 
-**المخرج:** صلاحيات مكتملة قبل تجميد Foundation وتنفيذ Engine.  
+**المخرج:** اختبار قبول ناجح → 🟢 قبل تجميد الدستور.  
 [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `COPY-ME-delegates-v2.sql` + enforce
 
-| بند | الحالة |
-|-----|--------|
-| صلاحيات حسب الدور | 🟡 كتالوج + فرض في RPC — SQL مُطبَّق؛ بانتظار قبول |
-| صلاحيات حسب الفرع (ربط الفرع) | 🟡 على الملف + فرض في RPC — SQL مُطبَّق؛ بانتظار قبول |
-| صلاحيات حسب نوع العملية (ops) | 🟡 جدول + فرض `tree.*` / `events.*` — SQL مُطبَّق؛ بانتظار قبول |
-| تفعيل / تعطيل المندوبين | 🟡 كود جاهز + فرض `is_enabled` — SQL مُطبَّق؛ بانتظار قبول |
-| سجل تدقيق الصلاحيات | 🟡 جداول+واجهة + `previous_role_key` — SQL مُطبَّق؛ بانتظار قبول |
+| بند قبول | الحالة |
+|----------|--------|
+| اختبار الصلاحيات | 🟡 بانتظار قبول |
+| اختبار الأدوار | 🟡 بانتظار قبول |
+| اختبار التفعيل والتعطيل | 🟡 بانتظار قبول |
+| اختبار سجل التدقيق | 🟡 بانتظار قبول |
 | اعتماد متعدد المراحل | ⚪ يُبنى لاحقًا فوق Workflow Engine — ليس بديلًا عنه |
 
-### المرحلة 0 — Product Foundation 🔵 (تصميم — ليست برمجة)
+### بوابة 2 — Product Foundation 🟡 = **دستور المنصة / دستور حي** (ليست مرحلة وثائق)
 
-**المخرج:** تجميد دستور المنصة قبل كود المحرك وشاشات النية/المندوب الإنتاجية.
+**المخرج:** تجميد الدستور الحي + **Truth Before Speed** — يمنع أي تطوير يخالفه إلا بقرار معماري.  
+**ليس** «docs phase» — هذا **دستور المنصة**.
 
 | وثيقة | المحتوى |
 |--------|---------|
 | [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) | Human First · ثلاث لغات · محظورات · صياغة الأدوار |
 | [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) | حالات · انتقالات · تعيين · Audit · إشعارات |
 | [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) | فهرس النوايا — المرجع الوحيد لإضافة عملية |
-| [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) | المبادئ · SSOT · Zero Duplicate Logic |
+| [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) | المبادئ · الطبقة · لغة المستخدم · Truth Before Speed · SSOT · Single Write Rule |
 
-الوثائق الأربع **موجودة ومعتمدة كدستور**؛ التجميد الرسمي بعد 🟢 Delegates وقبل شرائح Engine الكبيرة.
+الوثائق الأربع **موجودة**؛ البوابة 🟡 حتى **التجميد الرسمي** بعد 🟢 Delegates.
 
-### المرحلة الكانونية 1 — Workflow Engine v1 🟡
+### المرحلة — Request Experience ⚪
 
-**طبقة مستقلة** (ADR-010) — ليست شاشة. أساس foundation في المستودع.  
-المواصفة: [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · التقرير: [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
-**SQL:** `supabase/sql/COPY-ME-workflow-engine-v1.sql`
-
-| بند | المحتوى | الحالة |
-|-----|---------|--------|
-| حالات موحّدة | نفس العُقد لكل Request Type من الفهرس | 🟡 في المحرك |
-| آلة حالات | انتقالات مسموحة فقط عبر المحرك | 🟡 RPCs |
-| تعيين بالفرع | `admin_workflow_assign_v1` + `delegates_v2` | 🟡 |
-| سجل انتقال | `workflow_transition_log` + Audit | 🟡 |
-| Deep links | `module=requests&request=` | 🟡 |
-| أحداث إشعار | `workflow_notification_events` (log) | 🟡 |
-| تكييف `approval_requests` | أعمدة `wf_*` — لا نظام موازٍ | 🟡 |
-| لوحة حالة إدارية | موديول الطلبات فقط | 🟡 |
-| مخرج المرحلة | أي نوع طلب جديد يعيد استخدام المحرك | ⚪ بعد 🟢 |
-
-### المرحلة الكانونية 2 — Request Experience ⚪
-
-**بوابة:** أساس Workflow Engine + لغة المنتج. الواجهة تجمع النية وتستدعي المحرك فقط.
+**بوابة:** البوابتان 🟢 فقط. **لا يُشترط** Workflow Engine 🟢. الواجهة تجمع النية/الحقائق — لا تبني الشجرة.
 
 | بند | قاعدة |
 |-----|--------|
 | السؤال المحوري | **ماذا تريد أن تفعل؟** — ليس «اختر نوع البطاقة» |
 | النوايا | من [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) فقط |
-| نماذج قصيرة | النظام يبني الباقي — No Database Thinking |
+| نماذج قصيرة | النظام يبني الباقي — No Database Thinking + لغة المستخدم أولًا |
 | التتبع | مسار حالات إنساني ([`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)) |
-| لا منطق اعتماد | لا تعيين/انتقال خارج المحرك |
+| لا منطق اعتماد/تحقق | لا تعيين/انتقال/تحقق أعمال داخل الواجهة |
 
-### المرحلة الكانونية 3 — Delegate Workspace v1 ⚪
+### المرحلة — Validation Engine ⚪ (مستقلة — ليست ملاحظة داخل Workflow)
 
-**بوابة:** مواصفة السير + أساس Workflow Engine. الواجهة تستدعي المحرك فقط.
+**المرجع:** [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md)  
+**الهدف:** قبل المندوب أو طفرة الشجرة — اكتشاف أخطاء/تعارضات وحماية جودة البيانات.  
+**يتحقق ولا ينفّذ.**
+
+| مسؤولية | المعنى |
+|---------|--------|
+| هوية | `person_id` لا الاسم وحده |
+| تكرار | منع التكرارات |
+| تعارض | تعارضات منطقية |
+| هيكل | سلامة بنية الشجرة |
+| اكتمال | حسب نوع الطلب |
+| أسباب | رفض/تصحيح واضحة للمندوب |
+
+### المرحلة — Workflow Engine v1 🟡 (عند الوصول في السلّم — ليست بوابة قبل RX)
+
+> التحقق من سلامة المحرك وإزالة أي مسار اعتماد قديم متبقٍ.
+
+أساس على `main` = **provisional** — لا توسيع إنتاج حتى وجود Validation Engine والمواءمة.  
+المواصفة: [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · التقرير: [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
+**SQL:** `supabase/sql/COPY-ME-workflow-engine-v1.sql`
+
+| بند إغلاق المرحلة | المحتوى | الحالة |
+|-------------------|---------|--------|
+| انتقالات الحالات | التحقق من الانتقالات عبر المحرك | 🟡 |
+| التعيين | التحقق من التعيين بالفرع/المندوب | 🟡 |
+| السجل | التحقق من سجل الانتقال / Audit | 🟡 |
+| الإشعارات | التحقق إن كانت ضمن الشريحة | 🟡 |
+| مسار قديم | إزالة أي مسار اعتماد قديم متبقٍ | 🟡 |
+| إعلان استقرار | إعلان المحرك مستقراً → 🟢 | 🟡 |
+| أساس foundation | RPCs / deep links في المستودع | 🟡 provisional |
+
+### المرحلة — Delegate Workspace v1 ⚪
+
+**بوابة:** Validation + Workflow على مسار السلّم. الواجهة تستدعي المحركات فقط.
 
 | بند | قاعدة |
 |-----|--------|
@@ -669,7 +764,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 | لا حذف افتراضي | no default delete |
 | التالي | زر/مسار الطلب التالي بعد الإنجاز |
 
-### المرحلة الكانونية 4 — Admin UX (مراقبة التدفق) ⚪
+### المرحلة — Admin UX (مراقبة التدفق) ⚪
 
 الإدارة تراقب **التدفق** — لا تراجع الأشخاص كلغة أساسية.
 
@@ -686,24 +781,24 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 | 9 | تنبيهات الإدارة | Health حرجة · فشل RPC · SQL معلّق |
 | 10 | مركز استيراد / تصدير · Backup · مهام/صيانة | |
 
-### المرحلة الكانونية 5 — Family Engine Alignment ⚪
+### المرحلة — Family Engine Alignment ⚪
 
-**ليست إعادة بناء** للشجرة/المناسبات/الذكريات/البطاقات/التصويت/الأخبار — الخدمات موجودة.
+**ليست إعادة بناء** — الخدمات موجودة. **Single Write Rule** ساري.
 
 | هدف | المعنى |
 |-----|--------|
-| توحيد نقطة الدخول | العمليات المعتمدة على طلب تدخل عبر Workflow |
-| منع الكتابة خارج Workflow | لا مسارات UI→Service لعمليات الفهرس |
-| خدمات واضحة | عقود استدعاء من المحرك؛ الخدمات لا تعرف الواجهة |
-| إزالة التكرار | منطق مشترك مرة واحدة (Zero Duplicate Logic) عبر الأدوار الثلاثة |
+| توحيد نقطة الدخول | العمليات المعتمدة على طلب تدخل عبر Workflow + Validation |
+| منع الكتابة المباشرة | لا مسارات UI→شجرة لعمليات الفهرس |
+| خدمات واضحة | عقود استدعاء؛ الخدمات لا تعرف الواجهة |
+| إزالة التكرار | Zero Duplicate Logic عبر الأدوار الثلاثة |
 
 التفاصيل: [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md).
 
 ---
 
-## 23) مرحلة UX الموبايل — برنامج (ج) ⬛
+## 23) إعادة بناء تجربة iOS / UX الموبايل — برنامج (ج) ⬛
 
-**البوابة:** إغلاق (أو موافقة صريحة على التوازي بعد) المراحل الكانونية §22 (0→5 بعد إغلاق Delegates).  
+**البوابة:** البوابتان 🟢 ثم السلّم كاملًا حتى Family Engine Alignment — ثم فقط iOS.  
 **لا يُبدأ الآن.**
 
 | # | البند | ملاحظات |
@@ -725,23 +820,31 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 ## 24) ما لا يُفعل الآن
 
-- **UX الموبايل (§23)** قبل إغلاق المراحل الكانونية — مرفوض كمسار أول
-- تنفيذ **Request Experience / Delegate Workspace** الإنتاجية قبل تجميد Product Foundation + أساس Workflow Engine
-- وضع منطق حالات/اعتماد داخل Admin أو Delegate أو Request UI (خرق ADR-010)
+- **iOS / UX الموبايل (§23)** قبل البوابتين والسلّم الكانوني — مرفوض كمسار أول
+- القفز من قبول **Delegates** إلى **Request Experience** دون تجميد الدستور الحي
+- اشتراط **Workflow Engine 🟢** قبل Request Experience (مخالف للسلّم المعتمد)
+- توسيع أساس Workflow الـ provisional قبل مرحلة **Validation Engine** والمواءمة
+- تنفيذ مراحل السلّم خارج الترتيب أو قبل البوابتين 🟢
+- إنشاء شاشة/نموذج/ميزة بلا تحديد طبقة — بما فيها Validation Engine (خرق قاعدة أ)
+- بناء واجهة فوق قاعدة البيانات بدل لغة المستخدم أولًا ثم المحرك (خرق قاعدة ب)
+- تجاهل **Truth Before Speed** أو **Single Write Rule**
+- وضع منطق حالات/تحقق/اعتماد داخل Admin أو Delegate أو Request UI
 - محرك حالات منفصل لكل نوع طلب — الأنواع تشترك في نفس العُقد
 - كتابة مباشرة من الواجهة إلى Family Engine/Memory/Cards لعمليات [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md)
+- اعتبار Validation Engine «ملاحظة داخل Workflow» أو مجرد دوال مساعدة
 - إعادة بناء الشجرة/المناسبات بدل **Family Engine Alignment**
 - فتح مسار إصلاح بيانات تلقائي جديد قبل موافقة + dry-run (Integrity/Health = قراءة فقط)
 - إحصائيات تجميلية فوق بيانات غير موثوقة
 - «إصلاح بيانات صالح» كحل أول لمشكلة العرض 36
 - كسر أي ADR مقفل دون وثيقة قرار جديدة
-- قفز إلى UX الموبايل قبل تقدم برنامج (ب)
 - `new Date(...)` لتواريخ أعمال خارج DateEngine (ADR-009 / R-5)
 - تخزين سنة هجرية في أعمدة timestamp ميلادية
 - اعتبار ملف SQL في المستودع = 🟢 دون تطبيق واختبار قبول
-- تجاهل **قاعدة بوابة الميزة** (§1ب) أو دستور المنصة عند تصميم ميزة جديدة
+- اعتبار البوابتين 🟢 قبل القبول/التجميد
+- تجاهل **قاعدة بوابة الميزة** (§1ب) أو الدستور الحي عند تصميم ميزة جديدة
 - مصطلحات محظورة في الواجهة (JSON · Parent · tree_card كعنوان · …) — [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)
 - تكرار منطق التحقق في صفحات متعددة (خرق Zero Duplicate Logic)
+- أي تطوير خارج المسار دون سؤال «في أي مرحلة/طبقة؟»
 
 ---
 
@@ -750,16 +853,20 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 | الحالة | المحتوى |
 |--------|---------|
 | 🟢 | Patch 0–4 · Mobile 36 · News · Repair يدوي · Health · Admin P1 شِلّ · DateEngine أساس · TREE-004 |
-| 🟡 | **Delegates v2** — SQL أساس+فرض **مُطبَّق**؛ بانتظار اختبار قبول → 🟢 · tree-import reuse · Integrity v2 · (Admin-SC-List إن لزم) · **Workflow Engine v1** بانتظار COPY-ME+دخان |
-| 🔵 | **Product Foundation** — دستور المنصة (أربع وثائق) — تجميد بعد 🟢 Delegates |
-| ⚪ | Multi-stage فوق Workflow Engine — ليس حاجزًا لإغلاق صلاحيات v2 الأساسية |
-| ⚪ | Request Experience · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 · تعميم DateEngine |
-| ⬛ | UX الموبايل — برنامج (ج) |
+| 🟡 | **البوابتان** — (1) Delegates قبول · (2) تجميد الدستور الحي + Truth Before Speed — **ما زالتا 🟡** · Workflow foundation = provisional · tree-import · Integrity v2 · (Admin-SC-List إن لزم) |
+| ⚪ | Multi-stage فوق Workflow — ليس حاجزًا لإغلاق صلاحيات v2 |
+| ⚪ | Request Experience · Validation Engine · (إغلاق Workflow عند مرحلته) · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 — **بعد البوابتين 🟢** |
+| ⬛ | iOS Experience Rebuild — برنامج (ج) |
 
-المرجع طويل الأمد: **دستور المنصة** · المعمارية الأساسية · بوابة الميزة · ADR · Versioning · Rollback · KPI · DoD · Matrix · Cache · Error Codes · قواعد الانحدار · الدين التقني · البرامج الثلاثة.
+المرجع طويل الأمد: **الدستور الحي** · قاعدة الطبقة · لغة المستخدم · Truth Before Speed · Validation Engine · Single Write Rule · المعمارية · ADR · Versioning · Rollback · KPI · DoD · قواعد الانحدار · البرامج الثلاثة.
 
 ---
 
-**الخطوة التالية الفورية:** (1) اختبار قبول Delegates v2 → 🟢 · (2) طبّق `COPY-ME-workflow-engine-v1.sql` + دخان لوحة السير في الطلبات · (3) بعدها **Request Experience**. لا Delegate Workspace / UX موبايل الآن كشرائح إنتاج.
+**الخطوة التالية الفورية (لا قفز):**  
+(1) **بوابة 1** — اختبار قبول Delegates v2 (صلاحيات · أدوار · تفعيل/تعطيل · سجل تدقيق) → 🟢  
+(2) **بوابة 2** — تجميد الوثائق الأربع كـ**دستور حي** + Truth Before Speed → 🟢  
+(3) **بعدها السلّم:** Request Experience → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
+
+لا توسيع Workflow provisional · لا Delegate Workspace / iOS الآن كشرائح إنتاج.
 
 **تسليم SQL لـ Supabase:** افتح ملف `.sql` → Select All → Copy. لا تنسخ من الشات (أسوار Markdown تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.

@@ -74,9 +74,11 @@
 - Push notifications (أحداث log فقط)  
 - استبدال أزرار قبول/رفض القديمة بالكامل (تبقى للتوافق حتى Family Engine Alignment)
 
-## التالي
+## التالي / موقع السلّم
 
-بعد دخان المحرك: **Request Experience** (مرحلة كانونية 2) — نية المستخدم تستدعي المحرك فقط.
+أساس هذه الشريحة على `main` = **provisional**. لا توسيع إنتاج قبل مرحلة **Validation Engine** والمواءمة.  
+السلّم الرسمي: بعد البوابتين → Request Experience → **Validation Engine** → ثم إغلاق هذا المحرك (سلامة + إزالة مسار اعتماد قديم + إعلان استقرار) → Delegate Workspace…  
+انظر [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md).
 
 ## Compatibility
 

@@ -258,20 +258,24 @@ Search Name        ← للبحث/التطبيع
    - لغة المنتج · مواصفة السير · فهرس النوايا · مبادئ المنصة  
    - Roadmap = **ماذا نبني؟** · Constitution = **كيف نفكر / ما يُمنع؟**
 
-2. **الترتيب الكانوني المحدَّث** (بعد إغلاق Delegates v2):  
-   **0 Product Foundation** → **1 Workflow Engine** → **2 Request Experience** → **3 Delegate Workspace** → **4 Admin UX** → **5 Family Engine Alignment**  
-   المرحلة 5 = **مواءمة** خدمات موجودة (توحيد الدخول · منع الكتابة خارج Workflow · إزالة التكرار) — **ليست** إعادة بناء.
+2. **السلّم الرسمي المحدَّث** (بعد بوابتي Delegates + Product Foundation):  
+   **Request Experience** → **Validation Engine** → **Workflow Engine** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment** → **iOS Experience Rebuild**  
+   Family Engine Alignment = **مواءمة** + **Single Write Rule** — **ليست** إعادة بناء.  
+   Workflow foundation الحالي = provisional حتى مرحلة Validation. لا يُشترط Workflow 🟢 قبل Request Experience.
 
-3. **Single Source of Truth (SSOT):** كل معلومة من مصدر واحد — حالة الطلب ← Workflow · صلاحية المندوب ← Delegates · الشخص ← Family Engine · الأخبار ← Events · الذكريات ← Memory.
+3. **Single Source of Truth (SSOT):** نتيجة التحقق ← Validation Engine · حالة الطلب ← Workflow · صلاحية المندوب ← Delegates · الشخص ← Family Engine · الأخبار ← Events · الذكريات ← Memory.
 
-4. **Zero Duplicate Logic:** أي تحقق/قاعدة يحتاجها أكثر من دور تُكتب مرة واحدة في المحرك أو الخدمة — لا نسخ في صفحات الواجهة.
+4. **Zero Duplicate Logic:** أي تحقق/قاعدة يحتاجها أكثر من دور تُكتب مرة واحدة في Validation Engine أو المحرك أو الخدمة — لا نسخ في صفحات الواجهة.
+
+5. **قواعد دستورية:** تحديد الطبقة قبل التنفيذ (يشمل Validation Engine) · لغة المستخدم أولًا · **Truth Before Speed**.
 
 ### Consequences
 
 - أي عملية جديدة للمستخدم تمر أولًا عبر [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md).
-- شاشات جديدة تُرفض إن خالفت Human First / No Database Thinking ([`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)).
-- مسارات كتابة UI→Service لعمليات الفهرس = خرق دستوري (إلى جانب ADR-010).
+- شاشات جديدة تُرفض إن خالفت Human First / No Database Thinking / لغة المستخدم أولًا / تحديد الطبقة ([`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md)).
+- مسارات كتابة UI→Service لعمليات الفهرس = خرق دستوري (إلى جانب ADR-010 و Single Write Rule).
 - تكرار منطق الأعمال بين الزائر/المندوب/الإدارة = خرق Zero Duplicate Logic.
+- القفز خارج السلّم أو توسيع Workflow provisional قبل Validation = خرق الخارطة.
 
 ---
 
@@ -291,5 +295,5 @@ Search Name        ← للبحث/التطبيع
 
 ### إدارة المشروع (2026-08-08)
 
-خارطة الطريق الرسمية [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) هي وثيقة **إدارة مشروع** (ماذا نبني). دستور المنصة (أربع وثائق) يحدّد كيف نفكر وما يُمنع. الترتيب الكانوني: إغلاق **Delegates v2** → **Product Foundation** → **Workflow Engine** → **Request Experience** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment**. نموذج حالات 🟢🟡🔵⚪⬛، ثلاثة برامج، Tree Engine v2، DateEngine، دين تقني، وقواعد انحدار. المنصة = معرفة عائلية + سير اعتماد. هذا الملف (ADR) مصدر القرارات المعمارية المقفلَة فقط.  
+خارطة الطريق الرسمية [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) هي وثيقة **إدارة مشروع** (ماذا نبني). دستور المنصة (أربع وثائق) يحدّد كيف نفكر وما يُمنع. السلّم: بوابتا **Delegates** + **Product Foundation** → **Request Experience** → **Validation Engine** → **Workflow Engine** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment** → **iOS**. نموذج حالات 🟢🟡🔵⚪⬛، ثلاثة برامج، Tree Engine v2، DateEngine، دين تقني، وقواعد انحدار. المنصة = معرفة عائلية + سير اعتماد. هذا الملف (ADR) مصدر القرارات المعمارية المقفلَة فقط.  
 
