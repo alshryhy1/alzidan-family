@@ -3,7 +3,7 @@
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-09 — بوابة 1 🟡 فشل تفعيل الدخول بعد القبول (إصلاح في المستودع · بانتظار SQL/إعادة اختبار) · بوابة 2 🟡 · لا كود DW  
+**آخر تحديث تخطيط:** 2026-08-09 — مراجعة رحلة الطلب [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) · بوابة 1 🟡 · بوابة 2 🟡 · لا كود DW  
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 ### دستور المنصة مقابل هذه الخارطة
@@ -20,7 +20,8 @@
 3. [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) — فهرس النوايا · المرجع الوحيد لإضافة عملية  
 4. [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) — المبادئ · قواعد الطبقة · لغة المستخدم · Truth Before Speed · SSOT · Single Write Rule  
 
-مرجع مرحلة مستقلة: [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md).
+مرجع مرحلة مستقلة: [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md).  
+مراجعة رحلة الطلب كاملة (as-is → to-be · قبل أي RX/DW UI): [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) — **لا تطوير لواجهة المندوب الآن**.
 
 وثيقة التنفيذ الهندسية الرسمية لمشروع عائلة الزيدان. المنصة = **معرفة عائلية + سير اعتماد** — ليست شجرة فقط. تُدار كـ**برنامج مشاريع** بثلاثة مسارات + طبقات معمارية ثابتة + بنية تحتية مشتركة.
 
@@ -119,7 +120,7 @@ iOS Experience Rebuild
 | **Request Experience** | ⚪ | بعد البوابتين 1+2 🟢 فقط — **لا يُشترط** Workflow 🟢 |
 | **Validation Engine** | ⚪ | مرحلة مستقلة بعد RX — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **Workflow Engine v1** | 🟡 | أساس **provisional** على main — إغلاق (سلامة + إزالة مسار قديم) **عند مرحلته** بعد Validation — لا توسيع قبلها — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
-| **Delegate Workspace v1** | ⚪ | UX ✅ معتمد («ابدا») — [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) · **كود ❄️** حتى RX→VE→WF |
+| **Delegate Workspace v1** | ⚪ | UX ✅ معتمد («ابدا») — [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) · **كود ❄️** حتى RX→VE→WF · رحلة الطلب: [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) |
 | **Admin UX (مراقبة)** | ⚪ | بعد Delegate Workspace |
 | **Family Engine Alignment** | ⚪ | مواءمة + **Single Write Rule** — لا إعادة بناء |
 | **iOS Experience Rebuild** | ⬛ | بعد إغلاق المراحل الكانونية فقط |
@@ -763,7 +764,8 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 ### المرحلة — Delegate Workspace v1 ⚪
 
 **بوابة:** Validation + Workflow على مسار السلّم. الواجهة تستدعي المحركات فقط.  
-**تصوّر UX:** [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) — ✅ **معتمد من صاحب المنتج** (عبارة الاعتماد: **«ابدا»** / اعتماد المراجعة · 2026-08-09) · التنفيذ ❄️ **ما زال مجمَّدًا** حتى بوابات السلّم (Delegates → Foundation → RX → VE → Workflow) · requests-first · جلسة لكل طلب · الصفحة الحالية legacy مجمّدة تجميليًا · **لا كود DW الآن** · تنفيذ لاحق على مراحل (Inbox → Session → Next-queue) لا دفعة واحدة.
+**تصوّر UX:** [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) — ✅ **معتمد من صاحب المنتج** (عبارة الاعتماد: **«ابدا»** / اعتماد المراجعة · 2026-08-09) · التنفيذ ❄️ **ما زال مجمَّدًا** حتى بوابات السلّم (Delegates → Foundation → RX → VE → Workflow) · requests-first · جلسة لكل طلب · الصفحة الحالية legacy مجمّدة تجميليًا · **لا كود DW الآن** · تنفيذ لاحق على مراحل (Inbox → Session → Next-queue) لا دفعة واحدة.  
+**رحلة الطلب كاملة (قبل أي كود):** [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) — الرئيسية ↔ إدارة ↔ Workflow ↔ مندوب ↔ أثر الشجرة كوحدة واحدة.
 
 | بند | قاعدة |
 |-----|--------|
@@ -874,11 +876,11 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 ---
 
 **الخطوة التالية الفورية (لا قفز) — بعد «ابدا» 2026-08-09:**  
-(0) UX مساحة المندوب ✅ معتمد — **لا يفتح كود DW**  
+(0) UX مساحة المندوب ✅ معتمد — **لا يفتح كود DW** · الصفحة الحالية legacy — راجع [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md)  
 (1) **بوابة 1 الآن** — كود موثّق ✅ · تبقّى تشغيل 5 دقائق في [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) → 🟢  
 (2) **بوابة 2** — جاهزة كمسودة [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) · تُنفَّذ فور 🟢 بوابة 1  
 (3) **بعدها السلّم:** Request Experience → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace (كود) → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
 
-لا توسيع Workflow provisional · لا كود Delegate Workspace / iOS الآن.
+لا توسيع Workflow provisional · لا كود Delegate Workspace / iOS الآن · **لا تطوير لواجهة المندوب الآن**.
 
 **تسليم SQL لـ Supabase:** افتح ملف `.sql` → Select All → Copy. لا تنسخ من الشات (أسوار Markdown تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.
