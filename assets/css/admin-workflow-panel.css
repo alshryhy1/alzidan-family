@@ -1,0 +1,71 @@
+/* Workflow Engine v1 — minimal admin status panel (Requests module) */
+.admin-workflow-panel {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f3f4f6 100%);
+}
+.admin-workflow-panel .wf-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.admin-workflow-panel .wf-panel-head strong {
+  font-size: 15px;
+}
+.admin-workflow-panel .wf-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+.admin-workflow-panel .wf-field-ref {
+  flex: 1 1 220px;
+  margin: 0;
+}
+.admin-workflow-panel .wf-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-workflow-panel .wf-status-box {
+  line-height: 1.7;
+  margin: 0 0 8px;
+}
+.admin-workflow-panel .wf-status-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.admin-workflow-panel .status-pill.status-wf {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.admin-workflow-panel .wf-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+.admin-workflow-panel .wf-transition-log {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+.admin-workflow-panel .wf-transition-log ul {
+  margin: 6px 0 0;
+  padding-inline-start: 1.2rem;
+}
+.admin-workflow-panel code {
+  font-size: 12px;
+  background: #e5e7eb;
+  padding: 1px 6px;
+  border-radius: 4px;
+}

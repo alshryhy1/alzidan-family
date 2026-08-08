@@ -6,6 +6,12 @@
     if (value === "pending") return "انتظار";
     if (value === "approved") return "قبول";
     if (value === "rejected") return "رفض";
+    if (value === "submitted") return "مُقدَّم";
+    if (value === "assigned") return "مُعيَّن";
+    if (value === "in_review") return "قيد المراجعة";
+    if (value === "needs_changes") return "يحتاج تعديل";
+    if (value === "applied") return "مُطبَّق";
+    if (value === "done") return "مكتمل";
     return value || "-";
   }
 
@@ -437,14 +443,17 @@
     tr.appendChild(tdText(row.email || ""));
     const tdStatus = document.createElement("td");
     const pill = document.createElement("span");
+    const displayStatus = String(row.wf_state || row.status || "").trim();
+    const legacy = String(row.status || "").trim();
     pill.className =
       "status-pill " +
-      (row.status === "approved"
+      (legacy === "approved" || displayStatus === "approved" || displayStatus === "applied" || displayStatus === "done"
         ? "status-approved"
-        : row.status === "rejected"
+        : legacy === "rejected" || displayStatus === "rejected"
           ? "status-rejected"
           : "status-pending");
-    pill.textContent = requestStatusLabel(row.status);
+    pill.textContent = requestStatusLabel(displayStatus || legacy);
+    if (row.wf_state) pill.title = "Workflow: " + String(row.wf_state);
     tdStatus.appendChild(pill);
     tr.appendChild(tdStatus);
     const tdDate = document.createElement("td");

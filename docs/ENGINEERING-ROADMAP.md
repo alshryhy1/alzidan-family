@@ -2,7 +2,7 @@
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-08 — اعتماد **دستور المنصة** · Product Foundation · Request Experience · Family Engine Alignment · ترتيب المراحل الكانوني المحدَّث  
+**آخر تحديث تخطيط:** 2026-08-08 — Workflow Engine v1 foundation في المستودع · Delegates enforce مُطبَّق (بانتظار قبول) · دستور المنصة  
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 ### دستور المنصة مقابل هذه الخارطة
@@ -23,7 +23,7 @@
 
 **سياسة عامة للمشروع:** لا «مقبول / تم» بلا تطبيق متحقَّق — على الطلبات، الصور، الزوجات، الدمج، وأي اعتماد لاحق.
 
-**الهدف التنفيذي الحالي:** إكمال **Delegates v2** (🟡→🟢 عبر اختبار قبول) → **تجميد المرحلة 0 (Product Foundation)** → **Workflow Engine v1** → **Request Experience** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment**. UX الموبايل **بعد** المراحل الكانونية فقط.
+**الهدف التنفيذي الحالي:** إغلاق **Delegates v2** باختبار قبول (SQL enforce مُطبَّق → 🟢) → **تجميد المرحلة 0** → إكمال دخان **Workflow Engine v1** (🟡→🟢) → **Request Experience** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment**. UX الموبايل **بعد** المراحل الكانونية فقط.
 
 ---
 
@@ -46,7 +46,7 @@
 | البند | الحالة | ملاحظة |
 |--------|--------|--------|
 | **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (RPC تنفيذ 🟡 بانتظار COPY-ME) |
-| **Delegates v2 — Foundation + Enforce** | 🟡 | كود الواجهة + SQL (أساس + فرض صلاحيات) في المستودع؛ **بانتظار SQL على الإنتاج + اختبار قبول** — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md). Multi-stage = ⚪ (فوق Workflow Engine) |
+| **Delegates v2 — Foundation + Enforce** | 🟡 | SQL أساس+فرض **مُطبَّق**؛ **بانتظار اختبار قبول فقط** → أقرب لـ 🟢 — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md). Multi-stage = ⚪ (فوق Workflow Engine) |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |
 | **Health Center** | 🟢 | أساس قراءة فقط في الإدارة |
@@ -55,9 +55,9 @@
 | **DateEngine على كل النماذج** | ⚪ | ميلاد/وفاة/مناسبات — دين تقني (§ دين تقني) |
 | **Admin-SC / قائمة البطاقات** | 🟡 | حفظ ✅؛ قائمة **بانتظار SQL** `admin_special_cards_list_v1` إن لم يُطبَّق |
 | **TREE-004** | 🟢 | عزل أبناء + unlink يدوي مكتمل؛ **لا يُعاد** |
-| **Product Foundation (مرحلة 0)** | 🔵 | وثائق الدستور الأربع — تصميم لا برمجة؛ تجميد بعد إغلاق Delegates |
-| **Workflow Engine v1** | ⚪ | المرحلة الكانونية 1 بعد Delegates — [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) |
-| **Request Experience** | ⚪ | المرحلة الكانونية 2 — نية المستخدم → تستدعي المحرك |
+| **Product Foundation (مرحلة 0)** | 🔵 | وثائق الدستور الأربع — تصميم لا برمجة؛ تجميد بعد 🟢 Delegates |
+| **Workflow Engine v1** | 🟡 | أساس في المستودع (مخطط+RPCs+لوحة حالة) — **بانتظار COPY-ME + دخان** — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
+| **Request Experience** | ⚪ | المرحلة الكانونية 2 — **التالي بعد دخان Engine** |
 | **Delegate Workspace v1** | ⚪ | المرحلة الكانونية 3 — بعد Engine + تجميد Foundation |
 | **Admin UX (مراقبة)** | ⚪ | المرحلة الكانونية 4 |
 | **Family Engine Alignment** | ⚪ | المرحلة الكانونية 5 — مواءمة خدمات لا إعادة بناء |
@@ -212,9 +212,9 @@ Search Name        ← للبحث/التطبيع
 | المسار | المحتوى | الحالة |
 |--------|---------|--------|
 | **Admin Hub / Redesign** | شِلّ موديولات (عرض فقط — بلا منطق سير) | 🟢 أساس · تكراري |
-| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 أساس+فرض في المستودع — بانتظار SQL+قبول — **بوابة قبل المراحل 0→5** |
+| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 SQL مُطبَّق — بانتظار قبول — **بوابة قبل المراحل 0→5** |
 | **Product Foundation** | دستور المنصة (لغة · مواصفة · فهرس · مبادئ) — تصميم لا برمجة | 🔵 وثائق معتمدة — تجميد بعد 🟢 Delegates |
-| **Workflow Engine v1** | حالات موحّدة · آلة حالات · تعيين بالفرع · سجل انتقال · deep links · أحداث إشعار | ⚪ — **مرحلة 1** · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) |
+| **Workflow Engine v1** | حالات موحّدة · آلة حالات · تعيين بالفرع · سجل انتقال · deep links · أحداث إشعار | 🟡 أساس جاهز — بانتظار SQL+دخان — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
 | **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | ⚪ — **مرحلة 2** |
 | **Delegate Workspace v1** | موديولات تنفيذ المندوب فوق المحرك | ⚪ — **مرحلة 3** |
 | **Admin UX / مراقبة** | لوحة تدفق · تأخير · حمل مندوبين · بحث · bulk · تقارير | ⚪ — **مرحلة 4** |
@@ -276,7 +276,7 @@ Search Name        ← للبحث/التطبيع
 | **TD-2** | **إلغاء الربط بالاسم عند وجود `person_id`** في كل مسارات الكتابة/الاستيراد المتبقية | أ + Tree Engine v2 | حرجة |
 | **TD-3** | **إزالة منطق أسماء الآباء القديمي** (`parent_name` كمصدر حقيقة / fallback صامت) | أ + Tree Engine v2 | حرجة |
 | **TD-4** | **توحيد محرك البحث إدارة ↔ تطبيق** (نفس التطبيع والفهارس والقواعد) | ب + ج | متوسطة — بعد Admin UX بحث |
-| **TD-5** | فرض صلاحيات Delegates داخل RPC الفعلية (ليس الكتالوج فقط) | ب | 🟡 كود+SQL جاهز — بانتظار تطبيق+قبول (`COPY-ME-delegates-v2-enforce.sql`) |
+| **TD-5** | فرض صلاحيات Delegates داخل RPC الفعلية (ليس الكتالوج فقط) | ب | 🟡 SQL مُطبَّق — بانتظار قبول (`COPY-ME-delegates-v2-enforce.sql`) |
 | **TD-6** | تحميل كسول لموديولات الإدارة الثقيلة | ب | منخفضة (تكراري P1) |
 
 لا يُغلق «استقرار الشجرة» بينما TD-2/TD-3 ما زالا مفتوحين في مسارات نشطة.
@@ -345,7 +345,8 @@ TREE-004    عزل حالة الأبناء
 ### بانتظار نشر/قبول 🟡
 
 ```
-Delegates v2 foundation+enforce SQL + اختبار قبول إنتاج
+Delegates v2 — SQL مُطبَّق؛ اختبار قبول إنتاج فقط
+Workflow Engine v1 COPY-ME + دخان إداري
 tree-import reuse SQL (COPY-ME)
 Integrity Engine v2 SQL
 Admin-SC-List SQL (إن لم يُطبَّق)
@@ -354,14 +355,14 @@ Admin-SC-List SQL (إن لم يُطبَّق)
 ### الترتيب الكانوني للمراحل (معتمد — لا يُعاد ترتيبه بلا قرار)
 
 ```
-★    Delegates v2                 صلاحيات كاملة — بوابة إغلاق 🟡→🟢                    🟡
-  0  Product Foundation           دستور المنصة (تصميم لا برمجة) — أربع وثائق            🔵
-  1  Workflow Engine v1           آلة حالات مستقلّة · مواصفة v1                         ⚪
-  2  Request Experience           نية المستخدم → تستدعي المحرك فقط                     ⚪
-  3  Delegate Workspace v1        تنفيذ فوق المحرك                                     ⚪
-  4  Admin UX                     مراقبة تدفق · تأخير · حمل · بحث · bulk               ⚪
-  5  Family Engine Alignment      مواءمة خدمات تحت المحرك — لا إعادة بناء              ⚪
-  —  Tree Engine v2               مرحلة بيانات مستقلة (§6) — لا تستبدل الترتيب أعلاه    ⚪
+★    Delegates v2                 صلاحيات — SQL مُطبَّق؛ بانتظار قبول → 🟢                    🟡
+  0  Product Foundation           دستور المنصة — أربع وثائق                                    🔵
+  1  Workflow Engine v1           أساس في المستودع — بانتظار COPY-ME + دخان                     🟡
+  2  Request Experience           نية المستخدم → تستدعي المحرك فقط                             ⚪ ← التالي بعد Engine
+  3  Delegate Workspace v1        تنفيذ فوق المحرك                                             ⚪
+  4  Admin UX                     مراقبة تدفق · تأخير · حمل · بحث · bulk                       ⚪
+  5  Family Engine Alignment      مواءمة خدمات تحت المحرك — لا إعادة بناء                      ⚪
+  —  Tree Engine v2               مرحلة بيانات مستقلة (§6) — لا تستبدل الترتيب أعلاه            ⚪
   ⬛ UX الموبايل                  برنامج (ج) — بعد المراحل الكانونية
 ```
 
@@ -378,11 +379,11 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر وما يُمنع.
 | **B عرض** | Patch Mobile 36 | ج (عرض) | 🟢 |
 | **C أخبار/كاش** | Patch News Expiry | ج/كاش | 🟢 |
 | **D إصلاح/سلامة** | Repair · Integrity · Health | أ | 🟢 أساس · 🟡 Integrity v2 SQL |
-| **E إدارة/سير** | Delegates → Foundation → Engine → Request Exp → Delegate WS → Admin UX → Family Align | ب | 🟢 P1 · 🟡 D2 · 🔵 Foundation · ⚪ الباقي |
+| **E إدارة/سير** | Delegates → Foundation → Engine → Request Exp → Delegate WS → Admin UX → Family Align | ب | 🟢 P1 · 🟡 D2 (SQL✓) · 🔵 Foundation · 🟡 Engine · ⚪ الباقي |
 | **F UX موبايل** | بحث · عضو · إشعارات · … | ج | ⬛ |
 | **I بنية تحتية** | DateEngine عبر كل الأسطح | — | 🟢 أساس · ⚪ تعميم النماذج |
 | **T Tree Engine v2** | person_id-only · merge · move · dry-run | أ/ب | ⚪ |
-| **W Workflow** | محرك سير مستقل عن الواجهات | ب (طبقة) | ⚪ مواصفة دستور v1 |
+| **W Workflow** | محرك سير مستقل عن الواجهات | ب (طبقة) | 🟡 أساس v1 — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
 
 ---
 
@@ -442,10 +443,10 @@ Validation (معايير القبول + KPI جزئية)
 | **Health** | Health Center | 🟢 | قراءة فقط (R-7) |
 | **Tests** | Smoke + Regression | 🟢 أدوات | `verify:repair` · `verify:children-isolation` · `verify:tree-import-reuse` |
 | **Admin-P1** | Redesign شِلّ | 🟢 | تكراري |
-| **Admin-P2** | Delegates v2 | 🟡 | بوابة قبل المراحل — فرض RPC جاهز في المستودع — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
+| **Admin-P2** | Delegates v2 | 🟡 | SQL أساس+فرض مُطبَّق — بانتظار قبول — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
 | **PF-0** | Product Foundation | 🔵 | دستور المنصة — أربع وثائق |
-| **WE-v1** | Workflow Engine v1 | ⚪ | مرحلة كانونية 1 — [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) |
-| **RX-v1** | Request Experience | ⚪ | مرحلة كانونية 2 — نية → محرك |
+| **WE-v1** | Workflow Engine v1 | 🟡 | أساس foundation — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
+| **RX-v1** | Request Experience | ⚪ | مرحلة كانونية 2 — التالي بعد دخان Engine |
 | **DW-v1** | Delegate Workspace v1 | ⚪ | مرحلة كانونية 3 |
 | **Admin-P3** | Admin UX (مراقبة) | ⚪ | مرحلة كانونية 4 — قائمة موسّعة أدناه |
 | **FE-Align** | Family Engine Alignment | ⚪ | مرحلة كانونية 5 — مواءمة لا إعادة بناء |
@@ -597,18 +598,18 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 - شريط/عدّادات التدفق في الـ Hub تُغذَّى لاحقًا من **Workflow Engine** (لا منطق سير داخل الواجهة)
 - موديولات: شجرة · أعضاء · مناسبات · ذكريات · مندوبون · صحة · سجل · طلبات · بطاقات · تصويت · إحصاءات · أدوات
 
-### بوابة — Delegates v2 🟡 ← **بانتظار SQL + قبول → 🟢**
+### بوابة — Delegates v2 🟡 ← **SQL مُطبَّق · بانتظار قبول → 🟢**
 
 **المخرج:** صلاحيات مكتملة قبل تجميد Foundation وتنفيذ Engine.  
-[`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `COPY-ME-delegates-v2.sql`
+[`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `COPY-ME-delegates-v2.sql` + enforce
 
 | بند | الحالة |
 |-----|--------|
-| صلاحيات حسب الدور | 🟡 كتالوج + فرض في RPC — بانتظار SQL+قبول |
-| صلاحيات حسب الفرع (ربط الفرع) | 🟡 على الملف + فرض في RPC — بانتظار SQL+قبول |
-| صلاحيات حسب نوع العملية (ops) | 🟡 جدول + فرض `tree.*` / `events.*` — بانتظار SQL+قبول |
-| تفعيل / تعطيل المندوبين | 🟡 كود جاهز + فرض `is_enabled` — بانتظار SQL+قبول |
-| سجل تدقيق الصلاحيات | 🟡 جداول+واجهة + `previous_role_key` — بانتظار SQL |
+| صلاحيات حسب الدور | 🟡 كتالوج + فرض في RPC — SQL مُطبَّق؛ بانتظار قبول |
+| صلاحيات حسب الفرع (ربط الفرع) | 🟡 على الملف + فرض في RPC — SQL مُطبَّق؛ بانتظار قبول |
+| صلاحيات حسب نوع العملية (ops) | 🟡 جدول + فرض `tree.*` / `events.*` — SQL مُطبَّق؛ بانتظار قبول |
+| تفعيل / تعطيل المندوبين | 🟡 كود جاهز + فرض `is_enabled` — SQL مُطبَّق؛ بانتظار قبول |
+| سجل تدقيق الصلاحيات | 🟡 جداول+واجهة + `previous_role_key` — SQL مُطبَّق؛ بانتظار قبول |
 | اعتماد متعدد المراحل | ⚪ يُبنى لاحقًا فوق Workflow Engine — ليس بديلًا عنه |
 
 ### المرحلة 0 — Product Foundation 🔵 (تصميم — ليست برمجة)
@@ -624,20 +625,23 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 الوثائق الأربع **موجودة ومعتمدة كدستور**؛ التجميد الرسمي بعد 🟢 Delegates وقبل شرائح Engine الكبيرة.
 
-### المرحلة الكانونية 1 — Workflow Engine v1 ⚪
+### المرحلة الكانونية 1 — Workflow Engine v1 🟡
 
-**طبقة مستقلة** (ADR-010) — ليست شاشة.  
-المواصفة الإلزامية: [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md)
+**طبقة مستقلة** (ADR-010) — ليست شاشة. أساس foundation في المستودع.  
+المواصفة: [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · التقرير: [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
+**SQL:** `supabase/sql/COPY-ME-workflow-engine-v1.sql`
 
-| بند | المحتوى |
-|-----|---------|
-| حالات موحّدة | نفس العُقد لكل Request Type من الفهرس |
-| آلة حالات | انتقالات مسموحة فقط عبر المحرك |
-| تعيين بالفرع | assign وفق الفرع + صلاحية Delegates |
-| سجل انتقال | كل انتقال → Audit |
-| Deep links | من المحرك عند التعيين/الانتقال |
-| أحداث إشعار | من انتقال الحالة فقط |
-| مخرج المرحلة | أي نوع طلب جديد يعيد استخدام المحرك |
+| بند | المحتوى | الحالة |
+|-----|---------|--------|
+| حالات موحّدة | نفس العُقد لكل Request Type من الفهرس | 🟡 في المحرك |
+| آلة حالات | انتقالات مسموحة فقط عبر المحرك | 🟡 RPCs |
+| تعيين بالفرع | `admin_workflow_assign_v1` + `delegates_v2` | 🟡 |
+| سجل انتقال | `workflow_transition_log` + Audit | 🟡 |
+| Deep links | `module=requests&request=` | 🟡 |
+| أحداث إشعار | `workflow_notification_events` (log) | 🟡 |
+| تكييف `approval_requests` | أعمدة `wf_*` — لا نظام موازٍ | 🟡 |
+| لوحة حالة إدارية | موديول الطلبات فقط | 🟡 |
+| مخرج المرحلة | أي نوع طلب جديد يعيد استخدام المحرك | ⚪ بعد 🟢 |
 
 ### المرحلة الكانونية 2 — Request Experience ⚪
 
@@ -741,21 +745,21 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 ---
 
-## 25) جاهزية البدء / الخطوة التالية
+## 25) جاهزية البدء / الخطوات التالية
 
 | الحالة | المحتوى |
 |--------|---------|
 | 🟢 | Patch 0–4 · Mobile 36 · News · Repair يدوي · Health · Admin P1 شِلّ · DateEngine أساس · TREE-004 |
-| 🟡 | **Delegates v2** foundation+enforce · tree-import reuse · Integrity v2 · (Admin-SC-List إن لزم) — **طبّق SQL ثم قبول** |
+| 🟡 | **Delegates v2** — SQL أساس+فرض **مُطبَّق**؛ بانتظار اختبار قبول → 🟢 · tree-import reuse · Integrity v2 · (Admin-SC-List إن لزم) · **Workflow Engine v1** بانتظار COPY-ME+دخان |
 | 🔵 | **Product Foundation** — دستور المنصة (أربع وثائق) — تجميد بعد 🟢 Delegates |
 | ⚪ | Multi-stage فوق Workflow Engine — ليس حاجزًا لإغلاق صلاحيات v2 الأساسية |
-| ⚪ | Workflow Engine v1 · Request Experience · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 · تعميم DateEngine |
+| ⚪ | Request Experience · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 · تعميم DateEngine |
 | ⬛ | UX الموبايل — برنامج (ج) |
 
 المرجع طويل الأمد: **دستور المنصة** · المعمارية الأساسية · بوابة الميزة · ADR · Versioning · Rollback · KPI · DoD · Matrix · Cache · Error Codes · قواعد الانحدار · الدين التقني · البرامج الثلاثة.
 
 ---
 
-**الخطوة التالية الفورية:** تطبيق SQL معلّق Delegates v2 (`COPY-ME-delegates-v2.sql` ثم `COPY-ME-delegates-v2-enforce.sql`) + Hard Refresh + اختبار قبول → 🟢 صلاحيات مكتملة. بعدها **تجميد المرحلة 0** ثم **Workflow Engine v1**. لا Request Experience / Delegate Workspace / UX موبايل الآن كشرائح إنتاج.
+**الخطوة التالية الفورية:** (1) اختبار قبول Delegates v2 → 🟢 · (2) طبّق `COPY-ME-workflow-engine-v1.sql` + دخان لوحة السير في الطلبات · (3) بعدها **Request Experience**. لا Delegate Workspace / UX موبايل الآن كشرائح إنتاج.
 
-**تسليم SQL لـ Supabase:** افتح ملف `.sql` → Select All → Copy. لا تنسخ من الشات (أسوار ``` تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.
+**تسليم SQL لـ Supabase:** افتح ملف `.sql` → Select All → Copy. لا تنسخ من الشات (أسوار Markdown تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.

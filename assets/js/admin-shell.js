@@ -19,7 +19,7 @@
     {
       id: "requests",
       title: "الطلبات",
-      desc: "اعتماد ورفض الطلبات وإحصاء المناديب — Workflow واضح",
+      desc: "اعتماد ورفض الطلبات + لوحة حالة محرك السير v1",
       icon: "☑",
       sections: ["admin-requests-section", "requests-stats-section"],
       priority: true,
@@ -398,7 +398,11 @@
     if (!(opts && opts.skipHash)) {
       try {
         const url = new URL(window.location.href);
-        url.hash = "module=" + id;
+        const params = new URLSearchParams(String(url.hash || "").replace(/^#/, ""));
+        params.set("module", id);
+        if (opts && opts.request) params.set("request", String(opts.request));
+        else if (id !== "requests") params.delete("request");
+        url.hash = params.toString();
         history.replaceState(null, "", url.pathname + url.search + url.hash);
       } catch (_) {}
     }
@@ -412,8 +416,14 @@
 
   function moduleFromHash() {
     const h = String(window.location.hash || "").replace(/^#/, "");
+    try {
+      const params = new URLSearchParams(h);
+      const fromParam = String(params.get("module") || "").trim();
+      if (fromParam && MODULES.some((m) => m.id === fromParam)) return fromParam;
+    } catch (_) {}
     if (h.startsWith("module=")) {
-      const id = decodeURIComponent(h.slice(7));
+      const raw = h.slice(7).split("&")[0];
+      const id = decodeURIComponent(raw);
       if (MODULES.some((m) => m.id === id)) return id;
     }
     // Legacy deep links

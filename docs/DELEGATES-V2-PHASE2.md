@@ -1,8 +1,8 @@
 # المرحلة 2 — Delegates v2
 
-**الحالة:** 🟡 كود مكتمل — بانتظار SQL على الإنتاج + اختبار قبول (Foundation + Enforce)  
+**الحالة:** 🟡 SQL أساس+فرض **مُطبَّق على الإنتاج** — بانتظار اختبار قبول فقط (أقرب لـ 🟢)  
 **التاريخ:** 2026-08-08  
-**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 مرحلة كانونية 1 · برنامج (ب) · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)
+**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 · برنامج (ب) · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md) · [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)
 
 > **ملاحظة إدارة مشروع:** لا تُعلَّم الشريحة 🟢 «منشور ومختبر» قبل تطبيق ملفات COPY-ME ونجاح دخان/قبول الإنتاج. وجود SQL في المستودع = 🟡 فقط.
 

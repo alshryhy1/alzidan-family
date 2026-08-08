@@ -1,9 +1,9 @@
 # Workflow Specification v1 — محرك سير الطلبات
 
-**الحالة:** دستور المنصة (معتمد للتخطيط) — تُنقَّح عند تنفيذ Workflow Engine v1  
+**الحالة:** دستور المنصة (معتمد) — أساس Workflow Engine v1 في المستودع (🟡 بانتظار SQL+دخان) — راجع [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
 **التاريخ:** 2026-08-08  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) (ADR-010) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)  
-**النطاق:** طبقة Workflow Engine فقط — بلا شكل واجهة (لا Delegate Workspace ولا Admin UI)
+**النطاق:** طبقة Workflow Engine — بلا Delegate Workspace ولا Request Experience كاملة؛ لوحة حالة إدارية مصغّرة مسموحة للقراءة/انتقال إداري فقط
 
 **اسم الملف:** الرسمي = `WORKFLOW-SPECIFICATION-v1.md`.  
 عند الإشارة إلى `WORKFLOW-SPECIFICATION.md` يُقصد **هذا الملف** (لا يوجد ملف موازٍ منفصل).

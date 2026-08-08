@@ -4,9 +4,9 @@
 
 | الحقل | القيمة | المعنى |
 |--------|--------|--------|
-| Schema Version | `baseline+spouses.husband_person_id+integrity_v1` | عمود زوجات + views/تقرير سلامة (`admin_integrity_report_v1`) |
+| Schema Version | `baseline+…+workflow_engine_v1` | أعمدة `wf_*` على `approval_requests` + جداول انتقال/إشعار |
 | Data Version | `5` | استيراد tree_card يعيد استخدام الأب الموجود ولا يكرّره (ابن فقط) |
-| Migration Version | `5` | `20260808_tree_import_reuse_existing.sql` — ✅ في المستودع؛ ⏳ COPY-ME على الإنتاج |
+| Migration Version | `6` (معلّق) | `20260808_workflow_engine_v1.sql` — ✅ في المستودع؛ ⏳ COPY-ME على الإنتاج |
 
 ## تاريخ مختصر
 
@@ -18,5 +18,6 @@
 | 2026-08-07 | `3` | `3` | Patch 3 — زوجات عبر person_id (SPOUSE-001 / TREE-001)؛ SQL طُبّق + backfill 50/50 |
 | 2026-08-07 | `4` | `4` | Repair + Integrity foundation — dry-run 25 مرشّحًا؛ apply معلّق على service_role/DB |
 | 2026-08-08 | `5` | `5` | tree_card import reuse — لا تكرار الأب إن وُجد؛ SQL عبر COPY-ME |
+| 2026-08-08 | `5` | `6` | Workflow Engine v1 foundation — تكييف `approval_requests`؛ بانتظار COPY-ME |
 
 يُحدَّث هذا الملف مع كل Patch يغلق بنجاح (ومع Health Center لاحقًا).
