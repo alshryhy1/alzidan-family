@@ -14,7 +14,7 @@
     {
       id: "maint.sql_workspace_literal_aware_v1",
       title: "ترقية منفّذ SQL Workspace (أجسام الدوال)",
-      desc: "يصلح خطأ SQL-WS-MULTI تلقائيًا من داخل المساحة (بدون Supabase) ثم يسمح بـ CREATE FUNCTION والسكربتات متعددة الأوامر عبر التشغيل المتسلسل.",
+      desc: "يرقّي المنفّذ عبر UPDATE pg_proc من داخل المساحة (بدون Supabase) ثم يسمح بـ CREATE FUNCTION والتشغيل المتسلسل.",
       file: "../supabase/sql/20260809_sql_workspace_executor_bootstrap.sql",
       order: 10,
       bootstrap: true,

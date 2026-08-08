@@ -1,21 +1,28 @@
--- Operator path: Admin → SQL Workspace → أوامر الصيانة الجاهزة
+-- Operator path: Admin SQL Workspace maintenance presets
 -- Preset: maint.sql_workspace_executor_bootstrap_v1
--- Bootstraps literal-aware executor THROUGH the old naive MULTI checker.
--- Each statement below contains ZERO raw semicolon characters
--- (uses EXECUTE replace + chr(59)) so the old admin_sql_execute_v1 accepts them.
--- After this runs, CREATE FUNCTION bodies work from Workspace.
--- Safe to re-run.
+--
+-- Prior 1/9 failure root cause:
+--   Statement 1 was top-level EXECUTE replace(...) which SQL treats as a
+--   prepared-statement name (error: prepared statement replace does not exist).
+--   A corrupted header fragment made it worse.
+--
+-- Fix for OLD naive MULTI checker (rejects any raw semicolon char anywhere,
+--   even inside dollar bodies): CREATE sql stub then UPDATE pg_proc.prosrc
+--   via replace(..., chr(59)) so installed bodies get real semicolons.
+-- Step 4 (grants) runs after upgrade and may contain semicolons inside dollar quotes.
+-- Safe to re-run. No Supabase SQL Editor required.
 
-EXECUTE replace + chr(59)),
--- so the old admin_sql_execute_v1 accepts them. After this runs, CREATE FUNCTION works.
--- Safe to re-run.
+CREATE OR REPLACE FUNCTION public.admin_sql_sql_without_literals_v1(p_sql text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $alzidan_ws_stub$
+  SELECT coalesce(p_sql, '')
+$alzidan_ws_stub$;
 
-EXECUTE replace($alzidan_ws_upgrade$
-create or replace function public.admin_sql_sql_without_literals_v1(p_sql text)
-returns text
-language plpgsql
-immutable
-as $fn$
+UPDATE pg_proc SET
+  prolang = (SELECT oid FROM pg_language WHERE lanname = 'plpgsql'),
+  prosrc = replace($alzidan_ws_prosrc$
 declare
   v text := coalesce(p_sql, '')@SC@
   v_out text := ''@SC@
@@ -95,24 +102,12 @@ begin
   end loop@SC@
   return v_out@SC@
 end@SC@
-$fn$
-$alzidan_ws_upgrade$, '@SC@', chr(59));
+$alzidan_ws_prosrc$, '@SC@', chr(59))
+WHERE proname = 'admin_sql_sql_without_literals_v1'
+  AND pronamespace = 'public'::regnamespace;
 
-drop function if exists public.admin_sql_execute_v1(text, text);
-
-drop function if exists public.admin_sql_execute_v1(text, text, boolean);
-
-EXECUTE replace($alzidan_ws_upgrade$
-create or replace function public.admin_sql_execute_v1(
-  p_token text,
-  p_sql text,
-  p_confirm_mutate boolean default false
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $body$
+UPDATE pg_proc SET
+  prosrc = replace($alzidan_ws_prosrc$
 declare
   v_sql text@SC@
   v_cls jsonb@SC@
@@ -128,7 +123,6 @@ declare
   v_err_msg text@SC@
   v_limit integer := 500@SC@
   v_probe text@SC@
-  v_stripper_ok boolean := false@SC@
 begin
   if not public.admin_token_ok_v1(p_token) then
     raise exception 'not allowed'@SC@
@@ -143,21 +137,13 @@ begin
     )@SC@
   end if@SC@
 
-  begin
-    v_probe := public.admin_sql_sql_without_literals_v1(v_sql)@SC@
-    v_stripper_ok := true@SC@
-  exception when undefined_function then
-    v_probe := v_sql@SC@
-    v_stripper_ok := false@SC@
-  end@SC@
-
+  v_probe := public.admin_sql_sql_without_literals_v1(v_sql)@SC@
   v_probe := regexp_replace(v_probe, '@SC@\s*$', '')@SC@
   if position('@SC@' in v_probe) > 0 then
     return jsonb_build_object(
       'ok', false,
       'error_code', 'SQL-WS-MULTI',
-      'message_ar', 'يُسمح بأمر واحد فقط في كل تنفيذ. للصيانة متعددة الأوامر: استخدم «أوامر الصيانة الجاهزة» (تشغيل متسلسل).',
-      'needs_executor_upgrade', (not v_stripper_ok)
+      'message_ar', 'يُسمح بأمر واحد فقط في كل تنفيذ. للصيانة متعددة الأوامر: استخدم «أوامر الصيانة الجاهزة» (تشغيل متسلسل).'
     )@SC@
   end if@SC@
   v_sql := regexp_replace(v_sql, '@SC@\s*$', '')@SC@
@@ -267,8 +253,7 @@ begin
         'row_count', v_row_count,
         'truncated', v_truncated,
         'elapsed_ms', v_elapsed_ms,
-        'confirmed_mutate', coalesce(p_confirm_mutate, false),
-        'executor', 'literal_aware_v2'
+        'confirmed_mutate', coalesce(p_confirm_mutate, false)
       )
     )@SC@
   exception when others then
@@ -289,15 +274,32 @@ begin
     'executor', 'literal_aware_v2'
   )@SC@
 end@SC@
-$body$
-$alzidan_ws_upgrade$, '@SC@', chr(59));
+$alzidan_ws_prosrc$, '@SC@', chr(59))
+WHERE proname = 'admin_sql_execute_v1'
+  AND pronamespace = 'public'::regnamespace
+  AND pg_get_function_identity_arguments(oid) = 'p_token text, p_sql text, p_confirm_mutate boolean';
 
-comment on function public.admin_sql_execute_v1(text, text, boolean) is 'SQL Workspace: literal-aware MULTI check (bootstrap via Workspace)';
-
-revoke all on function public.admin_sql_execute_v1(text, text, boolean) from public;
-
-grant execute on function public.admin_sql_execute_v1(text, text, boolean) to anon, authenticated;
-
-revoke all on function public.admin_sql_sql_without_literals_v1(text) from public;
-
-grant execute on function public.admin_sql_sql_without_literals_v1(text) to anon, authenticated;
+DO $alzidan_ws_grants$
+BEGIN
+  BEGIN
+    REVOKE ALL ON FUNCTION public.admin_sql_execute_v1(text, text, boolean) FROM public;
+  EXCEPTION WHEN undefined_object OR invalid_grant_operation THEN
+    NULL;
+  END;
+  BEGIN
+    GRANT EXECUTE ON FUNCTION public.admin_sql_execute_v1(text, text, boolean) TO anon, authenticated;
+  EXCEPTION WHEN undefined_object THEN
+    NULL;
+  END;
+  BEGIN
+    REVOKE ALL ON FUNCTION public.admin_sql_sql_without_literals_v1(text) FROM public;
+  EXCEPTION WHEN undefined_object OR invalid_grant_operation THEN
+    NULL;
+  END;
+  BEGIN
+    GRANT EXECUTE ON FUNCTION public.admin_sql_sql_without_literals_v1(text) TO anon, authenticated;
+  EXCEPTION WHEN undefined_object THEN
+    NULL;
+  END;
+END
+$alzidan_ws_grants$;

@@ -1,10 +1,7 @@
--- NOTE: Operator upgrade path is now 20260809_sql_workspace_executor_bootstrap.sql
--- (runs through old naive MULTI checker). This file remains the readable source of the bodies.
--- Operator path: Admin → SQL Workspace → أوامر الصيانة الجاهزة
--- Preset: maint.sql_workspace_literal_aware_v1
--- Enables CREATE FUNCTION bodies via SQL Workspace (semicolons inside $$).
--- If an OLD executor rejects this script with SQL-WS-MULTI, run THIS file once
--- in Supabase SQL Editor — that is the only remaining external-paste exception.
+-- NOTE: Operator upgrade path is 20260809_sql_workspace_executor_bootstrap.sql
+-- (zero-semicolon CREATE stub + UPDATE pg_proc via Workspace). This file is the
+-- readable source of the stripper/executor bodies.
+-- Preset id: maint.sql_workspace_literal_aware_v1
 
 create or replace function public.admin_sql_sql_without_literals_v1(p_sql text)
 returns text

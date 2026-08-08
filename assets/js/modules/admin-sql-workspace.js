@@ -621,6 +621,7 @@
       if (!stmts.length) {
         return { ok: false, error: "ملف ترقية المنفّذ فارغ" };
       }
+      let lastFail = null;
       for (let i = 0; i < stmts.length; i++) {
         setStatus(
           "busy",
@@ -643,24 +644,50 @@
           const code = String(
             (payload && payload.error_code) || (error && error.code) || "",
           );
-          return {
+          const detail = String(
+            (payload && (payload.err || payload.hint_ar)) || "",
+          );
+          lastFail = {
             ok: false,
             error:
               "فشلت ترقية المنفّذ عند الخطوة " +
               (i + 1) +
               ": " +
               friendlyRpcError(error, payload) +
+              (detail ? " — " + detail : "") +
               (code ? " [" + code + "]" : ""),
             step: i + 1,
           };
+          // Core upgrade is statements 1–3 (stub + pg_proc bodies). If those
+          // landed, grants (step 4+) are best-effort — confirm via probe.
+          if (i >= 3) {
+            const probe = await probeExecutorReady(token);
+            if (probe.ready) {
+              lastFail = null;
+              break;
+            }
+          }
+          return lastFail;
         }
+      }
+      const probe = await probeExecutorReady(token);
+      if (!probe.ready) {
+        return (
+          lastFail || {
+            ok: false,
+            error:
+              "اكتملت خطوات الترقية لكن فحص المنفّذ فشل (" +
+              (probe.reason || "?") +
+              "). إن ظهر permission denied على pg_proc فالكتالوج مقفول من المزوّد.",
+          }
+        );
       }
       executorReady = true;
       if (typeof api.markDone === "function") {
         api.markDone("maint.sql_workspace_literal_aware_v1", {
           bootstrap: true,
           actor: getActorLabel(),
-          version: "executor_bootstrap_v1",
+          version: "executor_bootstrap_v2_pg_proc",
           archived: true,
         });
       }
