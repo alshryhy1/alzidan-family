@@ -1,17 +1,18 @@
 # مراجعة رحلة الطلب كاملة — v1
 
-**الحالة:** تحليل / تصميم تجربة — **ليست** شريحة تنفيذ  
+**الحالة:** تحليل / تصميم تجربة — **ليست** شريحة تنفيذ · توسعة القرار: [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) 🟡 مسودة  
 **التاريخ:** 2026-08-09  
 **النوع:** وثيقة رحلة (as-is → to-be) تربط الصفحة الرئيسية · الإدارة · Workflow · المندوب · الشجرة  
 **المراجع الدستورية:**  
-[`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md)
+[`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · **رحلة القرار لكل نوع:** [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)
 
 ---
 
 ## 0) قرار المنتج (ملخّص تنفيذي)
 
 > لا تُراجع صفحة المندوب بمعزل. الرحلة وحدة واحدة: **رئيسية → إدارة/تحقق → مندوب → أثر على الشجرة → عودة أثر للإدارة**.  
-> **لا تطوير لواجهة المندوب الآن.** الصفحة الحالية = **legacy**. إعادة التصميم تنتظر السلّم: RX → VE → WF.
+> **لا تطوير لواجهة المندوب الآن.** الصفحة الحالية = **legacy**. إعادة التصميم تنتظر السلّم: RX → VE → WF.  
+> **توسعة إلزامية قبل أي كود:** رحلة **الطلب + القرار** لكل نوع طلب — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — بانتظار «اعتمدوا رحلة القرار».
 
 | سؤال | جواب |
 |-------|------|
@@ -206,9 +207,12 @@ Family Engine / الخدمات            ← كتابة واحدة فقط
 
 ---
 
-## 8) ربط بالخارطة
+## 8) ربط بالخارطة ورحلة القرار
 
 أُضيفت إشارة من [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) إلى هذه المراجعة كمرجع رحلة الطلب الكاملة قبل أي تنفيذ DW/RX UI.
+
+**الخطوة الوثائقية التالية (قبل الكود):** اعتماد [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — من ينشئ / يراجع / يعتمد / ينفّذ / ماذا بعد / منع التكرار والخلط / لغة الحالة لكل نوع.  
+**لا شاشة منفردة** و**لا كود** حتى عبارة المنتج: **«اعتمدوا رحلة القرار»**.
 
 ---
 
