@@ -1,7 +1,7 @@
 # Request Catalog — فهرس نوايا المستخدم
 
-**الحالة:** دستور المنصة (معتمد) — مرحلة Product Foundation  
-**التاريخ:** 2026-08-08  
+**الحالة:** دستور المنصة (مضمون معتمد) — **تجميد بوابة 2:** 🟡 بعد Delegates 🟢  
+**التاريخ:** 2026-08-08 · ختم جاهزية التجميد: 2026-08-09  
 **المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md)
 
 هذا هو **المرجع الوحيد** لإضافة عملية جديدة يعتمدها المستخدم.

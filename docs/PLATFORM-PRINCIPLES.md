@@ -1,8 +1,9 @@
 # Platform Principles — دستور المنصة
 
-**الحالة:** معتمد رسميًا  
-**التاريخ:** 2026-08-08  
-**المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md)
+**الحالة:** معتمد رسميًا كمضمون · **بوابة Product Foundation (تجميد رسمي):** 🟡 جاهز للتجميد بعد Delegates v2 🟢  
+**Truth Before Speed:** ساري كمبدأ دستوري (قاعدة ج) — يُدرَج في ختم التجميد مع الوثائق الأربع عند إغلاق بوابة 2  
+**التاريخ:** 2026-08-08 · ختم جاهزية التجميد: 2026-08-09  
+**المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) · قبول المناديب: [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)
 
 هذه أهم وثيقة طويلة الأمد. كل مطوّر ينضم للمشروع يقرأها أولًا.
 

@@ -1,7 +1,7 @@
 # Workflow Specification v1 — محرك سير الطلبات
 
-**الحالة:** دستور المنصة (معتمد) — أساس Workflow Engine v1 في المستودع (🟡 بانتظار SQL+دخان) — راجع [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
-**التاريخ:** 2026-08-08  
+**الحالة:** دستور المنصة (مضمون معتمد) — **تجميد بوابة 2:** 🟡 بعد Delegates 🟢 · أساس Workflow Engine v1 في المستودع (🟡 provisional) — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
+**التاريخ:** 2026-08-08 · ختم جاهزية التجميد: 2026-08-09  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) (ADR-010) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)  
 **النطاق:** طبقة Workflow Engine — بلا Delegate Workspace ولا Request Experience كاملة؛ لوحة حالة إدارية مصغّرة مسموحة للقراءة/انتقال إداري فقط
 

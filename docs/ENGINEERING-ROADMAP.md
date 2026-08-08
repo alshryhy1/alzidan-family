@@ -2,7 +2,7 @@
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-08 — بوابتان قبل مراحل المنتج · Validation Engine مرحلة مستقلة · سلّم SSOT محدَّث · Truth Before Speed  
+**آخر تحديث تخطيط:** 2026-08-09 — اعتماد UX مساحة المندوب («ابدا») · قائمة قبول Delegates · بوابتان ما زالتا 🟡 · لا كود DW  
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 ### دستور المنصة مقابل هذه الخارطة
@@ -110,7 +110,7 @@ iOS Experience Rebuild
 | **Request Experience** | ⚪ | بعد البوابتين 1+2 🟢 فقط — **لا يُشترط** Workflow 🟢 |
 | **Validation Engine** | ⚪ | مرحلة مستقلة بعد RX — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **Workflow Engine v1** | 🟡 | أساس **provisional** على main — إغلاق (سلامة + إزالة مسار قديم) **عند مرحلته** بعد Validation — لا توسيع قبلها — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
-| **Delegate Workspace v1** | ⚪ | بعد Workflow على السلّم |
+| **Delegate Workspace v1** | ⚪ | UX ✅ معتمد («ابدا») — [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) · **كود ❄️** حتى RX→VE→WF |
 | **Admin UX (مراقبة)** | ⚪ | بعد Delegate Workspace |
 | **Family Engine Alignment** | ⚪ | مواءمة + **Single Write Rule** — لا إعادة بناء |
 | **iOS Experience Rebuild** | ⬛ | بعد إغلاق المراحل الكانونية فقط |
@@ -285,7 +285,7 @@ Search Name        ← للبحث/التطبيع
 | المسار | المحتوى | الحالة |
 |--------|---------|--------|
 | **Admin Hub / Redesign** | شِلّ موديولات (عرض فقط — بلا منطق سير) | 🟢 أساس · تكراري |
-| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 **بوابة 1** — SQL مُطبَّق؛ بانتظار اختبار قبول |
+| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 **بوابة 1** — SQL مُطبَّق؛ بانتظار قبول — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) |
 | **Product Foundation** | **دستور حي** + Truth Before Speed — تجميد لا «مرحلة docs» | 🟡 **بوابة 2** — بانتظار التجميد بعد 🟢 Delegates |
 | **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | ⚪ — بعد البوابتين 🟢 |
 | **Validation Engine** | تحقق قبل المندوب/الشجرة — لا تنفيذ | ⚪ — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
@@ -527,7 +527,7 @@ Validation (معايير القبول + KPI جزئية)
 | **RX-v1** | Request Experience | ⚪ | بعد البوابتين 1+2 🟢 |
 | **VE-v1** | Validation Engine | ⚪ | مرحلة مستقلة — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **WE-v1** | Workflow Engine v1 | 🟡 | provisional على main — إغلاق عند مرحلته بعد VE |
-| **DW-v1** | Delegate Workspace v1 | ⚪ | بعد Workflow على السلّم |
+| **DW-v1** | Delegate Workspace v1 | ⚪ | UX معتمد («ابدا») · كود بعد Workflow على السلّم |
 | **Admin-P3** | Admin UX (مراقبة) | ⚪ | قائمة موسّعة أدناه |
 | **FE-Align** | Family Engine Alignment | ⚪ | مواءمة + Single Write Rule |
 | **Tree Engine v2** | مرحلة مستقلة | ⚪ | §6 |
@@ -678,17 +678,18 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 - شريط/عدّادات التدفق في الـ Hub تُغذَّى لاحقًا من **Workflow Engine** (لا منطق سير داخل الواجهة)
 - موديولات: شجرة · أعضاء · مناسبات · ذكريات · مندوبون · صحة · سجل · طلبات · بطاقات · تصويت · إحصاءات · أدوات
 
-### بوابة 1 — Delegates v2 🟡 ← **قبول فقط · ليس برمجة جديدة**
+### بوابة 1 — Delegates v2 🟡 ← **قبول فقط · ليس برمجة جديدة** ← **الخطوة الفورية الآن**
 
 **المخرج:** اختبار قبول ناجح → 🟢 قبل تجميد الدستور.  
-[`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `COPY-ME-delegates-v2.sql` + enforce
+**نفّذ الآن:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) (خانات عربية قابلة للتنفيذ)  
+تفاصيل تقنية: [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `COPY-ME-delegates-v2.sql` + enforce
 
 | بند قبول | الحالة |
 |----------|--------|
-| اختبار الصلاحيات | 🟡 بانتظار قبول |
-| اختبار الأدوار | 🟡 بانتظار قبول |
-| اختبار التفعيل والتعطيل | 🟡 بانتظار قبول |
-| اختبار سجل التدقيق | 🟡 بانتظار قبول |
+| اختبار الصلاحيات | 🟡 بانتظار قبول — ACCEPTANCE §1 |
+| اختبار الأدوار | 🟡 بانتظار قبول — ACCEPTANCE §2 |
+| اختبار التفعيل والتعطيل | 🟡 بانتظار قبول — ACCEPTANCE §3 |
+| اختبار سجل التدقيق | 🟡 بانتظار قبول — ACCEPTANCE §4 |
 | اعتماد متعدد المراحل | ⚪ يُبنى لاحقًا فوق Workflow Engine — ليس بديلًا عنه |
 
 ### بوابة 2 — Product Foundation 🟡 = **دستور المنصة / دستور حي** (ليست مرحلة وثائق)
@@ -753,7 +754,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 ### المرحلة — Delegate Workspace v1 ⚪
 
 **بوابة:** Validation + Workflow على مسار السلّم. الواجهة تستدعي المحركات فقط.  
-**تصوّر UX:** [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) — ✅ **مرجع معتمد (conception)** · التنفيذ ❄️ مجمَّد حتى اعتماد مراجعة UX + بوابات السلّم السابقة · requests-first · جلسة لكل طلب · الصفحة الحالية legacy مجمّدة تجميليًا · تنفيذ لاحق على مراحل (Inbox → Session → Next-queue) لا دفعة واحدة.
+**تصوّر UX:** [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) — ✅ **معتمد من صاحب المنتج** (عبارة الاعتماد: **«ابدا»** / اعتماد المراجعة · 2026-08-09) · التنفيذ ❄️ **ما زال مجمَّدًا** حتى بوابات السلّم (Delegates → Foundation → RX → VE → Workflow) · requests-first · جلسة لكل طلب · الصفحة الحالية legacy مجمّدة تجميليًا · **لا كود DW الآن** · تنفيذ لاحق على مراحل (Inbox → Session → Next-queue) لا دفعة واحدة.
 
 | بند | قاعدة |
 |-----|--------|
@@ -825,7 +826,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 - القفز من قبول **Delegates** إلى **Request Experience** دون تجميد الدستور الحي
 - اشتراط **Workflow Engine 🟢** قبل Request Experience (مخالف للسلّم المعتمد)
 - توسيع أساس Workflow الـ provisional قبل مرحلة **Validation Engine** والمواءمة
-- تنفيذ مراحل السلّم خارج الترتيب أو قبل البوابتين 🟢
+- تنفيذ مراحل السلّم خارج الترتيب أو قبل البوابتين 🟢 — بما فيها **كود Delegate Workspace** رغم اعتماد UX («ابدا»)
 - إنشاء شاشة/نموذج/ميزة بلا تحديد طبقة — بما فيها Validation Engine (خرق قاعدة أ)
 - بناء واجهة فوق قاعدة البيانات بدل لغة المستخدم أولًا ثم المحرك (خرق قاعدة ب)
 - تجاهل **Truth Before Speed** أو **Single Write Rule**
@@ -854,7 +855,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 | الحالة | المحتوى |
 |--------|---------|
 | 🟢 | Patch 0–4 · Mobile 36 · News · Repair يدوي · Health · Admin P1 شِلّ · DateEngine أساس · TREE-004 |
-| 🟡 | **البوابتان** — (1) Delegates قبول · (2) تجميد الدستور الحي + Truth Before Speed — **ما زالتا 🟡** · Workflow foundation = provisional · tree-import · Integrity v2 · (Admin-SC-List إن لزم) |
+| 🟡 | **البوابتان** — (1) Delegates قبول ← [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) · (2) تجميد الدستور الحي + Truth Before Speed — **ما زالتا 🟡** · DW UX معتمد («ابدا») بلا كود · Workflow provisional · tree-import · Integrity v2 · (Admin-SC-List إن لزم) |
 | ⚪ | Multi-stage فوق Workflow — ليس حاجزًا لإغلاق صلاحيات v2 |
 | ⚪ | Request Experience · Validation Engine · (إغلاق Workflow عند مرحلته) · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 — **بعد البوابتين 🟢** |
 | ⬛ | iOS Experience Rebuild — برنامج (ج) |
@@ -863,11 +864,12 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 ---
 
-**الخطوة التالية الفورية (لا قفز):**  
-(1) **بوابة 1** — اختبار قبول Delegates v2 (صلاحيات · أدوار · تفعيل/تعطيل · سجل تدقيق) → 🟢  
+**الخطوة التالية الفورية (لا قفز) — بعد «ابدا» 2026-08-09:**  
+(0) UX مساحة المندوب ✅ معتمد — **لا يفتح كود DW**  
+(1) **بوابة 1 الآن** — نفّذ [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) (صلاحيات · أدوار · تفعيل/تعطيل · سجل تدقيق) → 🟢  
 (2) **بوابة 2** — تجميد الوثائق الأربع كـ**دستور حي** + Truth Before Speed → 🟢  
-(3) **بعدها السلّم:** Request Experience → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
+(3) **بعدها السلّم:** Request Experience → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace (كود) → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
 
-لا توسيع Workflow provisional · لا Delegate Workspace / iOS الآن كشرائح إنتاج.
+لا توسيع Workflow provisional · لا كود Delegate Workspace / iOS الآن.
 
 **تسليم SQL لـ Supabase:** افتح ملف `.sql` → Select All → Copy. لا تنسخ من الشات (أسوار Markdown تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.

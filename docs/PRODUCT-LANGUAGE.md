@@ -1,7 +1,7 @@
 # Product Language — لغة المنتج
 
-**الحالة:** دستور المنصة / دستور حي (معتمد) — بوابة Product Foundation  
-**التاريخ:** 2026-08-08  
+**الحالة:** دستور المنصة / دستور حي (مضمون معتمد) — **تجميد بوابة 2:** 🟡 بعد Delegates 🟢  
+**التاريخ:** 2026-08-08 · ختم جاهزية التجميد: 2026-08-09  
 **المراجع:** [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md)
 
 هذه الوثيقة هي **هوية المنتج اللغوية**. كل نص يظهر للزائر أو المندوب أو الإدارة يُراجع هنا قبل الشحن.
