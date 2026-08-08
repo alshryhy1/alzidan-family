@@ -9,7 +9,7 @@
   const QUEUE_KEY = "alzidan_sql_ws_queue_v1";
   const ARCHIVE_KEY = "alzidan_sql_ws_archive_v1";
   /** One-shot flag: collapse historical fail spam in localStorage. */
-  const DAILY_COLLAPSE_FLAG = "alzidan_sql_ws_daily_collapse_v3";
+  const DAILY_COLLAPSE_FLAG = "alzidan_sql_ws_daily_collapse_v4";
   const QUEUE_MAX = 60;
   const ARCHIVE_MAX = 200;
   const MUTATE_RE =
@@ -18,6 +18,17 @@
   const EDITOR_COMMAND_KEY = "editor:last";
   const EDITOR_DAILY_ID = "daily_editor_last";
   const EDITOR_DAILY_TITLE = "آخر محاولة محرر";
+  const SAFE_EDITOR_TIP =
+    "SELECT id, child_name FROM tree_children LIMIT 20;";
+  /** Retired pg_proc bootstrap — never load/run as a maintenance path. */
+  const RETIRED_BOOTSTRAP_IDS = {
+    "maint.sql_workspace_executor_bootstrap_v1": true,
+    "maint.sql_workspace_literal_aware_v1": true,
+  };
+  const RETIRED_MSG_AR =
+    "متقاعد — لا يُشغَّل. استخدم COPY-ME-admin-sql-workspace-run-v2.sql في Supabase مرة إن لزم، أو بطاقة تثبيت v2";
+  const V2_BLOCK_CARD_AR =
+    "تثبيت v2 مطلوب — الصق مرة واحدة في Supabase: supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql ثم شغّل بطاقة «تثبيت منفّذ SQL Workspace v2».";
 
   let migrated = false;
   let dailyCollapsed = false;
@@ -28,12 +39,45 @@
   let executorReady = false;
   let bootstrapping = false;
   let multiRetryUsed = false;
+  /** True after we un-archived false «تعليم كمُنفذ» because v2 is missing. */
+  let v2InstallRequiredBanner = false;
   const V2_RPC = "admin_sql_workspace_run_v2";
   const V1_RPC = "admin_sql_execute_v1";
   const V2_INSTALL_FILE = "../supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql";
   const V2_PRESET_ID = "maint.sql_workspace_run_v2";
   const V2_SUPABASE_HINT =
     "المنفّذ الحالي (v1) يرفض أكثر من أمر. الصق ملف COPY-ME-admin-sql-workspace-run-v2.sql مرة واحدة في Supabase SQL Editor أولًا (CREATE OR REPLACE فقط)، ثم ارجع وشغّل بطاقة «تثبيت منفّذ SQL Workspace v2».";
+
+  function isRetiredPresetId(id) {
+    const s = String(id || "").trim();
+    if (!s) return false;
+    if (RETIRED_BOOTSTRAP_IDS[s]) return true;
+    return /executor_bootstrap|literal_aware/i.test(s);
+  }
+
+  function isRetiredSql(sql) {
+    const s = String(sql || "");
+    if (!s.trim()) return false;
+    if (/UPDATE\s+pg_proc\b/i.test(s)) return true;
+    if (/SQL-WS-RETIRED-PG-PROC/i.test(s)) return true;
+    if (/sql_workspace_executor_bootstrap/i.test(s)) return true;
+    if (/maint\.sql_workspace_executor_bootstrap_v1/i.test(s)) return true;
+    if (/alzidan_ws_prosrc/i.test(s)) return true;
+    if (/permission denied for table pg_proc/i.test(s)) return true;
+    return false;
+  }
+
+  function isRetiredDailyEntry(entry) {
+    const it = entry && typeof entry === "object" ? entry : {};
+    if (isRetiredPresetId(it.presetId) || isRetiredPresetId(it.version)) {
+      return true;
+    }
+    if (isRetiredSql(it.sql)) return true;
+    if (/pg_proc|SQL-WS-RETIRED|42501/i.test(String(it.error || ""))) {
+      return true;
+    }
+    return false;
+  }
 
   function getToken() {
     try {
@@ -237,6 +281,7 @@
       try {
         localStorage.setItem(DAILY_COLLAPSE_FLAG, "1");
       } catch (_) {}
+      scrubRetiredDailyNoise();
     } catch (_) {}
   }
 
@@ -288,6 +333,99 @@
         return true;
       });
     saveJsonArray(QUEUE_KEY, localStorage, collapseDailyItems(q), QUEUE_MAX);
+  }
+
+  function scrubRetiredDailyNoise() {
+    const before = loadJsonArray(QUEUE_KEY, localStorage);
+    const next = before.filter(function (raw) {
+      return !isRetiredDailyEntry(raw);
+    });
+    if (JSON.stringify(before) !== JSON.stringify(next)) {
+      saveJsonArray(QUEUE_KEY, localStorage, collapseDailyItems(next), QUEUE_MAX);
+    }
+    // Drop obsolete retired preset fail badges.
+    try {
+      const api = presetsApi();
+      if (api && typeof api.loadFail === "function" && typeof api.clearFail === "function") {
+        const fails = api.loadFail() || {};
+        Object.keys(fails).forEach(function (id) {
+          if (isRetiredPresetId(id)) api.clearFail(id);
+        });
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Replace leftover pg_proc / bootstrap_v1 editor contents with a safe tip.
+   * Returns true when the editor was scrubbed.
+   */
+  function scrubRetiredEditorContent(opts) {
+    const quiet = !!(opts && opts.quiet);
+    cacheEls();
+    if (!els.editor) return false;
+    const sql = String(els.editor.value || "");
+    const retiredPreset = isRetiredPresetId(activeEditorPresetId);
+    if (!retiredPreset && !isRetiredSql(sql)) return false;
+    activeEditorPresetId = "";
+    els.editor.value = SAFE_EDITOR_TIP;
+    setEditorVisible(true);
+    if (!quiet) {
+      setError(RETIRED_MSG_AR);
+      setStatus("err", "متقاعد — لا يُشغَّل");
+    } else {
+      setError("");
+      setStatus("", "أُزيل سكربت متقاعد من المحرر");
+    }
+    return true;
+  }
+
+  function looksLikeFalseArchiveMeta(meta, presetId) {
+    const m = meta && typeof meta === "object" ? meta : {};
+    if (m.manual) return true;
+    if (presetId === V2_PRESET_ID) {
+      // Marked done but probe says missing → not really installed.
+      return !m.via && !m.already;
+    }
+    // Maintenance cards that need v2 cannot have succeeded without it.
+    if (!m.via && !m.statements && !m.rowCount && !m.bootstrap) return true;
+    return false;
+  }
+
+  /**
+   * If v2 RPC is absent, reverse false «تعليم كمُنفذ» archive marks and
+   * force a single blocking install card.
+   */
+  function reconcileArchiveWithExecutorReady() {
+    const api = presetsApi();
+    if (!api) return { cleared: [] };
+    if (executorReady) {
+      v2InstallRequiredBanner = false;
+      return { cleared: [] };
+    }
+    const done =
+      typeof api.loadDone === "function" ? api.loadDone() || {} : {};
+    const cleared = [];
+    Object.keys(done).forEach(function (id) {
+      const meta = done[id];
+      if (!meta || !meta.ok) return;
+      if (!looksLikeFalseArchiveMeta(meta, id) && id !== V2_PRESET_ID) return;
+      // Without v2, archived maintenance presets are not trustworthy.
+      if (typeof api.clearDone === "function") api.clearDone(id);
+      cleared.push(id);
+    });
+    if (cleared.length) {
+      const arch = loadJsonArray(ARCHIVE_KEY, localStorage).filter(function (raw) {
+        const it = normalizeEntry(raw);
+        if (cleared.indexOf(it.presetId) >= 0) return false;
+        if (isRetiredDailyEntry(it)) return false;
+        return true;
+      });
+      saveJsonArray(ARCHIVE_KEY, localStorage, arch, ARCHIVE_MAX);
+      v2InstallRequiredBanner = true;
+    } else {
+      v2InstallRequiredBanner = !executorReady;
+    }
+    return { cleared: cleared };
   }
 
   function makeId() {
@@ -416,11 +554,16 @@
       const it = normalizeEntry(raw);
       if (isCommandSucceeded(it)) return;
       if (it.status === "done" || it.ok) return;
+      if (isRetiredDailyEntry(it)) return;
       const presetId = resolvePresetId(it);
       // Drop obsolete maintenance cards that are no longer in the catalog.
       if (presetId && !known.has(presetId)) {
         // Old literal_aware / renamed presets: do not keep a daily ghost card.
-        if (it.source === "preset" || String(it.title || "").indexOf("literal") >= 0) {
+        if (
+          it.source === "preset" ||
+          isRetiredPresetId(presetId) ||
+          String(it.title || "").indexOf("literal") >= 0
+        ) {
           return;
         }
       }
@@ -698,8 +841,21 @@
     const o = opts || {};
     const ok = !!it.ok;
     const busy = it.status === "running";
-    const badge = busy ? "قيد التنفيذ" : ok ? "مُنفذ" : "فشل — أعد التنفيذ";
-    const cls = busy ? " is-busy" : ok ? " is-ok" : " is-fail";
+    const retired = !ok && !busy && isRetiredDailyEntry(it);
+    const badge = busy
+      ? "قيد التنفيذ"
+      : ok
+        ? "مُنفذ"
+        : retired
+          ? "متقاعد — غير قابل للتنفيذ"
+          : "فشل — أعد التنفيذ";
+    const cls = busy
+      ? " is-busy"
+      : ok
+        ? " is-ok"
+        : retired
+          ? " is-fail"
+          : " is-fail";
     return (
       '<button type="button" class="sql-ws-hist-item' +
       cls +
@@ -735,8 +891,10 @@
       '<span class="sql-ws-hist-rows">صفوف: ' +
       escapeHtml(String(it.rowCount != null ? it.rowCount : "—")) +
       "</span>" +
-      (it.error
-        ? '<span class="sql-ws-hist-err">' + escapeHtml(it.error) + "</span>"
+      ((retired ? RETIRED_MSG_AR : it.error)
+        ? '<span class="sql-ws-hist-err">' +
+          escapeHtml(retired ? RETIRED_MSG_AR : it.error) +
+          "</span>"
         : "") +
       '<span class="sql-ws-hist-preview" dir="ltr">' +
       escapeHtml((it.sql || it.title || "").slice(0, 120)) +
@@ -1238,6 +1396,20 @@
       setStatus("err", "فارغ");
       return;
     }
+    if (isRetiredSql(sql) || isRetiredPresetId(activeEditorPresetId)) {
+      scrubRetiredEditorContent();
+      scrubRetiredDailyNoise();
+      clearDailyForCommand({
+        id: EDITOR_DAILY_ID,
+        source: "editor",
+        sql: sql,
+        title: EDITOR_DAILY_TITLE,
+      });
+      renderQueue();
+      setError(RETIRED_MSG_AR);
+      setStatus("err", "متقاعد — لا يُشغَّل");
+      return;
+    }
 
     const cls = classifyLocal(sql);
     if (cls.mutating && !confirmMutate) {
@@ -1553,14 +1725,24 @@
         (executorReady ? " · المنفّذ v2 جاهز" : " · المنفّذ v2 غير مفعّل");
     }
     if (!items.length) {
+      if (!executorReady) {
+        host.innerHTML =
+          '<div class="alert alert-error sql-ws-v2-gate" role="status">' +
+          "<strong>تثبيت v2 مطلوب:</strong> " +
+          escapeHtml(V2_BLOCK_CARD_AR) +
+          "</div>";
+        return;
+      }
       host.innerHTML =
         '<div class="hint">لا أوامر صيانة بانتظار التنفيذ الآن. الأوامر المُنفَّذة في «سجل التنفيذ / الأرشيف» أدناه — أو ألغِ «مُنفذ» من الأرشيف إن احتجت إعادة تشغيل.</div>';
       return;
     }
     const gateBanner = !executorReady
       ? '<div class="alert alert-error sql-ws-v2-gate" role="status" style="margin:0 0 10px;">' +
-        "<strong>خطوة إلزامية قبل باقي البطاقات:</strong> " +
-        escapeHtml(V2_SUPABASE_HINT) +
+        "<strong>" +
+        (v2InstallRequiredBanner ? "تثبيت v2 مطلوب:" : "خطوة إلزامية قبل باقي البطاقات:") +
+        "</strong> " +
+        escapeHtml(v2InstallRequiredBanner ? V2_BLOCK_CARD_AR : V2_SUPABASE_HINT) +
         "</div>"
       : "";
     host.innerHTML =
@@ -1632,11 +1814,27 @@
   async function loadPresetIntoEditor(id) {
     const api = presetsApi();
     if (!api) return;
+    if (isRetiredPresetId(id)) {
+      activeEditorPresetId = "";
+      if (els.editor) els.editor.value = SAFE_EDITOR_TIP;
+      setEditorVisible(true);
+      setStatus("err", "متقاعد — لا يُشغَّل");
+      setError(RETIRED_MSG_AR);
+      return;
+    }
     const p = (api.PRESETS || []).find((x) => x.id === id);
     if (!p) return;
     setStatus("busy", "جاري تحميل الأمر…");
     try {
       const sql = await api.fetchPresetSql(p.file);
+      if (isRetiredSql(sql) || /SQL-WS-RETIRED-PG-PROC/i.test(sql)) {
+        activeEditorPresetId = "";
+        if (els.editor) els.editor.value = SAFE_EDITOR_TIP;
+        setEditorVisible(true);
+        setStatus("err", "متقاعد — لا يُشغَّل");
+        setError(RETIRED_MSG_AR);
+        return;
+      }
       activeEditorPresetId = id;
       if (els.editor) els.editor.value = sql;
       setEditorVisible(true);
@@ -1652,6 +1850,13 @@
     const api = presetsApi();
     if (!api) {
       setError("وحدة الأوامر الجاهزة غير محمّلة.");
+      return;
+    }
+    if (isRetiredPresetId(id)) {
+      if (els.editor) els.editor.value = SAFE_EDITOR_TIP;
+      setEditorVisible(true);
+      setError(RETIRED_MSG_AR);
+      setStatus("err", "متقاعد — لا يُشغَّل");
       return;
     }
     const p = (api.PRESETS || []).find((x) => x.id === id);
@@ -1694,7 +1899,12 @@
         return;
       }
       if (boot.needs_supabase && boot.sql && els.editor) {
-        els.editor.value = boot.sql;
+        if (isRetiredSql(boot.sql)) {
+          els.editor.value = SAFE_EDITOR_TIP;
+          setError(RETIRED_MSG_AR);
+        } else {
+          els.editor.value = boot.sql;
+        }
         setEditorVisible(true);
       }
       if (typeof api.markFail === "function") {
@@ -1729,7 +1939,12 @@
     const up = await ensureExecutorReady(token);
     if (!up.ok) {
       if (up.needs_supabase && up.sql && els.editor) {
-        els.editor.value = up.sql;
+        if (isRetiredSql(up.sql)) {
+          els.editor.value = SAFE_EDITOR_TIP;
+          setError(RETIRED_MSG_AR);
+        } else {
+          els.editor.value = up.sql;
+        }
         setEditorVisible(true);
       }
       setError(up.error || "تعذّر تثبيت منفّذ SQL Workspace v2");
@@ -1927,8 +2142,26 @@
 
   function restoreFromEntry(it) {
     if (!it || !els.editor) return;
+    if (isRetiredDailyEntry(it)) {
+      activeEditorPresetId = "";
+      els.editor.value = SAFE_EDITOR_TIP;
+      setEditorVisible(true);
+      setError(RETIRED_MSG_AR);
+      setStatus("err", "متقاعد — لا يُشغَّل");
+      scrubRetiredDailyNoise();
+      renderQueue();
+      return;
+    }
     if (it.presetId) activeEditorPresetId = it.presetId;
     if (it.sql) {
+      if (isRetiredSql(it.sql)) {
+        activeEditorPresetId = "";
+        els.editor.value = SAFE_EDITOR_TIP;
+        setEditorVisible(true);
+        setError(RETIRED_MSG_AR);
+        setStatus("err", "متقاعد — لا يُشغَّل");
+        return;
+      }
       els.editor.value = it.sql;
       setEditorVisible(true);
       setStatus("", "استُعيد من السجل");
@@ -1962,6 +2195,18 @@
       const doneBtn = e.target.closest("[data-preset-done]");
       if (doneBtn) {
         const id = doneBtn.getAttribute("data-preset-done");
+        if (isRetiredPresetId(id)) {
+          setError(RETIRED_MSG_AR);
+          setStatus("err", "متقاعد — لا يُشغَّل");
+          return;
+        }
+        if (!executorReady) {
+          v2InstallRequiredBanner = true;
+          setError(V2_BLOCK_CARD_AR);
+          setStatus("err", "تثبيت v2 مطلوب");
+          renderPresets();
+          return;
+        }
         archivePresetSuccess(id, {
           manual: true,
           actor: getActorLabel(),
@@ -2033,37 +2278,70 @@
     bindToolsNav();
     bindPresets();
     migrateCollapseDailySpam();
+    scrubRetiredDailyNoise();
     purgeDailySucceeded();
     renderQueue();
     renderArchive();
     setEditorVisible(true);
-    if (els.editor && !String(els.editor.value || "").trim()) {
-      els.editor.value = "SELECT id, child_name FROM tree_children LIMIT 20;";
+    if (els.editor) {
+      if (scrubRetiredEditorContent({ quiet: true })) {
+        /* replaced retired leftover */
+      } else if (!String(els.editor.value || "").trim()) {
+        els.editor.value = SAFE_EDITOR_TIP;
+      }
     }
 
     (async function probeExecutorOnBind() {
       const token = getToken();
       if (!token) {
+        scrubRetiredEditorContent({ quiet: true });
+        scrubRetiredDailyNoise();
         renderPresets();
+        renderQueue();
         return;
       }
       try {
         const probe = await probeExecutorReady(token);
         executorReady = !!probe.ready;
-        if (executorReady) clearMultiFailNoise();
+        if (executorReady) {
+          v2InstallRequiredBanner = false;
+          clearMultiFailNoise();
+        } else {
+          reconcileArchiveWithExecutorReady();
+        }
       } catch (_) {}
+      scrubRetiredEditorContent({ quiet: true });
+      scrubRetiredDailyNoise();
       purgeDailySucceeded();
       renderPresets();
       renderQueue();
+      renderArchive();
     })();
 
     document.addEventListener("alzidan:admin-module", (ev) => {
       if (ev && ev.detail && ev.detail.id === "tools") {
         migrateCollapseDailySpam();
+        scrubRetiredEditorContent({ quiet: true });
+        scrubRetiredDailyNoise();
         purgeDailySucceeded();
-        renderQueue();
-        renderArchive();
-        renderPresets();
+        (async function () {
+          const token = getToken();
+          if (token) {
+            try {
+              const probe = await probeExecutorReady(token);
+              executorReady = !!probe.ready;
+              if (executorReady) {
+                v2InstallRequiredBanner = false;
+                clearMultiFailNoise();
+              } else {
+                reconcileArchiveWithExecutorReady();
+              }
+            } catch (_) {}
+          }
+          renderQueue();
+          renderArchive();
+          renderPresets();
+        })();
       }
     });
   }
