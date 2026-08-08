@@ -45,7 +45,7 @@
 
 | البند | الحالة | ملاحظة |
 |--------|--------|--------|
-| **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ بقية P1 تكرارية |
+| **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (RPC تنفيذ 🟡 بانتظار COPY-ME) |
 | **Delegates v2 — Foundation + Enforce** | 🟡 | كود الواجهة + SQL (أساس + فرض صلاحيات) في المستودع؛ **بانتظار SQL على الإنتاج + اختبار قبول** — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md). Multi-stage = ⚪ (فوق Workflow Engine) |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |

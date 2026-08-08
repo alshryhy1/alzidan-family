@@ -39,7 +39,7 @@
       title: "الأعضاء",
       desc: "جودة بيانات الأعضاء ومراجعة الشجرة",
       icon: "👤",
-      sections: ["admin-quality-center", "admin-review-shortcut"],
+      sections: ["admin-quality-center"],
       group: "data",
     },
     {
@@ -112,12 +112,14 @@
     {
       id: "tools",
       title: "أدوات الصيانة",
-      desc: "أدوات مخفية للصيانة والاستيراد (عند الحاجة)",
+      desc: "مساحة عمل SQL · استيراد · واتساب · مراجعة الشجرة",
       icon: "⚙",
       sections: [
-        "file-whatsapp-section",
+        "sql-workspace-section",
         "batch-tree-sql-section",
         "tree-import-section",
+        "file-whatsapp-section",
+        "admin-review-shortcut",
       ],
       group: "tools",
     },

@@ -49,7 +49,7 @@ pages/admin.html
 | `special-cards` | البطاقات الخاصة | `special-cards-manager` | ✅ مُرحَّل (حفظ/قائمة RPC) |
 | `polls` | التصويت | `polls-manager` | ✅ مُرحَّل للعرض |
 | `stats` | الإحصاءات | `views-stats-section` · `marriage-stats-section` | ✅ مُرحَّل للعرض |
-| `tools` | أدوات الصيانة | أقسام maintenance المخفية | ✅ كشف عند فتح الموديول فقط |
+| `tools` | أدوات الصيانة | `sql-workspace-section` + أدوات الاستيراد/واتساب/مراجعة | ✅ SQL Workspace ظاهر داخل الموديول |
 
 ## كيف تُفتح اللوحة الجديدة
 
@@ -58,7 +58,7 @@ pages/admin.html
 3. بعد الدخول تظهر **لوحة التحكم** + الشريط الجانبي للمراكز.
 4. روابط مباشرة: `#module=health` · `#module=requests` · `#module=tree` · `#module=special-cards` …
 
-Cache-bust الحالي للأصول: `?v=20260807p1`.
+Cache-bust الحالي للأصول: `?v=20260808sw2`.
 
 ## ما لم يُنفَّذ بعد (بقية Phase 1)
 

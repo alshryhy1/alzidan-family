@@ -1,0 +1,139 @@
+/* SQL Workspace — tools / maintenance module */
+.sql-workspace-section .section-title::after {
+  content: none !important;
+}
+
+.sql-ws-card {
+  display: grid;
+  gap: 12px;
+}
+
+.sql-ws-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.sql-ws-nav .btn.is-active {
+  border-color: rgba(16, 92, 74, 0.45);
+  background: rgba(16, 92, 74, 0.08);
+  color: #0f3d32;
+  font-weight: 800;
+}
+
+.sql-ws-editor {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid #d7e0db;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  direction: ltr;
+  text-align: left;
+  background: #fbfcfb;
+  color: #10231c;
+  resize: vertical;
+}
+
+.sql-ws-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.sql-ws-status {
+  font-weight: 800;
+  min-height: 1.4em;
+}
+.sql-ws-status.is-ok { color: #047857; }
+.sql-ws-status.is-err { color: #b91c1c; }
+.sql-ws-status.is-busy { color: #0f3d32; }
+
+.sql-ws-meta {
+  margin: 0;
+}
+
+.sql-ws-error {
+  margin: 0;
+}
+
+.sql-ws-results .table-wrap,
+.sql-ws-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.sql-ws-results table {
+  min-width: 640px;
+  width: 100%;
+}
+
+.sql-ws-history {
+  display: grid;
+  gap: 8px;
+}
+
+.sql-ws-hist-item {
+  appearance: none;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: right;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  color: inherit;
+}
+
+.sql-ws-hist-item:hover {
+  border-color: rgba(16, 92, 74, 0.35);
+  background: #f7faf8;
+}
+
+.sql-ws-hist-item.is-fail {
+  border-color: rgba(185, 28, 28, 0.25);
+}
+
+.sql-ws-hist-time,
+.sql-ws-hist-badge,
+.sql-ws-hist-rows {
+  font-size: 12px;
+  color: #5b6b63;
+}
+
+.sql-ws-hist-badge {
+  font-weight: 800;
+}
+.sql-ws-hist-item.is-ok .sql-ws-hist-badge { color: #047857; }
+.sql-ws-hist-item.is-fail .sql-ws-hist-badge { color: #b91c1c; }
+
+.sql-ws-hist-err {
+  font-size: 12px;
+  color: #991b1b;
+}
+
+.sql-ws-hist-preview {
+  font-size: 11px;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@media (max-width: 720px) {
+  .sql-ws-editor {
+    min-height: 180px;
+    font-size: 12px;
+  }
+  .sql-ws-actions .btn {
+    flex: 1 1 auto;
+  }
+}

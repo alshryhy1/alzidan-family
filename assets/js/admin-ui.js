@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   document.querySelectorAll(".maintenance-section, .extra-tools-section[data-maintenance='1']").forEach(function (section) {
-    if (section.id === "bulk-name-audit-section") {
+    if (section.id === "bulk-name-audit-section" || section.id === "sql-workspace-section") {
       section.classList.remove("is-collapsed");
     } else {
       section.classList.add("is-collapsed");
