@@ -1,7 +1,8 @@
 /**
  * SQL Workspace — ready maintenance presets.
  * SQL source of truth: supabase/sql/*.sql (fetched at run time).
- * Done presets live in archive metadata; active list = pending / failed only.
+ * Command lifecycle SSOT: archived (done) > failed > pending.
+ * Done presets live in archive only; active list = not-yet-done current state.
  */
 (function () {
   "use strict";
@@ -68,6 +69,16 @@
     } catch (_) {}
   }
 
+  /**
+   * Single source of truth for a maintenance command:
+   * archived (done) > failed > pending. Attempt history must not override.
+   */
+  function commandState(id) {
+    if (isDone(id)) return "archived";
+    if (getFail(id)) return "failed";
+    return "pending";
+  }
+
   function markDone(id, meta) {
     const map = loadDone();
     map[id] = Object.assign(
@@ -75,6 +86,7 @@
       meta || {},
     );
     saveDone(map);
+    // Success supersedes every prior fail flag for this command.
     const fails = loadFail();
     if (fails[id]) {
       delete fails[id];
@@ -83,6 +95,8 @@
   }
 
   function markFail(id, meta) {
+    // Never paint "failed" over an archived success.
+    if (isDone(id)) return;
     const map = loadFail();
     map[id] = Object.assign(
       { at: new Date().toISOString(), ok: false },
@@ -109,6 +123,7 @@
   }
 
   function getFail(id) {
+    if (isDone(id)) return null;
     return loadFail()[id] || null;
   }
 
@@ -260,6 +275,7 @@
     clearFail,
     isDone,
     getFail,
+    commandState,
     listActivePresets,
     listArchivedPresets,
     DONE_KEY,

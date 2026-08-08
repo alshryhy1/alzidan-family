@@ -1,5 +1,7 @@
 /**
  * SQL Workspace — daily work queue + execution archive (admin token gated).
+ * Daily screen = current command state only (pending/failed/running).
+ * Attempt history lives in archive/audit and must never contradict current state.
  * Successful runs leave the daily screen and live in archive; never auto-run on load.
  */
 (function () {
@@ -13,6 +15,8 @@
 
   let migrated = false;
   let inProgress = null;
+  /** Preset id last loaded into the editor (SSOT link for editor runs). */
+  let activeEditorPresetId = "";
   /** True when admin_sql_workspace_run_v2 is callable. */
   let executorReady = false;
   let bootstrapping = false;
@@ -161,8 +165,65 @@
     return "op_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
   }
 
+  function normalizeSqlKey(sql) {
+    return String(sql || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function sqlSame(a, b) {
+    const na = normalizeSqlKey(a);
+    const nb = normalizeSqlKey(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    const n = Math.min(na.length, nb.length);
+    // Archive may store a truncated preview of the same command.
+    return n >= 80 && (na.slice(0, n) === nb.slice(0, n));
+  }
+
+  function inferPresetIdFromSql(sql) {
+    const s = String(sql || "");
+    if (
+      /admin_sql_workspace_run_v2/i.test(s) &&
+      /create\s+or\s+replace\s+function/i.test(s)
+    ) {
+      return V2_PRESET_ID;
+    }
+    if (
+      /fix_delegate_portal_path|delegates_v2/i.test(s) &&
+      /request_id/i.test(s)
+    ) {
+      return "maint.fix_delegate_portal_path_v1";
+    }
+    if (/delegate_secret_reset/i.test(s)) {
+      return "maint.delegate_secret_reset_v1";
+    }
+    return "";
+  }
+
+  function resolvePresetId(entry) {
+    const it = entry && typeof entry === "object" ? entry : {};
+    if (it.presetId) return String(it.presetId);
+    if (it.version && String(it.version).indexOf("maint.") === 0) {
+      return String(it.version);
+    }
+    return inferPresetIdFromSql(it.sql) || "";
+  }
+
+  /** Stable key: one daily card per command (not per attempt). */
+  function commandKey(entry) {
+    const presetId = resolvePresetId(entry);
+    if (presetId) return "p:" + presetId;
+    const sqlKey = normalizeSqlKey(entry && entry.sql);
+    if (sqlKey) return "s:" + sqlKey.slice(0, 240);
+    if (entry && entry.title) return "t:" + String(entry.title);
+    if (entry && entry.id) return "i:" + entry.id;
+    return "x:" + makeId();
+  }
+
   function normalizeEntry(raw) {
     const it = raw && typeof raw === "object" ? raw : {};
+    const presetId = resolvePresetId(it) || it.presetId || "";
     return {
       id: it.id || makeId(),
       at: it.at || new Date().toISOString(),
@@ -174,39 +235,159 @@
       title: it.title || "",
       actor: it.actor || "",
       requestId: it.requestId || it.request_id || "",
-      version: it.version || "",
-      presetId: it.presetId || "",
+      version: it.version || presetId || "",
+      presetId: presetId,
       auditId: it.auditId != null ? it.auditId : null,
       source: it.source || "editor",
     };
   }
 
-  function pushQueue(entry) {
-    const item = normalizeEntry(Object.assign({}, entry, { ok: false, status: entry.status || "failed" }));
-    const items = loadQueue().filter((x) => x.id !== item.id);
-    items.unshift(item);
-    saveQueue(items);
+  function isCommandSucceeded(entry) {
+    const it = normalizeEntry(entry || {});
+    if (it.ok || it.status === "done" || it.archived) return true;
+    const api = presetsApi();
+    if (
+      it.presetId &&
+      api &&
+      typeof api.isDone === "function" &&
+      api.isDone(it.presetId)
+    ) {
+      return true;
+    }
+    const arch = loadArchive();
+    if (it.presetId && arch.some((a) => a && a.ok && a.presetId === it.presetId)) {
+      return true;
+    }
+    if (it.sql && arch.some((a) => a && a.ok && sqlSame(a.sql, it.sql))) {
+      return true;
+    }
+    return false;
+  }
+
+  function clearDailyForCommand(ref) {
+    const base = normalizeEntry(ref || {});
+    const key = commandKey(base);
+    const api = presetsApi();
+    if (base.presetId && api && typeof api.clearFail === "function") {
+      api.clearFail(base.presetId);
+    }
+    const q = loadQueue().filter((x) => {
+      const row = normalizeEntry(x);
+      if (commandKey(row) === key) return false;
+      if (base.presetId && row.presetId === base.presetId) return false;
+      if (base.sql && row.sql && sqlSame(base.sql, row.sql)) return false;
+      return true;
+    });
+    saveQueue(q);
+  }
+
+  /** Collapse many fail attempts into the latest card per command. */
+  function collapseDailyItems(items) {
+    const byKey = new Map();
+    (items || []).forEach((raw) => {
+      const it = normalizeEntry(raw);
+      if (isCommandSucceeded(it)) return;
+      if (it.status === "done" || it.ok) return;
+      const key = commandKey(it);
+      const prev = byKey.get(key);
+      if (!prev || String(it.at || "") >= String(prev.at || "")) {
+        if (prev && prev.id) it.id = prev.id;
+        byKey.set(key, it);
+      }
+    });
+    return Array.from(byKey.values()).sort((a, b) =>
+      String(b.at || "").localeCompare(String(a.at || "")),
+    );
+  }
+
+  function purgeDailySucceeded() {
+    const before = loadQueue();
+    const next = collapseDailyItems(before);
+    if (JSON.stringify(before) !== JSON.stringify(next)) {
+      saveQueue(next);
+    }
+    return next;
+  }
+
+  /**
+   * Daily SSOT write: update the single current card for this command.
+   * Never append a new fail card for every retry.
+   */
+  function upsertDailyCommand(entry) {
+    const item = normalizeEntry(
+      Object.assign({}, entry, {
+        ok: false,
+        status: entry.status || "failed",
+      }),
+    );
+    if (isCommandSucceeded(item)) {
+      clearDailyForCommand(item);
+      renderQueue();
+      return null;
+    }
+    const key = commandKey(item);
+    const others = [];
+    let existing = null;
+    loadQueue().forEach((x) => {
+      const row = normalizeEntry(x);
+      if (isCommandSucceeded(row)) return;
+      if (commandKey(row) === key) {
+        if (!existing || String(row.at || "") >= String(existing.at || "")) {
+          existing = row;
+        }
+        return;
+      }
+      others.push(row);
+    });
+    if (existing) item.id = existing.id;
+    others.unshift(item);
+    saveQueue(collapseDailyItems(others));
     renderQueue();
     return item;
   }
 
-  function pushArchive(entry) {
+  /**
+   * Success SSOT write: archive only + remove from presets daily surfaces.
+   * A command must never appear as both executed and failed/pending.
+   */
+  function recordCommandSuccess(entry) {
     const item = normalizeEntry(
       Object.assign({}, entry, { ok: true, status: "done", archived: true }),
     );
-    const items = loadArchive().filter((x) => x.id !== item.id);
+    const api = presetsApi();
+    if (item.presetId && api && typeof api.markDone === "function") {
+      api.markDone(item.presetId, {
+        actor: item.actor,
+        requestId: item.requestId,
+        version: item.version || item.presetId,
+        archived: true,
+        statements: item.rowCount,
+      });
+    }
+    const items = loadArchive().filter((x) => {
+      if (x.id === item.id) return false;
+      // One current archive card per maintenance preset.
+      if (item.presetId && x.presetId === item.presetId) return false;
+      return true;
+    });
     items.unshift(item);
     saveArchive(items);
-    // Remove matching failed queue rows for same sql/preset
-    const q = loadQueue().filter((x) => {
-      if (item.presetId && x.presetId === item.presetId) return false;
-      if (item.sql && x.sql === item.sql && !x.ok) return false;
-      return x.id !== item.id;
-    });
-    saveQueue(q);
+    clearDailyForCommand(item);
+    if (activeEditorPresetId && activeEditorPresetId === item.presetId) {
+      activeEditorPresetId = "";
+    }
+    renderPresets();
     renderQueue();
     renderArchive();
     return item;
+  }
+
+  function pushQueue(entry) {
+    return upsertDailyCommand(entry);
+  }
+
+  function pushArchive(entry) {
+    return recordCommandSuccess(entry);
   }
 
   function escapeHtml(s) {
@@ -419,18 +600,29 @@
     );
   }
 
+  function listDailyWorkItems() {
+    const items = purgeDailySucceeded();
+    if (!inProgress) return items;
+    const live = normalizeEntry(inProgress);
+    const key = commandKey(live);
+    const rest = items.filter(
+      (x) => commandKey(x) !== key && x.id !== live.id,
+    );
+    rest.unshift(live);
+    return rest;
+  }
+
   function renderQueue() {
     if (!els.queue) return;
-    const items = loadQueue().slice();
-    if (inProgress) {
-      items.unshift(inProgress);
-    }
+    const items = listDailyWorkItems();
     if (!items.length) {
       els.queue.innerHTML =
         '<div class="hint">لا أوامر بانتظار التنفيذ. الشاشة اليومية نظيفة — الأوامر الناجحة في الأرشيف.</div>';
       return;
     }
-    els.queue.innerHTML = items.map((it) => renderOpCard(it, { archive: false })).join("");
+    els.queue.innerHTML = items
+      .map((it) => renderOpCard(it, { archive: false }))
+      .join("");
   }
 
   function archiveFromPresets() {
@@ -606,12 +798,35 @@
   }
 
   function clearEditor() {
+    activeEditorPresetId = "";
     if (els.editor) els.editor.value = "";
     if (els.meta) els.meta.textContent = "";
     if (els.results) els.results.innerHTML = "";
     setError("");
     setStatus("", "");
     setEditorVisible(true);
+  }
+
+  function archivePresetSuccess(presetId, meta) {
+    const api = presetsApi();
+    const p =
+      api && Array.isArray(api.PRESETS)
+        ? api.PRESETS.find((x) => x.id === presetId)
+        : null;
+    const m = meta || {};
+    return pushArchive({
+      id: "preset_" + presetId,
+      at: m.at || new Date().toISOString(),
+      ok: true,
+      title: (p && p.title) || m.title || presetId,
+      presetId: presetId,
+      actor: m.actor || getActorLabel(),
+      requestId: m.requestId || "",
+      version: m.version || presetId,
+      source: m.source || "preset",
+      sql: m.sql || "",
+      rowCount: m.statements != null ? m.statements : m.rowCount,
+    });
   }
 
   async function probeExecutorReady(token) {
@@ -682,15 +897,12 @@
       const already = await probeExecutorReady(token);
       if (already.ready) {
         executorReady = true;
-        if (typeof api.markDone === "function") {
-          api.markDone(V2_PRESET_ID, {
-            bootstrap: true,
-            actor: getActorLabel(),
-            version: "workspace_run_v2",
-            archived: true,
-            already: true,
-          });
-        }
+        archivePresetSuccess(V2_PRESET_ID, {
+          bootstrap: true,
+          actor: getActorLabel(),
+          version: "workspace_run_v2",
+          already: true,
+        });
         return { ok: true, skipped: true };
       }
 
@@ -779,15 +991,12 @@
       }
 
       executorReady = true;
-      if (typeof api.markDone === "function") {
-        api.markDone(V2_PRESET_ID, {
-          bootstrap: true,
-          actor: getActorLabel(),
-          version: "workspace_run_v2",
-          archived: true,
-          via: usedV1 ? "execute_v1_split" : "probe",
-        });
-      }
+      archivePresetSuccess(V2_PRESET_ID, {
+        bootstrap: true,
+        actor: getActorLabel(),
+        version: "workspace_run_v2",
+        via: usedV1 ? "execute_v1_split" : "probe",
+      });
       return { ok: true };
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e) };
@@ -900,6 +1109,8 @@
     const requestId = readLinkedRequestId();
     const actor = getActorLabel();
     const opId = makeId();
+    const presetId =
+      activeEditorPresetId || inferPresetIdFromSql(sql) || "";
     inProgress = normalizeEntry({
       id: opId,
       at: new Date().toISOString(),
@@ -908,9 +1119,10 @@
       sql: sql,
       actor: actor,
       requestId: requestId,
-      version: cls.first || "SQL",
-      source: "editor",
-      title: "أمر من المحرر",
+      version: presetId || cls.first || "SQL",
+      presetId: presetId,
+      source: presetId ? "preset" : "editor",
+      title: presetId ? "أمر صيانة من المحرر" : "أمر من المحرر",
     });
     renderQueue();
 
@@ -969,6 +1181,13 @@
         els.meta.textContent = "المدة: " + ms + " مللي ثانية";
       }
       inProgress = null;
+      if (presetId && typeof presetsApi().markFail === "function") {
+        presetsApi().markFail(presetId, {
+          error: msg,
+          actor: actor,
+          requestId: requestId,
+        });
+      }
       pushQueue({
         id: opId,
         at: new Date().toISOString(),
@@ -979,11 +1198,13 @@
         sql: sql,
         actor: actor,
         requestId: requestId,
-        version: cls.first || "SQL",
-        source: "editor",
-        title: "أمر من المحرر",
+        version: presetId || cls.first || "SQL",
+        presetId: presetId,
+        source: presetId ? "preset" : "editor",
+        title: presetId ? "أمر صيانة من المحرر" : "أمر من المحرر",
         auditId: payload && payload.audit_id,
       });
+      renderPresets();
       setEditorVisible(true);
       return;
     }
@@ -1005,9 +1226,10 @@
       sql: sql,
       actor: actor,
       requestId: requestId,
-      version: cls.first || "SQL",
-      source: "editor",
-      title: "أمر من المحرر",
+      version: presetId || cls.first || "SQL",
+      presetId: presetId,
+      source: presetId ? "preset" : "editor",
+      title: presetId ? "أمر صيانة من المحرر" : "أمر من المحرر",
       auditId: payload.audit_id,
     });
 
@@ -1094,7 +1316,15 @@
         const row = loadMap(DONE_KEY)[id];
         return !!(row && row.ok);
       },
-      getFail: function (id) { return loadMap(FAIL_KEY)[id] || null; },
+      getFail: function (id) {
+        if (api.isDone(id)) return null;
+        return loadMap(FAIL_KEY)[id] || null;
+      },
+      commandState: function (id) {
+        if (api.isDone(id)) return "archived";
+        if (api.getFail(id)) return "failed";
+        return "pending";
+      },
       markDone: function (id, meta) {
         const map = loadMap(DONE_KEY);
         map[id] = Object.assign({ at: new Date().toISOString(), ok: true, archived: true }, meta || {});
@@ -1103,6 +1333,7 @@
         if (fails[id]) { delete fails[id]; saveMap(FAIL_KEY, fails); }
       },
       markFail: function (id, meta) {
+        if (api.isDone(id)) return;
         const map = loadMap(FAIL_KEY);
         map[id] = Object.assign({ at: new Date().toISOString(), ok: false }, meta || {});
         saveMap(FAIL_KEY, map);
@@ -1223,6 +1454,7 @@
     setStatus("busy", "جاري تحميل الأمر…");
     try {
       const sql = await api.fetchPresetSql(p.file);
+      activeEditorPresetId = id;
       if (els.editor) els.editor.value = sql;
       setEditorVisible(true);
       setStatus("ok", "تم تحميل: " + p.title);
@@ -1289,6 +1521,19 @@
           needs_supabase: !!boot.needs_supabase,
         });
       }
+      pushQueue({
+        id: "preset_" + p.id,
+        at: new Date().toISOString(),
+        ok: false,
+        status: "failed",
+        title: p.title,
+        presetId: p.id,
+        error: boot.error || "فشل التثبيت",
+        actor: getActorLabel(),
+        version: p.id,
+        source: "preset",
+        sql: boot.sql || "",
+      });
       setError(boot.error || "تعذّر تثبيت المنفّذ v2");
       setStatus(
         "err",
@@ -1315,9 +1560,9 @@
 
     const requestId = readLinkedRequestId();
     const actor = getActorLabel();
-    const opId = makeId();
+    const dailyId = "daily_" + p.id;
     inProgress = normalizeEntry({
-      id: opId,
+      id: dailyId,
       at: new Date().toISOString(),
       ok: false,
       status: "running",
@@ -1342,7 +1587,7 @@
         api.markFail(p.id, { error: msg, actor: actor, requestId: requestId });
       }
       pushQueue({
-        id: opId,
+        id: dailyId,
         at: new Date().toISOString(),
         ok: false,
         status: "failed",
@@ -1441,7 +1686,7 @@
         });
       }
       pushQueue({
-        id: opId,
+        id: dailyId,
         at: new Date().toISOString(),
         ok: false,
         status: "failed",
@@ -1463,16 +1708,8 @@
 
     const at = new Date().toISOString();
     inProgress = null;
-    api.markDone(p.id, {
-      statements: doneCount,
-      actor: actor,
-      requestId: requestId,
-      version: p.id,
-      archived: true,
-      executor: (payload && payload.executor) || "workspace_run_v2",
-    });
     pushArchive({
-      id: opId,
+      id: "preset_" + p.id,
       at: at,
       ok: true,
       rowCount: doneCount,
@@ -1483,6 +1720,7 @@
       version: p.id,
       source: "preset",
       sql: sql.slice(0, 400),
+      executor: (payload && payload.executor) || "workspace_run_v2",
     });
 
     let statusMsg =
@@ -1502,13 +1740,11 @@
     setStatus("ok", statusMsg);
     setError("");
     setEditorVisible(false);
-    renderPresets();
-    renderQueue();
-    renderArchive();
   }
 
   function restoreFromEntry(it) {
     if (!it || !els.editor) return;
+    if (it.presetId) activeEditorPresetId = it.presetId;
     if (it.sql) {
       els.editor.value = it.sql;
       setEditorVisible(true);
@@ -1542,31 +1778,13 @@
       }
       const doneBtn = e.target.closest("[data-preset-done]");
       if (doneBtn) {
-        const api = presetsApi();
-        if (!api) return;
         const id = doneBtn.getAttribute("data-preset-done");
-        const p = (api.PRESETS || []).find((x) => x.id === id);
-        api.markDone(id, {
+        archivePresetSuccess(id, {
           manual: true,
           actor: getActorLabel(),
           requestId: readLinkedRequestId(),
           version: id,
-          archived: true,
         });
-        pushArchive({
-          id: makeId(),
-          at: new Date().toISOString(),
-          ok: true,
-          title: (p && p.title) || id,
-          presetId: id,
-          actor: getActorLabel(),
-          requestId: readLinkedRequestId(),
-          version: id,
-          source: "preset",
-          sql: "",
-        });
-        renderPresets();
-        renderArchive();
         setStatus("ok", "عُلّم كمُنفذ ونُقل إلى الأرشيف");
       }
     });
@@ -1631,6 +1849,7 @@
 
     bindToolsNav();
     bindPresets();
+    purgeDailySucceeded();
     renderQueue();
     renderArchive();
     setEditorVisible(true);
