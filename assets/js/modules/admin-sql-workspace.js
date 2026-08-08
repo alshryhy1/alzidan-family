@@ -292,6 +292,13 @@
     setEditorVisible(true);
   }
 
+  function readEditorSql() {
+    const editor =
+      document.getElementById("sql-ws-editor") || els.editor || null;
+    if (editor && els.editor !== editor) els.editor = editor;
+    return String((editor && editor.value) || "").trim();
+  }
+
   async function runSql(opts) {
     const confirmMutate = !!(opts && opts.confirmMutate);
     const token = getToken();
@@ -300,7 +307,7 @@
       setStatus("err", "غير مصرح");
       return;
     }
-    const sql = String((els.editor && els.editor.value) || "").trim();
+    const sql = readEditorSql();
     if (!sql) {
       setError("أدخل أمر SQL أولاً.");
       setStatus("err", "فارغ");
@@ -444,6 +451,10 @@
     bindToolsNav();
     renderHistory();
     setEditorVisible(true);
+    // Keep sample query as real value (not placeholder-only) so Run works on first open.
+    if (els.editor && !String(els.editor.value || "").trim()) {
+      els.editor.value = "SELECT id, child_name FROM tree_children LIMIT 20;";
+    }
 
     document.addEventListener("alzidan:admin-module", (ev) => {
       if (ev && ev.detail && ev.detail.id === "tools") {
