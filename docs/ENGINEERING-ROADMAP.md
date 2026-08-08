@@ -752,7 +752,8 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 ### المرحلة — Delegate Workspace v1 ⚪
 
-**بوابة:** Validation + Workflow على مسار السلّم. الواجهة تستدعي المحركات فقط.
+**بوابة:** Validation + Workflow على مسار السلّم. الواجهة تستدعي المحركات فقط.  
+**تصوّر UX (تصميم مسبق — بلا كود بعد):** [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) — requests-first · جلسة لكل طلب · الصفحة الحالية legacy مجمّدة تجميليًا.
 
 | بند | قاعدة |
 |-----|--------|
