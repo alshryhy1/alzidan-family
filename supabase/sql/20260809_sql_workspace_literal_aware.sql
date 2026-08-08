@@ -1,108 +1,8 @@
--- Admin SQL Workspace v1 — execute + audit (admin token gated)
--- Safe to re-run. Does NOT auto-execute arbitrary SQL on deploy.
--- Ref: docs/SQL-WORKSPACE-REPORT.md
-
--- Ensure audit table exists (also created by Delegates v2 foundation)
-create table if not exists public.admin_audit_log (
-  id bigserial primary key,
-  actor_type text not null default 'admin',
-  actor_ref text,
-  action_key text not null,
-  entity_type text not null,
-  entity_id text,
-  branch_key text,
-  payload jsonb,
-  created_at timestamptz not null default now()
-);
-
-create index if not exists admin_audit_log_created_idx
-  on public.admin_audit_log (created_at desc);
-create index if not exists admin_audit_log_action_idx
-  on public.admin_audit_log (action_key);
-
-alter table public.admin_audit_log enable row level security;
-revoke all on table public.admin_audit_log from anon, authenticated;
-
-create or replace function public.admin_audit_write_v1(
-  p_actor_type text,
-  p_actor_ref text,
-  p_action_key text,
-  p_entity_type text,
-  p_entity_id text,
-  p_branch_key text,
-  p_payload jsonb
-)
-returns bigint
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_id bigint;
-begin
-  insert into public.admin_audit_log (
-    actor_type, actor_ref, action_key, entity_type, entity_id, branch_key, payload
-  ) values (
-    coalesce(nullif(trim(p_actor_type), ''), 'admin'),
-    nullif(trim(p_actor_ref), ''),
-    nullif(trim(p_action_key), ''),
-    coalesce(nullif(trim(p_entity_type), ''), 'unknown'),
-    nullif(trim(p_entity_id), ''),
-    nullif(trim(p_branch_key), ''),
-    p_payload
-  )
-  returning id into v_id;
-  return v_id;
-end;
-$$;
-
-create or replace function public.admin_sql_classify_v1(p_sql text)
-returns jsonb
-language plpgsql
-immutable
-as $$
-declare
-  v_raw text := btrim(coalesce(p_sql, ''));
-  v_work text;
-  v_first text;
-  v_mutating boolean := false;
-  v_selectish boolean := false;
-begin
-  if v_raw = '' then
-    return jsonb_build_object('empty', true, 'mutating', false, 'selectish', false, 'first', null);
-  end if;
-
-  v_work := v_raw;
-  loop
-    if v_work ~ '^\s*--' then
-      v_work := regexp_replace(v_work, '^\s*--[^\n]*\n?', '');
-      continue;
-    end if;
-    if v_work ~ '^\s*/\*' then
-      v_work := regexp_replace(v_work, '^\s*/\*.*?\*/\s*', '', 'n');
-      continue;
-    end if;
-    exit;
-  end loop;
-
-  v_work := btrim(v_work);
-  v_first := upper(substring(v_work from '^\s*([A-Za-z]+)'));
-
-  v_selectish := v_first in ('SELECT', 'WITH', 'SHOW', 'EXPLAIN', 'VALUES', 'TABLE');
-  v_mutating := v_first in (
-    'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE',
-    'INSERT', 'REPLACE', 'GRANT', 'REVOKE', 'COMMENT', 'COPY',
-    'VACUUM', 'REINDEX', 'CLUSTER', 'SECURITY', 'CALL', 'DO'
-  );
-
-  return jsonb_build_object(
-    'empty', false,
-    'mutating', v_mutating,
-    'selectish', v_selectish,
-    'first', v_first
-  );
-end;
-$$;
+-- Operator path: Admin → SQL Workspace → أوامر الصيانة الجاهزة
+-- Preset: maint.sql_workspace_literal_aware_v1
+-- Enables CREATE FUNCTION bodies via SQL Workspace (semicolons inside $$).
+-- If an OLD executor rejects this script with SQL-WS-MULTI, run THIS file once
+-- in Supabase SQL Editor — that is the only remaining external-paste exception.
 
 create or replace function public.admin_sql_sql_without_literals_v1(p_sql text)
 returns text
@@ -371,14 +271,10 @@ end;
 $$;
 
 comment on function public.admin_sql_execute_v1(text, text, boolean) is
-  'SQL Workspace: admin-token gated single-statement execute + audit. Confirm required for mutating DDL/DML.';
+  'SQL Workspace: admin-token gated execute + audit. Literals-aware multi check.';
 
 revoke all on function public.admin_sql_execute_v1(text, text, boolean) from public;
 grant execute on function public.admin_sql_execute_v1(text, text, boolean)
-  to anon, authenticated;
-
-revoke all on function public.admin_sql_classify_v1(text) from public;
-grant execute on function public.admin_sql_classify_v1(text)
   to anon, authenticated;
 
 revoke all on function public.admin_sql_sql_without_literals_v1(text) from public;

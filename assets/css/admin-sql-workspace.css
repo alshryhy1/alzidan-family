@@ -137,3 +137,41 @@
     flex: 1 1 auto;
   }
 }
+
+/* Maintenance presets */
+.sql-ws-presets-block {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.sql-ws-preset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
+  border: 1px solid #d7e0db;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fbfcfb;
+}
+.sql-ws-preset.is-done {
+  border-color: rgba(4, 120, 87, 0.35);
+  background: rgba(4, 120, 87, 0.05);
+}
+.sql-ws-preset-main { flex: 1 1 240px; display: grid; gap: 4px; }
+.sql-ws-preset-title { font-weight: 800; color: #0f3d32; }
+.sql-ws-preset-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sql-ws-preset-badge {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e8efeb;
+  color: #0f3d32;
+}
+.sql-ws-preset-badge.is-done {
+  background: rgba(4, 120, 87, 0.15);
+  color: #047857;
+}

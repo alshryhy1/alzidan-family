@@ -5,7 +5,7 @@
 **آخر تحقق كود:** 2026-08-09 (مسار قبول→دخول)  
 **الغرض:** إغلاق بوابة Delegates v2 → 🟢 حتى يُسمح بتجميد الدستور الحي ثم Request Experience  
 **المراجع:** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · مسودة بوابة 2: [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md)  
-**SQL مطلوب الآن:** `supabase/sql/COPY-ME-fix-delegate-portal-path.sql` (+ الأساس/الفرض إن لم يُطبَّقا)
+**SQL مطلوب الآن:** من الإدارة → **⚙ أدوات الصيانة → أوامر الصيانة الجاهزة** → «إصلاح دخول المندوب بعد القبول (بوابة 1)» (`maint.fix_delegate_portal_path_v1`) ثم علّمه **مُنفذ** (+ الأساس/الفرض إن لم يُطبَّقا). ملف المصدر: `supabase/sql/COPY-ME-fix-delegate-portal-path.sql`
 
 > **قاعدة:** لا ميزات مندوب جديدة · لا تحسين تجميلي · لا كود Delegate Workspace · لا Request Experience حتى 🟢 بوابة 1 ثم 🟢 بوابة 2.  
 > النجاح هنا = قبول حي على الإنتاج + تعليم §6.  
@@ -37,7 +37,7 @@
 | فرض الصلاحيات في SQL (Enforce) | ✅ **موثّق بالكود** — `disabled` / `no_permission` / `bad_secret` |
 | رسائل عربية في بوابة المندوب | ✅ **موثّق بالكود** — شجرة + مناسبات + دخول |
 | قبول → تفعيل دخول مندوب (نفس المصدر) | ✅ **كود** — ⏳ **حي بعد COPY-ME-fix + Hard Refresh** |
-| تطبيق SQL على الإنتاج + سلوك حي | ⏳ **يلزم COPY-ME-fix-delegate-portal-path.sql** |
+| تطبيق SQL على الإنتاج + سلوك حي | ⏳ **يلزم أمر الصيانة الجاهز من SQL Workspace** |
 | دخان الموقع من الآلة | ⛔ `https://alzidan.org` أعاد **403** لطلبات آلية — افتح من متصفحك |
 
 **بوابة 1 ليست 🟢** حتى ينجح دخول المندوب بعد القبول وتُغلق خانات §6.
@@ -47,8 +47,8 @@
 ## تشغيل إعادة الاختبار (مسار القبول→الدخول أولًا)
 
 **قبل أي شيء:**  
-1. طبّق في Supabase SQL Editor: `supabase/sql/COPY-ME-fix-delegate-portal-path.sql` (Select All → Copy → Run).  
-2. انشر/ادفع واجهة الموقع إن كانت تُبنى من git (ملفات: `delegate.js` · `requests.js` · `alzidan-tree.html` · `admin.html`).  
+1. إدارة → `#module=tools` → **أوامر الصيانة الجاهزة** → شغّل «ترقية منفّذ SQL Workspace» إن لزم ثم «إصلاح دخول المندوب بعد القبول» → علّم **مُنفذ**.  
+2. انشر/ادفع واجهة الموقع إن كانت تُبنى من git.  
 3. Hard Refresh للصفحتين.
 
 **روابط:** إدارة → `https://alzidan.org/pages/admin.html#module=requests` · مندوبون → `#module=delegates` · بوابة مندوب → `https://alzidan.org/pages/alzidan-tree.html?view=delegate`
@@ -179,10 +179,28 @@
 
 ---
 
+
+---
+
+## 7) قبول إضافي — إعادة تعيين الرقم السري (ليس Workflow عام)
+
+**الحالة:** 🟡 بانتظار تشغيل أمر الصيانة + اختبار حي  
+**Preset:** `maint.delegate_secret_reset_v1` · المصدر: `supabase/sql/COPY-ME-delegate-secret-reset.sql`
+
+| # | أنت تفعل | ☐ |
+|---|----------|---|
+| S0 | أدوات الصيانة → تشغيل أمر «طلب إعادة تعيين الرقم السري» → مُنفذ | ☐ |
+| S1 | بوابة المندوب → نسيت الرقم السري → طلب جديد بعنوان واضح للإدارة | ☐ |
+| S2 | الإدارة ترى بطاقة «طلب إعادة تعيين الرقم السري» (ليس events_delegate / مُعيَّن) | ☐ |
+| S3 | اعتماد → دخول بالرقم الجديد ينجح · رفض يُغلق الطلب دون تغيير السر | ☐ |
+
+> بوابة 1 تبقى 🟡 حتى ينجح مسار القبول→الدخول (A–C) حيًا. هذا البند إضافي ولا يُعلن بوابة 1 🟢 وحده.
+
+
 ## Definition of Done
 
 - [x] تحقق كود: UI + RPCs + Enforce + رسائل عربية (2026-08-09)
-- [ ] SQL أساس+فرض مؤكَّد على بيئة الهدف (شريط الإدارة = Delegates v2)
+- [ ] SQL أساس+فرض + أمر بوابة 1 من SQL Workspace مُنفذ على بيئة الهدف
 - [ ] تشغيل 5 دقائق (§ أعلاه) ناجح
 - [ ] §6 كل البنود الأربعة ✅
 - [ ] تحديث PHASE2 + ENGINEERING-ROADMAP إلى 🟢 بعد إبلاغ صاحب المنتج

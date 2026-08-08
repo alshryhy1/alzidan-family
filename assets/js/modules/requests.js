@@ -46,6 +46,50 @@
   let requestsAllRows = [];
   let requestsCurrentPage = 1;
 
+
+  function isSecretResetRequest(row) {
+    const kind = String((row && row.kind) || "").trim();
+    const rtype = String((row && row.request_type) || "").trim();
+    return kind === "delegate_secret_reset" || rtype === "delegate_secret_reset";
+  }
+
+  function extractProposedSecretFromMessage(message) {
+    const text = String(message || "");
+    const m =
+      /الرقم السري المقترح:\s*(.+)$/m.exec(text) ||
+      /الرقم السري:\s*(.+)$/m.exec(text);
+    return m ? String(m[1] || "").trim() : "";
+  }
+
+  function renderSecretResetCard(actions, row, approveBtn, rejectBtn) {
+    actions.innerHTML = "";
+    const title = document.createElement("div");
+    title.className = "hint";
+    title.style.fontWeight = "800";
+    title.style.marginBottom = "6px";
+    title.textContent = "طلب إعادة تعيين الرقم السري";
+    const sub = document.createElement("div");
+    sub.className = "hint";
+    sub.style.marginBottom = "8px";
+    sub.textContent =
+      (row.name || "مندوب") +
+      " · " +
+      (row.branch_key || "—") +
+      " · بانتظار الإدارة";
+    approveBtn.textContent = "اعتماد وإصدار رقم سري جديد";
+    approveBtn.className = "btn btn-primary btn-sm";
+    rejectBtn.textContent = "رفض";
+    rejectBtn.className = "btn btn-outline btn-sm";
+    const canApprove = row.status !== "approved" && row.status !== "rejected";
+    const canReject = row.status !== "rejected";
+    approveBtn.disabled = !canApprove;
+    rejectBtn.disabled = !canReject;
+    actions.appendChild(title);
+    actions.appendChild(sub);
+    actions.appendChild(approveBtn);
+    actions.appendChild(rejectBtn);
+  }
+
   function grantLabel(value) {
     const key = String(value || "").trim();
     if (key === "events_delegate") return "مندوب المناسبات";
@@ -517,12 +561,16 @@
       row.kind === "tree_card" &&
       (row.status === "approved" || row.status === "pending");
     reapplyBtn.disabled = !canReapply;
-    actions.appendChild(approveBtn);
-    actions.appendChild(rejectBtn);
-    if (row.kind === "tree_card") actions.appendChild(reapplyBtn);
-    if (row.kind === "event_card") actions.appendChild(publishEventBtn);
-    actions.appendChild(editBranchBtn);
-    actions.appendChild(deleteBtn);
+    if (isSecretResetRequest(row)) {
+      renderSecretResetCard(actions, row, approveBtn, rejectBtn);
+    } else {
+      actions.appendChild(approveBtn);
+      actions.appendChild(rejectBtn);
+      if (row.kind === "tree_card") actions.appendChild(reapplyBtn);
+      if (row.kind === "event_card") actions.appendChild(publishEventBtn);
+      actions.appendChild(editBranchBtn);
+      actions.appendChild(deleteBtn);
+    }
     tdActions.appendChild(actions);
     tr.appendChild(tdActions);
     editBranchBtn.addEventListener("click", async () => {
@@ -674,6 +722,98 @@
     });
     approveBtn.addEventListener("click", async () => {
       hideAlert();
+      if (isSecretResetRequest(row)) {
+        const sb = getClient();
+        if (!sb) {
+          showAlert("error", "تعذر الاتصال.");
+          return;
+        }
+        const token = getAdminToken();
+        if (!token) {
+          showAlert("error", "يلزم تسجيل الدخول أولاً.");
+          return;
+        }
+        const id = coerceRpcId(row.id != null ? row.id : row.request_id);
+        if (!id) {
+          showAlert("error", "بيانات الطلب ناقصة.");
+          return;
+        }
+        const proposed = extractProposedSecretFromMessage(row.message);
+        const ok = window.confirm(
+          "اعتماد طلب إعادة تعيين الرقم السري؟\n" +
+            "المندوب: " +
+            (row.name || "—") +
+            "\nالفرع: " +
+            (row.branch_key || "—") +
+            (proposed
+              ? "\n\nسيُعتمد الرقم السري الذي اقترحه المندوب. انسخه بعد النجاح وأبلغه إن لم تصل إشعارات."
+              : "\n\nسيُعتمد الهاش المخزّن في الطلب."),
+        );
+        if (!ok) return;
+        approveBtn.disabled = true;
+        const { data, error } = await sb.rpc("admin_delegate_secret_reset_approve_v1", {
+          p_token: token,
+          p_id: String(id),
+          p_secret_hash: null,
+        });
+        approveBtn.disabled = false;
+        if (error) {
+          const msg = String(error.message || "");
+          showAlert(
+            "error",
+            /could not find|schema cache|PGRST202/i.test(msg)
+              ? "RPC غير مفعّل. من أدوات الصيانة شغّل أمر «طلب إعادة تعيين الرقم السري»."
+              : "تعذر اعتماد إعادة التعيين.",
+          );
+          return;
+        }
+        if (!data || data.ok === false) {
+          showAlert(
+            "error",
+            "فشل الاعتماد (" + String((data && data.reason) || "unknown") + ").",
+          );
+          return;
+        }
+        let note =
+          "تم اعتماد إعادة التعيين: " +
+          (row.request_id || "") +
+          " · حُدّث Legacy=" +
+          String(data.legacy_updated != null ? data.legacy_updated : "?") +
+          " · v2=" +
+          String(data.v2_updated != null ? data.v2_updated : "?");
+        if (proposed) {
+          note +=
+            "\n\nالرقم السري الجديد (انسخه الآن): " +
+            proposed +
+            "\n" +
+            (data.notify_limitation ||
+              "لا قناة إشعار مضمونة للمندوب — أبلغه يدويًا إن لزم.");
+          try {
+            window.alert(note);
+          } catch (_) {}
+        } else if (data.notify_limitation) {
+          note += "\n" + String(data.notify_limitation);
+        }
+        showAlert("success", note);
+        try {
+          await sb.functions.invoke("alzidan-email-notify", {
+            body: {
+              mode: "secret_reset_approved",
+              record: {
+                request_id: row.request_id,
+                kind: "delegate_secret_reset",
+                branch_key: row.branch_key,
+                phone: row.phone,
+                email: row.email,
+                name: row.name,
+              },
+            },
+          });
+        } catch (_) {}
+        await loadRequests();
+        return;
+      }
+
       const sb = getClient();
       if (!sb) {
         showAlert("error", "تعذر الاتصال.");
@@ -854,6 +994,48 @@
     });
     rejectBtn.addEventListener("click", async () => {
       hideAlert();
+      if (isSecretResetRequest(row)) {
+        const sb = getClient();
+        if (!sb) {
+          showAlert("error", "تعذر الاتصال.");
+          return;
+        }
+        const token = getAdminToken();
+        if (!token) {
+          showAlert("error", "يلزم تسجيل الدخول أولاً.");
+          return;
+        }
+        const id = coerceRpcId(row.id != null ? row.id : row.request_id);
+        if (!id) {
+          showAlert("error", "بيانات الطلب ناقصة.");
+          return;
+        }
+        const reason = window.prompt("سبب الرفض (اختياري):") || "";
+        rejectBtn.disabled = true;
+        const { data, error } = await sb.rpc("admin_delegate_secret_reset_reject_v1", {
+          p_token: token,
+          p_id: String(id),
+          p_reason: reason || null,
+        });
+        rejectBtn.disabled = false;
+        if (error) {
+          const msg = String(error.message || "");
+          showAlert(
+            "error",
+            /could not find|schema cache|PGRST202/i.test(msg)
+              ? "RPC غير مفعّل. من أدوات الصيانة شغّل أمر «طلب إعادة تعيين الرقم السري»."
+              : "تعذر رفض الطلب.",
+          );
+          return;
+        }
+        if (!data || data.ok === false) {
+          showAlert("error", "فشل الرفض.");
+          return;
+        }
+        showAlert("success", "تم رفض طلب إعادة التعيين: " + (row.request_id || ""));
+        await loadRequests();
+        return;
+      }
       const sb = getClient();
       if (!sb) {
         showAlert("error", "تعذر الاتصال.");

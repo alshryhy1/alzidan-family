@@ -1,3 +1,4 @@
+
 # عائلة الزيدان — Engineering Roadmap (إدارة مشروع + مرجع هندسي)
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
@@ -33,7 +34,7 @@
 
 | البوابة | الاسم | الحالة | المعنى |
 |---------|--------|--------|--------|
-| **1** | **Delegates v2** | 🟡 | فشل قبول حي (دخول بعد القبول) — إصلاح `COPY-ME-fix-delegate-portal-path.sql` بانتظار إعادة اختبار |
+| **1** | **Delegates v2** | 🟡 | فشل قبول حي (دخول بعد القبول) — أمر Workspace `maint.fix_delegate_portal_path_v1` بانتظار تشغيل + إعادة اختبار |
 | **2** | **Product Foundation** = **دستور المنصة / دستور حي** | 🟡 | تجميد الدستور + **Truth Before Speed** — ليست «مرحلة وثائق» |
 
 **بوابة 1 — Delegates v2 🟡→🟢** (قبول فقط):
@@ -78,6 +79,14 @@ iOS Experience Rebuild
 
 ---
 
+## قواعد تشغيل
+
+### قاعدة تسليم SQL (Standing · 2026-08-09)
+
+بعد إضافة SQL Workspace: **مسار المشغّل = الإدارة → أدوات الصيانة → أوامر الصيانة الجاهزة → تشغيل → مُنفذ**.  
+لا تُرسل تعليمات «افتح Supabase والصق COPY-ME» كمسار افتراضي. الملفات في `supabase/sql/` تبقى مصدر الحقيقة. الاستثناء الوحيد الموثّق: فشل ترقية المنفّذ بسبب قيد تقني قديم (`SQL-WS-MULTI` على أجسام الدوال) — مرة واحدة ثم Workspace لكل ما بعده. التفاصيل: [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md).
+
+
 ## 0) نموذج الحالات (Status Model)
 
 لا يكفي ✅. لكل بند مادّي يُستخدم أحد الحالات التالية:
@@ -96,7 +105,7 @@ iOS Experience Rebuild
 
 | البند | الحالة | ملاحظة |
 |--------|--------|--------|
-| **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (RPC تنفيذ 🟡 بانتظار COPY-ME) |
+| **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (أوامر صيانة جاهزة + مُنفذ؛ RPC 🟡 حتى تشغيل أمر الترقية من الإدارة) |
 | **Delegates v2 — Foundation + Enforce** | 🟡 | قبول حي فشل على تفعيل الدخول بعد «قبول»؛ إصلاح مسار التفعيل في المستودع — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |

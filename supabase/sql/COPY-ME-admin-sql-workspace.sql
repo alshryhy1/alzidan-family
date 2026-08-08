@@ -105,6 +105,92 @@ begin
 end;
 $$;
 
+create or replace function public.admin_sql_sql_without_literals_v1(p_sql text)
+returns text
+language plpgsql
+immutable
+as $fn$
+declare
+  v text := coalesce(p_sql, '');
+  v_out text := '';
+  i int := 1;
+  n int;
+  ch text;
+  tag text;
+  endtag text;
+  j int;
+begin
+  n := char_length(v);
+  while i <= n loop
+    ch := substr(v, i, 1);
+    if ch = '$' then
+      j := i + 1;
+      while j <= n and substr(v, j, 1) ~ '[A-Za-z0-9_]' loop
+        j := j + 1;
+      end loop;
+      if j <= n and substr(v, j, 1) = '$' then
+        tag := substr(v, i, j - i + 1);
+        endtag := tag;
+        i := j + 1;
+        v_out := v_out || ' ';
+        while i <= n loop
+          if substr(v, i, char_length(endtag)) = endtag then
+            i := i + char_length(endtag);
+            v_out := v_out || ' ';
+            exit;
+          end if;
+          v_out := v_out || ' ';
+          i := i + 1;
+        end loop;
+        continue;
+      end if;
+    end if;
+    if ch = chr(39) then
+      v_out := v_out || ' ';
+      i := i + 1;
+      while i <= n loop
+        if substr(v, i, 1) = chr(39) then
+          if i < n and substr(v, i + 1, 1) = chr(39) then
+            v_out := v_out || '  ';
+            i := i + 2;
+            continue;
+          end if;
+          i := i + 1;
+          exit;
+        end if;
+        v_out := v_out || ' ';
+        i := i + 1;
+      end loop;
+      continue;
+    end if;
+    if ch = '-' and i < n and substr(v, i + 1, 1) = '-' then
+      while i <= n and substr(v, i, 1) <> E'\n' loop
+        v_out := v_out || ' ';
+        i := i + 1;
+      end loop;
+      continue;
+    end if;
+    if ch = '/' and i < n and substr(v, i + 1, 1) = '*' then
+      v_out := v_out || '  ';
+      i := i + 2;
+      while i < n loop
+        if substr(v, i, 2) = '*/' then
+          v_out := v_out || '  ';
+          i := i + 2;
+          exit;
+        end if;
+        v_out := v_out || ' ';
+        i := i + 1;
+      end loop;
+      continue;
+    end if;
+    v_out := v_out || ch;
+    i := i + 1;
+  end loop;
+  return v_out;
+end;
+$fn$;
+
 drop function if exists public.admin_sql_execute_v1(text, text);
 drop function if exists public.admin_sql_execute_v1(text, text, boolean);
 
@@ -132,6 +218,7 @@ declare
   v_err_state text;
   v_err_msg text;
   v_limit integer := 500;
+  v_probe text;
 begin
   if not public.admin_token_ok_v1(p_token) then
     raise exception 'not allowed';
@@ -146,14 +233,16 @@ begin
     );
   end if;
 
-  v_sql := regexp_replace(v_sql, ';\s*$', '');
-  if position(';' in v_sql) > 0 then
+  v_probe := public.admin_sql_sql_without_literals_v1(v_sql);
+  v_probe := regexp_replace(v_probe, ';\s*$', '');
+  if position(';' in v_probe) > 0 then
     return jsonb_build_object(
       'ok', false,
       'error_code', 'SQL-WS-MULTI',
-      'message_ar', 'يُسمح بأمر واحد فقط في كل تنفيذ.'
+      'message_ar', 'يُسمح بأمر واحد فقط في كل تنفيذ. للصيانة متعددة الأوامر: استخدم «أوامر الصيانة الجاهزة» (تشغيل متسلسل).'
     );
   end if;
+  v_sql := regexp_replace(v_sql, ';\s*$', '');
 
   v_cls := public.admin_sql_classify_v1(v_sql);
   v_is_mutating := coalesce((v_cls->>'mutating')::boolean, false);
@@ -291,4 +380,8 @@ grant execute on function public.admin_sql_execute_v1(text, text, boolean)
 
 revoke all on function public.admin_sql_classify_v1(text) from public;
 grant execute on function public.admin_sql_classify_v1(text)
+  to anon, authenticated;
+
+revoke all on function public.admin_sql_sql_without_literals_v1(text) from public;
+grant execute on function public.admin_sql_sql_without_literals_v1(text)
   to anon, authenticated;

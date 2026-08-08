@@ -1,4 +1,7 @@
--- Open this file, Select All, paste in Supabase SQL Editor
+-- Operator path: Admin → SQL Workspace → أوامر الصيانة الجاهزة
+-- Preset id: maint.fix_delegate_portal_path_v1
+-- Source of truth file (do not prefer external paste).
+
 -- =============================================================================
 -- FIX: Delegate portal path after approve (Gate 1)
 -- Safe to re-run.

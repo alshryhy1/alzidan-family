@@ -137,6 +137,30 @@
       return;
     }
 
+    const reqType = String(data.request_type || data.kind || "").trim();
+    if (reqType === "delegate_secret_reset" || data.dedicated_ui) {
+      box.innerHTML =
+        '<div class="wf-status-main"><strong>طلب إعادة تعيين الرقم السري</strong></div>' +
+        '<div class="hint">هذه نية مستقلة — ليست مسار الشجرة/المناسبات. استخدم أزرار الاعتماد/الرفض في صف الطلب بالجدول.</div>' +
+        '<div class="hint">Legacy: ' +
+        String(data.legacy_status || "—") +
+        " · المندوب: " +
+        String(data.name || "—") +
+        " · الفرع: " +
+        String(data.branch_key || "—") +
+        "</div>";
+      if (actions) {
+        actions.hidden = false;
+        actions.innerHTML =
+          '<span class="hint">لا انتقالات Workflow عامة لهذا الطلب.</span>';
+      }
+      if (logEl) {
+        logEl.hidden = true;
+        logEl.innerHTML = "";
+      }
+      return;
+    }
+
     const deep = String(data.wf_deep_link || "").trim();
     box.innerHTML =
       '<div class="wf-status-main">' +
@@ -252,6 +276,14 @@
     if (error || !data || !data.ok) {
       actions.hidden = true;
       actions.innerHTML = "";
+      return;
+    }
+    if (data.dedicated_ui || data.intent === "delegate_secret_reset") {
+      actions.hidden = false;
+      actions.innerHTML =
+        '<span class="hint">' +
+        String(data.hint_ar || "استخدم بطاقة إعادة تعيين الرقم السري في الجدول.") +
+        "</span>";
       return;
     }
     const next = Array.isArray(data.next) ? data.next : [];

@@ -354,6 +354,7 @@
       tree_audit: "تعديل بيانات الشجرة",
       events_audit: "تعديل الأخبار والمناسبات",
       event_card: "بطاقة مناسبة",
+      delegate_secret_reset: "إعادة تعيين الرقم السري",
       test_request: "طلب اختبار",
       unknown: "غير معروف",
     };
