@@ -735,6 +735,36 @@
         );
         return;
       }
+      // Activate Delegates v2 login credentials from the same approved row
+      // (SSOT for portal login after «قبول» — also mirrored by DB trigger when SQL applied).
+      if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
+        try {
+          const act = await sb.rpc("admin_delegates_v2_activate_from_request_v1", {
+            p_token: token,
+            p_id: String(id),
+          });
+          if (act.error && !/could not find the function|PGRST202/i.test(String(act.error.message || ""))) {
+            showAlert(
+              "error",
+              "تم قبول الطلب لكن تعذر تفعيل دخول المندوب. طبّق COPY-ME-fix-delegate-portal-path.sql ثم أعد القبول أو المزامنة.",
+            );
+            approveBtn.disabled = false;
+            await loadRequests();
+            return;
+          }
+          if (act.data && act.data.ok === false && act.data.reason !== "not_delegate_kind") {
+            showAlert(
+              "error",
+              "تم قبول الطلب لكن تفعيل دخول المندوب فشل (" +
+                String(act.data.reason || "unknown") +
+                "). راجع سجل المندوبين أو أعد المزامنة.",
+            );
+            approveBtn.disabled = false;
+            await loadRequests();
+            return;
+          }
+        } catch (activateErr) {}
+      }
       if (row.kind === "tree_card") {
         const extra = applyInfo && applyInfo.message ? " (" + applyInfo.message + ")" : "";
         showAlert(
@@ -745,6 +775,11 @@
         showAlert(
           "success",
           `تم قبول الطلب ونشر المناسبة في الويب والتطبيق: ${row.request_id}`,
+        );
+      } else if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
+        showAlert(
+          "success",
+          `تم قبول الطلب وتفعيل دخول المندوب: ${row.request_id}`,
         );
       } else {
         showAlert("success", `تم قبول الطلب: ${row.request_id}`);

@@ -441,6 +441,14 @@ begin
     v_write := public.delegate_v2_check_op_v1(
       p_branch_key, p_phone, p_email, p_secret_hash, 'tree.write'
     );
+    select
+      nullif(btrim(coalesce(d.tree_request_id, d.events_request_id, '')), '') as request_id,
+      nullif(btrim(coalesce(d.phone, '')), '') as phone,
+      nullif(btrim(coalesce(d.email, '')), '') as email
+    into r
+    from public.delegates_v2 d
+    where d.id::text = nullif(btrim(coalesce(v_check->>'delegate_id', '')), '')
+    limit 1;
     return jsonb_build_object(
       'allowed', true,
       'status', 'approved',
@@ -449,8 +457,9 @@ begin
       'delegate_id', v_check->>'delegate_id',
       'role_key', v_check->>'role_key',
       'branch_key', coalesce(v_check->>'branch_key', p_branch_key),
-      'phone', p_phone,
-      'email', p_email,
+      'request_id', coalesce(r.request_id, v_check->>'delegate_id'),
+      'phone', coalesce(r.phone, p_phone),
+      'email', coalesce(r.email, p_email),
       'operations', jsonb_build_object(
         'tree.read', true,
         'tree.write', coalesce((v_write->>'ok')::boolean, false)
@@ -550,6 +559,7 @@ declare
   v_row record;
   v_allowed boolean := false;
   v_write jsonb;
+  v_req_id text;
 begin
   v_check := public.delegate_v2_check_op_v1(
     p_branch_key, p_phone, p_email, p_secret_hash, 'events.read'
@@ -560,6 +570,11 @@ begin
     v_write := public.delegate_v2_check_op_v1(
       p_branch_key, p_phone, p_email, p_secret_hash, 'events.write'
     );
+    select nullif(btrim(coalesce(d.events_request_id, d.tree_request_id, '')), '')
+      into v_req_id
+    from public.delegates_v2 d
+    where d.id::text = nullif(btrim(coalesce(v_check->>'delegate_id', '')), '')
+    limit 1;
     return jsonb_build_object(
       'allowed', true,
       'status', 'approved',
@@ -567,7 +582,7 @@ begin
       'reason', null,
       'delegate_id', v_check->>'delegate_id',
       'role_key', v_check->>'role_key',
-      'request_id', null,
+      'request_id', coalesce(v_req_id, v_check->>'delegate_id'),
       'operations', jsonb_build_object(
         'events.read', true,
         'events.write', coalesce((v_write->>'ok')::boolean, false)

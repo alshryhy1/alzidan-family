@@ -2,7 +2,7 @@
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-09 — اعتماد UX مساحة المندوب («ابدا») · قائمة قبول Delegates · بوابتان ما زالتا 🟡 · لا كود DW  
+**آخر تحديث تخطيط:** 2026-08-09 — بوابة 1 🟡 فشل تفعيل الدخول بعد القبول (إصلاح في المستودع · بانتظار SQL/إعادة اختبار) · بوابة 2 🟡 · لا كود DW  
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 ### دستور المنصة مقابل هذه الخارطة
@@ -33,7 +33,7 @@
 
 | البوابة | الاسم | الحالة | المعنى |
 |---------|--------|--------|--------|
-| **1** | **Delegates v2** | 🟡 | اختبار قبول فقط — ليس برمجة جديدة |
+| **1** | **Delegates v2** | 🟡 | فشل قبول حي (دخول بعد القبول) — إصلاح `COPY-ME-fix-delegate-portal-path.sql` بانتظار إعادة اختبار |
 | **2** | **Product Foundation** = **دستور المنصة / دستور حي** | 🟡 | تجميد الدستور + **Truth Before Speed** — ليست «مرحلة وثائق» |
 
 **بوابة 1 — Delegates v2 🟡→🟢** (قبول فقط):
@@ -97,7 +97,7 @@ iOS Experience Rebuild
 | البند | الحالة | ملاحظة |
 |--------|--------|--------|
 | **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (RPC تنفيذ 🟡 بانتظار COPY-ME) |
-| **Delegates v2 — Foundation + Enforce** | 🟡 | SQL أساس+فرض **مُطبَّق**؛ **بانتظار اختبار قبول فقط** → أقرب لـ 🟢 — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md). Multi-stage = ⚪ (فوق Workflow Engine) |
+| **Delegates v2 — Foundation + Enforce** | 🟡 | قبول حي فشل على تفعيل الدخول بعد «قبول»؛ إصلاح مسار التفعيل في المستودع — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |
 | **Health Center** | 🟢 | أساس قراءة فقط في الإدارة |
@@ -285,7 +285,7 @@ Search Name        ← للبحث/التطبيع
 | المسار | المحتوى | الحالة |
 |--------|---------|--------|
 | **Admin Hub / Redesign** | شِلّ موديولات (عرض فقط — بلا منطق سير) | 🟢 أساس · تكراري |
-| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 **بوابة 1** — SQL مُطبَّق؛ بانتظار قبول — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) |
+| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 **بوابة 1** — فشل دخول بعد القبول؛ إصلاح بانتظار إعادة اختبار — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) |
 | **Product Foundation** | **دستور حي** + Truth Before Speed — تجميد لا «مرحلة docs» | 🟡 **بوابة 2** — بانتظار التجميد بعد 🟢 Delegates |
 | **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | ⚪ — بعد البوابتين 🟢 |
 | **Validation Engine** | تحقق قبل المندوب/الشجرة — لا تنفيذ | ⚪ — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
