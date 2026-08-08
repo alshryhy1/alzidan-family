@@ -8,12 +8,19 @@
   const LEGACY_HISTORY_KEY = "alzidan_sql_ws_history_v1";
   const QUEUE_KEY = "alzidan_sql_ws_queue_v1";
   const ARCHIVE_KEY = "alzidan_sql_ws_archive_v1";
+  /** One-shot flag: collapse historical fail spam in localStorage. */
+  const DAILY_COLLAPSE_FLAG = "alzidan_sql_ws_daily_collapse_v3";
   const QUEUE_MAX = 60;
   const ARCHIVE_MAX = 200;
   const MUTATE_RE =
     /^\s*(UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|INSERT|REPLACE|GRANT|REVOKE|COMMENT|COPY|VACUUM|REINDEX|CLUSTER|CALL|DO)\b/i;
+  /** All free-editor attempts share one daily card (never a failure history). */
+  const EDITOR_COMMAND_KEY = "editor:last";
+  const EDITOR_DAILY_ID = "daily_editor_last";
+  const EDITOR_DAILY_TITLE = "آخر محاولة محرر";
 
   let migrated = false;
+  let dailyCollapsed = false;
   let inProgress = null;
   /** Preset id last loaded into the editor (SSOT link for editor runs). */
   let activeEditorPresetId = "";
@@ -25,6 +32,8 @@
   const V1_RPC = "admin_sql_execute_v1";
   const V2_INSTALL_FILE = "../supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql";
   const V2_PRESET_ID = "maint.sql_workspace_run_v2";
+  const V2_SUPABASE_HINT =
+    "المنفّذ الحالي (v1) يرفض أكثر من أمر. الصق ملف COPY-ME-admin-sql-workspace-run-v2.sql مرة واحدة في Supabase SQL Editor أولًا (CREATE OR REPLACE فقط)، ثم ارجع وشغّل بطاقة «تثبيت منفّذ SQL Workspace v2».";
 
   function getToken() {
     try {
@@ -135,30 +144,150 @@
     migrated = true;
     try {
       const legacy = loadJsonArray(LEGACY_HISTORY_KEY, sessionStorage);
-      if (!legacy.length) return;
-      const queue = loadJsonArray(QUEUE_KEY, localStorage);
-      const archive = loadJsonArray(ARCHIVE_KEY, localStorage);
-      const seenQ = new Set(queue.map((x) => String(x.id || "") + "|" + String(x.at || "")));
-      const seenA = new Set(archive.map((x) => String(x.id || "") + "|" + String(x.at || "")));
-      legacy.forEach((it) => {
-        const entry = normalizeEntry(it);
-        const key = String(entry.id || "") + "|" + String(entry.at || "");
-        if (entry.ok) {
-          if (!seenA.has(key)) {
-            archive.unshift(entry);
-            seenA.add(key);
+      if (legacy.length) {
+        const queue = loadJsonArray(QUEUE_KEY, localStorage);
+        const archive = loadJsonArray(ARCHIVE_KEY, localStorage);
+        const seenQ = new Set(
+          queue.map((x) => String(x.id || "") + "|" + String(x.at || "")),
+        );
+        const seenA = new Set(
+          archive.map((x) => String(x.id || "") + "|" + String(x.at || "")),
+        );
+        legacy.forEach((it) => {
+          const entry = normalizeEntry(it);
+          const key = String(entry.id || "") + "|" + String(entry.at || "");
+          if (entry.ok) {
+            if (!seenA.has(key)) {
+              archive.unshift(entry);
+              seenA.add(key);
+            }
+          } else if (!seenQ.has(key)) {
+            queue.unshift(entry);
+            seenQ.add(key);
           }
-        } else if (!seenQ.has(key)) {
-          queue.unshift(entry);
-          seenQ.add(key);
+        });
+        saveJsonArray(QUEUE_KEY, localStorage, collapseDailyItems(queue), QUEUE_MAX);
+        saveJsonArray(ARCHIVE_KEY, localStorage, archive, ARCHIVE_MAX);
+        try {
+          sessionStorage.removeItem(LEGACY_HISTORY_KEY);
+        } catch (_) {}
+      }
+    } catch (_) {}
+    migrateCollapseDailySpam();
+  }
+
+  function knownPresetIdSet() {
+    const api = presetsApi();
+    const ids = new Set();
+    ((api && api.PRESETS) || []).forEach((p) => {
+      if (p && p.id) ids.add(String(p.id));
+    });
+    return ids;
+  }
+
+  function isMultiFailMessage(msg) {
+    return /SQL-WS-MULTI|أمر واحد فقط|يُسمح بأمر واحد/i.test(String(msg || ""));
+  }
+
+  /**
+   * Existing localStorage often holds a failure *history* (pre-SSOT).
+   * Keep latest row per command key only; drop obsolete presets; one editor card.
+   */
+  function migrateCollapseDailySpam() {
+    if (dailyCollapsed) return;
+    dailyCollapsed = true;
+    try {
+      const flag = localStorage.getItem(DAILY_COLLAPSE_FLAG);
+      const queue = loadJsonArray(QUEUE_KEY, localStorage);
+      const next = collapseDailyItems(queue).map((it) => {
+        if (isMultiFailMessage(it.error)) {
+          return Object.assign({}, it, {
+            error: V2_SUPABASE_HINT,
+          });
         }
+        return it;
       });
-      saveJsonArray(QUEUE_KEY, localStorage, queue, QUEUE_MAX);
-      saveJsonArray(ARCHIVE_KEY, localStorage, archive, ARCHIVE_MAX);
+      const changed =
+        flag !== "1" || JSON.stringify(queue) !== JSON.stringify(next);
+      if (changed) {
+        saveJsonArray(QUEUE_KEY, localStorage, next, QUEUE_MAX);
+      }
+      // Rewrite stored MULTI fail badges on ready presets (without clearing).
       try {
-        sessionStorage.removeItem(LEGACY_HISTORY_KEY);
+        const api = presetsApi();
+        if (api && typeof api.loadFail === "function" && api.FAIL_KEY) {
+          const fails = api.loadFail() || {};
+          let fChanged = false;
+          Object.keys(fails).forEach((id) => {
+            const row = fails[id];
+            if (!row) return;
+            if (isMultiFailMessage(row.error)) {
+              fails[id] = Object.assign({}, row, {
+                error: V2_SUPABASE_HINT,
+                needs_supabase: true,
+              });
+              fChanged = true;
+            }
+          });
+          if (fChanged) {
+            localStorage.setItem(api.FAIL_KEY, JSON.stringify(fails));
+          }
+        }
+      } catch (_) {}
+      try {
+        localStorage.setItem(DAILY_COLLAPSE_FLAG, "1");
       } catch (_) {}
     } catch (_) {}
+  }
+
+  /** Rewrite or clear MULTI fail flags so the UI never looks like a retry log. */
+  function clearMultiFailNoise() {
+    const api = presetsApi();
+    if (api && typeof api.loadFail === "function") {
+      const fails = api.loadFail() || {};
+      let changed = false;
+      Object.keys(fails).forEach((id) => {
+        const row = fails[id];
+        if (!row) return;
+        if (executorReady) {
+          if (id === V2_PRESET_ID || isMultiFailMessage(row.error)) {
+            if (typeof api.clearFail === "function") api.clearFail(id);
+            changed = true;
+          }
+          return;
+        }
+        if (isMultiFailMessage(row.error) || row.needs_supabase) {
+          fails[id] = Object.assign({}, row, {
+            error: V2_SUPABASE_HINT,
+            needs_supabase: true,
+          });
+          changed = true;
+        }
+      });
+      if (changed && !executorReady && typeof api.loadFail === "function") {
+        try {
+          localStorage.setItem(
+            api.FAIL_KEY || "alzidan_sql_ws_presets_fail_v1",
+            JSON.stringify(fails),
+          );
+        } catch (_) {}
+      }
+    }
+    const q = loadJsonArray(QUEUE_KEY, localStorage)
+      .map((raw) => {
+        const it = normalizeEntry(raw);
+        if (!executorReady && isMultiFailMessage(it.error)) {
+          it.error = V2_SUPABASE_HINT;
+        }
+        return it;
+      })
+      .filter((it) => {
+        if (!executorReady) return true;
+        if (it.presetId === V2_PRESET_ID) return false;
+        if (isMultiFailMessage(it.error)) return false;
+        return true;
+      });
+    saveJsonArray(QUEUE_KEY, localStorage, collapseDailyItems(q), QUEUE_MAX);
   }
 
   function makeId() {
@@ -213,12 +342,10 @@
   /** Stable key: one daily card per command (not per attempt). */
   function commandKey(entry) {
     const presetId = resolvePresetId(entry);
-    if (presetId) return "p:" + presetId;
-    const sqlKey = normalizeSqlKey(entry && entry.sql);
-    if (sqlKey) return "s:" + sqlKey.slice(0, 240);
-    if (entry && entry.title) return "t:" + String(entry.title);
-    if (entry && entry.id) return "i:" + entry.id;
-    return "x:" + makeId();
+    const known = knownPresetIdSet();
+    if (presetId && known.has(presetId)) return "p:" + presetId;
+    // Free-editor / unknown / obsolete → single ephemeral daily slot.
+    return EDITOR_COMMAND_KEY;
   }
 
   function normalizeEntry(raw) {
@@ -284,14 +411,31 @@
   /** Collapse many fail attempts into the latest card per command. */
   function collapseDailyItems(items) {
     const byKey = new Map();
+    const known = knownPresetIdSet();
     (items || []).forEach((raw) => {
       const it = normalizeEntry(raw);
       if (isCommandSucceeded(it)) return;
       if (it.status === "done" || it.ok) return;
+      const presetId = resolvePresetId(it);
+      // Drop obsolete maintenance cards that are no longer in the catalog.
+      if (presetId && !known.has(presetId)) {
+        // Old literal_aware / renamed presets: do not keep a daily ghost card.
+        if (it.source === "preset" || String(it.title || "").indexOf("literal") >= 0) {
+          return;
+        }
+      }
       const key = commandKey(it);
+      if (key === EDITOR_COMMAND_KEY) {
+        it.source = "editor";
+        it.title = EDITOR_DAILY_TITLE;
+        it.presetId = "";
+        it.id = EDITOR_DAILY_ID;
+      } else if (presetId) {
+        it.presetId = presetId;
+        it.id = "daily_" + presetId;
+      }
       const prev = byKey.get(key);
       if (!prev || String(it.at || "") >= String(prev.at || "")) {
-        if (prev && prev.id) it.id = prev.id;
         byKey.set(key, it);
       }
     });
@@ -417,20 +561,21 @@
   function friendlyRpcError(error, data) {
     if (data && data.message_ar) return String(data.message_ar);
     const code = String((error && error.code) || (data && data.error_code) || "");
+    const rawMsg = String(
+      (error && error.message) || (data && data.message_ar) || "",
+    );
     if (
       code === "PGRST202" ||
-      /could not find|schema cache|admin_sql_workspace_run_v2/i.test(
-        String((error && error.message) || ""),
-      )
+      /could not find|schema cache|admin_sql_workspace_run_v2/i.test(rawMsg)
     ) {
-      return (
-        "منفّذ SQL Workspace v2 غير مفعّل بعد. من أدوات الصيانة شغّل «تثبيت منفّذ SQL Workspace v2» " +
-        "(أو الصق COPY-ME-admin-sql-workspace-run-v2.sql مرة واحدة في Supabase — CREATE OR REPLACE فقط)."
-      );
+      return V2_SUPABASE_HINT;
     }
-    if (/pg_proc|42501/i.test(String((error && error.message) || ""))) {
+    if (isMultiFailMessage(rawMsg) || code === "SQL-WS-MULTI") {
+      return V2_SUPABASE_HINT;
+    }
+    if (/pg_proc|42501/i.test(rawMsg)) {
       return (
-        "مسار UPDATE pg_proc مُلغى وغير مسموح في Supabase. ثبّت المنفّذ v2 عبر CREATE OR REPLACE فقط."
+        "مسار UPDATE pg_proc مُلغى وغير مسموح في Supabase. " + V2_SUPABASE_HINT
       );
     }
     if (/not allowed|permission|JWT/i.test(String((error && error.message) || ""))) {
@@ -897,6 +1042,7 @@
       const already = await probeExecutorReady(token);
       if (already.ready) {
         executorReady = true;
+        clearMultiFailNoise();
         archivePresetSuccess(V2_PRESET_ID, {
           bootstrap: true,
           actor: getActorLabel(),
@@ -991,6 +1137,7 @@
       }
 
       executorReady = true;
+      clearMultiFailNoise();
       archivePresetSuccess(V2_PRESET_ID, {
         bootstrap: true,
         actor: getActorLabel(),
@@ -1013,6 +1160,7 @@
     const probe = await probeExecutorReady(token);
     if (probe.ready) {
       executorReady = true;
+      clearMultiFailNoise();
       return { ok: true, skipped: true };
     }
     return runExecutorBootstrap(token);
@@ -1108,9 +1256,9 @@
 
     const requestId = readLinkedRequestId();
     const actor = getActorLabel();
-    const opId = makeId();
     const presetId =
       activeEditorPresetId || inferPresetIdFromSql(sql) || "";
+    const opId = presetId ? "daily_" + presetId : EDITOR_DAILY_ID;
     inProgress = normalizeEntry({
       id: opId,
       at: new Date().toISOString(),
@@ -1122,7 +1270,7 @@
       version: presetId || cls.first || "SQL",
       presetId: presetId,
       source: presetId ? "preset" : "editor",
-      title: presetId ? "أمر صيانة من المحرر" : "أمر من المحرر",
+      title: presetId ? "أمر صيانة من المحرر" : EDITOR_DAILY_TITLE,
     });
     renderQueue();
 
@@ -1186,8 +1334,11 @@
           error: msg,
           actor: actor,
           requestId: requestId,
+          needs_supabase: isMultiFailMessage(msg) || /Supabase/i.test(msg),
         });
       }
+      // Editor fails: one ephemeral daily card only (never append history).
+      // Linked preset fails update that preset's single daily card.
       pushQueue({
         id: opId,
         at: new Date().toISOString(),
@@ -1201,7 +1352,7 @@
         version: presetId || cls.first || "SQL",
         presetId: presetId,
         source: presetId ? "preset" : "editor",
-        title: presetId ? "أمر صيانة من المحرر" : "أمر من المحرر",
+        title: presetId ? "أمر صيانة من المحرر" : EDITOR_DAILY_TITLE,
         auditId: payload && payload.audit_id,
       });
       renderPresets();
@@ -1229,7 +1380,7 @@
       version: presetId || cls.first || "SQL",
       presetId: presetId,
       source: presetId ? "preset" : "editor",
-      title: presetId ? "أمر صيانة من المحرر" : "أمر من المحرر",
+      title: presetId ? "أمر صيانة من المحرر" : EDITOR_DAILY_TITLE,
       auditId: payload.audit_id,
     });
 
@@ -1265,7 +1416,8 @@
     {
       id: "maint.sql_workspace_run_v2",
       title: "تثبيت منفّذ SQL Workspace v2",
-      desc: "CREATE OR REPLACE فقط (بدون pg_proc). مرة Supabase إن لزم ثم المساحة.",
+      desc:
+        "إلزامي أولًا: إن ظهر «يُسمح بأمر واحد فقط» فالصق COPY-ME-admin-sql-workspace-run-v2.sql مرة في Supabase ثم أعد تشغيل هذه البطاقة.",
       file: "../supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql",
       order: 10,
       bootstrap: true,
@@ -1397,53 +1549,84 @@
     if (countEl) {
       countEl.textContent =
         (items.length ? items.length + " بانتظار التنفيذ" : "لا أوامر معلّقة") +
-        (archivedN ? " · " + archivedN + " في الأرشيف" : "");
+        (archivedN ? " · " + archivedN + " في الأرشيف" : "") +
+        (executorReady ? " · المنفّذ v2 جاهز" : " · المنفّذ v2 غير مفعّل");
     }
     if (!items.length) {
       host.innerHTML =
         '<div class="hint">لا أوامر صيانة بانتظار التنفيذ الآن. الأوامر المُنفَّذة في «سجل التنفيذ / الأرشيف» أدناه — أو ألغِ «مُنفذ» من الأرشيف إن احتجت إعادة تشغيل.</div>';
       return;
     }
-    host.innerHTML = items
-      .map(function (p) {
-        const fail = typeof api.getFail === "function" ? api.getFail(p.id) : null;
-        return (
-          '<div class="sql-ws-preset' +
-          (fail ? " is-fail" : "") +
-          '" data-preset-id="' +
-          escapeHtml(p.id) +
-          '">' +
-          '<div class="sql-ws-preset-main">' +
-          '<div class="sql-ws-preset-title">' +
-          escapeHtml(p.title) +
-          "</div>" +
-          '<div class="hint sql-ws-preset-desc">' +
-          escapeHtml(p.desc || "") +
-          "</div>" +
-          '<div class="sql-ws-preset-meta hint">' +
-          (fail
-            ? '<span class="sql-ws-preset-badge is-fail">فشل — أعد التنفيذ</span> · ' +
+    const gateBanner = !executorReady
+      ? '<div class="alert alert-error sql-ws-v2-gate" role="status" style="margin:0 0 10px;">' +
+        "<strong>خطوة إلزامية قبل باقي البطاقات:</strong> " +
+        escapeHtml(V2_SUPABASE_HINT) +
+        "</div>"
+      : "";
+    host.innerHTML =
+      gateBanner +
+      items
+        .map(function (p) {
+          const fail =
+            typeof api.getFail === "function" ? api.getFail(p.id) : null;
+          const multi =
+            !!(fail && isMultiFailMessage(fail.error)) ||
+            !!(fail && fail.needs_supabase);
+          const isV2 = p.id === V2_PRESET_ID || p.bootstrap || p.supabaseOnce;
+          let badgeHtml;
+          if (isV2 && !executorReady) {
+            badgeHtml =
+              '<span class="sql-ws-preset-badge is-fail">يلزم Supabase أولًا</span> · ' +
+              "الصق COPY-ME-admin-sql-workspace-run-v2.sql مرة في SQL Editor ثم اضغط تشغيل";
+          } else if (fail) {
+            const errShow = multi
+              ? "موقوف حتى تثبيت v2 في Supabase"
+              : String(fail.error || "").slice(0, 100);
+            badgeHtml =
+              '<span class="sql-ws-preset-badge is-fail">' +
+              (multi ? "فشل — ثبّت v2 أولًا" : "فشل — أعد التنفيذ") +
+              "</span> · " +
               escapeHtml(formatTime(fail.at)) +
-              (fail.error
-                ? " · " + escapeHtml(String(fail.error).slice(0, 80))
-                : "")
-            : '<span class="sql-ws-preset-badge">جاهز للتشغيل</span>') +
-          (p.bootstrap ? " · تثبيت منفّذ v2" : "") +
-          "</div></div>" +
-          '<div class="sql-ws-preset-actions">' +
-          '<button type="button" class="btn btn-primary btn-sm" data-preset-run="' +
-          escapeHtml(p.id) +
-          '">تشغيل</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-preset-load="' +
-          escapeHtml(p.id) +
-          '">عرض في المحرر</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-preset-done="' +
-          escapeHtml(p.id) +
-          '" title="تعليم يدوي كمُنفذ ونقله للأرشيف">تعليم كمُنفذ</button>' +
-          "</div></div>"
-        );
-      })
-      .join("");
+              (errShow ? " · " + escapeHtml(errShow) : "");
+          } else {
+            badgeHtml = '<span class="sql-ws-preset-badge">جاهز للتشغيل</span>';
+          }
+          const desc = isV2 && !executorReady
+            ? V2_SUPABASE_HINT
+            : multi && !isV2
+              ? "لا تُعاد المحاولة الآن. ثبّت منفّذ v2 من البطاقة الأولى (لصق الملف في Supabase إن لزم) ثم شغّل هذه البطاقة مرة واحدة."
+              : p.desc || "";
+          return (
+            '<div class="sql-ws-preset' +
+            (fail || (isV2 && !executorReady) ? " is-fail" : "") +
+            '" data-preset-id="' +
+            escapeHtml(p.id) +
+            '">' +
+            '<div class="sql-ws-preset-main">' +
+            '<div class="sql-ws-preset-title">' +
+            escapeHtml(p.title) +
+            "</div>" +
+            '<div class="hint sql-ws-preset-desc">' +
+            escapeHtml(desc) +
+            "</div>" +
+            '<div class="sql-ws-preset-meta hint">' +
+            badgeHtml +
+            (p.bootstrap ? " · تثبيت منفّذ v2" : "") +
+            "</div></div>" +
+            '<div class="sql-ws-preset-actions">' +
+            '<button type="button" class="btn btn-primary btn-sm" data-preset-run="' +
+            escapeHtml(p.id) +
+            '">تشغيل</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-preset-load="' +
+            escapeHtml(p.id) +
+            '">عرض في المحرر</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-preset-done="' +
+            escapeHtml(p.id) +
+            '" title="تعليم يدوي كمُنفذ ونقله للأرشيف">تعليم كمُنفذ</button>' +
+            "</div></div>"
+          );
+        })
+        .join("");
   }
 
   async function loadPresetIntoEditor(id) {
@@ -1849,6 +2032,7 @@
 
     bindToolsNav();
     bindPresets();
+    migrateCollapseDailySpam();
     purgeDailySucceeded();
     renderQueue();
     renderArchive();
@@ -1857,8 +2041,26 @@
       els.editor.value = "SELECT id, child_name FROM tree_children LIMIT 20;";
     }
 
+    (async function probeExecutorOnBind() {
+      const token = getToken();
+      if (!token) {
+        renderPresets();
+        return;
+      }
+      try {
+        const probe = await probeExecutorReady(token);
+        executorReady = !!probe.ready;
+        if (executorReady) clearMultiFailNoise();
+      } catch (_) {}
+      purgeDailySucceeded();
+      renderPresets();
+      renderQueue();
+    })();
+
     document.addEventListener("alzidan:admin-module", (ev) => {
       if (ev && ev.detail && ev.detail.id === "tools") {
+        migrateCollapseDailySpam();
+        purgeDailySucceeded();
         renderQueue();
         renderArchive();
         renderPresets();

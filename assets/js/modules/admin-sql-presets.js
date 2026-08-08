@@ -15,7 +15,8 @@
     {
       id: "maint.sql_workspace_run_v2",
       title: "تثبيت منفّذ SQL Workspace v2",
-      desc: "CREATE OR REPLACE فقط (بدون pg_proc). مرة واحدة في Supabase إن لزم، ثم أوامر الصيانة من المساحة إلى الأبد.",
+      desc:
+        "إلزامي أولًا: إن ظهر «يُسمح بأمر واحد فقط» فالصق COPY-ME-admin-sql-workspace-run-v2.sql مرة واحدة في Supabase SQL Editor (CREATE OR REPLACE فقط — بدون pg_proc). بعدها شغّل هذه البطاقة ثم بقية أوامر الصيانة من المساحة.",
       file: "../supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql",
       order: 10,
       bootstrap: true,
