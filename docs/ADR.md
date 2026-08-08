@@ -1,8 +1,9 @@
 # عائلة الزيدان — Architecture Decision Records (ADR)
 
 **الحالة:** قرارات مقفلة (Accepted)  
-**التاريخ:** 2026-08-07 (آخر قرار: ADR-010 — 2026-08-08)  
-**المرجع التنفيذي:** [`docs/ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md)
+**التاريخ:** 2026-08-07 (آخر قرار: ADR-011 — 2026-08-08)  
+**المرجع التنفيذي:** [`docs/ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md)  
+**دستور المنصة:** [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md)
 
 هذه قرارات معمارية ثابتة — ليست اقتراحات. أي تغيير يتطلّب ADR جديدًا صريحًا وحالة محدَّثة.
 
@@ -240,6 +241,40 @@ Search Name        ← للبحث/التطبيع
 - قبل تنفيذ Delegate Workspace: مواصفة السير معتمدة + أساس المحرك.
 - قاعدة بوابة الميزة في الخارطة ملزمة قبل كود أي ميزة جديدة.
 
+---
+
+## ADR-011 — دستور المنصة + محاذاة المراحل + SSOT + Zero Duplicate Logic
+
+| الحقل | القيمة |
+|--------|--------|
+| **Status** | Accepted |
+| **التاريخ** | 2026-08-08 |
+| **الدستور** | [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) |
+| **الخارطة** | [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) |
+
+### Decision
+
+1. **دستور المنصة** أربع وثائق رسمية منفصلة عن الخارطة:
+   - لغة المنتج · مواصفة السير · فهرس النوايا · مبادئ المنصة  
+   - Roadmap = **ماذا نبني؟** · Constitution = **كيف نفكر / ما يُمنع؟**
+
+2. **الترتيب الكانوني المحدَّث** (بعد إغلاق Delegates v2):  
+   **0 Product Foundation** → **1 Workflow Engine** → **2 Request Experience** → **3 Delegate Workspace** → **4 Admin UX** → **5 Family Engine Alignment**  
+   المرحلة 5 = **مواءمة** خدمات موجودة (توحيد الدخول · منع الكتابة خارج Workflow · إزالة التكرار) — **ليست** إعادة بناء.
+
+3. **Single Source of Truth (SSOT):** كل معلومة من مصدر واحد — حالة الطلب ← Workflow · صلاحية المندوب ← Delegates · الشخص ← Family Engine · الأخبار ← Events · الذكريات ← Memory.
+
+4. **Zero Duplicate Logic:** أي تحقق/قاعدة يحتاجها أكثر من دور تُكتب مرة واحدة في المحرك أو الخدمة — لا نسخ في صفحات الواجهة.
+
+### Consequences
+
+- أي عملية جديدة للمستخدم تمر أولًا عبر [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md).
+- شاشات جديدة تُرفض إن خالفت Human First / No Database Thinking ([`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)).
+- مسارات كتابة UI→Service لعمليات الفهرس = خرق دستوري (إلى جانب ADR-010).
+- تكرار منطق الأعمال بين الزائر/المندوب/الإدارة = خرق Zero Duplicate Logic.
+
+---
+
 ## ملخص سريع (لا يُكسر)
 
 1. الهوية = `person_id`  
@@ -252,8 +287,9 @@ Search Name        ← للبحث/التطبيع
 8. الكاش يتبع الأحداث والإصدارات  
 9. DateEngine موحّد — لا `new Date()` لتواريخ الأعمال؛ لا هجري في timestamp ميلادي  
 10. **Workflow Engine طبقة مستقلة** — بلا UI؛ نفس العُقد لكل نوع طلب؛ الواجهات بلا منطق أعمال  
+11. **دستور المنصة** — أربع وثائق · SSOT · Zero Duplicate Logic · Family Engine Alignment · مراحل 0→5  
 
 ### إدارة المشروع (2026-08-08)
 
-خارطة الطريق الرسمية [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) هي وثيقة **إدارة مشروع**: معمارية ثابتة (Presentation → Workflow Engine → Business Services → Data)، مبادئ منتج، بوابة ميزة، ترتيب كانوني (**Delegates v2 → Workflow Engine v1 → Delegate Workspace v1 → Admin UX**)، مواصفة سير [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md)، نموذج حالات 🟢🟡🔵⚪⬛، ثلاثة برامج، Tree Engine v2، DateEngine، دين تقني، وقواعد انحدار. المنصة = بيانات عائلية + سير اعتماد. هذا الملف (ADR) مصدر القرارات المعمارية المقفلَة فقط.  
+خارطة الطريق الرسمية [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) هي وثيقة **إدارة مشروع** (ماذا نبني). دستور المنصة (أربع وثائق) يحدّد كيف نفكر وما يُمنع. الترتيب الكانوني: إغلاق **Delegates v2** → **Product Foundation** → **Workflow Engine** → **Request Experience** → **Delegate Workspace** → **Admin UX** → **Family Engine Alignment**. نموذج حالات 🟢🟡🔵⚪⬛، ثلاثة برامج، Tree Engine v2، DateEngine، دين تقني، وقواعد انحدار. المنصة = معرفة عائلية + سير اعتماد. هذا الملف (ADR) مصدر القرارات المعمارية المقفلَة فقط.  
 
