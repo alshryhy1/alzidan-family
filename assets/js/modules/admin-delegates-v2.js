@@ -179,7 +179,7 @@
     el.hidden = false;
     el.innerHTML =
       "<strong>يلزم تطبيق SQL مرة واحدة:</strong> " +
-      esc(message || "شغّل ملف supabase/sql/20260808_delegates_v2_foundation.sql في SQL Editor.") +
+      esc(message || "شغّل COPY-ME-delegates-v2.sql ثم COPY-ME-delegates-v2-enforce.sql في SQL Editor.") +
       " حتى ذلك الحين تُعرض قائمة مبسّطة من الطلبات القديمة.";
   }
 
@@ -481,7 +481,7 @@
           setSqlHint(true);
           showAlert(
             "error",
-            "طبّق أولاً ملف SQL: supabase/sql/20260808_delegates_v2_foundation.sql",
+            "طبّق أولاً: supabase/sql/COPY-ME-delegates-v2.sql ثم COPY-ME-delegates-v2-enforce.sql",
           );
           return;
         }

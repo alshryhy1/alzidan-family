@@ -125,12 +125,25 @@
     }
     const msg = String(err && err.message ? err.message : "");
     if (msg.toLowerCase().includes("not allowed")) {
+      if (err && err.arabic) return String(err.arabic);
+      const fmt = h("formatDelegateDeniedError");
+      if (fmt) {
+        return fmt({
+          reason: err && (err.reason || err.status),
+          status: err && err.status,
+          requestId: err && err.requestId,
+          role_key: err && err.role_key,
+          operation_key: err && err.operation_key
+        }, "events");
+      }
       if (err && err.detail === "events_access") {
-        const st = String(err.status || "");
+        const st = String(err.status || err.reason || "");
         const rid = String(err.requestId || "");
+        if (st === "disabled") return "حساب المندوب معطّل. تواصل مع الإدارة لإعادة التفعيل.";
+        if (st === "no_permission") return "دورك الحالي لا يسمح بالكتابة على المناسبات. اطلب من الإدارة تعديل الصلاحية.";
         if (st === "pending") return rid ? "صلاحية المناسبات قيد المراجعة (رقم الطلب: " + rid + ")." : "صلاحية المناسبات قيد المراجعة.";
         if (st === "rejected") return rid ? "تم رفض صلاحية المناسبات (رقم الطلب: " + rid + ")." : "تم رفض صلاحية المناسبات.";
-        if (st === "approved") return "الصلاحية معتمدة لكن بيانات الدخول لا تطابق بيانات الاعتماد. جرّب تسجيل خروج/دخول وتأكد من البريد والجوال.";
+        if (st === "approved" || st === "bad_secret") return "الصلاحية معتمدة لكن بيانات الدخول لا تطابق بيانات الاعتماد. جرّب تسجيل خروج/دخول وتأكد من البريد والجوال.";
       }
       return "لا توجد صلاحية لإضافة المناسبات لهذا المندوب.";
     }
@@ -315,7 +328,7 @@
             const err = (res && res.error) || {};
             const msg = String(err && err.message ? err.message : "");
             if (msg.toLowerCase().includes("not allowed")) {
-              return { ok: false, message: "لا توجد صلاحية لتعديل المناسبات لهذا المندوب." };
+              return { ok: false, message: (res.error && res.error.arabic) ? String(res.error.arabic) : "دورك الحالي لا يسمح بتعديل المناسبات. اطلب من الإدارة تعديل الصلاحية." };
             }
             return { ok: false, message: mapRpcInsertError(err) };
           }
@@ -385,7 +398,7 @@
           const err = (res && res.error) || {};
           const msg = String(err && err.message ? err.message : "");
           if (msg.toLowerCase().includes("not allowed")) {
-            return { ok: false, message: "لا توجد صلاحية لتعديل/حذف المناسبات لهذا المندوب." };
+            return { ok: false, message: (res.error && res.error.arabic) ? String(res.error.arabic) : "دورك الحالي لا يسمح بحذف المناسبات. اطلب من الإدارة تعديل الصلاحية." };
           }
           return { ok: false, message: "تعذر الحذف حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
         }

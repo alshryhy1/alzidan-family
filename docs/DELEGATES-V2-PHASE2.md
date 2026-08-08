@@ -1,96 +1,109 @@
-# المرحلة 2 — Delegates v2 (أساس)
+# المرحلة 2 — Delegates v2
 
-**الحالة:** 🟡 كود مكتمل — بانتظار SQL على الإنتاج + اختبار دخان (شريحة 1 — Foundation)؛ فرض RPC / Multi-stage = ⚪  
+**الحالة:** 🟡 كود مكتمل — بانتظار SQL على الإنتاج + اختبار قبول (Foundation + Enforce)  
 **التاريخ:** 2026-08-08  
-**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 مرحلة 2 · برنامج (ب) تطوير الإدارة · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)
+**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 مرحلة كانونية 1 · برنامج (ب) · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)
 
-> **ملاحظة إدارة مشروع:** لا تُعلَّم الشريحة 🟢 «منشور ومختبر» قبل تطبيق `COPY-ME-delegates-v2.sql` ونجاح دخان الإنتاج. وجود SQL في المستودع = 🟡 فقط.
+> **ملاحظة إدارة مشروع:** لا تُعلَّم الشريحة 🟢 «منشور ومختبر» قبل تطبيق ملفات COPY-ME ونجاح دخان/قبول الإنتاج. وجود SQL في المستودع = 🟡 فقط.
 
-## الهدف من هذه الشريحة
+## الهدف
 
-بناء أساس Delegates v2 دون غليان المحيط:
+صلاحيات مندوب مكتملة على مستوى البيانات + فرضها في RPC + رسائل عربية واضحة في بوابة المندوب — **دون** Workflow Engine ودون Delegate Workspace.
 
-| بند خارطة الطريق | في هذه الشريحة |
-|------------------|----------------|
-| صلاحيات حسب الدور (Role-based) | ✅ كتالوج أدوار + صلاحيات عمليات + تعيين دور في الواجهة |
-| صلاحيات حسب الفرع (Branch-based) | ✅ حقل `branch_key` إلزامي على `delegates_v2` |
-| صلاحيات حسب نوع العملية | ✅ جدول `delegate_role_permissions` (`tree.write` / `events.write` / …) |
-| اعتماد متعدد المراحل | 🟡 هيكل جدول `delegate_approval_stages` فقط (منطق لاحق) |
-| سجل تدقيق كامل | ✅ `admin_audit_log` + كتابة عند تفعيل/تعطيل/دور/مزامنة |
-| تفعيل / تعطيل المندوبين | ✅ RPC + واجهة (+ مرآة لـ `approval_requests` القديمة) |
+| بند خارطة الطريق | الحالة في المستودع |
+|------------------|---------------------|
+| صلاحيات حسب الدور (Role-based) | ✅ كتالوج + تعيين دور |
+| صلاحيات حسب الفرع (Branch-based) | ✅ `branch_key` إلزامي |
+| صلاحيات حسب نوع العملية | ✅ `delegate_role_permissions` + فرض في RPC |
+| تفعيل / تعطيل | ✅ RPC + مرآة legacy + فرض `is_enabled` |
+| سجل تدقيق الصلاحيات | ✅ تفعيل/تعطيل/دور (مع `previous_role_key`) / مزامنة |
+| اعتماد متعدد المراحل | ⚪ هيكل فقط — المنطق فوق Workflow Engine لاحقًا |
 
 ## SQL المطلوب من المستخدم
 
-شغّل مرة واحدة في **Supabase SQL Editor**.
+شغّل بالترتيب في **Supabase SQL Editor** (مرة واحدة لكل ملف؛ آمن لإعادة التشغيل).
 
 **طريقة النسخ (إلزامية):** افتح الملف في المحرر → **Select All** → **Copy** → الصق في SQL Editor.  
-**لا تنسخ من الشات** — أسوار Markdown (```) تكسر اللصق.
+**لا تنسخ من الشات** — أسوار Markdown تكسر اللصق.
 
-ملفات نظيفة (بدون أسوار):
+| الترتيب | ملف النسخ | المصدر |
+|---------|-----------|--------|
+| 1 | `supabase/sql/COPY-ME-delegates-v2.sql` | `20260808_delegates_v2_foundation.sql` |
+| 2 | `supabase/sql/COPY-ME-delegates-v2-enforce.sql` | `20260808_delegates_v2_enforce_permissions.sql` |
 
-- `supabase/sql/COPY-ME-delegates-v2.sql` — جاهز للنسخ (تعليق إنجليزي سطر واحد أعلى الملف فقط)
-- `supabase/sql/20260808_delegates_v2_foundation.sql` — المصدر الرسمي
+### ماذا يفعل ملف Enforce (الشريحة 2)
 
-ينشئ:
+- `delegate_v2_check_op_v1` / `delegate_v2_has_op_v1` — فحص: فرع + هوية + سر + `is_enabled` + مفتاح العملية
+- إعادة تعريف `tree_delegate_allowed_v1` لفرض `tree.write` عند وجود صف `delegates_v2`
+- إعادة تعريف `events_delegate_allowed_v1` لفرض `events.write`
+- `tree_delegate_can_read_v1` / `events_delegate_can_read_v1`
+- إثراء `check_tree_delegate_access` / `check_events_delegate_access` برموز سبب: `disabled` · `no_permission` · `bad_secret`
+- `delegate_session_permissions_v1` — قائمة العمليات للجلسة
+- قائمة/اعتماد طلبات المناسبات عبر read/write المناسب
+- تدقيق أقوى عند تغيير الدور (`previous_role_key`)
+- **Fallback:** إن لم يوجد صف `delegates_v2` تُستخدم `approval_requests` القديمة
 
-- `delegate_roles` · `delegate_role_permissions`
-- `delegates_v2` (هوية مندوب + دور + فرع + `is_enabled`)
-- `delegate_approval_stages` (هيكل)
-- `admin_audit_log`
-- RPCs:
-  - `admin_delegates_v2_list_v1`
-  - `admin_delegates_v2_sync_from_requests_v1`
-  - `admin_delegates_v2_set_enabled_v1`
-  - `admin_delegates_v2_set_role_v1`
-  - `admin_delegate_roles_list_v1`
-  - `admin_audit_log_list_v1`
-
-بدون هذا الملف: الواجهة تعمل بـ**وضع مؤقت** من `admin_list_requests` (tree/events_delegate) وتعرض تلميح SQL.
+بدون الملف 1: واجهة الإدارة تعمل بوضع مؤقت.  
+بدون الملف 2: الكتالوج موجود لكن الكتابة لا تُفرض عبر الدور/`is_enabled`.
 
 ## واجهة الإدارة
 
 | ملف | الدور |
 |-----|--------|
 | `assets/js/modules/admin-delegates-v2.js` | قائمة · تفعيل/تعطيل · دور · مزامنة · سجل تدقيق |
-| `assets/js/admin-shell.js` | موديول `delegates` لم يعد stub |
-| `assets/css/admin-shell.css` | أنماط الجدول والحالة |
+| `assets/js/admin-shell.js` | موديول `delegates` |
 
 افتح: `/pages/admin.html#module=delegates`
 
-### اختبار دخان
+## بوابة المندوب
 
-1. دخول الإدارة.
-2. من الشريط الجانبي أو الـ Hub → **المندوبون**.
-3. إن ظهر تلميح SQL → طبّق الملف ثم **مزامنة من الطلبات القديمة**.
-4. تحقق من ظهور الفرع + الدور + مفعّل/معطّل.
-5. عطّل مندوبًا ثم فعّله — يجب ظهور صف في سجل التدقيق أسفل الصفحة.
-6. مركز السجل (`#module=audit`) يبقى لمسار تعديلات الشجرة/المناسبات القديمة.
+| ملف | الدور |
+|-----|--------|
+| `assets/js/delegate.js` | رفض عمليات الشجرة/المناسبات برسائل عربية حسب `reason` |
+| `assets/js/delegate-events-mgmt.js` | نفس رموز الرفض للمناسبات |
 
-## علاقة المرحلة 1
+أمثلة رسائل:
 
-Phase 1 = شِلّ + Hub + توجيه موديولات ✅ (أساس مكتمل).  
-ما تبقى من Phase 1 (تحميل كسول، تعميق Workflow) = تحسينات تكرارية — **ليست حاجزًا** أمام Phase 2.
+- معطّل → «حساب المندوب معطّل…»
+- بلا صلاحية عملية → «دورك الحالي لا يسمح…»
+- سر غير مطابق → «بيانات الدخول لا تطابق…»
 
-## التالي (شرائح لاحقة في Phase 2)
+## اختبار قبول (بعد SQL)
 
-1. فرض الصلاحيات فعليًا داخل `tree_delegate_allowed_v1` / `events_*` عبر الدور + العملية + `is_enabled`.
-2. منطق Multi-stage approval على الطلبات (stage1 مندوب → stage2 إدارة).
-3. واجهة منح/سحب صلاحيات عمليات أدق من القائمة المنسدلة للدور.
-4. ربط Event Bus بعد تغيير صلاحيات المندوب (ADR-003).
+1. طبّق الملف 1 ثم 2 → Hard Refresh للإدارة.
+2. إدارة → المندوبون → مزامنة من الطلبات القديمة.
+3. عطّل مندوبًا → حاول الدخول/الكتابة من بوابة المندوب → يجب الرفض برسالة التعطيل + صف تدقيق.
+4. فعّل مندوبًا بدور `viewer` → محاولة حفظ شجرة/مناسبة → رفض «لا يسمح».
+5. غيّر الدور إلى `branch_editor` أو `full_delegate` → الكتابة المسموحة تنجح؛ صف تدقيق يعرض الدور السابق والجديد.
+6. مندوب بلا صف v2 (إن وُجد) يبقى على مسار legacy حتى المزامنة.
+
+## التالي (خارج هذه الشريحة)
+
+1. منطق Multi-stage فوق **Workflow Engine** (ليس الآن).
+2. واجهة منح/سحب صلاحيات عمليات أدق من قائمة الدور.
+3. Event Bus بعد تغيير صلاحيات (ADR-003).
+4. **لا** تبدأ Delegate Workspace قبل المواصفة + Engine.
 
 ## Compatibility
 
 | المنصة | الحالة |
 |--------|--------|
 | Admin Web | Affected |
+| Delegate portal | Affected |
 | Web العام | Not affected |
 | Mobile | Not affected |
-| Widget | Not affected |
 
-## Definition of Done (شريحة 1)
+## Definition of Done
 
+### شريحة 1 — Foundation
 - [x] SQL أساس الأدوار/الفرع/التدقيق + RPCs
 - [x] موديول إدارة يتجاوز الـ stub
 - [x] تفعيل/تعطيل + عرض الدور/الفرع
-- [x] وثيقة المرحلة + تحديث الخارطة
 - [ ] اختبار دخان بعد تطبيق SQL على الإنتاج
+
+### شريحة 2 — Enforce (هذه)
+- [x] فرض `is_enabled` + دور + مفاتيح العمليات في RPC
+- [x] تدقيق تغيير الدور يشمل السابق
+- [x] بوابة المندوب ترفض برسائل عربية واضحة
+- [x] COPY-ME نظيف بلا أسوار Markdown
+- [ ] تطبيق SQL على الإنتاج + اختبار قبول → بعدها 🟢
