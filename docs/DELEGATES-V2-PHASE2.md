@@ -1,8 +1,9 @@
 # المرحلة 2 — Delegates v2
 
-**الحالة:** 🟡 SQL أساس+فرض **مُطبَّق على الإنتاج** — بانتظار اختبار قبول فقط (أقرب لـ 🟢)  
+**الحالة:** 🟡 SQL أساس+فرض **مُطبَّق على الإنتاج** — قبول حي متبقٍ فقط (كود ✅ موثّق 2026-08-09)  
 **التاريخ:** 2026-08-08 · **آخر تحديث قبول:** 2026-08-09  
-**قائمة القبول التنفيذية (عربي):** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) ← **نفّذها الآن لإغلاق بوابة 1**  
+**قائمة القبول + مصفوفة كود/حي + تشغيل 5 دقائق:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) ← **نفّذ تشغيل 5 دقائق الآن**  
+**مسودة بوابة 2 (لا تُنفَّذ قبل 🟢):** [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md)  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 · برنامج (ب) · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md) · [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)
 
 > **ملاحظة إدارة مشروع:** لا تُعلَّم الشريحة 🟢 «منشور ومختبر» قبل نجاح اختبار القبول. وجود SQL في المستودع أو تطبيقه ≠ 🟢 دون §§ القبول.  
@@ -106,7 +107,8 @@
 - [x] SQL أساس الأدوار/الفرع/التدقيق + RPCs
 - [x] موديول إدارة يتجاوز الـ stub
 - [x] تفعيل/تعطيل + عرض الدور/الفرع
-- [ ] اختبار دخان/قبول — نفّذ [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) §1–4
+- [x] تحقق كود (UI/RPC/Enforce/عربي) — انظر مصفوفة القبول 2026-08-09
+- [ ] اختبار قبول حي — تشغيل 5 دقائق في [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)
 
 ### شريحة 2 — Enforce (هذه)
 - [x] فرض `is_enabled` + دور + مفاتيح العمليات في RPC
@@ -114,4 +116,5 @@
 - [x] بوابة المندوب ترفض برسائل عربية واضحة
 - [x] COPY-ME نظيف بلا أسوار Markdown
 - [x] تطبيق SQL على الإنتاج (مفترض / أكّد في قبول §0)
-- [ ] اختبار قبول الأربعة (صلاحيات · أدوار · تفعيل · تدقيق) → بعدها 🟢 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) §6
+- [x] تحقق كود لبنود القبول الأربعة (مصفوفة كود ↔ حي)
+- [ ] قبول حي للأربعة → بعدها 🟢 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) §6

@@ -866,8 +866,8 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 **الخطوة التالية الفورية (لا قفز) — بعد «ابدا» 2026-08-09:**  
 (0) UX مساحة المندوب ✅ معتمد — **لا يفتح كود DW**  
-(1) **بوابة 1 الآن** — نفّذ [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) (صلاحيات · أدوار · تفعيل/تعطيل · سجل تدقيق) → 🟢  
-(2) **بوابة 2** — تجميد الوثائق الأربع كـ**دستور حي** + Truth Before Speed → 🟢  
+(1) **بوابة 1 الآن** — كود موثّق ✅ · تبقّى تشغيل 5 دقائق في [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) → 🟢  
+(2) **بوابة 2** — جاهزة كمسودة [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) · تُنفَّذ فور 🟢 بوابة 1  
 (3) **بعدها السلّم:** Request Experience → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace (كود) → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
 
 لا توسيع Workflow provisional · لا كود Delegate Workspace / iOS الآن.
