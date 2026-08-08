@@ -34,7 +34,7 @@
 
 | البوابة | الاسم | الحالة | المعنى |
 |---------|--------|--------|--------|
-| **1** | **Delegates v2** | 🟡 | فشل قبول حي (دخول بعد القبول) — أمر Workspace `maint.fix_delegate_portal_path_v1` بانتظار تشغيل + إعادة اختبار |
+| **1** | **Delegates v2** | 🟡 | فشل قبول حي (دخول بعد القبول) — ثبّت منفّذ Workspace v2 (`maint.sql_workspace_run_v2` / CREATE OR REPLACE) ثم `maint.fix_delegate_portal_path_v1` + إعادة اختبار |
 | **2** | **Product Foundation** = **دستور المنصة / دستور حي** | 🟡 | تجميد الدستور + **Truth Before Speed** — ليست «مرحلة وثائق» |
 
 **بوابة 1 — Delegates v2 🟡→🟢** (قبول فقط):
@@ -105,7 +105,7 @@ iOS Experience Rebuild
 
 | البند | الحالة | ملاحظة |
 |--------|--------|--------|
-| **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (أوامر صيانة جاهزة + مُنفذ؛ RPC 🟡 حتى تشغيل أمر الترقية من الإدارة) |
+| **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (منفّذ v2 عبر CREATE OR REPLACE فقط — مسار `pg_proc` مُلغى؛ RPC 🟡 حتى تثبيت v2 مرة) |
 | **Delegates v2 — Foundation + Enforce** | 🟡 | قبول حي فشل على تفعيل الدخول بعد «قبول»؛ إصلاح مسار التفعيل في المستودع — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |

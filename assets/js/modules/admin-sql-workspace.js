@@ -13,9 +13,14 @@
 
   let migrated = false;
   let inProgress = null;
+  /** True when admin_sql_workspace_run_v2 is callable. */
   let executorReady = false;
   let bootstrapping = false;
   let multiRetryUsed = false;
+  const V2_RPC = "admin_sql_workspace_run_v2";
+  const V1_RPC = "admin_sql_execute_v1";
+  const V2_INSTALL_FILE = "../supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql";
+  const V2_PRESET_ID = "maint.sql_workspace_run_v2";
 
   function getToken() {
     try {
@@ -231,8 +236,21 @@
   function friendlyRpcError(error, data) {
     if (data && data.message_ar) return String(data.message_ar);
     const code = String((error && error.code) || (data && data.error_code) || "");
-    if (code === "PGRST202" || /could not find|schema cache/i.test(String((error && error.message) || ""))) {
-      return "وظيفة التنفيذ غير مفعّلة بعد. من أدوات الصيانة شغّل أمر «ترقية منفّذ SQL Workspace».";
+    if (
+      code === "PGRST202" ||
+      /could not find|schema cache|admin_sql_workspace_run_v2/i.test(
+        String((error && error.message) || ""),
+      )
+    ) {
+      return (
+        "منفّذ SQL Workspace v2 غير مفعّل بعد. من أدوات الصيانة شغّل «تثبيت منفّذ SQL Workspace v2» " +
+        "(أو الصق COPY-ME-admin-sql-workspace-run-v2.sql مرة واحدة في Supabase — CREATE OR REPLACE فقط)."
+      );
+    }
+    if (/pg_proc|42501/i.test(String((error && error.message) || ""))) {
+      return (
+        "مسار UPDATE pg_proc مُلغى وغير مسموح في Supabase. ثبّت المنفّذ v2 عبر CREATE OR REPLACE فقط."
+      );
     }
     if (/not allowed|permission|JWT/i.test(String((error && error.message) || ""))) {
       return "غير مصرح. سجّل دخول الإدارة ثم أعد المحاولة.";
@@ -241,6 +259,20 @@
       return String((error && error.message) || "تعذّر الاتصال بخدمة الإدارة.");
     }
     return "تعذّر تنفيذ الأمر. راجع الصياغة أو الصلاحيات.";
+  }
+
+  function isMissingRpcError(error, payload) {
+    const code = String(
+      (error && error.code) || (payload && payload.error_code) || "",
+    );
+    const msg = String(
+      (error && error.message) || (payload && payload.message_ar) || "",
+    );
+    return (
+      code === "PGRST202" ||
+      code === "42883" ||
+      /could not find the function|schema cache|does not exist/i.test(msg)
+    );
   }
 
   const els = {};
@@ -583,29 +615,62 @@
   }
 
   async function probeExecutorReady(token) {
-    // Probe without any raw ';' in the SQL text (old executor rejects those).
-    const probe =
-      "SELECT position(chr(59) in public.admin_sql_sql_without_literals_v1(" +
-      "chr(36)||chr(36)||'BEGIN NULL'||chr(59)||' END'||chr(36)||chr(36))) AS n";
     const { data, error } = await invokeRpc(
-      "admin_sql_execute_v1",
-      { p_token: token, p_sql: probe, p_confirm_mutate: false },
+      V2_RPC,
+      {
+        p_token: token,
+        p_sql: "SELECT 1 AS n",
+        p_confirm_mutate: false,
+      },
       { timeoutMs: 30000 },
     );
     const payload =
       data && typeof data === "object" && !Array.isArray(data) ? data : null;
+    if (isMissingRpcError(error, payload)) {
+      return { ready: false, reason: "v2_missing" };
+    }
     if (error || !payload || payload.ok === false) {
+      // Function exists but probe SQL failed — still treat as present if not missing.
+      if (payload && payload.executor === "workspace_run_v2") {
+        return { ready: true, reason: "ok_with_payload_error" };
+      }
       return { ready: false, reason: "probe_failed" };
     }
-    const rows = Array.isArray(payload.rows) ? payload.rows : [];
-    const n =
-      rows[0] && rows[0].n != null ? Number(rows[0].n) : Number.NaN;
-    return { ready: n === 0, reason: n === 0 ? "ok" : "stripper_broken" };
+    return { ready: true, reason: "ok" };
   }
 
+  async function copyText(text) {
+    const s = String(text || "");
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(s);
+        return true;
+      }
+    } catch (_) {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = s;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return !!ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * Install v2 via CREATE OR REPLACE only.
+   * Tries Workspace (split + execute_v1) first; never touches pg_proc.
+   * If the old executor rejects CREATE FUNCTION, returns needs_supabase.
+   */
   async function runExecutorBootstrap(token) {
     if (bootstrapping) {
-      return { ok: false, error: "ترقية المنفّذ قيد التنفيذ بالفعل" };
+      return { ok: false, error: "تثبيت المنفّذ قيد التنفيذ بالفعل" };
     }
     bootstrapping = true;
     try {
@@ -613,22 +678,40 @@
       if (!api || typeof api.fetchPresetSql !== "function") {
         return { ok: false, error: "وحدة الأوامر الجاهزة غير محمّلة" };
       }
-      setStatus("busy", "جاري ترقية منفّذ SQL Workspace…");
-      const sql = await api.fetchPresetSql(
-        "../supabase/sql/20260809_sql_workspace_executor_bootstrap.sql",
-      );
-      const stmts = api.splitSqlStatements(sql);
-      if (!stmts.length) {
-        return { ok: false, error: "ملف ترقية المنفّذ فارغ" };
+
+      const already = await probeExecutorReady(token);
+      if (already.ready) {
+        executorReady = true;
+        if (typeof api.markDone === "function") {
+          api.markDone(V2_PRESET_ID, {
+            bootstrap: true,
+            actor: getActorLabel(),
+            version: "workspace_run_v2",
+            archived: true,
+            already: true,
+          });
+        }
+        return { ok: true, skipped: true };
       }
-      let lastFail = null;
+
+      setStatus("busy", "جاري تثبيت منفّذ SQL Workspace v2 (CREATE OR REPLACE)…");
+      const sql = await api.fetchPresetSql(V2_INSTALL_FILE);
+      const stmts =
+        typeof api.splitSqlStatements === "function"
+          ? api.splitSqlStatements(sql)
+          : [];
+      if (!stmts.length) {
+        return { ok: false, error: "ملف تثبيت المنفّذ v2 فارغ" };
+      }
+
+      let usedV1 = false;
       for (let i = 0; i < stmts.length; i++) {
         setStatus(
           "busy",
-          "ترقية المنفّذ " + (i + 1) + " / " + stmts.length + "…",
+          "تثبيت v2 — أمر " + (i + 1) + " / " + stmts.length + "…",
         );
         const { data, error } = await invokeRpc(
-          "admin_sql_execute_v1",
+          V1_RPC,
           {
             p_token: token,
             p_sql: stmts[i],
@@ -641,54 +724,68 @@
             ? data
             : null;
         if (error || !payload || payload.ok === false) {
-          const code = String(
-            (payload && payload.error_code) || (error && error.code) || "",
-          );
-          const detail = String(
-            (payload && (payload.err || payload.hint_ar)) || "",
-          );
-          lastFail = {
+          if (isMultiError(payload, error) || /pg_proc|42501/i.test(
+            String((error && error.message) || ""),
+          )) {
+            const copied = await copyText(sql);
+            return {
+              ok: false,
+              needs_supabase: true,
+              error:
+                "المنفّذ القديم لا يستطيع تثبيت CREATE FUNCTION من داخل المساحة " +
+                "(أو رُفض أي مسار كتالوج). الصق الملف مرة واحدة في Supabase SQL Editor " +
+                "(CREATE OR REPLACE فقط — بدون pg_proc)" +
+                (copied ? " — نُسخ إلى الحافظة." : " — افتح البطاقة «عرض في المحرر».") +
+                " بعد النجاح: أعد تشغيل بطاقة التثبيت ثم أوامر بوابة 1 من المساحة.",
+              sql: sql,
+            };
+          }
+          return {
             ok: false,
             error:
-              "فشلت ترقية المنفّذ عند الخطوة " +
+              "فشل تثبيت v2 عند الأمر " +
               (i + 1) +
+              " / " +
+              stmts.length +
               ": " +
-              friendlyRpcError(error, payload) +
-              (detail ? " — " + detail : "") +
-              (code ? " [" + code + "]" : ""),
+              friendlyRpcError(error, payload),
             step: i + 1,
           };
-          // Core upgrade is statements 1–3 (stub + pg_proc bodies). If those
-          // landed, grants (step 4+) are best-effort — confirm via probe.
-          if (i >= 3) {
-            const probe = await probeExecutorReady(token);
-            if (probe.ready) {
-              lastFail = null;
-              break;
-            }
-          }
-          return lastFail;
         }
+        usedV1 = true;
       }
-      const probe = await probeExecutorReady(token);
+
+      // PostgREST schema cache may lag; retry probe briefly.
+      let probe = await probeExecutorReady(token);
       if (!probe.ready) {
-        return (
-          lastFail || {
-            ok: false,
-            error:
-              "اكتملت خطوات الترقية لكن فحص المنفّذ فشل (" +
-              (probe.reason || "?") +
-              "). إن ظهر permission denied على pg_proc فالكتالوج مقفول من المزوّد.",
-          }
-        );
+        await new Promise(function (r) {
+          setTimeout(r, 1200);
+        });
+        probe = await probeExecutorReady(token);
       }
+      if (!probe.ready) {
+        const copied = await copyText(sql);
+        return {
+          ok: false,
+          needs_supabase: true,
+          error:
+            (usedV1
+              ? "أُرسلت أوامر CREATE OR REPLACE لكن PostgREST لا يرى v2 بعد. "
+              : "") +
+            "الصق COPY-ME-admin-sql-workspace-run-v2.sql مرة في Supabase ثم أعد المحاولة" +
+            (copied ? " (نُسخ إلى الحافظة)." : "."),
+          sql: sql,
+        };
+      }
+
       executorReady = true;
       if (typeof api.markDone === "function") {
-        api.markDone("maint.sql_workspace_literal_aware_v1", {
+        api.markDone(V2_PRESET_ID, {
           bootstrap: true,
           actor: getActorLabel(),
-          version: "executor_bootstrap_v2_pg_proc",
+          version: "workspace_run_v2",
           archived: true,
+          via: usedV1 ? "execute_v1_split" : "probe",
         });
       }
       return { ok: true };
@@ -710,6 +807,42 @@
       return { ok: true, skipped: true };
     }
     return runExecutorBootstrap(token);
+  }
+
+  async function invokeWorkspaceSql(token, sql, confirmMutate) {
+    if (executorReady) {
+      return invokeRpc(
+        V2_RPC,
+        {
+          p_token: token,
+          p_sql: sql,
+          p_confirm_mutate: !!confirmMutate,
+        },
+        { timeoutMs: 90000 },
+      );
+    }
+    const probe = await probeExecutorReady(token);
+    if (probe.ready) {
+      executorReady = true;
+      return invokeRpc(
+        V2_RPC,
+        {
+          p_token: token,
+          p_sql: sql,
+          p_confirm_mutate: !!confirmMutate,
+        },
+        { timeoutMs: 90000 },
+      );
+    }
+    return invokeRpc(
+      V1_RPC,
+      {
+        p_token: token,
+        p_sql: sql,
+        p_confirm_mutate: !!confirmMutate,
+      },
+      { timeoutMs: 90000 },
+    );
   }
 
   function isMultiError(payload, error) {
@@ -786,19 +919,15 @@
     if (els.run) els.run.disabled = true;
 
     const started = Date.now();
-    const { data, error } = await invokeRpc(
-      "admin_sql_execute_v1",
-      {
-        p_token: token,
-        p_sql: sql,
-        p_confirm_mutate: !!cls.mutating,
-      },
-      { timeoutMs: 60000 },
+    let { data, error } = await invokeWorkspaceSql(
+      token,
+      sql,
+      !!cls.mutating || confirmMutate,
     );
 
     if (els.run) els.run.disabled = false;
 
-    const payload =
+    let payload =
       data && typeof data === "object" && !Array.isArray(data) ? data : null;
 
     if (payload && payload.needs_confirm) {
@@ -815,16 +944,19 @@
     }
 
     if (error || !payload || payload.ok === false) {
-      if (isMultiError(payload, error) && !multiRetryUsed) {
+      if (
+        (isMultiError(payload, error) || isMissingRpcError(error, payload)) &&
+        !multiRetryUsed
+      ) {
         multiRetryUsed = true;
-        setStatus("busy", "المنفّذ قديم — جاري الترقية ثم إعادة المحاولة…");
+        setStatus("busy", "المنفّذ v2 غير جاهز — جاري التثبيت ثم إعادة المحاولة…");
         const up = await ensureExecutorReady(token, { force: true });
         if (up.ok) {
           if (els.run) els.run.disabled = false;
           inProgress = null;
           return runSql({ confirmMutate: true });
         }
-        setError(up.error || "تعذّرت ترقية المنفّذ");
+        setError(up.error || "تعذّر تثبيت منفّذ SQL Workspace v2");
       }
       const msg = friendlyRpcError(error, payload);
       setError(msg);
@@ -909,12 +1041,13 @@
 
   const FALLBACK_PRESETS = [
     {
-      id: "maint.sql_workspace_literal_aware_v1",
-      title: "ترقية منفّذ SQL Workspace (أجسام الدوال)",
-      desc: "يصلح SQL-WS-MULTI من داخل المساحة ثم يسمح بـ CREATE FUNCTION.",
-      file: "../supabase/sql/20260809_sql_workspace_executor_bootstrap.sql",
+      id: "maint.sql_workspace_run_v2",
+      title: "تثبيت منفّذ SQL Workspace v2",
+      desc: "CREATE OR REPLACE فقط (بدون pg_proc). مرة Supabase إن لزم ثم المساحة.",
+      file: "../supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql",
       order: 10,
       bootstrap: true,
+      supabaseOnce: true,
     },
     {
       id: "maint.fix_delegate_portal_path_v1",
@@ -1064,7 +1197,7 @@
                 ? " · " + escapeHtml(String(fail.error).slice(0, 80))
                 : "")
             : '<span class="sql-ws-preset-badge">جاهز للتشغيل</span>') +
-          (p.bootstrap ? " · ترقية منفّذ" : "") +
+          (p.bootstrap ? " · تثبيت منفّذ v2" : "") +
           "</div></div>" +
           '<div class="sql-ws-preset-actions">' +
           '<button type="button" class="btn btn-primary btn-sm" data-preset-run="' +
@@ -1117,24 +1250,67 @@
     const okConfirm = window.confirm(
       "تشغيل أمر الصيانة:\n«" +
         p.title +
-        "»\n\nسيُنفَّذ على مراحل (أوامر متسلسلة) بعد تأكيد التغيير.\nهل تريد المتابعة؟",
+        "»\n\nسيُنفَّذ بعد تأكيد التغيير" +
+        (p.bootstrap
+          ? " (تثبيت CREATE OR REPLACE — بدون تعديل pg_proc)."
+          : " عبر منفّذ Workspace v2.") +
+        "\nهل تريد المتابعة؟",
     );
     if (!okConfirm) {
       setStatus("", "أُلغي التشغيل");
       return;
     }
 
-    if (!p.bootstrap) {
-      const up = await ensureExecutorReady(token);
-      if (!up.ok) {
-        setError(up.error || "تعذّرت ترقية منفّذ SQL Workspace");
-        setStatus("err", "المنفّذ غير جاهز");
+    if (p.bootstrap) {
+      setStatus("busy", "جاري تثبيت / فحص منفّذ v2…");
+      const boot = await runExecutorBootstrap(token);
+      if (boot.ok) {
+        setStatus(
+          "ok",
+          boot.skipped
+            ? "✅ المنفّذ v2 جاهز مسبقًا — نُقل إلى الأرشيف"
+            : "✅ تم تثبيت منفّذ SQL Workspace v2 — نُقل إلى الأرشيف",
+        );
+        setError("");
+        setEditorVisible(false);
+        renderPresets();
+        renderQueue();
+        renderArchive();
         return;
       }
-      if (!up.skipped) {
-        setStatus("ok", "تم ترقية المنفّذ — متابعة الأمر…");
-        renderPresets();
+      if (boot.needs_supabase && boot.sql && els.editor) {
+        els.editor.value = boot.sql;
+        setEditorVisible(true);
       }
+      if (typeof api.markFail === "function") {
+        api.markFail(p.id, {
+          error: boot.error || "فشل التثبيت",
+          actor: getActorLabel(),
+          needs_supabase: !!boot.needs_supabase,
+        });
+      }
+      setError(boot.error || "تعذّر تثبيت المنفّذ v2");
+      setStatus(
+        "err",
+        boot.needs_supabase ? "يلزم لصق مرة في Supabase" : "فشل التثبيت",
+      );
+      renderPresets();
+      return;
+    }
+
+    const up = await ensureExecutorReady(token);
+    if (!up.ok) {
+      if (up.needs_supabase && up.sql && els.editor) {
+        els.editor.value = up.sql;
+        setEditorVisible(true);
+      }
+      setError(up.error || "تعذّر تثبيت منفّذ SQL Workspace v2");
+      setStatus("err", "المنفّذ غير جاهز");
+      return;
+    }
+    if (!up.skipped) {
+      setStatus("ok", "تم تثبيت المنفّذ v2 — متابعة الأمر…");
+      renderPresets();
     }
 
     const requestId = readLinkedRequestId();
@@ -1186,118 +1362,105 @@
     if (els.editor) els.editor.value = sql;
     setEditorVisible(true);
 
-    const stmts = api.splitSqlStatements(sql);
-    if (!stmts.length) {
+    if (els.run) els.run.disabled = true;
+    setStatus("busy", "تشغيل عبر منفّذ Workspace v2…");
+    let { data, error } = await invokeWorkspaceSql(token, sql, true);
+    let payload =
+      data && typeof data === "object" && !Array.isArray(data) ? data : null;
+    let doneCount = 0;
+
+    if (
+      (isMissingRpcError(error, payload) || isMultiError(payload, error)) &&
+      !executorReady
+    ) {
+      const stmts = api.splitSqlStatements(sql);
+      if (!stmts.length) {
+        inProgress = null;
+        setStatus("err", "فارغ");
+        setError("لم يُعثر على أوامر قابلة للتنفيذ في الملف.");
+        if (els.run) els.run.disabled = false;
+        renderQueue();
+        return;
+      }
+      error = null;
+      payload = { ok: true };
+      for (let i = 0; i < stmts.length; i++) {
+        setStatus(
+          "busy",
+          "تشغيل متسلسل " + (i + 1) + " / " + stmts.length + "…",
+        );
+        if (inProgress) {
+          inProgress = Object.assign({}, inProgress, {
+            title: p.title + " (" + (i + 1) + "/" + stmts.length + ")",
+          });
+          renderQueue();
+        }
+        if (els.editor) els.editor.value = stmts[i];
+        const step = await invokeWorkspaceSql(token, stmts[i], true);
+        const stepPayload =
+          step.data &&
+          typeof step.data === "object" &&
+          !Array.isArray(step.data)
+            ? step.data
+            : null;
+        if (step.error || !stepPayload || stepPayload.ok === false) {
+          error = step.error;
+          payload = stepPayload;
+          break;
+        }
+        doneCount++;
+        payload = stepPayload;
+      }
+      if (els.editor) els.editor.value = sql;
+      if (!error && doneCount === stmts.length) {
+        payload = Object.assign({}, payload || {}, {
+          ok: true,
+          statements_ok: doneCount,
+          statement_count: doneCount,
+        });
+      }
+    } else if (payload && payload.ok !== false && !error) {
+      doneCount =
+        payload.statements_ok != null
+          ? Number(payload.statements_ok)
+          : payload.statement_count != null
+            ? Number(payload.statement_count)
+            : 1;
+    }
+
+    if (els.run) els.run.disabled = false;
+
+    if (error || !payload || payload.ok === false) {
+      const msg = friendlyRpcError(error, payload);
       inProgress = null;
-      setStatus("err", "فارغ");
-      setError("لم يُعثر على أوامر قابلة للتنفيذ في الملف.");
-      renderQueue();
+      if (typeof api.markFail === "function") {
+        api.markFail(p.id, {
+          error: msg,
+          actor: actor,
+          requestId: requestId,
+        });
+      }
+      pushQueue({
+        id: opId,
+        at: new Date().toISOString(),
+        ok: false,
+        status: "failed",
+        title: p.title,
+        presetId: p.id,
+        error: msg,
+        sql: sql,
+        actor: actor,
+        requestId: requestId,
+        version: p.id,
+        source: "preset",
+        auditId: payload && payload.audit_id,
+      });
+      setError(msg);
+      setStatus("err", "فشل التنفيذ");
+      renderPresets();
       return;
     }
 
-    if (els.run) els.run.disabled = true;
-    let doneCount = 0;
-    for (let i = 0; i < stmts.length; i++) {
-      const stmt = stmts[i];
-      setStatus(
-        "busy",
-        "تشغيل متسلسل " + (i + 1) + " / " + stmts.length + "…",
-      );
-      if (inProgress) {
-        inProgress = Object.assign({}, inProgress, {
-          title: p.title + " (" + (i + 1) + "/" + stmts.length + ")",
-        });
-        renderQueue();
-      }
-      if (els.editor) els.editor.value = stmt;
-      let { data, error } = await invokeRpc(
-        "admin_sql_execute_v1",
-        {
-          p_token: token,
-          p_sql: stmt,
-          p_confirm_mutate: true,
-        },
-        { timeoutMs: 90000 },
-      );
-      let payload =
-        data && typeof data === "object" && !Array.isArray(data) ? data : null;
-      if (error || !payload || payload.ok === false) {
-        if (isMultiError(payload, error) && !p.bootstrap) {
-          setStatus(
-            "busy",
-            "SQL-WS-MULTI — ترقية المنفّذ ثم إعادة الخطوة " +
-              (i + 1) +
-              "…",
-          );
-          const up = await ensureExecutorReady(token, { force: true });
-          if (up.ok) {
-            const retry = await invokeRpc(
-              "admin_sql_execute_v1",
-              {
-                p_token: token,
-                p_sql: stmt,
-                p_confirm_mutate: true,
-              },
-              { timeoutMs: 90000 },
-            );
-            const retryPayload =
-              retry.data &&
-              typeof retry.data === "object" &&
-              !Array.isArray(retry.data)
-                ? retry.data
-                : null;
-            if (!retry.error && retryPayload && retryPayload.ok !== false) {
-              doneCount++;
-              continue;
-            }
-            error = retry.error;
-            payload = retryPayload;
-          }
-        }
-        const msg = friendlyRpcError(error, payload);
-        inProgress = null;
-        if (typeof api.markFail === "function") {
-          api.markFail(p.id, {
-            error: msg,
-            actor: actor,
-            requestId: requestId,
-            atStep: i + 1,
-          });
-        }
-        pushQueue({
-          id: opId,
-          at: new Date().toISOString(),
-          ok: false,
-          status: "failed",
-          title: p.title,
-          presetId: p.id,
-          error:
-            "توقف عند الأمر " + (i + 1) + " / " + stmts.length + ": " + msg,
-          sql: stmt,
-          actor: actor,
-          requestId: requestId,
-          version: p.id,
-          source: "preset",
-          auditId: payload && payload.audit_id,
-        });
-        setError(
-          "توقف عند الأمر " +
-            (i + 1) +
-            " / " +
-            stmts.length +
-            ": " +
-            msg,
-        );
-        setStatus("err", "فشل متسلسل عند #" + (i + 1));
-        if (els.run) els.run.disabled = false;
-        renderPresets();
-        return;
-      }
-      doneCount++;
-    }
-
-    if (els.editor) els.editor.value = sql;
-    if (els.run) els.run.disabled = false;
     const at = new Date().toISOString();
     inProgress = null;
     api.markDone(p.id, {
@@ -1306,6 +1469,7 @@
       requestId: requestId,
       version: p.id,
       archived: true,
+      executor: (payload && payload.executor) || "workspace_run_v2",
     });
     pushArchive({
       id: opId,
@@ -1322,7 +1486,9 @@
     });
 
     let statusMsg =
-      "✅ تم تنفيذ الأمر الجاهز (" + doneCount + " أوامر) — نُقل إلى الأرشيف";
+      "✅ تم تنفيذ الأمر الجاهز (" +
+      doneCount +
+      " أوامر) — نُقل إلى الأرشيف";
     if (requestId) {
       const closed = await closeLinkedRequest(requestId, at);
       if (closed.ok) {

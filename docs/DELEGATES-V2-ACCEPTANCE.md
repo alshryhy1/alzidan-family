@@ -5,7 +5,7 @@
 **آخر تحقق كود:** 2026-08-09 (مسار قبول→دخول)  
 **الغرض:** إغلاق بوابة Delegates v2 → 🟢 حتى يُسمح بتجميد الدستور الحي ثم Request Experience  
 **المراجع:** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · مسودة بوابة 2: [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md)  
-**SQL مطلوب الآن:** من الإدارة → **⚙ أدوات الصيانة → أوامر الصيانة الجاهزة** → «إصلاح دخول المندوب بعد القبول (بوابة 1)» (`maint.fix_delegate_portal_path_v1`) ثم علّمه **مُنفذ** (+ الأساس/الفرض إن لم يُطبَّقا). ملف المصدر: `supabase/sql/COPY-ME-fix-delegate-portal-path.sql`
+**SQL مطلوب الآن:** (1) مرة واحدة إن لزم: الصق `COPY-ME-admin-sql-workspace-run-v2.sql` في Supabase (CREATE OR REPLACE فقط — **لا** `pg_proc`) أو شغّل بطاقة «تثبيت منفّذ SQL Workspace v2». (2) من الإدارة → **⚙ أدوات الصيانة → أوامر الصيانة الجاهزة** → «إصلاح دخول المندوب بعد القبول (بوابة 1)» (`maint.fix_delegate_portal_path_v1`) ثم علّمه **مُنفذ**. ملف المصدر: `supabase/sql/COPY-ME-fix-delegate-portal-path.sql`
 
 > **قاعدة:** لا ميزات مندوب جديدة · لا تحسين تجميلي · لا كود Delegate Workspace · لا Request Experience حتى 🟢 بوابة 1 ثم 🟢 بوابة 2.  
 > النجاح هنا = قبول حي على الإنتاج + تعليم §6.  
@@ -47,7 +47,7 @@
 ## تشغيل إعادة الاختبار (مسار القبول→الدخول أولًا)
 
 **قبل أي شيء:**  
-1. إدارة → `#module=tools` → **أوامر الصيانة الجاهزة** → شغّل «ترقية منفّذ SQL Workspace» إن لزم ثم «إصلاح دخول المندوب بعد القبول» → علّم **مُنفذ**.  
+1. إدارة → `#module=tools` → **أوامر الصيانة الجاهزة** → «تثبيت منفّذ SQL Workspace v2» (أو لصق COPY-ME-admin-sql-workspace-run-v2.sql مرة في Supabase) ثم «إصلاح دخول المندوب بعد القبول» → علّم **مُنفذ**.  
 2. انشر/ادفع واجهة الموقع إن كانت تُبنى من git.  
 3. Hard Refresh للصفحتين.
 

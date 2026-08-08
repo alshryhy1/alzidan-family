@@ -9,15 +9,16 @@
   const DONE_KEY = "alzidan_sql_ws_presets_done_v1";
   const FAIL_KEY = "alzidan_sql_ws_presets_fail_v1";
 
-  /** @type {{id:string,title:string,desc:string,file:string,order:number,bootstrap?:boolean}[]} */
+  /** @type {{id:string,title:string,desc:string,file:string,order:number,bootstrap?:boolean,supabaseOnce?:boolean}[]} */
   const PRESETS = [
     {
-      id: "maint.sql_workspace_literal_aware_v1",
-      title: "ترقية منفّذ SQL Workspace (أجسام الدوال)",
-      desc: "يرقّي المنفّذ عبر UPDATE pg_proc من داخل المساحة (بدون Supabase) ثم يسمح بـ CREATE FUNCTION والتشغيل المتسلسل.",
-      file: "../supabase/sql/20260809_sql_workspace_executor_bootstrap.sql",
+      id: "maint.sql_workspace_run_v2",
+      title: "تثبيت منفّذ SQL Workspace v2",
+      desc: "CREATE OR REPLACE فقط (بدون pg_proc). مرة واحدة في Supabase إن لزم، ثم أوامر الصيانة من المساحة إلى الأبد.",
+      file: "../supabase/sql/COPY-ME-admin-sql-workspace-run-v2.sql",
       order: 10,
       bootstrap: true,
+      supabaseOnce: true,
     },
     {
       id: "maint.fix_delegate_portal_path_v1",
