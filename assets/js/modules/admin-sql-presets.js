@@ -1,12 +1,13 @@
 /**
  * SQL Workspace — ready maintenance presets.
  * SQL source of truth: supabase/sql/*.sql (fetched at run time).
- * Operator marks «مُنفذ» after successful sequential run.
+ * Done presets live in archive metadata; active list = pending / failed only.
  */
 (function () {
   "use strict";
 
   const DONE_KEY = "alzidan_sql_ws_presets_done_v1";
+  const FAIL_KEY = "alzidan_sql_ws_presets_fail_v1";
 
   /** @type {{id:string,title:string,desc:string,file:string,order:number,bootstrap?:boolean}[]} */
   const PRESETS = [
@@ -50,10 +51,43 @@
     } catch (_) {}
   }
 
+  function loadFail() {
+    try {
+      const raw = localStorage.getItem(FAIL_KEY);
+      const obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveFail(map) {
+    try {
+      localStorage.setItem(FAIL_KEY, JSON.stringify(map || {}));
+    } catch (_) {}
+  }
+
   function markDone(id, meta) {
     const map = loadDone();
-    map[id] = Object.assign({ at: new Date().toISOString(), ok: true }, meta || {});
+    map[id] = Object.assign(
+      { at: new Date().toISOString(), ok: true, archived: true },
+      meta || {},
+    );
     saveDone(map);
+    const fails = loadFail();
+    if (fails[id]) {
+      delete fails[id];
+      saveFail(fails);
+    }
+  }
+
+  function markFail(id, meta) {
+    const map = loadFail();
+    map[id] = Object.assign(
+      { at: new Date().toISOString(), ok: false },
+      meta || {},
+    );
+    saveFail(map);
   }
 
   function clearDone(id) {
@@ -62,9 +96,38 @@
     saveDone(map);
   }
 
+  function clearFail(id) {
+    const map = loadFail();
+    delete map[id];
+    saveFail(map);
+  }
+
   function isDone(id) {
     const row = loadDone()[id];
     return !!(row && row.ok);
+  }
+
+  function getFail(id) {
+    return loadFail()[id] || null;
+  }
+
+  function listActivePresets() {
+    return (PRESETS || [])
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .filter((p) => !isDone(p.id));
+  }
+
+  function listArchivedPresets() {
+    const done = loadDone();
+    return (PRESETS || [])
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .filter((p) => !!(done[p.id] && done[p.id].ok))
+      .map((p) => ({
+        preset: p,
+        meta: done[p.id],
+      }));
   }
 
   /**
@@ -146,8 +209,7 @@
 
       if (ch === ";") {
         const stmt = buf.trim();
-        if (stmt && !/^(--|\/\*)/.test(stmt.replace(/^\s+/, "")) || stmt) {
-          // keep if any non-comment content
+        if (stmt) {
           const stripped = stmt
             .replace(/\/\*[\s\S]*?\*\//g, "")
             .replace(/--[^\n]*/g, "")
@@ -190,9 +252,16 @@
     splitSqlStatements,
     fetchPresetSql,
     loadDone,
+    loadFail,
     markDone,
+    markFail,
     clearDone,
+    clearFail,
     isDone,
+    getFail,
+    listActivePresets,
+    listArchivedPresets,
     DONE_KEY,
+    FAIL_KEY,
   };
 })();

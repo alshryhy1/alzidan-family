@@ -1,12 +1,18 @@
 /**
- * SQL Workspace — maintenance module console (admin token gated).
- * Execution only via UI controls; never auto-runs on load.
+ * SQL Workspace — daily work queue + execution archive (admin token gated).
+ * Successful runs leave the daily screen and live in archive; never auto-run on load.
  */
 (function () {
-  const HISTORY_KEY = "alzidan_sql_ws_history_v1";
-  const HISTORY_MAX = 40;
+  const LEGACY_HISTORY_KEY = "alzidan_sql_ws_history_v1";
+  const QUEUE_KEY = "alzidan_sql_ws_queue_v1";
+  const ARCHIVE_KEY = "alzidan_sql_ws_archive_v1";
+  const QUEUE_MAX = 60;
+  const ARCHIVE_MAX = 200;
   const MUTATE_RE =
     /^\s*(UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|INSERT|REPLACE|GRANT|REVOKE|COMMENT|COPY|VACUUM|REINDEX|CLUSTER|CALL|DO)\b/i;
+
+  let migrated = false;
+  let inProgress = null;
 
   function getToken() {
     try {
@@ -29,6 +35,22 @@
     } catch (_) {
       return "";
     }
+  }
+
+  function getActorLabel() {
+    try {
+      const el = document.getElementById("admin-username");
+      const name = String((el && el.value) || "").trim();
+      if (name) return name;
+    } catch (_) {}
+    const token = getToken();
+    if (token) return "إدارة (" + token.slice(0, 8) + "…)";
+    return "إدارة";
+  }
+
+  function readLinkedRequestId() {
+    const el = document.getElementById("sql-ws-request-id");
+    return String((el && el.value) || "").trim();
   }
 
   async function invokeRpc(fnName, params, opts) {
@@ -62,9 +84,9 @@
     return { empty: false, mutating, selectish, first: upper };
   }
 
-  function loadHistory() {
+  function loadJsonArray(key, storage) {
     try {
-      const raw = sessionStorage.getItem(HISTORY_KEY);
+      const raw = storage.getItem(key);
       const arr = raw ? JSON.parse(raw) : [];
       return Array.isArray(arr) ? arr : [];
     } catch (_) {
@@ -72,20 +94,111 @@
     }
   }
 
-  function saveHistory(items) {
+  function saveJsonArray(key, storage, items, max) {
     try {
-      sessionStorage.setItem(
-        HISTORY_KEY,
-        JSON.stringify((items || []).slice(0, HISTORY_MAX)),
-      );
+      storage.setItem(key, JSON.stringify((items || []).slice(0, max)));
     } catch (_) {}
   }
 
-  function pushHistory(entry) {
-    const items = loadHistory();
-    items.unshift(entry);
-    saveHistory(items);
-    renderHistory();
+  function loadQueue() {
+    migrateLegacyHistory();
+    return loadJsonArray(QUEUE_KEY, localStorage);
+  }
+
+  function saveQueue(items) {
+    saveJsonArray(QUEUE_KEY, localStorage, items, QUEUE_MAX);
+  }
+
+  function loadArchive() {
+    migrateLegacyHistory();
+    return loadJsonArray(ARCHIVE_KEY, localStorage);
+  }
+
+  function saveArchive(items) {
+    saveJsonArray(ARCHIVE_KEY, localStorage, items, ARCHIVE_MAX);
+  }
+
+  function migrateLegacyHistory() {
+    if (migrated) return;
+    migrated = true;
+    try {
+      const legacy = loadJsonArray(LEGACY_HISTORY_KEY, sessionStorage);
+      if (!legacy.length) return;
+      const queue = loadJsonArray(QUEUE_KEY, localStorage);
+      const archive = loadJsonArray(ARCHIVE_KEY, localStorage);
+      const seenQ = new Set(queue.map((x) => String(x.id || "") + "|" + String(x.at || "")));
+      const seenA = new Set(archive.map((x) => String(x.id || "") + "|" + String(x.at || "")));
+      legacy.forEach((it) => {
+        const entry = normalizeEntry(it);
+        const key = String(entry.id || "") + "|" + String(entry.at || "");
+        if (entry.ok) {
+          if (!seenA.has(key)) {
+            archive.unshift(entry);
+            seenA.add(key);
+          }
+        } else if (!seenQ.has(key)) {
+          queue.unshift(entry);
+          seenQ.add(key);
+        }
+      });
+      saveJsonArray(QUEUE_KEY, localStorage, queue, QUEUE_MAX);
+      saveJsonArray(ARCHIVE_KEY, localStorage, archive, ARCHIVE_MAX);
+      try {
+        sessionStorage.removeItem(LEGACY_HISTORY_KEY);
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  function makeId() {
+    return "op_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+  }
+
+  function normalizeEntry(raw) {
+    const it = raw && typeof raw === "object" ? raw : {};
+    return {
+      id: it.id || makeId(),
+      at: it.at || new Date().toISOString(),
+      ok: !!it.ok,
+      status: it.status || (it.ok ? "done" : "failed"),
+      rowCount: it.rowCount != null ? it.rowCount : null,
+      error: it.error || "",
+      sql: it.sql || "",
+      title: it.title || "",
+      actor: it.actor || "",
+      requestId: it.requestId || it.request_id || "",
+      version: it.version || "",
+      presetId: it.presetId || "",
+      auditId: it.auditId != null ? it.auditId : null,
+      source: it.source || "editor",
+    };
+  }
+
+  function pushQueue(entry) {
+    const item = normalizeEntry(Object.assign({}, entry, { ok: false, status: entry.status || "failed" }));
+    const items = loadQueue().filter((x) => x.id !== item.id);
+    items.unshift(item);
+    saveQueue(items);
+    renderQueue();
+    return item;
+  }
+
+  function pushArchive(entry) {
+    const item = normalizeEntry(
+      Object.assign({}, entry, { ok: true, status: "done", archived: true }),
+    );
+    const items = loadArchive().filter((x) => x.id !== item.id);
+    items.unshift(item);
+    saveArchive(items);
+    // Remove matching failed queue rows for same sql/preset
+    const q = loadQueue().filter((x) => {
+      if (item.presetId && x.presetId === item.presetId) return false;
+      if (item.sql && x.sql === item.sql && !x.ok) return false;
+      return x.id !== item.id;
+    });
+    saveQueue(q);
+    renderQueue();
+    renderArchive();
+    return item;
   }
 
   function escapeHtml(s) {
@@ -105,6 +218,7 @@
         second: "2-digit",
         day: "2-digit",
         month: "2-digit",
+        year: "numeric",
       });
     } catch (_) {
       return String(iso || "");
@@ -141,7 +255,11 @@
     els.meta = document.getElementById("sql-ws-meta");
     els.error = document.getElementById("sql-ws-error");
     els.results = document.getElementById("sql-ws-results");
-    els.history = document.getElementById("sql-ws-history");
+    els.queue = document.getElementById("sql-ws-queue") || document.getElementById("sql-ws-history");
+    els.archive = document.getElementById("sql-ws-archive");
+    els.cleanLog = document.getElementById("sql-ws-clean-log");
+    els.archiveRefresh = document.getElementById("sql-ws-archive-refresh");
+    els.requestId = document.getElementById("sql-ws-request-id");
   }
 
   function setStatus(kind, text) {
@@ -215,42 +333,211 @@
     els.results.innerHTML = html;
   }
 
-  function renderHistory() {
-    if (!els.history) return;
-    const items = loadHistory();
+  function renderOpCard(it, opts) {
+    const o = opts || {};
+    const ok = !!it.ok;
+    const busy = it.status === "running";
+    const badge = busy ? "قيد التنفيذ" : ok ? "مُنفذ" : "فشل — أعد التنفيذ";
+    const cls = busy ? " is-busy" : ok ? " is-ok" : " is-fail";
+    return (
+      '<button type="button" class="sql-ws-hist-item' +
+      cls +
+      '" data-' +
+      (o.archive ? "arch" : "queue") +
+      '-id="' +
+      escapeHtml(it.id) +
+      '">' +
+      '<span class="sql-ws-hist-time">' +
+      escapeHtml(formatTime(it.at)) +
+      "</span>" +
+      '<span class="sql-ws-hist-badge">' +
+      badge +
+      "</span>" +
+      (it.title
+        ? '<span class="sql-ws-hist-title">' + escapeHtml(it.title) + "</span>"
+        : "") +
+      (it.actor
+        ? '<span class="sql-ws-hist-actor">المنفّذ: ' +
+          escapeHtml(it.actor) +
+          "</span>"
+        : "") +
+      (it.requestId
+        ? '<span class="sql-ws-hist-req">الطلب: ' +
+          escapeHtml(it.requestId) +
+          "</span>"
+        : "") +
+      (it.version
+        ? '<span class="sql-ws-hist-ver">النسخة: ' +
+          escapeHtml(it.version) +
+          "</span>"
+        : "") +
+      '<span class="sql-ws-hist-rows">صفوف: ' +
+      escapeHtml(String(it.rowCount != null ? it.rowCount : "—")) +
+      "</span>" +
+      (it.error
+        ? '<span class="sql-ws-hist-err">' + escapeHtml(it.error) + "</span>"
+        : "") +
+      '<span class="sql-ws-hist-preview" dir="ltr">' +
+      escapeHtml((it.sql || it.title || "").slice(0, 120)) +
+      "</span>" +
+      "</button>"
+    );
+  }
+
+  function renderQueue() {
+    if (!els.queue) return;
+    const items = loadQueue().slice();
+    if (inProgress) {
+      items.unshift(inProgress);
+    }
     if (!items.length) {
-      els.history.innerHTML =
-        '<div class="hint">لا أوامر بعد. يظهر هنا آخر التنفيذات في هذه الجلسة.</div>';
+      els.queue.innerHTML =
+        '<div class="hint">لا أوامر بانتظار التنفيذ. الشاشة اليومية نظيفة — الأوامر الناجحة في الأرشيف.</div>';
       return;
     }
-    els.history.innerHTML = items
-      .map((it, idx) => {
-        const ok = !!it.ok;
-        return (
-          '<button type="button" class="sql-ws-hist-item' +
-          (ok ? " is-ok" : " is-fail") +
-          '" data-hist-idx="' +
-          idx +
-          '">' +
-          '<span class="sql-ws-hist-time">' +
-          escapeHtml(formatTime(it.at)) +
-          "</span>" +
-          '<span class="sql-ws-hist-badge">' +
-          (ok ? "نجاح" : "فشل") +
-          "</span>" +
-          '<span class="sql-ws-hist-rows">صفوف: ' +
-          escapeHtml(String(it.rowCount != null ? it.rowCount : "—")) +
-          "</span>" +
-          (it.error
-            ? '<span class="sql-ws-hist-err">' + escapeHtml(it.error) + "</span>"
-            : "") +
-          '<span class="sql-ws-hist-preview" dir="ltr">' +
-          escapeHtml((it.sql || "").slice(0, 120)) +
-          "</span>" +
-          "</button>"
-        );
-      })
-      .join("");
+    els.queue.innerHTML = items.map((it) => renderOpCard(it, { archive: false })).join("");
+  }
+
+  function archiveFromPresets() {
+    const api = presetsApi();
+    if (!api || typeof api.listArchivedPresets !== "function") return [];
+    return api.listArchivedPresets().map(({ preset, meta }) =>
+      normalizeEntry({
+        id: "preset_" + preset.id,
+        at: meta.at,
+        ok: true,
+        status: "done",
+        title: preset.title,
+        actor: meta.actor || "",
+        requestId: meta.requestId || "",
+        version: preset.id,
+        presetId: preset.id,
+        sql: "",
+        rowCount: meta.statements != null ? meta.statements : null,
+        source: "preset",
+      }),
+    );
+  }
+
+  function renderArchive() {
+    if (!els.archive) return;
+    const local = loadArchive();
+    const fromPresets = archiveFromPresets();
+    const byKey = new Map();
+    fromPresets.concat(local).forEach((it) => {
+      const key = it.presetId
+        ? "p:" + it.presetId
+        : it.id || "a:" + it.at + ":" + (it.sql || "").slice(0, 40);
+      if (!byKey.has(key)) byKey.set(key, it);
+    });
+    const items = Array.from(byKey.values()).sort((a, b) =>
+      String(b.at || "").localeCompare(String(a.at || "")),
+    );
+    if (!items.length) {
+      els.archive.innerHTML =
+        '<div class="hint">الأرشيف فارغ بعد. بعد نجاح أي تنفيذ يظهر هنا مع التاريخ والمنفّذ.</div>';
+      return;
+    }
+    els.archive.innerHTML = items.map((it) => renderOpCard(it, { archive: true })).join("");
+  }
+
+  async function refreshArchiveFromAudit() {
+    const token = getToken();
+    if (!token) {
+      setStatus("err", "سجّل دخول الإدارة لاستعراض سجل التدقيق");
+      return;
+    }
+    setStatus("busy", "جاري جلب سجل التدقيق…");
+    const { data, error } = await invokeRpc(
+      "admin_audit_log_list_v1",
+      { p_token: token, p_entity_type: "sql_workspace", p_limit: 80 },
+      { timeoutMs: 30000 },
+    );
+    if (error) {
+      setStatus("err", "تعذّر جلب سجل التدقيق");
+      renderArchive();
+      return;
+    }
+    const rows = Array.isArray(data) ? data : [];
+    const archive = loadArchive();
+    const seen = new Set(archive.map((x) => "audit:" + String(x.auditId || "")));
+    rows.forEach((row) => {
+      const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+      if (!payload.ok) return;
+      const auditId = row.id;
+      if (seen.has("audit:" + String(auditId))) return;
+      archive.push(
+        normalizeEntry({
+          id: "audit_" + auditId,
+          at: row.created_at,
+          ok: true,
+          actor: row.actor_ref || "إدارة",
+          requestId: payload.request_id || payload.requestId || "",
+          version: payload.first_keyword || "sql.execute",
+          sql: payload.sql_preview || "",
+          rowCount: payload.row_count,
+          auditId: auditId,
+          source: "audit",
+          title: "تنفيذ SQL (تدقيق)",
+        }),
+      );
+      seen.add("audit:" + String(auditId));
+    });
+    archive.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+    saveArchive(archive);
+    setStatus("ok", "تم دمج سجل التدقيق في الأرشيف");
+    renderArchive();
+  }
+
+  function cleanLogToArchive() {
+    const queue = loadQueue();
+    const keep = [];
+    let moved = 0;
+    queue.forEach((it) => {
+      if (it && (it.ok || it.status === "done")) {
+        pushArchive(it);
+        moved++;
+      } else {
+        keep.push(it);
+      }
+    });
+    // Also ensure all done presets stay archived-only (already filtered in UI)
+    saveQueue(keep);
+    renderQueue();
+    renderArchive();
+    renderPresets();
+    setStatus(
+      "ok",
+      moved
+        ? "تم نقل " + moved + " عملية منجزة إلى الأرشيف (بدون حذف)"
+        : "لا عمليات منجزة في شاشة العمل — الأرشيف لم يتغيّر",
+    );
+  }
+
+  async function closeLinkedRequest(requestId, atIso) {
+    const rid = String(requestId || "").trim();
+    if (!rid) return { ok: false, skipped: true };
+    const token = getToken();
+    if (!token) return { ok: false, error: "لا رمز إدارة" };
+    const core = window.AlzidanAdminCore || {};
+    const id =
+      typeof core.coerceRpcId === "function" ? core.coerceRpcId(rid) : rid;
+    const { data, error } = await invokeRpc(
+      "admin_set_request_status_v2",
+      { p_token: token, p_id: id, p_status: "approved" },
+      { timeoutMs: 30000 },
+    );
+    if (error || data === false) {
+      return {
+        ok: false,
+        error: (error && error.message) || "تعذّر إغلاق الطلب المرتبط",
+      };
+    }
+    const when = formatTime(atIso || new Date().toISOString());
+    return {
+      ok: true,
+      message: "تم تنفيذ أمر الصيانة بنجاح بتاريخ " + when,
+    };
   }
 
   function downloadSql() {
@@ -329,6 +616,23 @@
       return runSql({ confirmMutate: true });
     }
 
+    const requestId = readLinkedRequestId();
+    const actor = getActorLabel();
+    const opId = makeId();
+    inProgress = normalizeEntry({
+      id: opId,
+      at: new Date().toISOString(),
+      ok: false,
+      status: "running",
+      sql: sql,
+      actor: actor,
+      requestId: requestId,
+      version: cls.first || "SQL",
+      source: "editor",
+      title: "أمر من المحرر",
+    });
+    renderQueue();
+
     setError("");
     setStatus("busy", "جاري التنفيذ…");
     if (els.run) els.run.disabled = true;
@@ -350,6 +654,8 @@
       data && typeof data === "object" && !Array.isArray(data) ? data : null;
 
     if (payload && payload.needs_confirm) {
+      inProgress = null;
+      renderQueue();
       const ok = window.confirm(
         String(payload.message_ar || "أمر يغيّر البيانات — هل تؤكد؟"),
       );
@@ -371,12 +677,21 @@
             : Date.now() - started;
         els.meta.textContent = "المدة: " + ms + " مللي ثانية";
       }
-      pushHistory({
+      inProgress = null;
+      pushQueue({
+        id: opId,
         at: new Date().toISOString(),
         ok: false,
+        status: "failed",
         rowCount: null,
         error: msg,
         sql: sql,
+        actor: actor,
+        requestId: requestId,
+        version: cls.first || "SQL",
+        source: "editor",
+        title: "أمر من المحرر",
+        auditId: payload && payload.audit_id,
       });
       setEditorVisible(true);
       return;
@@ -387,8 +702,37 @@
       payload.row_count != null ? Number(payload.row_count) : rows.length;
     const ms =
       payload.elapsed_ms != null ? Number(payload.elapsed_ms) : Date.now() - started;
+    const at = new Date().toISOString();
 
-    setStatus("ok", "✅ تم التنفيذ");
+    inProgress = null;
+    pushArchive({
+      id: opId,
+      at: at,
+      ok: true,
+      rowCount: rowCount,
+      error: "",
+      sql: sql,
+      actor: actor,
+      requestId: requestId,
+      version: cls.first || "SQL",
+      source: "editor",
+      title: "أمر من المحرر",
+      auditId: payload.audit_id,
+    });
+
+    let statusMsg = "✅ تم التنفيذ — نُقل إلى الأرشيف";
+    if (requestId) {
+      const closed = await closeLinkedRequest(requestId, at);
+      if (closed.ok) {
+        statusMsg = closed.message;
+      } else if (!closed.skipped) {
+        statusMsg =
+          "✅ تم التنفيذ وأُرشف — تعذّر إغلاق الطلب: " +
+          (closed.error || "");
+      }
+    }
+
+    setStatus("ok", statusMsg);
     setError("");
     if (els.meta) {
       els.meta.textContent =
@@ -396,37 +740,153 @@
         ms +
         " مللي ثانية · الصفوف المتأثرة/المعروضة: " +
         rowCount +
-        (payload.truncated ? " (مقتطع للعرض)" : "");
+        (payload.truncated ? " (مقتطع للعرض)" : "") +
+        " · المنفّذ: " +
+        actor;
     }
     renderResults(payload.is_select === false ? [] : rows);
     setEditorVisible(false);
-    pushHistory({
-      at: new Date().toISOString(),
-      ok: true,
-      rowCount: rowCount,
-      error: "",
-      sql: sql,
-    });
   }
 
+  const FALLBACK_PRESETS = [
+    {
+      id: "maint.sql_workspace_literal_aware_v1",
+      title: "ترقية منفّذ SQL Workspace (أجسام الدوال)",
+      desc: "يسمح بتشغيل CREATE FUNCTION من المساحة.",
+      file: "../supabase/sql/20260809_sql_workspace_literal_aware.sql",
+      order: 10,
+      bootstrap: true,
+    },
+    {
+      id: "maint.fix_delegate_portal_path_v1",
+      title: "إصلاح دخول المندوب بعد القبول (بوابة 1)",
+      desc: "تفعيل/مزامنة delegates_v2 عند اعتماد طلب مندوب + request_id في check_*.",
+      file: "../supabase/sql/COPY-ME-fix-delegate-portal-path.sql",
+      order: 20,
+    },
+    {
+      id: "maint.delegate_secret_reset_v1",
+      title: "طلب إعادة تعيين الرقم السري (واجهة مخصصة)",
+      desc: "نية منفصلة delegate_secret_reset + اعتماد/رفض يحدّثون الرقم السري.",
+      file: "../supabase/sql/COPY-ME-delegate-secret-reset.sql",
+      order: 30,
+    },
+  ];
+
+  function ensurePresetsApi() {
+    if (window.AlzidanSqlPresets && Array.isArray(window.AlzidanSqlPresets.PRESETS)) {
+      return window.AlzidanSqlPresets;
+    }
+    // Fallback catalog so the Workspace never looks like "editor only".
+    const DONE_KEY = "alzidan_sql_ws_presets_done_v1";
+    const FAIL_KEY = "alzidan_sql_ws_presets_fail_v1";
+    function loadMap(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        const obj = raw ? JSON.parse(raw) : {};
+        return obj && typeof obj === "object" ? obj : {};
+      } catch (_) {
+        return {};
+      }
+    }
+    function saveMap(key, map) {
+      try {
+        localStorage.setItem(key, JSON.stringify(map || {}));
+      } catch (_) {}
+    }
+    const api = {
+      PRESETS: FALLBACK_PRESETS.slice(),
+      loadDone: function () { return loadMap(DONE_KEY); },
+      loadFail: function () { return loadMap(FAIL_KEY); },
+      isDone: function (id) {
+        const row = loadMap(DONE_KEY)[id];
+        return !!(row && row.ok);
+      },
+      getFail: function (id) { return loadMap(FAIL_KEY)[id] || null; },
+      markDone: function (id, meta) {
+        const map = loadMap(DONE_KEY);
+        map[id] = Object.assign({ at: new Date().toISOString(), ok: true, archived: true }, meta || {});
+        saveMap(DONE_KEY, map);
+        const fails = loadMap(FAIL_KEY);
+        if (fails[id]) { delete fails[id]; saveMap(FAIL_KEY, fails); }
+      },
+      markFail: function (id, meta) {
+        const map = loadMap(FAIL_KEY);
+        map[id] = Object.assign({ at: new Date().toISOString(), ok: false }, meta || {});
+        saveMap(FAIL_KEY, map);
+      },
+      clearDone: function (id) {
+        const map = loadMap(DONE_KEY);
+        delete map[id];
+        saveMap(DONE_KEY, map);
+      },
+      clearFail: function (id) {
+        const map = loadMap(FAIL_KEY);
+        delete map[id];
+        saveMap(FAIL_KEY, map);
+      },
+      listActivePresets: function () {
+        return api.PRESETS.filter(function (p) { return !api.isDone(p.id); })
+          .sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      },
+      listArchivedPresets: function () {
+        const done = api.loadDone();
+        return api.PRESETS.filter(function (p) { return !!(done[p.id] && done[p.id].ok); })
+          .map(function (p) { return { preset: p, meta: done[p.id] }; });
+      },
+      splitSqlStatements: function (sql) {
+        // Minimal splitter: prefer full module when loaded.
+        return String(sql || "").split(/;\s*\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+      },
+      fetchPresetSql: async function (file) {
+        const url = new URL(file, window.location.href).toString();
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("تعذّر تحميل ملف SQL (" + res.status + ").");
+        }
+        return await res.text();
+      },
+      DONE_KEY: DONE_KEY,
+      FAIL_KEY: FAIL_KEY,
+      _fallback: true,
+    };
+    window.AlzidanSqlPresets = api;
+    return api;
+  }
 
   function presetsApi() {
-    return window.AlzidanSqlPresets || null;
+    return ensurePresetsApi();
   }
 
   function renderPresets() {
     const host = document.getElementById("sql-ws-presets");
+    const countEl = document.getElementById("sql-ws-presets-count");
+    if (!host) return;
     const api = presetsApi();
-    if (!host || !api) return;
-    const done = api.loadDone();
-    const items = (api.PRESETS || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    const items =
+      typeof api.listActivePresets === "function"
+        ? api.listActivePresets()
+        : (api.PRESETS || []).filter(function (p) { return !api.isDone(p.id); });
+    const archivedN =
+      typeof api.listArchivedPresets === "function"
+        ? api.listArchivedPresets().length
+        : 0;
+    if (countEl) {
+      countEl.textContent =
+        (items.length ? items.length + " بانتظار التنفيذ" : "لا أوامر معلّقة") +
+        (archivedN ? " · " + archivedN + " في الأرشيف" : "");
+    }
+    if (!items.length) {
+      host.innerHTML =
+        '<div class="hint">لا أوامر صيانة بانتظار التنفيذ الآن. الأوامر المُنفَّذة في «سجل التنفيذ / الأرشيف» أدناه — أو ألغِ «مُنفذ» من الأرشيف إن احتجت إعادة تشغيل.</div>';
+      return;
+    }
     host.innerHTML = items
-      .map((p) => {
-        const row = done[p.id];
-        const ok = !!(row && row.ok);
+      .map(function (p) {
+        const fail = typeof api.getFail === "function" ? api.getFail(p.id) : null;
         return (
           '<div class="sql-ws-preset' +
-          (ok ? " is-done" : "") +
+          (fail ? " is-fail" : "") +
           '" data-preset-id="' +
           escapeHtml(p.id) +
           '">' +
@@ -438,9 +898,12 @@
           escapeHtml(p.desc || "") +
           "</div>" +
           '<div class="sql-ws-preset-meta hint">' +
-          (ok
-            ? '<span class="sql-ws-preset-badge is-done">مُنفذ</span> · ' +
-              escapeHtml(formatTime(row.at))
+          (fail
+            ? '<span class="sql-ws-preset-badge is-fail">فشل — أعد التنفيذ</span> · ' +
+              escapeHtml(formatTime(fail.at)) +
+              (fail.error
+                ? " · " + escapeHtml(String(fail.error).slice(0, 80))
+                : "")
             : '<span class="sql-ws-preset-badge">جاهز للتشغيل</span>') +
           (p.bootstrap ? " · ترقية منفّذ" : "") +
           "</div></div>" +
@@ -453,9 +916,7 @@
           '">عرض في المحرر</button>' +
           '<button type="button" class="btn btn-outline btn-sm" data-preset-done="' +
           escapeHtml(p.id) +
-          '" title="تعليم يدوي كمُنفذ">' +
-          (ok ? "إلغاء مُنفذ" : "تعليم كمُنفذ") +
-          "</button>" +
+          '" title="تعليم يدوي كمُنفذ ونقله للأرشيف">تعليم كمُنفذ</button>' +
           "</div></div>"
         );
       })
@@ -504,14 +965,50 @@
       return;
     }
 
+    const requestId = readLinkedRequestId();
+    const actor = getActorLabel();
+    const opId = makeId();
+    inProgress = normalizeEntry({
+      id: opId,
+      at: new Date().toISOString(),
+      ok: false,
+      status: "running",
+      title: p.title,
+      presetId: p.id,
+      actor: actor,
+      requestId: requestId,
+      version: p.id,
+      source: "preset",
+    });
+    renderQueue();
+
     setError("");
     setStatus("busy", "جاري تحميل SQL…");
     let sql;
     try {
       sql = await api.fetchPresetSql(p.file);
     } catch (e) {
+      inProgress = null;
+      const msg = String((e && e.message) || e);
+      if (typeof api.markFail === "function") {
+        api.markFail(p.id, { error: msg, actor: actor, requestId: requestId });
+      }
+      pushQueue({
+        id: opId,
+        at: new Date().toISOString(),
+        ok: false,
+        status: "failed",
+        title: p.title,
+        presetId: p.id,
+        error: msg,
+        actor: actor,
+        requestId: requestId,
+        version: p.id,
+        source: "preset",
+      });
       setStatus("err", "فشل التحميل");
-      setError(String((e && e.message) || e));
+      setError(msg);
+      renderPresets();
       return;
     }
     if (els.editor) els.editor.value = sql;
@@ -519,8 +1016,10 @@
 
     const stmts = api.splitSqlStatements(sql);
     if (!stmts.length) {
+      inProgress = null;
       setStatus("err", "فارغ");
       setError("لم يُعثر على أوامر قابلة للتنفيذ في الملف.");
+      renderQueue();
       return;
     }
 
@@ -532,8 +1031,13 @@
         "busy",
         "تشغيل متسلسل " + (i + 1) + " / " + stmts.length + "…",
       );
+      if (inProgress) {
+        inProgress = Object.assign({}, inProgress, {
+          title: p.title + " (" + (i + 1) + "/" + stmts.length + ")",
+        });
+        renderQueue();
+      }
       if (els.editor) els.editor.value = stmt;
-      const cls = classifyLocal(stmt);
       const { data, error } = await invokeRpc(
         "admin_sql_execute_v1",
         {
@@ -547,6 +1051,31 @@
         data && typeof data === "object" && !Array.isArray(data) ? data : null;
       if (error || !payload || payload.ok === false) {
         const msg = friendlyRpcError(error, payload);
+        inProgress = null;
+        if (typeof api.markFail === "function") {
+          api.markFail(p.id, {
+            error: msg,
+            actor: actor,
+            requestId: requestId,
+            atStep: i + 1,
+          });
+        }
+        pushQueue({
+          id: opId,
+          at: new Date().toISOString(),
+          ok: false,
+          status: "failed",
+          title: p.title,
+          presetId: p.id,
+          error:
+            "توقف عند الأمر " + (i + 1) + " / " + stmts.length + ": " + msg,
+          sql: stmt,
+          actor: actor,
+          requestId: requestId,
+          version: p.id,
+          source: "preset",
+          auditId: payload && payload.audit_id,
+        });
         setError(
           "توقف عند الأمر " +
             (i + 1) +
@@ -564,22 +1093,64 @@
         return;
       }
       doneCount++;
-      pushHistory({
-        at: new Date().toISOString(),
-        ok: true,
-        rowCount: payload.row_count,
-        error: "",
-        sql: stmt,
-      });
     }
 
     if (els.editor) els.editor.value = sql;
     if (els.run) els.run.disabled = false;
-    api.markDone(p.id, { statements: doneCount });
-    setStatus("ok", "✅ تم تنفيذ الأمر الجاهز (" + doneCount + " أوامر) — مُعلَّم كمُنفذ");
+    const at = new Date().toISOString();
+    inProgress = null;
+    api.markDone(p.id, {
+      statements: doneCount,
+      actor: actor,
+      requestId: requestId,
+      version: p.id,
+      archived: true,
+    });
+    pushArchive({
+      id: opId,
+      at: at,
+      ok: true,
+      rowCount: doneCount,
+      title: p.title,
+      presetId: p.id,
+      actor: actor,
+      requestId: requestId,
+      version: p.id,
+      source: "preset",
+      sql: sql.slice(0, 400),
+    });
+
+    let statusMsg =
+      "✅ تم تنفيذ الأمر الجاهز (" + doneCount + " أوامر) — نُقل إلى الأرشيف";
+    if (requestId) {
+      const closed = await closeLinkedRequest(requestId, at);
+      if (closed.ok) {
+        statusMsg = closed.message;
+      } else if (!closed.skipped) {
+        statusMsg =
+          statusMsg + " · تعذّر إغلاق الطلب: " + (closed.error || "");
+      }
+    }
+
+    setStatus("ok", statusMsg);
     setError("");
     setEditorVisible(false);
     renderPresets();
+    renderQueue();
+    renderArchive();
+  }
+
+  function restoreFromEntry(it) {
+    if (!it || !els.editor) return;
+    if (it.sql) {
+      els.editor.value = it.sql;
+      setEditorVisible(true);
+      setStatus("", "استُعيد من السجل");
+      return;
+    }
+    if (it.presetId) {
+      loadPresetIntoEditor(it.presetId).catch(() => {});
+    }
   }
 
   function bindPresets() {
@@ -607,14 +1178,33 @@
         const api = presetsApi();
         if (!api) return;
         const id = doneBtn.getAttribute("data-preset-done");
-        if (api.isDone(id)) api.clearDone(id);
-        else api.markDone(id, { manual: true });
+        const p = (api.PRESETS || []).find((x) => x.id === id);
+        api.markDone(id, {
+          manual: true,
+          actor: getActorLabel(),
+          requestId: readLinkedRequestId(),
+          version: id,
+          archived: true,
+        });
+        pushArchive({
+          id: makeId(),
+          at: new Date().toISOString(),
+          ok: true,
+          title: (p && p.title) || id,
+          presetId: id,
+          actor: getActorLabel(),
+          requestId: readLinkedRequestId(),
+          version: id,
+          source: "preset",
+          sql: "",
+        });
         renderPresets();
+        renderArchive();
+        setStatus("ok", "عُلّم كمُنفذ ونُقل إلى الأرشيف");
       }
     });
     renderPresets();
   }
-
 
   function bindToolsNav() {
     if (!els.root) return;
@@ -641,31 +1231,51 @@
     if (els.toggleSql) {
       els.toggleSql.addEventListener("click", () => setEditorVisible(true));
     }
-    if (els.history) {
-      els.history.addEventListener("click", (e) => {
-        const btn = e.target.closest("[data-hist-idx]");
+    if (els.cleanLog) {
+      els.cleanLog.addEventListener("click", () => cleanLogToArchive());
+    }
+    if (els.archiveRefresh) {
+      els.archiveRefresh.addEventListener("click", () => {
+        refreshArchiveFromAudit().catch(() => {});
+      });
+    }
+    if (els.queue) {
+      els.queue.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-queue-id]");
         if (!btn) return;
-        const idx = Number(btn.getAttribute("data-hist-idx"));
-        const items = loadHistory();
-        const it = items[idx];
-        if (!it || !els.editor) return;
-        els.editor.value = it.sql || "";
-        setEditorVisible(true);
-        setStatus("", "استُعيد من السجل");
+        const id = btn.getAttribute("data-queue-id");
+        const items = loadQueue();
+        const it =
+          (inProgress && inProgress.id === id ? inProgress : null) ||
+          items.find((x) => x.id === id);
+        restoreFromEntry(it);
+      });
+    }
+    if (els.archive) {
+      els.archive.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-arch-id]");
+        if (!btn) return;
+        const id = btn.getAttribute("data-arch-id");
+        const items = loadArchive().concat(archiveFromPresets());
+        const it = items.find((x) => x.id === id);
+        restoreFromEntry(it);
       });
     }
 
     bindToolsNav();
-    renderHistory();
+    bindPresets();
+    renderQueue();
+    renderArchive();
     setEditorVisible(true);
-    // Keep sample query as real value (not placeholder-only) so Run works on first open.
     if (els.editor && !String(els.editor.value || "").trim()) {
       els.editor.value = "SELECT id, child_name FROM tree_children LIMIT 20;";
     }
 
     document.addEventListener("alzidan:admin-module", (ev) => {
       if (ev && ev.detail && ev.detail.id === "tools") {
-        renderHistory();
+        renderQueue();
+        renderArchive();
+        renderPresets();
       }
     });
   }
@@ -678,7 +1288,10 @@
 
   window.AlzidanSqlWorkspace = {
     run: runSql,
-    refreshHistory: renderHistory,
+    refreshHistory: renderQueue,
+    refreshQueue: renderQueue,
+    refreshArchive: renderArchive,
+    cleanLog: cleanLogToArchive,
     renderPresets: renderPresets,
     runPreset: runPreset,
   };
