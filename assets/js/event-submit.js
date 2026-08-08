@@ -19,8 +19,14 @@ return sbClient;
 }
 function normalizeEventText(v) { return String(v || "").replace(/\s+/g, " ").trim();
 }
-function normalizeEventPhone(v) { return String(v || "") .replace(/[٠-٩]/g, (digit) =>String(digit.charCodeAt(0) - 1632)) .replace(/[۰-۹]/g, (digit) =>String(digit.charCodeAt(0) - 1776)) .replace(/[^\d+]/g, "") .trim();
+function normalizeEventDigits(v) {
+  return String(v || "")
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 1632))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 1776));
 }
+function normalizeEventPhone(v) { return normalizeEventDigits(v).replace(/[^\d+]/g, "").trim();
+}
+function normalizeEventSecret(v) { return normalizeEventDigits(String(v || "")).trim(); }
 function normalizeEventEmail(v) { return String(v || "").trim().toLowerCase();
 }
 async function sha256Hex(text) { try { if (!window.crypto || !window.crypto.subtle) return null;
@@ -179,7 +185,7 @@ const text = normalizeEventText(form.querySelector('[name="text"]')?.value);
 const submitterName = normalizeEventText(form.querySelector('[name="submitterName"]')?.value);
 const phone = normalizeEventPhone(form.querySelector('[name="phone"]')?.value);
 const email = normalizeEventEmail(form.querySelector('[name="email"]')?.value);
-const secret = normalizeEventText(form.querySelector('[name="secret"]')?.value);
+const secret = normalizeEventSecret(form.querySelector('[name="secret"]')?.value);
 if (!branch || !type || !person || !text || !submitterName || !phone) { setEventSubmitAlert("error", "أكمل الفرع ونوع المناسبة والاسم والنص وبيانات المرسل.");
 return;
 } if (phone.length< 9) { setEventSubmitAlert("error", "رقم الجوال غير صحيح.");

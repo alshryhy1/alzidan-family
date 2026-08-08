@@ -53,12 +53,18 @@
     return kind === "delegate_secret_reset" || rtype === "delegate_secret_reset";
   }
 
+  function normalizeRequestDigits(value) {
+    return String(value || "")
+      .replace(/[٠-٩]/g, (d) => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
+      .replace(/[۰-۹]/g, (d) => "0123456789"["۰۱۲۳۴۵۶۷۸۹".indexOf(d)]);
+  }
+
   function extractProposedSecretFromMessage(message) {
     const text = String(message || "");
     const m =
       /الرقم السري المقترح:\s*(.+)$/m.exec(text) ||
       /الرقم السري:\s*(.+)$/m.exec(text);
-    return m ? String(m[1] || "").trim() : "";
+    return m ? normalizeRequestDigits(String(m[1] || "")).trim() : "";
   }
 
   function renderSecretResetCard(actions, row, approveBtn, rejectBtn) {
@@ -200,6 +206,7 @@
     return String(value || "")
       .toLowerCase()
       .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+      .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
       .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
       .replace(/\s+/g, " ")
       .trim();
@@ -1076,6 +1083,7 @@
     return String(value == null ? "" : value)
       .toLowerCase()
       .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+      .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
       .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
       .trim();
   }
