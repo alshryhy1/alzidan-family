@@ -18,8 +18,6 @@
   const EDITOR_COMMAND_KEY = "editor:last";
   const EDITOR_DAILY_ID = "daily_editor_last";
   const EDITOR_DAILY_TITLE = "آخر محاولة محرر";
-  const SAFE_EDITOR_TIP =
-    "SELECT id, child_name FROM tree_children LIMIT 20;";
   /** Retired pg_proc bootstrap — never load/run as a maintenance path. */
   const RETIRED_BOOTSTRAP_IDS = {
     "maint.sql_workspace_executor_bootstrap_v1": true,
@@ -356,7 +354,7 @@
   }
 
   /**
-   * Replace leftover pg_proc / bootstrap_v1 editor contents with a safe tip.
+   * Clear leftover pg_proc / bootstrap_v1 editor contents (leave box empty).
    * Returns true when the editor was scrubbed.
    */
   function scrubRetiredEditorContent(opts) {
@@ -367,7 +365,7 @@
     const retiredPreset = isRetiredPresetId(activeEditorPresetId);
     if (!retiredPreset && !isRetiredSql(sql)) return false;
     activeEditorPresetId = "";
-    els.editor.value = SAFE_EDITOR_TIP;
+    els.editor.value = "";
     setEditorVisible(true);
     if (!quiet) {
       setError(RETIRED_MSG_AR);
@@ -1816,7 +1814,7 @@
     if (!api) return;
     if (isRetiredPresetId(id)) {
       activeEditorPresetId = "";
-      if (els.editor) els.editor.value = SAFE_EDITOR_TIP;
+      if (els.editor) els.editor.value = "";
       setEditorVisible(true);
       setStatus("err", "متقاعد — لا يُشغَّل");
       setError(RETIRED_MSG_AR);
@@ -1829,7 +1827,7 @@
       const sql = await api.fetchPresetSql(p.file);
       if (isRetiredSql(sql) || /SQL-WS-RETIRED-PG-PROC/i.test(sql)) {
         activeEditorPresetId = "";
-        if (els.editor) els.editor.value = SAFE_EDITOR_TIP;
+        if (els.editor) els.editor.value = "";
         setEditorVisible(true);
         setStatus("err", "متقاعد — لا يُشغَّل");
         setError(RETIRED_MSG_AR);
@@ -1853,7 +1851,7 @@
       return;
     }
     if (isRetiredPresetId(id)) {
-      if (els.editor) els.editor.value = SAFE_EDITOR_TIP;
+      if (els.editor) els.editor.value = "";
       setEditorVisible(true);
       setError(RETIRED_MSG_AR);
       setStatus("err", "متقاعد — لا يُشغَّل");
@@ -1900,7 +1898,7 @@
       }
       if (boot.needs_supabase && boot.sql && els.editor) {
         if (isRetiredSql(boot.sql)) {
-          els.editor.value = SAFE_EDITOR_TIP;
+          els.editor.value = "";
           setError(RETIRED_MSG_AR);
         } else {
           els.editor.value = boot.sql;
@@ -1940,7 +1938,7 @@
     if (!up.ok) {
       if (up.needs_supabase && up.sql && els.editor) {
         if (isRetiredSql(up.sql)) {
-          els.editor.value = SAFE_EDITOR_TIP;
+          els.editor.value = "";
           setError(RETIRED_MSG_AR);
         } else {
           els.editor.value = up.sql;
@@ -2144,7 +2142,7 @@
     if (!it || !els.editor) return;
     if (isRetiredDailyEntry(it)) {
       activeEditorPresetId = "";
-      els.editor.value = SAFE_EDITOR_TIP;
+      els.editor.value = "";
       setEditorVisible(true);
       setError(RETIRED_MSG_AR);
       setStatus("err", "متقاعد — لا يُشغَّل");
@@ -2156,7 +2154,7 @@
     if (it.sql) {
       if (isRetiredSql(it.sql)) {
         activeEditorPresetId = "";
-        els.editor.value = SAFE_EDITOR_TIP;
+        els.editor.value = "";
         setEditorVisible(true);
         setError(RETIRED_MSG_AR);
         setStatus("err", "متقاعد — لا يُشغَّل");
@@ -2283,13 +2281,9 @@
     renderQueue();
     renderArchive();
     setEditorVisible(true);
-    if (els.editor) {
-      if (scrubRetiredEditorContent({ quiet: true })) {
-        /* replaced retired leftover */
-      } else if (!String(els.editor.value || "").trim()) {
-        els.editor.value = SAFE_EDITOR_TIP;
-      }
-    }
+    // Always open with an empty editor (no default SELECT / no draft restore).
+    clearEditor();
+    scrubRetiredEditorContent({ quiet: true });
 
     (async function probeExecutorOnBind() {
       const token = getToken();
@@ -2321,6 +2315,7 @@
     document.addEventListener("alzidan:admin-module", (ev) => {
       if (ev && ev.detail && ev.detail.id === "tools") {
         migrateCollapseDailySpam();
+        clearEditor();
         scrubRetiredEditorContent({ quiet: true });
         scrubRetiredDailyNoise();
         purgeDailySucceeded();
