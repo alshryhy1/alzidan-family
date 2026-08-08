@@ -14,8 +14,8 @@
     {
       id: "maint.sql_workspace_literal_aware_v1",
       title: "ترقية منفّذ SQL Workspace (أجسام الدوال)",
-      desc: "يسمح بتشغيل CREATE FUNCTION من المساحة. إن فشل بسبب SQL-WS-MULTI على منفّذ قديم: نفّذه مرة واحدة من Supabase ثم استخدم المساحة لكل ما بعده.",
-      file: "../supabase/sql/20260809_sql_workspace_literal_aware.sql",
+      desc: "يصلح خطأ SQL-WS-MULTI تلقائيًا من داخل المساحة (بدون Supabase) ثم يسمح بـ CREATE FUNCTION والسكربتات متعددة الأوامر عبر التشغيل المتسلسل.",
+      file: "../supabase/sql/20260809_sql_workspace_executor_bootstrap.sql",
       order: 10,
       bootstrap: true,
     },
