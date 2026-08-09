@@ -57,6 +57,14 @@
 
 المسار اليدوي الآن: dry-run (SELECT واحد) ثم APPLY (UPDATE) بعد موافقة — بلا Auto Repair.
 
+## Health Center → SQL Workspace (صف واحد)
+
+حتى 2026-08-09 كان «أرسل إلى SQL Workspace» يحقن SELECT + `/* UPDATE */` + SELECT لنفس `id` — نفس علّة timeout على صف مثل `id = 1500` (مسارات عربية فيها `/` داخل التعليق الكتلي).
+
+**الآن:** بعد الموافقة يُحقن `UPDATE public.tree_children SET … WHERE id = N;` فقط — تعليقات `--` قصيرة، بلا `/* */`. العميل يمرّر الأوامر البسيطة عبر `admin_sql_execute_v1` (أمر واحد). Hard Refresh ثم أعد الإرسال من مركز الصحة إن بقي سكربت قديم في المحرر.
+
+إن استمر timeout على UPDATE بسيط بلا تعليقات كتلية: الصق مرة `COPY-ME-admin-sql-workspace-run-v2.sql` في Supabase (classify بدون regex معلّق).
+
 ## إعادة الاختبار (دقيق)
 
 1. Hard Refresh لـ `/pages/admin.html` (Cmd+Shift+R).

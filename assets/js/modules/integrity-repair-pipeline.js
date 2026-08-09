@@ -442,8 +442,10 @@
   }
 
   /**
-   * Build single-row UPDATE SQL for SQL Workspace (Execute stage payload).
-   * Commented APPLY block — admin must review then run.
+   * Build single-row UPDATE for SQL Workspace (Execute stage payload).
+   * Pure APPLY only — no SELECT sandwich, no block comments.
+   * (Block comments + Arabic paths with '/' hang old admin_sql_classify_v1.)
+   * Approval already happened in Health Center; Workspace Run confirms mutate.
    */
   function buildExecuteSql(preview, meta) {
     var p = preview || {};
@@ -481,45 +483,24 @@
       return { ok: false, message_ar: "لا حقول للتحديث في المعاينة." };
     }
 
+    var rowId = Number(id);
     var sql = [
-      "-- =============================================================================",
-      "-- Health Center staged repair — صف واحد · بعد موافقة المدير",
-      "-- Pipeline: Analyze → Preview → Approve → Execute → Re-verify → Log",
-      "-- سياسة: بلا إصلاح الكل · بلا كتابة صامتة من مركز الصحة",
-      "-- actor: " + actor,
-      "-- reason: " + String(reason).replace(/\n/g, " "),
-      "-- before.parent: " + String(before.parent),
-      "-- before.parent_person_id: " + String(before.parent_person_id),
-      "-- after.parent: " + String(after.parent),
-      "-- after.parent_person_id: " + String(after.parent_person_id),
-      "-- =============================================================================",
-      "",
-      "-- 0) Dry-run تحقق قبل التطبيق",
-      "SELECT id, branch_key, parent, parent_name, parent_person_id,",
-      "       coalesce(child_name, name) AS child_path",
-      "FROM public.tree_children",
-      "WHERE id = " + Number(id) + ";",
-      "",
-      "-- 1) APPLY — أزل التعليق بعد المراجعة والموافقة الصريحة",
-      "/*",
+      "-- Health Center · صف واحد · بعد موافقة المدير",
+      "-- id: " + rowId + " · actor: " + String(actor).replace(/\n/g, " "),
+      "-- reason: " + String(reason).replace(/\n/g, " ").slice(0, 200),
+      "-- before.parent: " + String(before.parent == null ? "" : before.parent),
+      "-- after.parent: " + String(after.parent == null ? "" : after.parent),
       "UPDATE public.tree_children",
       "SET",
       sets.join(",\n"),
-      "WHERE id = " + Number(id) + ";",
-      "*/",
-      "",
-      "-- 2) Re-verify",
-      "SELECT id, parent, parent_name, parent_person_id,",
-      "       coalesce(child_name, name) AS child_path",
-      "FROM public.tree_children",
-      "WHERE id = " + Number(id) + ";",
+      "WHERE id = " + rowId + ";",
     ].join("\n");
 
     return {
       ok: true,
       sql: sql,
-      title: "إصلاح صف #" + id + " (مركز الصحة)",
-      row_id: id,
+      title: "إصلاح صف #" + rowId + " (مركز الصحة)",
+      row_id: rowId,
       before: before,
       after: after,
     };

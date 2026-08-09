@@ -133,11 +133,36 @@
     };
   }
 
+  /** Strip leading -- / block comments (loop), matching fixed admin_sql_classify_v1. */
+  function stripLeadingSqlComments(sql) {
+    let work = String(sql || "");
+    for (;;) {
+      work = work.replace(/^\s+/, "");
+      if (!work) break;
+      if (work.slice(0, 2) === "--") {
+        const nl = work.indexOf("\n");
+        work = nl < 0 ? "" : work.slice(nl + 1);
+        continue;
+      }
+      if (work.slice(0, 2) === "/*") {
+        const end = work.indexOf("*/", 2);
+        if (end < 0) {
+          work = "";
+          break;
+        }
+        work = work.slice(end + 2);
+        continue;
+      }
+      break;
+    }
+    return work.trim();
+  }
+
   function classifyLocal(sql) {
     const raw = String(sql || "").trim();
     if (!raw) return { empty: true, mutating: false, selectish: false };
-    let work = raw.replace(/^\s*--[^\n]*\n?/gm, "").trim();
-    work = work.replace(/^\s*\/\*[\s\S]*?\*\//, "").trim();
+    const work = stripLeadingSqlComments(raw);
+    if (!work) return { empty: true, mutating: false, selectish: false };
     const first = (work.match(/^\s*([A-Za-z]+)/) || [])[1] || "";
     const upper = first.toUpperCase();
     const selectish = ["SELECT", "WITH", "SHOW", "EXPLAIN", "VALUES", "TABLE"].includes(
@@ -145,6 +170,22 @@
     );
     const mutating = MUTATE_RE.test(work);
     return { empty: false, mutating, selectish, first: upper };
+  }
+
+  /**
+   * Safe for old execute_v1 / pre-fix classify: one statement, line comments only.
+   * Rejects block comments (known classify timeout with '/' paths) and DO blocks.
+   */
+  function isSimpleSingleStatement(sql) {
+    const raw = String(sql || "");
+    if (!raw.trim()) return false;
+    if (/\/\*|\*\//.test(raw)) return false;
+    if (/\bDO\s+\$/i.test(raw)) return false;
+    const work = stripLeadingSqlComments(raw);
+    if (!work) return false;
+    if (!/^(SELECT|WITH|UPDATE|INSERT|DELETE)\b/i.test(work)) return false;
+    const body = work.replace(/;\s*$/, "");
+    return body.indexOf(";") < 0;
   }
 
   function loadJsonArray(key, storage) {
@@ -710,7 +751,7 @@
       /statement timeout|canceling statement/i.test(rawMsg)
     ) {
       return (
-        "انتهت مهلة التنفيذ (timeout). إن كان السكربت يحتوي تعليقًا كتليًا /* … */ فأزلْه أو استخدم بطاقة dry-run / APPLY المنفصلتين، أو أعد تثبيت منفّذ v2 المحدَّث ثم أعد المحاولة."
+        "انتهت مهلة التنفيذ (timeout). غالبًا تعليق كتلي /* … */ مع مسارات فيها '/' علّق التصنيف القديم — أزل التعليق الكتلي أو أعد الإرسال من مركز الصحة (UPDATE صف واحد فقط)، أو الصق COPY-ME-admin-sql-workspace-run-v2.sql مرة في Supabase ثم Hard Refresh."
       );
     }
     if (
@@ -1338,6 +1379,19 @@
   }
 
   async function invokeWorkspaceSql(token, sql, confirmMutate) {
+    // Health one-row UPDATE / plain SELECT: prefer execute_v1 (single classify,
+    // works on old executor, avoids multi-statement splitter).
+    if (isSimpleSingleStatement(sql)) {
+      return invokeRpc(
+        V1_RPC,
+        {
+          p_token: token,
+          p_sql: sql,
+          p_confirm_mutate: !!confirmMutate,
+        },
+        { timeoutMs: 45000 },
+      );
+    }
     if (executorReady) {
       return invokeRpc(
         V2_RPC,
@@ -1425,6 +1479,13 @@
     }
 
     const cls = classifyLocal(sql);
+    if (/\/\*/.test(sql)) {
+      setError(
+        "المحرر يحتوي تعليقًا كتليًا /* … */ — هذا يعلّق التصنيف القديم (timeout). احذف التعليق الكتلي أو أعد «أرسل إلى SQL Workspace» من مركز الصحة بعد التحديث.",
+      );
+      setStatus("err", "تعليق كتلي مرفوض");
+      return;
+    }
     if (cls.mutating && !confirmMutate) {
       const kw = cls.first || "MUTATE";
       const ok = window.confirm(
@@ -2411,7 +2472,7 @@
       const title = (meta && meta.title) || "أمر من مركز الصحة";
       setStatus(
         "ok",
-        "✅ محمّل من مركز الصحة: " + title + " — راجع الأمر ثم شغّل بعد الموافقة (صف واحد).",
+        "✅ محمّل من مركز الصحة: " + title + " — UPDATE صف واحد · راجع ثم شغّل وأكّد الكتابة.",
       );
       setError("");
       const reveal = function () {
