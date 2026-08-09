@@ -1360,10 +1360,11 @@
       { sub: "تأكيد هوية الشخص المراد إضافته — ليس تأكيد الأب." }
     );
     root.querySelector("[data-rx-id-yes]").addEventListener("click", function () {
+      // Affirming an existing tree person — never continue to review/send.
       state.identityAffirmedExisting = true;
       state.differentPersonSameName = false;
       clearError();
-      state.view = "exists";
+      blockExistingPerson(state.selectedIdentity, "id-yes-affirmed");
       render();
     });
     root.querySelector("[data-rx-id-other]").addEventListener("click", function () {
@@ -1490,7 +1491,24 @@
         "</div>",
       { sub: "تأكيد مكان الإضافة — ليس تأكيد أن الشخص الجديد موجود مسبقًا." }
     );
-    root.querySelector("[data-rx-confirm-yes]").addEventListener("click", function () {
+    root.querySelector("[data-rx-confirm-yes]").addEventListener("click", async function () {
+      try {
+        var children = await refreshChildrenUnderParent();
+        var under = findExistingChildUnderParent(
+          state.facts.personName,
+          state.selectedParent,
+          children
+        );
+        if (under) {
+          blockExistingPerson(under, "confirm-parent-same-child");
+          render();
+          return;
+        }
+      } catch (err) {
+        setError("تعذر التحقق قبل تأكيد السياق. حاول مرة أخرى.");
+        render();
+        return;
+      }
       state.parentConfirmed = true;
       state.view = "review";
       clearError();
@@ -1628,11 +1646,52 @@
     return lines.join("\n");
   }
 
+  /** Map RX person items → snake_case rows the identity guard understands. */
+  function toGuardPersonRow(item, parentFallback) {
+    if (!item) return null;
+    var parentPid = text(
+      item.parentPersonId ||
+        item.parent_person_id ||
+        (parentFallback && parentFallback.personId) ||
+        ""
+    );
+    var parentPath = text(
+      item.parent_path ||
+        item.parentPath ||
+        item.parent_name ||
+        (parentFallback && (parentFallback.path || parentFallback.id)) ||
+        ""
+    );
+    return {
+      leaf: item.leaf || "",
+      person_id: text(item.personId || item.person_id || ""),
+      personId: text(item.personId || item.person_id || ""),
+      parent_person_id: parentPid,
+      parentPersonId: parentPid,
+      parent_path: parentPath,
+      parent_name: parentPath,
+      child_name: item.id || item.leaf || "",
+      branch_key: item.branch || "",
+      path: item.path || "",
+    };
+  }
+
   async function submitAddPerson() {
     if (state.busy) return;
     clearError();
     if (state.identityAffirmedExisting) {
       blockExistingPerson(state.selectedIdentity, "submit-affirmed");
+      render();
+      return;
+    }
+    // Selecting an existing tree identity (with person_id) means add-person is forbidden.
+    var selectedExistingPid = text(
+      (state.selectedIdentity &&
+        (state.selectedIdentity.personId || state.selectedIdentity.person_id)) ||
+        ""
+    );
+    if (selectedExistingPid) {
+      blockExistingPerson(state.selectedIdentity, "submit-selected-person-id");
       render();
       return;
     }
@@ -1660,10 +1719,26 @@
     var p = state.selectedParent;
 
     try {
-      // Refresh siblings for catalog — guard decides same vs similar vs new.
+      // Hard gate on live tree_children siblings — before any insert.
       var children = await refreshChildrenUnderParent();
+      var underSameFather = findExistingChildUnderParent(f.personName, p, children);
+      if (underSameFather) {
+        state.busy = false;
+        blockExistingPerson(underSameFather, "submit-under-parent");
+        render();
+        return;
+      }
       var collisions = await searchIdentityCollisions(f.personName);
       state.identityCandidates = collisions;
+      if (collisions.length && !state.differentPersonSameName) {
+        state.busy = false;
+        setError(
+          "يوجد تطابق بالاسم في الشجرة. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم."
+        );
+        state.view = "identity";
+        render();
+        return;
+      }
     } catch (gateErr) {
       state.busy = false;
       setError("تعذر التحقق قبل الإرسال. حاول مرة أخرى.");
@@ -1711,28 +1786,39 @@
       status: "pending",
       created_at: payload.createdAt,
     };
+    var guardSiblings = (state.childrenUnderParent || [])
+      .map(function (item) {
+        return toGuardPersonRow(item, p);
+      })
+      .filter(Boolean);
+    var guardPeople = (state.identityCandidates || [])
+      .map(function (item) {
+        return toGuardPersonRow(item, null);
+      })
+      .filter(Boolean)
+      .concat(guardSiblings);
     var guardPayload = {
       person_name: f.personName,
       parent_person_id: parentPersonId,
-      parent_path: p.path,
+      parent_path: p.path || p.id || "",
       father: p.leaf,
       branch_key: p.branch,
       identity_affirmed_existing: !!state.identityAffirmedExisting,
       different_person_same_name: !!state.differentPersonSameName,
-    };
-    var catalog = {
-      siblings: state.childrenUnderParent || [],
-      people: (state.identityCandidates || []).concat(state.childrenUnderParent || []),
+      // Never invent a new id; only pass when an existing tree person was chosen.
+      person_id: selectedExistingPid || "",
     };
     try {
+      // Prefer live catalog from home-request-create (snake_case) + pass RX catalog as fallback.
       var created = await Create.create({
         type: "add_person",
         payload: guardPayload,
-        catalog: catalog,
+        catalog: { siblings: guardSiblings, people: guardPeople },
         client: sb,
-        skipFetch: true,
+        skipFetch: false,
         mode: "approval",
         row: row,
+        acknowledgeReview: !!state.differentPersonSameName,
       });
       if (!created.ok) {
         state.busy = false;

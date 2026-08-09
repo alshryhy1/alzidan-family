@@ -346,9 +346,31 @@
     markInflight(fp);
     try {
       var client = getClient(options.client);
-      var catalog =
-        options.catalog ||
-        (options.skipFetch ? {} : await fetchCatalog(type, payload, client));
+      var catalog = options.catalog || {};
+      // Always prefer a live DB catalog unless the caller explicitly skips fetch.
+      // UI-provided catalogs (e.g. RX camelCase) are merged as extras, not replacements.
+      if (!options.skipFetch) {
+        var fetched = await fetchCatalog(type, payload, client);
+        catalog = {
+          siblings: (fetched.siblings || []).concat(
+            Array.isArray(catalog.siblings) ? catalog.siblings : []
+          ),
+          people: (fetched.people || []).concat(
+            Array.isArray(catalog.people) ? catalog.people : []
+          ),
+          events: (fetched.events || []).concat(
+            Array.isArray(catalog.events) ? catalog.events : []
+          ),
+          pending_requests: (fetched.pending_requests || []).concat(
+            Array.isArray(catalog.pending_requests)
+              ? catalog.pending_requests
+              : []
+          ),
+          memories: (fetched.memories || []).concat(
+            Array.isArray(catalog.memories) ? catalog.memories : []
+          ),
+        };
+      }
 
       var guardResult = G.evaluate(type, payload, catalog);
       guardResult.fingerprint = fp;

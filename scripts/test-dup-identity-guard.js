@@ -361,13 +361,87 @@ const PERSON_Y = "cccccccc-cccc-cccc-cccc-cccccccccccc";
       );
       assert(afterAck.verdict === "allow", "similar name + acknowledge different → allow");
 
-      console.log("\n--- summary ---");
-      console.log("passed:", results.filter((x) => x.ok).length, "/", results.length);
-      if (failed) {
-        console.error("FAILED:", failed);
-        process.exit(1);
-      }
-      console.log("All dup-identity-guard checks passed.");
+      // UI regression: RX camelCase siblings must still BLOCK under same parent
+      // (skipFetch catalog shape that previously bypassed the guard).
+      const camelCaseRx = Guard.evaluate(
+        "add_person",
+        {
+          person_name: "محمد",
+          parent_person_id: PARENT_A,
+          branch_key: "زيدان",
+          different_person_same_name: true,
+        },
+        {
+          siblings: [
+            {
+              leaf: "محمد",
+              personId: PERSON_X,
+              parentPersonId: PARENT_A,
+              path: "زيدان / أب / محمد",
+            },
+          ],
+          people: [],
+        }
+      );
+      assert(
+        camelCaseRx.verdict === "block" && camelCaseRx.code === "ADD_PERSON_EXISTS",
+        "UI camelCase siblings + same parent → block (even with different_person_same_name)"
+      );
+
+      // Selected existing person_id in payload → block (no new identity)
+      const byPid = Guard.evaluate(
+        "add_person",
+        {
+          person_name: "محمد",
+          parent_person_id: PARENT_A,
+          person_id: PERSON_X,
+          branch_key: "زيدان",
+        },
+        { siblings: [], people: [] }
+      );
+      assert(
+        byPid.verdict === "block" && byPid.code === "ADD_PERSON_EXISTS",
+        "payload person_id of existing tree person → block before insert"
+      );
+
+      // create() must not insert when camelCase catalog proves same parent
+      Create.resetLocksForTests();
+      let uiInserts = 0;
+      return Create.create({
+        type: "add_person",
+        payload: {
+          person_name: "محمد",
+          parent_person_id: PARENT_A,
+          branch_key: "زيدان",
+          different_person_same_name: true,
+        },
+        catalog: {
+          siblings: [
+            {
+              leaf: "محمد",
+              personId: PERSON_X,
+              parentPersonId: PARENT_A,
+            },
+          ],
+          people: [],
+        },
+        skipFetch: true,
+        performInsert: async function () {
+          uiInserts += 1;
+          return { request_id: "SHOULD-NOT" };
+        },
+      }).then(function (created) {
+        assert(created.ok === false && created.blocked === true, "create blocks UI camelCase duplicate");
+        assert(uiInserts === 0, "create does not insert when existing under parent");
+
+        console.log("\n--- summary ---");
+        console.log("passed:", results.filter((x) => x.ok).length, "/", results.length);
+        if (failed) {
+          console.error("FAILED:", failed);
+          process.exit(1);
+        }
+        console.log("All dup-identity-guard checks passed.");
+      });
     })
     .catch(function (err) {
       console.error(err);

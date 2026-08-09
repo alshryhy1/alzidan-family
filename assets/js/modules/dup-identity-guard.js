@@ -189,14 +189,60 @@
     return parts.join("::");
   }
 
+  /** Accept snake_case or RX camelCase person rows. */
+  function rowPersonId(row) {
+    if (!row) return "";
+    return pid(row.person_id || row.personId);
+  }
+
+  function rowParentPersonId(row) {
+    if (!row) return "";
+    return pid(row.parent_person_id || row.parentPersonId);
+  }
+
+  function rowLeaf(row) {
+    if (!row) return "";
+    return normalizeArabic(
+      row.leaf || leafOf(row.child_name || row.name || row.person_name || "")
+    );
+  }
+
+  function rowParentPath(row) {
+    if (!row) return "";
+    return normalizeArabic(
+      row.parent_path ||
+        row.parentPath ||
+        row.parent_name ||
+        row.parentName ||
+        row.parent ||
+        ""
+    );
+  }
+
+  function pathKeysMatch(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    var aSlash = a.replace(/\s*\/\s*/g, "/");
+    var bSlash = b.replace(/\s*\/\s*/g, "/");
+    if (aSlash === bSlash) return true;
+    return (
+      aSlash.endsWith("/" + bSlash) ||
+      bSlash.endsWith("/" + aSlash) ||
+      aSlash.endsWith("/" + leafOf(bSlash)) ||
+      bSlash.endsWith("/" + leafOf(aSlash))
+    );
+  }
+
   function evaluateAddPerson(payload, catalog) {
     var p = payload || {};
     var cat = catalog || {};
     var siblings = Array.isArray(cat.siblings) ? cat.siblings : [];
     var people = Array.isArray(cat.people) ? cat.people : [];
     var nameQ = normalizeArabic(p.person_name || p.name || "");
-    var parentPid = pid(p.parent_person_id);
-    var parentPath = normalizeArabic(p.parent_path || p.father_path || p.father || "");
+    var parentPid = pid(p.parent_person_id || p.parentPersonId);
+    var parentPath = normalizeArabic(
+      p.parent_path || p.parentPath || p.father_path || p.father || ""
+    );
     var affirmedExisting = !!p.identity_affirmed_existing;
     var differentSameName = !!p.different_person_same_name;
 
@@ -206,59 +252,59 @@
       });
     }
 
-    var sameParent = [];
-    siblings.forEach(function (row) {
-      if (!row) return;
-      var leaf = normalizeArabic(row.leaf || leafOf(row.child_name || row.name || row.person_name));
-      if (!leaf || leaf !== nameQ) return;
-      var rowParentPid = pid(row.parent_person_id);
-      var rowParentPath = normalizeArabic(
-        row.parent_path || row.parent_name || row.parent || ""
-      );
-      var samePid = parentPid && rowParentPid && parentPid === rowParentPid;
-      var samePath =
-        !parentPid &&
-        parentPath &&
-        rowParentPath &&
-        (parentPath === rowParentPath ||
-          parentPath.endsWith("/" + rowParentPath) ||
-          rowParentPath.endsWith("/" + parentPath));
-      if (samePid || samePath || (parentPid && !rowParentPid && samePath)) {
-        sameParent.push(row);
-      } else if (parentPid && rowParentPid && parentPid === rowParentPid) {
-        sameParent.push(row);
-      }
-    });
-
-    if (sameParent.length) {
-      return result(VERDICT.BLOCK, "ADD_PERSON_EXISTS", MSG.ADD_PERSON_EXISTS, {
-        matches: sameParent,
-      });
-    }
-
-    // Explicit person_id pointing at an existing tree row → block (do not mint new id)
-    var wantPid = pid(p.person_id);
+    // Explicit person_id (selected existing tree person) → always block; never mint new id
+    var wantPid = pid(p.person_id || p.personId);
     if (wantPid) {
-      var byId = people.filter(function (row) {
-        return pid(row.person_id) === wantPid;
+      var pool = people.concat(siblings);
+      var byId = pool.filter(function (row) {
+        return rowPersonId(row) === wantPid;
       });
       if (byId.length) {
         return result(VERDICT.BLOCK, "ADD_PERSON_EXISTS", MSG.ADD_PERSON_EXISTS, {
           matches: byId,
         });
       }
+      // Payload carries an existing id even if catalog omitted the row
+      return result(VERDICT.BLOCK, "ADD_PERSON_EXISTS", MSG.ADD_PERSON_EXISTS, {
+        matches: [{ person_id: wantPid, reason: "payload_person_id" }],
+      });
+    }
+
+    var sameParent = [];
+    siblings.forEach(function (row) {
+      if (!row) return;
+      var leaf = rowLeaf(row);
+      if (!leaf || !nameQ || leaf !== nameQ) return;
+      var rowParentPid = rowParentPersonId(row);
+      var rowPPath = rowParentPath(row);
+      var samePid = parentPid && rowParentPid && parentPid === rowParentPid;
+      var samePath = pathKeysMatch(parentPath, rowPPath);
+      // Sibling lists from RX are already scoped to the chosen parent — leaf match is enough
+      // when the row has no parent id (camelCase-only bugs) but list provenance is parent-scoped.
+      var scopedSibling =
+        !!parentPid && !rowParentPid && (!rowPPath || samePath || !parentPath);
+      if (samePid || (samePath && (!parentPid || !rowParentPid || samePid)) || scopedSibling) {
+        sameParent.push(row);
+      }
+    });
+
+    if (sameParent.length) {
+      // Same entity under same father — «شخص آخر بنفس الاسم» must NOT bypass
+      return result(VERDICT.BLOCK, "ADD_PERSON_EXISTS", MSG.ADD_PERSON_EXISTS, {
+        matches: sameParent,
+      });
     }
 
     var similar = [];
     people.forEach(function (row) {
       if (!row) return;
-      var leaf = normalizeArabic(row.leaf || leafOf(row.child_name || row.name || row.person_name));
+      var leaf = rowLeaf(row);
       if (leaf && leaf === nameQ) similar.push(row);
     });
     // Also scan siblings list as people for cross-branch name hits when people empty
     if (!people.length) {
       siblings.forEach(function (row) {
-        var leaf = normalizeArabic(row.leaf || leafOf(row.child_name || row.name || ""));
+        var leaf = rowLeaf(row);
         if (leaf && leaf === nameQ) similar.push(row);
       });
     }
