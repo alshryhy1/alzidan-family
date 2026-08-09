@@ -735,7 +735,9 @@
       const row = {
         branch_key: branchKey,
         parent_name: p,
+        parent: p,
         child_name: c,
+        name: c,
         created_at: createdAt,
       };
       if (extra && typeof extra === "object") Object.assign(row, extra);

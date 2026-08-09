@@ -179,6 +179,11 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const healthCenterBadBody = document.getElementById("health-center-bad-body");
   const healthCenterStatus = document.getElementById("health-center-status");
   const healthCenterSource = document.getElementById("health-center-source");
+  const healthStructureCards = document.getElementById("health-structure-cards");
+  const healthStructureBody = document.getElementById("health-structure-body");
+  const healthStructureDetailTitle = document.getElementById("health-structure-detail-title");
+  let healthStructureAudit = null;
+  let healthStructureActiveCat = "";
   const specialCardsList = document.getElementById("special-cards-list");
   const specialCardsForm = document.getElementById("special-cards-form");
   const specialCardsId = document.getElementById("special-cards-id");
@@ -2078,6 +2083,116 @@ where c.id = matches.id; commit;
     renderSpecialCardsList();
   }
 
+  function renderHealthStructureDetail(categoryId) {
+    healthStructureActiveCat = String(categoryId || "");
+    if (healthStructureCards) {
+      healthStructureCards.querySelectorAll(".health-structure-card").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.getAttribute("data-cat") === healthStructureActiveCat);
+      });
+    }
+    if (!healthStructureBody) return;
+    const audit = healthStructureAudit;
+    if (!audit) {
+      healthStructureBody.innerHTML =
+        '<tr><td colspan="6" class="hint">لا تقرير بعد — اضغط تحديث التقرير.</td></tr>';
+      if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = "";
+      return;
+    }
+    let rows = [];
+    let title = "";
+    if (healthStructureActiveCat === "total") {
+      title = "إجمالي الأشخاص — لا تفصيل صفوف (استخدم بطاقة مشكلة)";
+      rows = [];
+    } else if (healthStructureActiveCat === "healthy_relations") {
+      title = "علاقات صحيحة: " + String((audit.totals && audit.totals.healthy_relations) || 0);
+      rows = [];
+    } else {
+      rows = (audit.lists && audit.lists[healthStructureActiveCat]) || [];
+      const catMeta = (audit.categories || []).find((c) => c.id === healthStructureActiveCat);
+      title =
+        (catMeta && catMeta.label ? catMeta.label : healthStructureActiveCat) +
+        " — " +
+        String(rows.length) +
+        " صف";
+    }
+    if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = title;
+    if (!rows.length) {
+      healthStructureBody.innerHTML =
+        healthStructureActiveCat === "total" || healthStructureActiveCat === "healthy_relations"
+          ? '<tr><td colspan="6" class="hint">بطاقة ملخص فقط — اختر بطاقة تحذير لعرض الصفوف.</td></tr>'
+          : '<tr><td colspan="6" class="hint">لا صفوف في هذه الفئة.</td></tr>';
+      return;
+    }
+    healthStructureBody.innerHTML = rows
+      .slice(0, 200)
+      .map((row) => {
+        const id = escapeHtml(row.id != null ? row.id : "");
+        const branch = escapeHtml(row.branch_key || "");
+        const path = escapeHtml(row.child_path || "");
+        const parent = escapeHtml(
+          row.parent != null && row.parent !== "" ? row.parent : "NULL",
+        );
+        const extracted = escapeHtml(row.extracted_parent || "—");
+        const reason = escapeHtml(row.reason_ar || row.category_ar || "");
+        return (
+          "<tr><td>" +
+          id +
+          "</td><td>" +
+          branch +
+          "</td><td>" +
+          path +
+          "</td><td>" +
+          parent +
+          "</td><td>" +
+          extracted +
+          "</td><td>" +
+          reason +
+          "</td></tr>"
+        );
+      })
+      .join("");
+  }
+
+  function renderHealthStructureAudit(audit) {
+    healthStructureAudit = audit || null;
+    if (!healthStructureCards) return;
+    healthStructureCards.innerHTML = "";
+    if (!audit || !Array.isArray(audit.categories)) {
+      healthStructureCards.innerHTML =
+        '<div class="hint">تعذر بناء ملخص سلامة الشجرة.</div>';
+      return;
+    }
+    audit.categories.forEach((cat) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className =
+        "health-structure-card " + (cat.ok ? "is-ok" : "is-warn");
+      btn.setAttribute("data-cat", cat.id);
+      const mark = cat.ok ? "✓" : "⚠";
+      btn.innerHTML =
+        '<span class="hs-mark">' +
+        mark +
+        "</span>" +
+        '<span class="hs-label">' +
+        escapeHtml(cat.label || cat.id) +
+        "</span>" +
+        '<span class="hs-count">' +
+        escapeHtml(cat.count != null ? cat.count : "—") +
+        "</span>";
+      btn.addEventListener("click", () => renderHealthStructureDetail(cat.id));
+      healthStructureCards.appendChild(btn);
+    });
+    const prefer = ["parent_null", "missing_father", "path_mismatch", "broken_relation"];
+    let start = prefer.find(
+      (id) =>
+        audit.lists &&
+        Array.isArray(audit.lists[id]) &&
+        audit.lists[id].length,
+    );
+    if (!start) start = "parent_null";
+    renderHealthStructureDetail(start);
+  }
+
   function setHealthCenterStatus(msg) {
     if (healthCenterStatus) healthCenterStatus.textContent = String(msg || "");
   }
@@ -2311,26 +2426,18 @@ where c.id = matches.id; commit;
       return;
     }
     setHealthCenterStatus("جاري تجهيز تقرير السلامة (قراءة فقط)...");
-    const { data, error } = await invokeAdminRpc("admin_integrity_report_v1", {
-      p_token: token,
-    });
-    if (!error && data) {
-      renderHealthCenterReport(data, "المصدر: admin_integrity_report_v1");
-      setHealthCenterStatus("تم تحديث التقرير من RPC (قراءة فقط).");
-      return;
-    }
-    // Fallback: client-side read-only scan when RPC not deployed yet.
     const sb = getClient();
     if (!sb) {
       setHealthCenterStatus(
-        "دالة التقرير غير منشورة بعد، وتعذر المسح المحلي. انشر supabase/sql/20260807_integrity_engine_v1.sql (قراءة فقط) — انظر docs/PATCH-INTEGRITY-DEPLOY-SQL.md",
+        "تعذر الاتصال بقاعدة البيانات لمسح سلامة الشجرة.",
       );
       return;
     }
+    let children = [];
+    let spouses = [];
+    let parents = [];
     try {
-      const children = await fetchTreeChildrenPaged(sb);
-      let spouses = [];
-      let parents = [];
+      children = await fetchTreeChildrenPaged(sb);
       try {
         const sp = await sb
           .from("tree_spouses")
@@ -2349,23 +2456,38 @@ where c.id = matches.id; commit;
       } catch (e) {
         parents = [];
       }
-      const report = buildClientIntegrityReport(children, spouses, parents);
-      renderHealthCenterReport(
-        report,
-        "المصدر: مسح محلي Integrity v2 (RPC غير منشور بعد)",
-      );
-      setHealthCenterStatus(
-        "تم المسح المحلي قراءة فقط (v2). لنشر RPC: supabase/sql/20260808_integrity_engine_v2.sql — بدون أي apply بيانات.",
-      );
     } catch (err) {
       setHealthCenterStatus(
-        "تعذر المسح: " +
-          String((err && err.message) || err || "خطأ") +
-          (error
-            ? " · RPC: " + String(error.message || error.code || "")
-            : ""),
+        "تعذر مسح الشجرة: " + String((err && err.message) || err || "خطأ"),
       );
+      return;
     }
+
+    const Struct = window.AlzidanIntegrityTreeStructure;
+    if (Struct && typeof Struct.auditTreeStructure === "function") {
+      renderHealthStructureAudit(Struct.auditTreeStructure(children, spouses));
+    } else {
+      renderHealthStructureAudit(null);
+    }
+
+    const { data, error } = await invokeAdminRpc("admin_integrity_report_v1", {
+      p_token: token,
+    });
+    if (!error && data) {
+      renderHealthCenterReport(data, "المصدر: admin_integrity_report_v1 + مسح هيكل محلي");
+      setHealthCenterStatus(
+        "تم تحديث التقرير (قراءة فقط): سلامة الشجرة محليًا + TREE-003 من RPC.",
+      );
+      return;
+    }
+    const report = buildClientIntegrityReport(children, spouses, parents);
+    renderHealthCenterReport(
+      report,
+      "المصدر: مسح محلي Integrity v2 + سلامة الهيكل",
+    );
+    setHealthCenterStatus(
+      "تم المسح المحلي قراءة فقط. TREE-003 RPC اختياري: supabase/sql/20260808_integrity_engine_v2.sql — بلا apply.",
+    );
   }
 
   async function loadSpecialCardsRows() {

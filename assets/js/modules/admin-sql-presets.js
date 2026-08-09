@@ -36,6 +36,13 @@
       file: "../supabase/sql/COPY-ME-delegate-secret-reset.sql",
       order: 30,
     },
+    {
+      id: "maint.repair_null_parent_columns_v1",
+      title: "إصلاح parent/child_name الفارغ (يدوي)",
+      desc: "Dry-run ثم APPLY اختياري لملء عمود parent من parent_name أو من مسار name — ليس إصلاحًا تلقائيًا من مركز الصحة.",
+      file: "../supabase/sql/COPY-ME-repair-null-parent-columns.sql",
+      order: 40,
+    },
   ];
 
   function loadDone() {

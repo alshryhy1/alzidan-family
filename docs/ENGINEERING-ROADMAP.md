@@ -112,7 +112,7 @@ iOS Experience Rebuild
 | **Delegates v2 — Foundation + Enforce** | 🟢 | قبول حي + «اغلاق ١» 2026-08-09 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |
-| **Health Center** | 🟢 | أساس قراءة فقط في الإدارة |
+| **Health Center** | 🟢 | أساس قراءة فقط + بطاقات **سلامة الشجرة** (parent NULL / أب مفقود / تطابق المسار) |
 | **Repair يدوي** | 🟢 | مغلق للتخطيط — لا مسار apply تلقائي من الواجهة |
 | **DateEngine (أساس + حارس ends_at)** | 🟢 | مكتبة + ADR-009 + مستهلك أوّل |
 | **DateEngine على كل النماذج** | ⚪ | ميلاد/وفاة/مناسبات — دين تقني (§ دين تقني) |
@@ -628,7 +628,7 @@ Validation (معايير القبول + KPI جزئية)
 
 ## 18) Data Integrity Engine
 
-محرك **دائم** (برنامج أ): أبناء بلا أب، أب بلا فرع، `parent_person_id`، `person_id` مكرر، cycles، زوجة بلا زوج، أبناء خارج الفرع، `approved` بلا أثر، أخبار منتهية ظاهرة. يغذي Health Center.
+محرك **دائم** (برنامج أ): أبناء بلا أب، **عمود parent=NULL**، أب مذكور بلا صف في الشجرة، تطابق المسار المستخرج من name مقابل parent، أب بلا فرع، `parent_person_id`، `person_id` مكرر، cycles، زوجة بلا زوج، أبناء خارج الفرع، `approved` بلا أثر، أخبار منتهية ظاهرة. يغذي Health Center (بطاقات سلامة الشجرة + TREE-003).
 
 **للتخطيط:** مسار Integrity قراءة فقط = 🟢 مغلق كمفهوم. نشر v2 SQL = 🟡. أي إصلاح كتابة لاحق = dry-run + موافقة صريحة (R-3) → مسار Tree Engine v2 / Repair اليدوي فقط.
 

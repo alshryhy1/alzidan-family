@@ -166,7 +166,60 @@ body.admin-authenticated #admin-requests-section #sb-status { display: none !imp
 .requests-stat-card.stat-total { background: #f8fafc; border-color: #dbeafe;
 } /* requests stats visibility fix */
 .requests-stats-box { display: block !important; width: 100%; margin-top: 12px;
-} /* requests stats 4x2 layout */
+}
+.health-structure-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 0 0 8px;
+}
+.health-structure-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  min-height: 88px;
+}
+.health-structure-card:hover,
+.health-structure-card:focus-visible {
+  border-color: #94a3b8;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.35);
+}
+.health-structure-card.is-active {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.25);
+}
+.health-structure-card.is-ok {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+}
+.health-structure-card.is-warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.health-structure-card .hs-label {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.health-structure-card .hs-count {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.health-structure-card .hs-mark {
+  font-size: 12px;
+  opacity: 0.85;
+}
+ /* requests stats 4x2 layout */
 .requests-stats-cards { grid-template-columns: repeat(4, minmax(150px, 1fr)) !important; align-items: stretch;
 } .requests-stat-card { min-height: 96px !important;
 } @media (max-width: 900px) { .requests-stats-cards { grid-template-columns: repeat(2, minmax(130px, 1fr)) !important; }
