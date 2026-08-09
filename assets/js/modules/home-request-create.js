@@ -119,23 +119,67 @@
 
     try {
       if (t === G.TYPE.ADD_PERSON) {
-        var parentPid = text(payload.parent_person_id || "");
-        var parentPath = text(payload.parent_path || payload.father_path || "");
+        var parentPid = text(payload.parent_person_id || payload.parentPersonId || "");
+        var parentPath = text(
+          payload.parent_path ||
+            payload.parentPath ||
+            payload.father_path ||
+            payload.father ||
+            ""
+        );
+        var parentPathKey = parentPath
+          .replace(/\s*\/\s*/g, "/")
+          .replace(/\s+/g, " ")
+          .trim();
+        var rows = [];
+        var seenRow = Object.create(null);
+
+        function pushRow(r) {
+          if (!r) return;
+          var key =
+            text(r.person_id) ||
+            text(r.id) ||
+            text(r.child_name || r.name || "") +
+              "|" +
+              text(r.parent_person_id || "") +
+              "|" +
+              text(r.parent_name || r.parent || "");
+          if (!key || seenRow[key]) return;
+          seenRow[key] = true;
+          rows.push(r);
+        }
+
+        // Prefer canonical parent_person_id siblings (no branch-wide LIMIT miss).
+        if (parentPid) {
+          var byPid = await client
+            .from("tree_children")
+            .select(
+              "id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name,is_deceased,deceased"
+            )
+            .eq("parent_person_id", parentPid)
+            .limit(1000);
+          (Array.isArray(byPid.data) ? byPid.data : []).forEach(pushRow);
+        }
+
+        // Branch scan for people + path fallback (RX parent_path may include spaces around /).
         var q = client.from("tree_children").select(
           "id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name,is_deceased,deceased"
         );
         if (branch) q = q.eq("branch_key", branch);
         var sibRes = await q.limit(2000);
-        var rows = Array.isArray(sibRes.data) ? sibRes.data : [];
+        (Array.isArray(sibRes.data) ? sibRes.data : []).forEach(pushRow);
+
         rows.forEach(function (r) {
           var leaf = text(r.child_name || r.name || "");
           if (leaf.indexOf("/") >= 0) leaf = leaf.split("/").filter(Boolean).slice(-1)[0] || leaf;
+          var pName = text(r.parent_name || r.parent || "");
+          var pNameKey = pName.replace(/\s*\/\s*/g, "/").replace(/\s+/g, " ").trim();
           var item = {
             id: r.id,
             person_id: r.person_id,
             parent_person_id: r.parent_person_id,
-            parent_path: r.parent_name || r.parent || "",
-            parent_name: r.parent_name || r.parent || "",
+            parent_path: pName,
+            parent_name: pName,
             child_name: r.child_name || r.name || "",
             leaf: leaf,
             branch_key: r.branch_key,
@@ -145,8 +189,12 @@
           cat.people.push(item);
           var sameParent =
             (parentPid && text(r.parent_person_id) === parentPid) ||
-            (parentPath &&
-              text(r.parent_name || r.parent || "") === parentPath);
+            (parentPathKey &&
+              (pNameKey === parentPathKey ||
+                pNameKey.endsWith("/" + parentPathKey) ||
+                parentPathKey.endsWith("/" + pNameKey) ||
+                pNameKey.endsWith("/" + parentPathKey.split("/").pop()) ||
+                parentPathKey.endsWith("/" + pNameKey.split("/").pop())));
           if (sameParent) cat.siblings.push(item);
         });
       }

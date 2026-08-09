@@ -514,30 +514,58 @@
           return q.eq("parent_person_id", parentPid);
         });
       }
-      // Fallback / supplement: name-path match within branch (never cached for this field).
-      if ((!all.length || !parentPid) && branch) {
+      // Always supplement with name/path match in-branch. Some children may lack
+      // parent_person_id; UUID-only fetch then looks "complete" while omitting them.
+      if (branch) {
         var byBranch = await pageQuery(function (q) {
           return q.eq("branch_key", branch);
         });
         var matched = byBranch.filter(function (r) {
           var pRaw = normalizePersonName(r.parent_name || r.parent || "");
           if (!pRaw) return false;
-          if (parentId && (pRaw === parentId || pRaw.indexOf(parentId) === 0)) return true;
-          var pLeaf = normalizeSearchText(getDisplayNameForNodeId(pRaw, getBranchRootName(branch)));
+          if (parentId && (pRaw === parentId || pRaw.indexOf(parentId + "/") === 0 || pRaw === parentId)) {
+            // Direct children only: parent path equals selected parent id (not deeper).
+            return pRaw === parentId;
+          }
+          var pLeaf = normalizeSearchText(
+            getDisplayNameForNodeId(pRaw, getBranchRootName(branch))
+          );
+          // Leaf-only match is too wide (many خميس). Prefer full parentId when known.
+          if (parentId) return false;
           return parentLeaf && pLeaf === parentLeaf;
         });
         if (!all.length) {
           all = matched;
         } else {
           var seenPid = new Set(
+            all
+              .map(function (r) {
+                return normalizePersonName(r.person_id || "");
+              })
+              .filter(Boolean)
+          );
+          var seenLeaf = new Set(
             all.map(function (r) {
-              return normalizePersonName(r.person_id || "");
-            }).filter(Boolean)
+              return normalizeSearchText(
+                getDisplayNameForNodeId(
+                  r.child_name || r.name || "",
+                  getBranchRootName(branch)
+                )
+              );
+            })
           );
           matched.forEach(function (r) {
             var pid = normalizePersonName(r.person_id || "");
+            var leaf = normalizeSearchText(
+              getDisplayNameForNodeId(
+                r.child_name || r.name || "",
+                getBranchRootName(branch)
+              )
+            );
             if (pid && seenPid.has(pid)) return;
+            if (!pid && leaf && seenLeaf.has(leaf)) return;
             if (pid) seenPid.add(pid);
+            if (leaf) seenLeaf.add(leaf);
             all.push(r);
           });
         }
@@ -1678,8 +1706,10 @@
 
   async function submitAddPerson() {
     if (state.busy) return;
+    state.busy = true;
     clearError();
     if (state.identityAffirmedExisting) {
+      state.busy = false;
       blockExistingPerson(state.selectedIdentity, "submit-affirmed");
       render();
       return;
@@ -1691,11 +1721,13 @@
         ""
     );
     if (selectedExistingPid) {
+      state.busy = false;
       blockExistingPerson(state.selectedIdentity, "submit-selected-person-id");
       render();
       return;
     }
     if (!state.selectedParent || !state.parentConfirmed) {
+      state.busy = false;
       setError("يلزم تأكيد السياق قبل الإرسال.");
       state.view = "confirm";
       render();
@@ -1703,17 +1735,18 @@
     }
     var sb = getClient();
     if (!sb) {
+      state.busy = false;
       setError("تعذر الإرسال لأن الربط غير مُعد.");
       render();
       return;
     }
     var Create = window.AlzidanHomeRequestCreate;
     if (!Create || typeof Create.create !== "function") {
+      state.busy = false;
       setError("حارس الهوية غير محمّل. حدّث الصفحة ثم أعد المحاولة.");
       render();
       return;
     }
-    state.busy = true;
     render();
     var f = state.facts;
     var p = state.selectedParent;
@@ -1800,7 +1833,8 @@
     var guardPayload = {
       person_name: f.personName,
       parent_person_id: parentPersonId,
-      parent_path: p.path || p.id || "",
+      // Prefer unspaced node id (matches tree_children.parent_name); path label is fallback.
+      parent_path: p.id || p.path || "",
       father: p.leaf,
       branch_key: p.branch,
       identity_affirmed_existing: !!state.identityAffirmedExisting,

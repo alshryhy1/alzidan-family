@@ -404,6 +404,33 @@ const PERSON_Y = "cccccccc-cccc-cccc-cccc-cccccccccccc";
         "payload person_id of existing tree person → block before insert"
       );
 
+      // Empty siblings but people has same leaf under same parent_person_id
+      // + different_person_same_name — must still BLOCK (حسن/خميس bypass class).
+      const emptySibBypass = Guard.evaluate(
+        "add_person",
+        {
+          person_name: "حسن",
+          parent_person_id: PARENT_A,
+          different_person_same_name: true,
+          branch_key: "مزيد",
+        },
+        {
+          siblings: [],
+          people: [
+            {
+              leaf: "حسن",
+              person_id: PERSON_X,
+              parent_person_id: PARENT_A,
+              parent_path: "مزيد بن مطلق بن زيدان/خميس/دليميك/خميس",
+            },
+          ],
+        }
+      );
+      assert(
+        emptySibBypass.verdict === "block" && emptySibBypass.code === "ADD_PERSON_EXISTS",
+        "empty siblings + people same parent + diffName → block"
+      );
+
       // create() must not insert when camelCase catalog proves same parent
       Create.resetLocksForTests();
       let uiInserts = 0;

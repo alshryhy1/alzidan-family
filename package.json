@@ -19,6 +19,7 @@
     "verify:uuid-primary-father": "node scripts/test-uuid-primary-father.js",
     "verify:uuid-link-diagnosis": "node scripts/test-uuid-link-diagnosis.js",
     "verify:dup-identity": "node scripts/test-dup-identity-guard.js",
+    "verify:hasan-khamis": "node scripts/test-hasan-khamis-add-person.js",
     "repair:dry-run": "node scripts/repair-parent-person-id.mjs --snapshot",
     "repair:ali-dual": "node scripts/repair-ali-dual-children.mjs",
     "repair:ali-unlink": "node scripts/repair-ali-dual-unlink.mjs"

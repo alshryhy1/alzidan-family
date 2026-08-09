@@ -270,11 +270,10 @@
       });
     }
 
-    var sameParent = [];
-    siblings.forEach(function (row) {
-      if (!row) return;
+    function isSameParentRow(row, opts) {
+      if (!row) return false;
       var leaf = rowLeaf(row);
-      if (!leaf || !nameQ || leaf !== nameQ) return;
+      if (!leaf || !nameQ || leaf !== nameQ) return false;
       var rowParentPid = rowParentPersonId(row);
       var rowPPath = rowParentPath(row);
       var samePid = parentPid && rowParentPid && parentPid === rowParentPid;
@@ -282,10 +281,22 @@
       // Sibling lists from RX are already scoped to the chosen parent — leaf match is enough
       // when the row has no parent id (camelCase-only bugs) but list provenance is parent-scoped.
       var scopedSibling =
-        !!parentPid && !rowParentPid && (!rowPPath || samePath || !parentPath);
-      if (samePid || (samePath && (!parentPid || !rowParentPid || samePid)) || scopedSibling) {
-        sameParent.push(row);
-      }
+        !!(opts && opts.allowScoped) &&
+        !!parentPid &&
+        !rowParentPid &&
+        (!rowPPath || samePath || !parentPath);
+      return !!(samePid || (samePath && (!parentPid || !rowParentPid || samePid)) || scopedSibling);
+    }
+
+    var sameParent = [];
+    siblings.forEach(function (row) {
+      if (isSameParentRow(row, { allowScoped: true })) sameParent.push(row);
+    });
+    // Critical: also scan `people`. If siblings catalog was empty/incomplete but the branch
+    // people list still has this leaf under the same parent_person_id/path, block.
+    // «شخص آخر بنفس الاسم» must NOT bypass a proven same-parent child.
+    people.forEach(function (row) {
+      if (isSameParentRow(row, { allowScoped: false })) sameParent.push(row);
     });
 
     if (sameParent.length) {
