@@ -1,0 +1,238 @@
+/* Request Experience — visitor intent-first (RX-1) */
+.rx-shell {
+  background: linear-gradient(160deg, rgba(240, 253, 244, 0.95), rgba(255, 255, 255, 0.98));
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 18px;
+  padding: 18px 16px 20px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+}
+.rx-shell-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.rx-kicker {
+  font-size: 12px;
+  font-weight: 800;
+  color: #047857;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+.rx-title {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.35;
+  color: #064e3b;
+}
+.rx-sub,
+.rx-lead,
+.rx-note,
+.rx-muted {
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+.rx-sub,
+.rx-muted {
+  color: #475569;
+  font-size: 0.95rem;
+}
+.rx-lead {
+  color: #0f172a;
+  font-size: 1.05rem;
+}
+.rx-note {
+  background: rgba(236, 253, 245, 0.85);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #065f46;
+  font-size: 0.95rem;
+}
+.rx-alert {
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+.rx-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+.rx-intent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.rx-intent-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: right;
+  width: 100%;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.rx-intent-card:hover {
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+.rx-intent-label {
+  font-weight: 900;
+  color: #064e3b;
+  font-size: 1.05rem;
+}
+.rx-intent-blurb {
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.rx-intent-badge {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.rx-track {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(15, 118, 110, 0.2);
+}
+.rx-track h3 {
+  margin: 0 0 6px;
+  color: #064e3b;
+  font-size: 1.1rem;
+}
+.rx-track-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.rx-track-list li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+.rx-track-status {
+  font-weight: 800;
+  color: #047857;
+  font-size: 0.92rem;
+}
+.rx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.rx-form {
+  display: grid;
+  gap: 12px;
+}
+.rx-field {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.rx-field input,
+.rx-field select {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+}
+.rx-fieldset {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.rx-fieldset legend {
+  padding: 0 6px;
+  font-weight: 900;
+  color: #064e3b;
+}
+.rx-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.rx-search-item {
+  width: 100%;
+  text-align: right;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #dbeafe;
+  background: #f8fafc;
+  cursor: pointer;
+}
+.rx-search-item:hover {
+  border-color: #34d399;
+  background: #ecfdf5;
+}
+.rx-path {
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.rx-selected,
+.rx-confirm-card,
+.rx-review,
+.rx-done {
+  background: #fff;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 14px;
+  padding: 14px;
+}
+.rx-review dl {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.rx-review dl > div {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+}
+.rx-review dt {
+  margin: 0;
+  color: #64748b;
+  font-weight: 700;
+}
+.rx-review dd {
+  margin: 0;
+  font-weight: 800;
+  color: #0f172a;
+}
+@media (max-width: 640px) {
+  .rx-review dl > div {
+    grid-template-columns: 1fr;
+  }
+  .rx-shell-head {
+    flex-direction: column;
+  }
+}

@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="../assets/css/main.css?v=20260808ux" />
     <link rel="stylesheet" href="../assets/css/person-card.css?v=1782540603" />
     <link rel="stylesheet" href="../assets/css/legal.css?v=2026071207" />
+    <link rel="stylesheet" href="../assets/css/request-experience.css?v=20260809rx1" />
 </head>
   <body>
     <div class="page">
@@ -50,6 +51,7 @@
         <div id="member-profile-entry" class="member-profile-entry" style="display:none;"></div><nav>
           <a href="#branches">فروع العائلة</a
           ><a href="#fund">صندوق تراحم عائلة الزيدان</a
+          ><a href="#request-experience">قدّم طلبًا</a
           ><a href="#events">المناسبات</a><a href="#search">البحث</a
           ><a href="#stats">الإحصائيات</a><a href="memory/">🕊️ من الذاكرة</a><a href="#about">عن الموقع</a
           ><a
@@ -357,6 +359,18 @@
           </div>
         </details>
       </section>
+      <section id="request-experience" class="section">
+        <div class="section-header">
+          <div>
+            <div class="section-title">قدّم طلبًا</div>
+            <div class="section-sub">
+              تجربة الطلب (RX-1): نية أولًا · ابدأ الآن للدخول فقط · أرسل الطلب
+              للمراجعة في النهاية — بلا حفظ مباشر في الشجرة.
+            </div>
+          </div>
+        </div>
+        <div data-rx-root></div>
+      </section>
       <section id="tree" class="section">
         <div class="section-header">
           <div
@@ -366,195 +380,6 @@
           ></div>
         </div>
         <div id="home-tree-body" class="tree-list"></div>
-        <details
-          class="toggle-card"
-          data-accordion="tree-actions"
-          data-tree-attn
-          style="margin-top: 12px"
-        >
-          <summary class="toggle-summary">
-            <span class="toggle-icon" aria-hidden="true"
-              ><svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#047857"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 5v14"></path>
-                <path d="M5 12h14"></path></svg></span
-            ><span class="toggle-text"
-              ><span class="toggle-title">إضافة بيانات للشجرة</span
-              ><span class="toggle-sub"
-                >إرسال بطاقة مباشرة للإدارة للمراجعة والإضافة.</span
-              ></span
-            >
-          </summary>
-          <div class="toggle-body">
-            <div class="note" style="margin-bottom: 10px">
-              يرجى تعبئة البيانات العربية فقط. سيتم إرسالها للإدارة ثم مراجعتها
-              واعتمادها.
-            </div>
-            <form class="founder-form" data-tree-card-form>
-              <div class="founder-grid">
-                <div class="founder-field">
-                  <label for="tree-card-branch">العائلة (إجباري)</label
-                  ><select id="tree-card-branch" name="branch" required>
-                    <option value="">اختر العائلة</option>
-                    <option value="زيدان">زيدان</option>
-                    <option value="مزيد">مزيد</option>
-                    <option value="زايد">زايد</option>
-                    <option value="لاحم">لاحم</option>
-                    <option value="ملحم">ملحم</option>
-                  </select>
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-grandfather">الجد 1 (إجباري)</label
-                  ><input
-                    id="tree-card-grandfather"
-                    name="grandfather"
-                    type="text"
-                    autocomplete="off"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-grandfather-2">الجد 2 (اختياري)</label
-                  ><input
-                    id="tree-card-grandfather-2"
-                    name="grandfather2"
-                    type="text"
-                    autocomplete="off"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-grandfather-3">الجد 3 (اختياري)</label
-                  ><input
-                    id="tree-card-grandfather-3"
-                    name="grandfather3"
-                    type="text"
-                    autocomplete="off"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-grandfather-4">الجد 4 (اختياري)</label
-                  ><input
-                    id="tree-card-grandfather-4"
-                    name="grandfather4"
-                    type="text"
-                    autocomplete="off"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-father">الأب (إجباري)</label
-                  ><input
-                    id="tree-card-father"
-                    name="father"
-                    type="text"
-                    autocomplete="off"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-name">الاسم (إجباري)</label
-                  ><input
-                    id="tree-card-name"
-                    name="name"
-                    type="text"
-                    autocomplete="off"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-dob">تاريخ الميلاد (اختياري)</label
-                  ><input id="tree-card-dob" name="dob" type="date" />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-city">المدينة (اختياري)</label
-                  ><input
-                    id="tree-card-city"
-                    name="city"
-                    type="text"
-                    autocomplete="address-level2"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-area">الحي/القرية (اختياري)</label
-                  ><input
-                    id="tree-card-area"
-                    name="area"
-                    type="text"
-                    autocomplete="address-level3"
-                  />
-                </div>
-                <div class="founder-field" style="grid-column: 1 / -1">
-                  <label>الأبناء (اختياري)</label>
-                  <div data-tree-card-children></div>
-                  <div class="info-actions" style="margin-top: 10px">
-                    <button
-                      class="btn btn-outline btn-sm"
-                      type="button"
-                      data-tree-card-add-child
-                    >
-                      إضافة ابن/ابنة
-                    </button>
-                  </div>
-                </div>
-                <div class="founder-field" style="grid-column: 1 / -1">
-                  <div class="note" style="margin: 0 0 10px">
-                    بيانات المرسل (للرجوع إليه)
-                  </div>
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-submit-name">اسم المرسل (إجباري)</label
-                  ><input
-                    id="tree-card-submit-name"
-                    name="submitterName"
-                    type="text"
-                    autocomplete="name"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-submit-phone">رقم الجوال (إجباري)</label
-                  ><input
-                    id="tree-card-submit-phone"
-                    name="submitterPhone"
-                    type="tel"
-                    inputmode="tel"
-                    placeholder="05xxxxxxxx"
-                    autocomplete="tel"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="tree-card-submit-email"
-                    >البريد الإلكتروني (اختياري)</label
-                  ><input
-                    id="tree-card-submit-email"
-                    name="submitterEmail"
-                    type="email"
-                    inputmode="email"
-                    autocomplete="email"
-                  />
-                </div>
-              </div>
-              <div class="info-actions">
-                <button class="btn btn-primary" type="submit">
-                  إرسال البطاقة للإدارة</button
-                ><button
-                  class="btn btn-outline"
-                  type="button"
-                  data-tree-card-cancel
-                >
-                  إلغاء
-                </button>
-              </div>
-              <div class="founder-alert" data-tree-card-alert></div>
-            </form>
-          </div>
-        </details>
       </section>
       <section id="fund" class="section">
         <details class="toggle-card" data-accordion="initiatives">
@@ -1370,6 +1195,7 @@
     <script src="../assets/js/modules/events/event-visibility.js?v=2026080720"></script>
     <script src="../assets/js/event-submit.js"></script>
     <script src="../assets/js/app.js?v=2026080720"></script>
+    <script src="../assets/js/modules/request-experience.js?v=20260809rx1"></script>
     <script src="../assets/js/public-marriage-stats.js?v=20260702"></script>
     <script src="../assets/js/modules/date-engine.js?v=20260808de"></script>
     <script src="../assets/js/poll.js?v=20260808ux"></script>
