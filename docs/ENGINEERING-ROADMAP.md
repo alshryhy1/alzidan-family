@@ -3,7 +3,7 @@
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-09 — بوابة 1 🟢 («اغلاق ١») · بوابة 2 🟢 («ابدا») · رحلة القرار ✅ معتمدة («ابدا») — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) · المرحلة الحالية: **Request Experience** 🟡 جاهزة للمراجعة النهائية — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · لا كود حتى الاعتماد · لا كود DW · لا تجميل legacy مندوب
+**آخر تحديث تخطيط:** 2026-08-09 — بوابة 1 🟢 («اغلاق ١») · بوابة 2 🟢 («ابدا») · رحلة القرار ✅ معتمدة («ابدا») — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) · المرحلة الحالية: **Request Experience** 🟢 معتمدة («اعتمدوا Request Experience») — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · تنفيذ RX-Build على شرائح · لا كود DW · لا تجميل legacy مندوب
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 ### دستور المنصة مقابل هذه الخارطة
@@ -23,7 +23,7 @@
 مرجع مرحلة مستقلة: [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md).  
 مراجعة رحلة الطلب كاملة (as-is → to-be · قبل أي RX/DW UI): [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md).  
 **رحلة الطلب + القرار لكل نوع:** [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — ✅ معتمدة («ابدا» 2026-08-09) · مرشّحات فهرس (زوجة/أبناء/ميلاد) ⬛ مؤجّلة.  
-**Request Experience (تصميم):** [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) — 🟡 جاهزة للمراجعة النهائية · **لا كود حتى «اعتمدوا Request Experience»** · **لا كود DW**.
+**Request Experience:** [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) — 🟢 معتمدة («اعتمدوا Request Experience» 2026-08-09) · **RX-Build مفتوح على شرائح** · **لا كود DW**.
 
 وثيقة التنفيذ الهندسية الرسمية لمشروع عائلة الزيدان. المنصة = **معرفة عائلية + سير اعتماد** — ليست شجرة فقط. تُدار كـ**برنامج مشاريع** بثلاثة مسارات + طبقات معمارية ثابتة + بنية تحتية مشتركة.
 
@@ -78,7 +78,7 @@ iOS Experience Rebuild
 
 **ملاحظة Workflow على main:** أساس Workflow Engine v1 الموجود = **مؤقت / provisional** — لا يُوسَّع كإنتاج حتى تُنشأ مرحلة Validation Engine وتتم المواءمة.
 
-**الهدف التنفيذي الحالي:** رحلة القرار ✅ → **مراجعة نهائية لتصميم Request Experience** 🟡 — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) → اعتماد («اعتمدوا Request Experience») → ثم كود RX → Validation Engine → إغلاق Workflow على السلّم. iOS **بعد** المراحل الكانونية فقط.
+**الهدف التنفيذي الحالي:** Request Experience 🟢 معتمدة («اعتمدوا Request Experience») → **RX-Build على شرائح** — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) §12.1 → ثم Validation Engine → إغلاق Workflow على السلّم. iOS **بعد** المراحل الكانونية فقط.
 
 ---
 
@@ -119,7 +119,7 @@ iOS Experience Rebuild
 | **Admin-SC / قائمة البطاقات** | 🟡 | حفظ ✅؛ قائمة **بانتظار SQL** `admin_special_cards_list_v1` إن لم يُطبَّق |
 | **TREE-004** | 🟢 | عزل أبناء + unlink يدوي مكتمل؛ **لا يُعاد** |
 | **Product Foundation (بوابة 2)** | 🟢 | **دستور حي** مجمّد («ابدا» 2026-08-09) — Truth Before Speed · Single Write · قاعدة الطبقة · VE — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) |
-| **Request Experience** | 🟡 | جاهزة للمراجعة النهائية — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · رحلة القرار ✅ · **لا يُشترط** Workflow 🟢 · كود بعد «اعتمدوا Request Experience» |
+| **Request Experience** | 🔵 | 🟢 UX معتمد («اعتمدوا Request Experience» 2026-08-09) — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · RX-Build شرائح · **لا يُشترط** Workflow 🟢 · لا DW |
 | **Validation Engine** | ⚪ | مرحلة مستقلة بعد RX — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **Workflow Engine v1** | 🟡 | أساس **provisional** على main — إغلاق (سلامة + إزالة مسار قديم) **عند مرحلته** بعد Validation — لا توسيع قبلها — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
 | **Delegate Workspace v1** | ⚪ | UX ✅ معتمد («ابدا») — [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) · **كود ❄️** حتى RX→VE→WF · رحلة: [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) · قرار: [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) ✅ |
@@ -299,7 +299,7 @@ Search Name        ← للبحث/التطبيع
 | **Admin Hub / Redesign** | شِلّ موديولات (عرض فقط — بلا منطق سير) | 🟢 أساس · تكراري |
 | **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟢 **بوابة 1** — مغلقة («اغلاق ١» 2026-08-09) — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) |
 | **Product Foundation** | **دستور حي** + Truth Before Speed — تجميد لا «مرحلة docs» | 🟢 **بوابة 2** — مجمّد («ابدا» 2026-08-09) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) |
-| **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | 🟡 جاهزة للمراجعة النهائية — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · رحلة قرار ✅ |
+| **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | 🔵 UX 🟢 معتمد — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · RX-Build شرائح |
 | **Validation Engine** | تحقق قبل المندوب/الشجرة — لا تنفيذ | ⚪ — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **Workflow Engine v1** | حالات · تعيين · سجل · إزالة مسار اعتماد قديم · إعلان استقرار | 🟡 أساس **provisional** — إغلاق عند مرحلته بعد Validation — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
 | **Delegate Workspace v1** | موديولات تنفيذ المندوب فوق المحرك | ⚪ — بعد Workflow على السلّم |
@@ -429,13 +429,13 @@ DateEngine  مكتبة + حارس ends_at
 TREE-004    عزل حالة الأبناء
 ```
 
-### بعد البوابتين 🟢 — رحلة القرار ✅ · RX 🟡 مراجعة نهائية · أساس مؤقت
+### بعد البوابتين 🟢 — رحلة القرار ✅ · RX 🟢 معتمدة · RX-Build شرائح · أساس مؤقت
 
 ```
 بوابة 1  Delegates v2 — 🟢 مغلقة («اغلاق ١» 2026-08-09)
 بوابة 2  Product Foundation — 🟢 مجمّد («ابدا» 2026-08-09) — دستور حي + Truth Before Speed
 —        رحلة القرار ✅ معتمدة («ابدا» 2026-08-09)
-—        Request Experience — 🟡 جاهزة للمراجعة النهائية — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md)
+—        Request Experience — 🟢 معتمدة («اعتمدوا Request Experience» 2026-08-09) — RX-Build شرائح
 —        Workflow Engine v1 foundation = provisional على main (لا توسيع قبل Validation)
 —        tree-import reuse SQL · Integrity Engine v2 SQL · Admin-SC-List (إن لزم)
 —        كود DW ❄️ · تجميل legacy مندوب ❄️
@@ -449,7 +449,7 @@ TREE-004    عزل حالة الأبناء
 ★ 2  Product Foundation           دستور حي + Truth Before Speed — مجمّد («ابدا» 2026-08-09)     🟢
 —    رحلة القرار                  معتمدة («ابدا» 2026-08-09)                                    ✅
 ═══ بعد البوابتين 🟢 — السلّم ═══
-     Request Experience           نية المستخدم — 🟡 جاهزة للمراجعة النهائية                     🟡
+     Request Experience           نية المستخدم — 🟢 UX معتمد · 🔵 RX-Build شرائح                🔵
      Validation Engine            تحقق مستقل — لا تنفيذ                                      ⚪
      Workflow Engine              سلامة + إزالة مسار اعتماد قديم + إعلان استقرار             🟡 provisional
      Delegate Workspace v1        تنفيذ فوق المحرك                                           ⚪
@@ -473,7 +473,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر وما يُمنع 
 | **B عرض** | Patch Mobile 36 | ج (عرض) | 🟢 |
 | **C أخبار/كاش** | Patch News Expiry | ج/كاش | 🟢 |
 | **D إصلاح/سلامة** | Repair · Integrity · Health | أ | 🟢 أساس · 🟡 Integrity v2 SQL |
-| **E إدارة/سير** | بوابة 1 🟢 · بوابة 2 🟢 · رحلة قرار ✅ → RX 🟡 مراجعة نهائية → Validation → Workflow → DW → Admin UX → Family Align → iOS | ب | 🟢 P1 · 🟢 Gate 1 · 🟢 Gate 2 · ✅ رحلة قرار · 🟡 RX مراجعة نهائية · 🟡 WE provisional · ⚪ الباقي |
+| **E إدارة/سير** | بوابة 1 🟢 · بوابة 2 🟢 · رحلة قرار ✅ → RX 🟢 معتمد · RX-Build شرائح → Validation → Workflow → DW → Admin UX → Family Align → iOS | ب | 🟢 P1 · 🟢 Gate 1 · 🟢 Gate 2 · ✅ رحلة قرار · 🟢 RX معتمد · 🔵 RX-Build · 🟡 WE provisional · ⚪ الباقي |
 | **F UX موبايل / iOS** | إعادة بناء تجربة iOS · بحث · عضو · إشعارات · … | ج | ⬛ |
 | **I بنية تحتية** | DateEngine عبر كل الأسطح | — | 🟢 أساس · ⚪ تعميم النماذج |
 | **T Tree Engine v2** | person_id-only · merge · move · dry-run | أ/ب | ⚪ |
@@ -540,7 +540,7 @@ Validation (معايير القبول + KPI جزئية)
 | **Admin-P1** | Redesign شِلّ | 🟢 | تكراري |
 | **Admin-P2** | Delegates v2 | 🟢 | بوابة 1 مغلقة («اغلاق ١» 2026-08-09) — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
 | **PF-0** | Product Foundation | 🟢 | بوابة 2 — دستور حي مجمّد («ابدا» 2026-08-09) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) |
-| **RX-v1** | Request Experience | 🟡 | جاهزة للمراجعة النهائية — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · رحلة قرار ✅ («ابدا») · كود بعد الاعتماد |
+| **RX-v1** | Request Experience | 🔵 | 🟢 UX معتمد («اعتمدوا Request Experience» 2026-08-09) — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · RX-Build شرائح (§12.1) |
 | **VE-v1** | Validation Engine | ⚪ | مرحلة مستقلة — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **WE-v1** | Workflow Engine v1 | 🟡 | provisional على main — إغلاق عند مرحلته بعد VE |
 | **DW-v1** | Delegate Workspace v1 | ⚪ | UX معتمد («ابدا») · كود بعد Workflow على السلّم |
@@ -723,20 +723,22 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 الوثائق الأربع + مبادئ Single Write / قاعدة الطبقة / Truth Before Speed / Validation Engine **مجمّدة** كدستور حي.
 
-### المرحلة — Request Experience 🟡 (جاهزة للمراجعة النهائية)
+### المرحلة — Request Experience 🔵 (UX 🟢 معتمد · RX-Build شرائح)
 
-**بوابة:** البوابتان 🟢 + رحلة القرار ✅ («ابدا» 2026-08-09). **لا يُشترط** Workflow Engine 🟢. الواجهة تجمع النية/الحقائق — لا تبني الشجرة.  
-**مواصفة التصميم:** [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) — 🟡 جاهزة للمراجعة النهائية · **لا كود حتى «اعتمدوا Request Experience»** · مرشّحات فهرس ⬛ خارج النطاق (مؤجّل ≠ ملغى).
+**بوابة:** البوابتان 🟢 + رحلة القرار ✅ («ابدا» 2026-08-09) + اعتماد RX («اعتمدوا Request Experience» 2026-08-09). **لا يُشترط** Workflow Engine 🟢. الواجهة تجمع النية/الحقائق — لا تبني الشجرة.  
+**مواصفة التصميم:** [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) — 🟢 معتمدة · تنفيذ على شرائح (§12.1) · مرشّحات فهرس ⬛ خارج النطاق (مؤجّل ≠ ملغى).
 
 | بند | قاعدة |
 |-----|--------|
 | السؤال المحوري | **ماذا تريد أن تفعل؟** — ليس «اختر نوع البطاقة» |
 | النوايا | من [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) فقط (A–F زائر · G إدارة) |
 | نماذج قصيرة | النظام يبني الباقي — No Database Thinking + لغة المستخدم أولًا |
+| الأزرار | **ابدأ الآن** = دخول فقط · **أرسل الطلب للمراجعة** = إرسال نهائي |
 | التتبع | مسار حالات إنساني ([`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)) |
 | تسليم VE | حقائق + نوع → يمر / نحتاج معلومة / مرفوض تحقق |
 | لا منطق اعتماد/تحقق أعمال | لا تعيين/انتقال/تحقق أعمال داخل الواجهة |
 | خارج النطاق | كود DW · تجميل legacy مندوب · نوايا مرشّحة بلا فهرس |
+| شرائح متبقية بعد RX-1 | tree_edit · event_death · event_marriage · memory_card · special_card · تتبّع كامل |
 
 ### المرحلة — Validation Engine ⚪ (مستقلة — ليست ملاحظة داخل Workflow)
 
@@ -864,7 +866,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 - `new Date(...)` لتواريخ أعمال خارج DateEngine (ADR-009 / R-5)
 - تخزين سنة هجرية في أعمدة timestamp ميلادية
 - اعتبار ملف SQL في المستودع = 🟢 دون تطبيق واختبار قبول
-- القفز إلى كود إنتاج RX قبل اعتماد مواصفة [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · أو كود DW قبل RX→VE→WF · أو تجاهل الدستور الحي المجمّد · أو فتح نوايا مرشّحة بلا صف فهرس
+- كود DW قبل RX→VE→WF · أو تجاهل الدستور الحي المجمّد · أو فتح نوايا مرشّحة بلا صف فهرس · أو Big Bang RX بدل الشرائح المعتمدة
 - تجاهل **قاعدة بوابة الميزة** (§1ب) أو الدستور الحي عند تصميم ميزة جديدة
 - مصطلحات محظورة في الواجهة (JSON · Parent · tree_card كعنوان · …) — [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)
 - تكرار منطق التحقق في صفحات متعددة (خرق Zero Duplicate Logic)
@@ -880,10 +882,11 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 | 🟢 | **بوابة 1** Delegates v2 — مغلقة («اغلاق ١» 2026-08-09) |
 | 🟢 | **بوابة 2** Product Foundation — مجمّد («ابدا» 2026-08-09) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) |
 | ✅ | رحلة القرار معتمدة («ابدا» 2026-08-09) — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) |
-| 🟡 | **Request Experience** جاهزة للمراجعة النهائية — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · لا كود حتى الاعتماد |
+| 🟢 | **Request Experience UX** معتمد («اعتمدوا Request Experience» 2026-08-09) — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) |
+| 🔵 | **RX-Build** على شرائح — RX-1 أولًا (نية + أضف فردًا) ثم RX-2…RX-7 |
 | 🟡 | DW UX معتمد («ابدا») بلا كود · Workflow provisional · tree-import · Integrity v2 · (Admin-SC-List إن لزم) |
 | ⚪ | Multi-stage فوق Workflow — ليس حاجزًا لإغلاق صلاحيات v2 |
-| ⚪ | كود RX (بعد اعتماد التصميم) · Validation Engine · (إغلاق Workflow عند مرحلته) · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 |
+| ⚪ | Validation Engine · (إغلاق Workflow عند مرحلته) · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 |
 | ⬛ | مرشّحات فهرس (زوجة/أبناء/ميلاد…) · iOS Experience Rebuild — برنامج (ج) |
 
 المرجع طويل الأمد: **الدستور الحي** · قاعدة الطبقة · لغة المستخدم · Truth Before Speed · Validation Engine · Single Write Rule · المعمارية · ADR · Versioning · Rollback · KPI · DoD · قواعد الانحدار · البرامج الثلاثة.
@@ -893,9 +896,9 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 **الخطوة التالية الفورية (لا قفز) — 2026-08-09:**  
 (0) UX مساحة المندوب ✅ معتمد — **لا يفتح كود DW** · الصفحة الحالية legacy  
 (1) **بوابة 1** 🟢 · **بوابة 2** 🟢 · **رحلة القرار** ✅ («ابدا») — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)  
-(2) **الآن:** مراجعة نهائية لتصميم Request Experience 🟡 — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) — عبارة الاعتماد: **«اعتمدوا Request Experience»**  
-(3) **بعد اعتماد تصميم RX:** كود RX → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace (كود) → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
+(2) **Request Experience** 🟢 معتمدة («اعتمدوا Request Experience») — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md)  
+(3) **الآن:** RX-Build شريحة بشريحة (§12.1) — بعد RX → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace (كود) → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
 
-لا توسيع Workflow provisional · لا كود DW / تجميل legacy مندوب · لا نوايا مرشّحة بلا فهرس · لا كود إنتاج RX قبل «اعتمدوا Request Experience».
+لا توسيع Workflow provisional · لا كود DW / تجميل legacy مندوب · لا نوايا مرشّحة بلا فهرس · لا Big Bang لـ RX.
 
 **تسليم SQL لـ Supabase:** افتح ملف `.sql` → Select All → Copy. لا تنسخ من الشات (أسوار Markdown تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.
