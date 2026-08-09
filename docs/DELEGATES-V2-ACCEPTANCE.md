@@ -149,7 +149,7 @@
 | اعتماد متعدد المراحل | ⚪ فوق Workflow Engine لاحقًا |
 | واجهة منح/سحب عمليات أدق من الدور | خارج شريحة القبول |
 | Delegate Workspace / تحسين `delegate.js` تجميليًا | مجمّد |
-| Request Experience | بعد بوابة 2 🟢 + «اعتمدوا رحلة القرار» — تصميم أولًا |
+| Request Experience | رحلة قرار ✅ — تصميم 🔵 [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) |
 
 ---
 
@@ -164,7 +164,7 @@
 
 | قرار | المعنى |
 |------|--------|
-| **كل الخانات في §6 ✅** | بوابة 1 → 🟢 — PHASE2 + الخارطة محدَّثان · بوابة 2 🟢 مجمّدة («ابدا») — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) · **التالي:** «اعتمدوا رحلة القرار» |
+| **كل الخانات في §6 ✅** | بوابة 1 → 🟢 — PHASE2 + الخارطة محدَّثان · بوابة 2 🟢 مجمّدة («ابدا») — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) · رحلة قرار ✅ · **التالي:** مراجعة تصميم RX |
 | **أي فشل** | ابقَ 🟡 — سجّل رقم الخطوة + نص الرسالة على الشاشة · **لا** برمجة ميزات جديدة |
 
 **لا** يُفتح كود Delegate Workspace من هذه البوابة.
@@ -193,4 +193,5 @@
 - [x] §6 كل البنود الأربعة ✅
 - [x] تحديث PHASE2 + ENGINEERING-ROADMAP إلى 🟢 بعد إبلاغ صاحب المنتج
 - [x] بعده: تجميد بوابة 2 («ابدا» 2026-08-09) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)
-- [ ] بعده: «اعتمدوا رحلة القرار» — **ثم فقط** Request Experience (تصميم أولًا)
+- [x] بعده: رحلة القرار ✅ («ابدا» 2026-08-09) — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)
+- [ ] بعده: اعتماد تصميم Request Experience — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md)

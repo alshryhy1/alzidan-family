@@ -3,11 +3,11 @@
 **الحالة:** 🟢 **منشور ومختبر** — قبول حي ناجح · إغلاق بوابة 1 بتأكيد صاحب المنتج «اغلاق ١» (2026-08-09)  
 **التاريخ:** 2026-08-08 · **آخر تحديث قبول:** 2026-08-09  
 **قائمة القبول:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)  
-**التالي بعد بوابة 2 🟢:** عبارة المنتج **«اعتمدوا رحلة القرار»** ثم Request Experience (تصميم أولًا) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) · [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)  
+**التالي:** رحلة القرار ✅ («ابدا») · مراجعة تصميم Request Experience — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) · [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 · برنامج (ب) · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md) · [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)
 
-> **ملاحظة إدارة مشروع:** بوابة 1 = 🟢 · بوابة 2 Product Foundation = 🟢 مجمّدة («ابدا» 2026-08-09).  
-> **2026-08-09:** اعتماد UX («ابدا») لا يفتح DW. مسار القبول→الدخول + الأرقام العربية مقبولان حيًا. لا كود RX حتى «اعتمدوا رحلة القرار».
+> **ملاحظة إدارة مشروع:** بوابة 1 = 🟢 · بوابة 2 = 🟢 · رحلة القرار ✅ («ابدا» 2026-08-09).  
+> **2026-08-09:** اعتماد UX المندوب («ابدا») لا يفتح DW. لا كود إنتاج RX قبل اعتماد مواصفة التصميم · لا تجميل legacy مندوب.
 
 ## الهدف
 
@@ -78,11 +78,12 @@
 ## التالي (خارج هذه الشريحة)
 
 1. **بوابة 2:** ✅ مجمّدة («ابدا» 2026-08-09) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md).
-2. **الآن:** اعتماد رحلة القرار بعبارة **«اعتمدوا رحلة القرار»** — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — ثم RX (تصميم أولًا).
-3. منطق Multi-stage فوق **Workflow Engine** (ليس الآن).
-4. واجهة منح/سحب صلاحيات عمليات أدق من قائمة الدور.
-5. Event Bus بعد تغيير صلاحيات (ADR-003).
-6. **لا** كود Delegate Workspace رغم اعتماد UX («ابدا») — السلّم: RX → VE → WF أولًا.
+2. **رحلة القرار:** ✅ معتمدة («ابدا» 2026-08-09) — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md).
+3. **الآن:** مراجعة تصميم Request Experience — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md).
+4. منطق Multi-stage فوق **Workflow Engine** (ليس الآن).
+5. واجهة منح/سحب صلاحيات عمليات أدق من قائمة الدور.
+6. Event Bus بعد تغيير صلاحيات (ADR-003).
+7. **لا** كود Delegate Workspace رغم اعتماد UX («ابدا») — السلّم: RX → VE → WF أولًا.
 
 ## Compatibility
 

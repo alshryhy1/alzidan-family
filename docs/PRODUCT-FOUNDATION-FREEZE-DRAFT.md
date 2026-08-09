@@ -36,9 +36,9 @@
 ## بعد 🟢 بوابة 2 مباشرة
 
 ```
-اعتمدوا رحلة القرار   ← عبارة المنتج التالية
+رحلة القرار ✅ («ابدا» 2026-08-09)
         ↓
-Request Experience (تصميم أولًا)
+Request Experience (تصميم) — راجع REQUEST-EXPERIENCE-UX-v1.md
         ↓
 Validation Engine
         ↓

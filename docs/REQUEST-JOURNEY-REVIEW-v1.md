@@ -1,6 +1,7 @@
 # مراجعة رحلة الطلب كاملة — v1
 
-**الحالة:** تحليل / تصميم تجربة — **ليست** شريحة تنفيذ · توسعة القرار: [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) 🟡 مسودة  
+**الحالة:** تحليل / تصميم تجربة — **ليست** شريحة تنفيذ · رحلة القرار: [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) ✅ معتمدة («ابدا») · RX تصميم: [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) 🔵  
+
 **التاريخ:** 2026-08-09  
 **النوع:** وثيقة رحلة (as-is → to-be) تربط الصفحة الرئيسية · الإدارة · Workflow · المندوب · الشجرة  
 **المراجع الدستورية:**  
@@ -12,13 +13,13 @@
 
 > لا تُراجع صفحة المندوب بمعزل. الرحلة وحدة واحدة: **رئيسية → إدارة/تحقق → مندوب → أثر على الشجرة → عودة أثر للإدارة**.  
 > **لا تطوير لواجهة المندوب الآن.** الصفحة الحالية = **legacy**. إعادة التصميم تنتظر السلّم: RX → VE → WF.  
-> **توسعة إلزامية قبل أي كود:** رحلة **الطلب + القرار** لكل نوع طلب — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — بانتظار «اعتمدوا رحلة القرار».
+> **رحلة القرار:** ✅ معتمدة («ابدا» 2026-08-09). **التالي:** مراجعة تصميم Request Experience — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md).
 
 | سؤال | جواب |
 |-------|------|
 | هل نبدأ كود Delegate Workspace؟ | **لا** — UX معتمد («ابدا») والتنفيذ ❄️ مجمّد |
 | هل نجمّل `alzidan-tree.html`؟ | **لا** — تجميد تجميلي؛ إصلاحات حرجة فقط |
-| الخطوة التالية على الخارطة؟ | إغلاق **بوابة 1** (قبول Delegates) → **بوابة 2** (تجميد الدستور) → تصميم **Request Experience** |
+| الخطوة التالية على الخارطة؟ | مراجعة/اعتماد تصميم **Request Experience** ثم كود RX → VE → WF |
 
 ---
 
@@ -189,9 +190,10 @@ Family Engine / الخدمات            ← كتابة واحدة فقط
 
 ```
 ✅ بوابة 1: Delegates v2 🟢 («اغلاق ١» 2026-08-09)
-✅ بوابة 2: Product Foundation 🟢 («ابدا» 2026-08-09) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)
-الآن ──► اعتمدوا رحلة القرار — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)
-      ──► تصميم Request Experience (نية من الرئيسية — وحدة مع الرحلة)
+✅ بوابة 2: Product Foundation 🟢 («ابدا» 2026-08-09)
+✅ رحلة القرار («ابدا» 2026-08-09) — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)
+الآن ──► مراجعة تصميم Request Experience — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md)
+      ──► كود RX بعد اعتماد التصميم
       ──► Validation Engine
       ──► إغلاق Workflow (سلامة + إزالة مسار قديم)
       ──► ثم فقط كود Delegate Workspace
@@ -199,12 +201,12 @@ Family Engine / الخدمات            ← كتابة واحدة فقط
 
 | افعل | لا تفعل |
 |------|---------|
-| قل **«اعتمدوا رحلة القرار»** | ❌ ابدأ كود RX/DW |
-| صمّم RX بعد الاعتماد كجزء من الرحلة الكاملة | ❌ جمّل صفحة المندوب الحالية |
+| راجع [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) | ❌ ابدأ كود DW / جمّل المندوب |
+| اعتمد تصميم RX قبل كود الإنتاج | ❌ افتح نوايا مرشّحة (زوجة/ميلاد) بلا فهرس |
 | أبقِ Workflow provisional بلا توسيع قبل VE | ❌ راجع المندوب بمعزل عن الرئيسية/الإدارة |
 | احترم الدستور الحي المجمّد | ❌ اكتب شجرة من UI لمسارات الفهرس الجديدة |
 
-**الخلاصة التنفيذية:** بوابة 1+2 🟢 → **«اعتمدوا رحلة القرار»** → **Request Experience (تصميم ثم تنفيذ)** — **وليس** تطوير واجهة المندوب.
+**الخلاصة التنفيذية:** رحلة القرار ✅ → **Request Experience (تصميم 🔵 ثم كود)** — **وليس** تطوير واجهة المندوب.
 
 ---
 
@@ -212,8 +214,8 @@ Family Engine / الخدمات            ← كتابة واحدة فقط
 
 أُضيفت إشارة من [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) إلى هذه المراجعة كمرجع رحلة الطلب الكاملة قبل أي تنفيذ DW/RX UI.
 
-**الخطوة الوثائقية التالية (قبل الكود):** اعتماد [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — من ينشئ / يراجع / يعتمد / ينفّذ / ماذا بعد / منع التكرار والخلط / لغة الحالة لكل نوع.  
-**لا شاشة منفردة** و**لا كود** حتى عبارة المنتج: **«اعتمدوا رحلة القرار»**.
+**الخطوة الوثائقية التالية:** مراجعة [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) قبل كود إنتاج RX.  
+رحلة القرار ✅ — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md).
 
 ---
 

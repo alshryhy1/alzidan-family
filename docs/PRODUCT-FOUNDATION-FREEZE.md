@@ -39,14 +39,14 @@
 ```
 بوابة 2 🟢 (هذا الختم)
         ↓
-اعتمدوا رحلة القرار   ← عبارة المنتج المطلوبة
+رحلة القرار ✅ معتمدة («ابدا» 2026-08-09)
         ↓
-Request Experience (تصميم أولًا) — بلا كود شاشات حتى الاعتماد
+Request Experience (تصميم) — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md)
         ↓
 Validation Engine → Workflow Engine → Delegate Workspace (كود) → …
 ```
 
-**عبارة المنتج التالية:** «اعتمدوا رحلة القرار»  
-المسودة: [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md)
+**رحلة القرار:** ✅ [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — معتمدة («ابدا» 2026-08-09)  
+**التالي للمراجعة:** تصميم Request Experience — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md)
 
-> **ممنوع الآن:** كود Request Experience · كود Delegate Workspace · توسيع Workflow provisional · أي شاشة منفردة قبل اعتماد رحلة القرار.
+> **ممنوع الآن:** كود إنتاج RX قبل اعتماد مواصفة التصميم · كود Delegate Workspace · توسيع Workflow provisional · تجميل legacy مندوب · نوايا مرشّحة بلا صف فهرس.
