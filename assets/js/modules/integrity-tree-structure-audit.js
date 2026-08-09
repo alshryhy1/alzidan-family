@@ -27,12 +27,12 @@
   };
 
   var CAT_AR = {
-    parent_null: "parent = NULL",
-    parent_empty: "parent فارغ",
-    missing_father: "الأب غير موجود",
-    path_mismatch: "عدم تطابق المسار مع parent",
-    possible_spelling_duplicates: "الأسماء المتشابهة (Possible Duplicates)",
-    duplicate_person_id: "person_id مكرر",
+    parent_null: "حقل الأب فارغ",
+    parent_empty: "الأب غير مذكور",
+    missing_father: "الأب غير موجود في الشجرة",
+    path_mismatch: "الاسم مكتوب بطريقة مختلفة عن الأب",
+    possible_spelling_duplicates: "أسماء قد تكون مكررة",
+    duplicate_person_id: "معرف شخص مكرر",
     spouses_without_husband: "زوجات بلا زوج صالح",
     broken_relation: "أبناء بدون أب صالح",
   };
@@ -47,28 +47,32 @@
     parent_empty: [
       "لا يظهر ضمن أبناء الأب",
       "لا يظهر في البحث",
-      "يؤثر على Workflow",
+      "يعطل مسار الطلبات",
     ],
     missing_father: [
       "لا يظهر ضمن أبناء الأب",
-      "يؤثر على Workflow",
+      "يعطل مسار الطلبات",
       "يسمح بطلبات مكررة",
     ],
     path_mismatch: [
       "لا يظهر ضمن أبناء الأب",
       "لا يظهر في البحث",
-      "يؤثر على Workflow",
+      "يعطل مسار الطلبات",
     ],
     possible_spelling_duplicates: [
       "يسمح بطلبات مكررة",
-      "يُربك بحث الطلبات (RX)",
+      "يُربك البحث في الطلبات",
     ],
-    duplicate_person_id: ["يسمح بطلبات مكررة", "يحتاج ربط UUID", "يؤثر على Workflow"],
-    spouses_without_husband: ["يؤثر على Workflow", "لا يظهر في البحث"],
+    duplicate_person_id: [
+      "يسمح بطلبات مكررة",
+      "يحتاج ربط المعرف الداخلي",
+      "يعطل مسار الطلبات",
+    ],
+    spouses_without_husband: ["يعطل مسار الطلبات", "لا يظهر في البحث"],
     broken_relation: [
       "لا يظهر ضمن أبناء الأب",
       "لا يظهر في البحث",
-      "يؤثر على Workflow",
+      "يعطل مسار الطلبات",
     ],
   };
 
@@ -101,34 +105,37 @@
   /** Root-cause templates (fix the source, not only the symptom). */
   var CAT_ROOT_CAUSE = {
     parent_null:
-      "أُنشئ بلا parent، أو انجراف ثنائي الأعمدة (parent_name موجود و parent فارغ) من استيراد/مندوب/صيانة legacy.",
+      "أُنشئ بلا أب، أو حقل الأب فارغ بينما اسم الأب موجود — غالبًا من استيراد أو مندوب أو صيانة قديمة.",
     parent_empty:
-      "صف بلا أب نصّي — غالبًا استيراد ناقص أو أداة صيانة أو مسار كتابة تجاوز الحارس.",
+      "سجل بلا أب مذكور — غالبًا استيراد ناقص أو أداة صيانة تجاوزت التحقق.",
     missing_father:
-      "قيمة أب لا تطابق صفًا حيًا: خطأ إملائي / متغيرات كتابة / أب لم يُستورد / اعتماد طلب بلا أب صالح.",
+      "اسم الأب لا يطابق أحدًا في الشجرة: إملاء مختلف، أو الأب لم يُضف بعد، أو اعتماد طلب بلا أب صالح.",
     path_mismatch:
-      "تعديل المسار (name) دون مزامنة parent، أو استيراد جزئي، أو صيانة يدوية. اختلاف ى/ي وحده بعد التطبيع لا يُعدّ عدم تطابق هيكلي.",
+      "عُدّل المسار دون تحديث حقل الأب، أو الاسم مكتوب بطريقة مختلفة عن صف الأب. اختلاف ى/ي وحده بعد التوحيد لا يُعدّ مشكلة هيكلية.",
     possible_spelling_duplicates:
-      "صفّان تحت نفس الأب تطابقا بعد تطبيع العربية (همزة / ى↔ي / ة↔ه / تشكيل) — قد يكونان شخصًا واحدًا أو شخصين مختلفين.",
-    duplicate_person_id: "دمج/استيراد مكرر أو نسخ صفوف — يحتاج ربط UUID لا إعادة تسمية.",
-    spouses_without_husband: "زوجة رُبطت بزوج غير موجود أو UUID مكسور.",
-    broken_relation: "فشل هيكلي مركّب — راجع الفئة الأساسية للصف.",
+      "اسمان تحت نفس الأب تطابقا بعد توحيد العربية (همزة / ى↔ي / ة↔ه / تشكيل) — قد يكونان شخصًا واحدًا أو شخصين مختلفين.",
+    duplicate_person_id:
+      "دمج أو استيراد مكرر — يحتاج ربط المعرف الداخلي لا إعادة تسمية.",
+    spouses_without_husband: "زوجة رُبطت بزوج غير موجود أو معرف مكسور.",
+    broken_relation: "مشكلة مركّبة — راجع الفئة الأساسية للسجل.",
   };
 
   var CAT_WRITE_PATH = {
     parent_null:
-      "مسار الكتابة المشتبه: مندوب · إدارة شجرة · استيراد CSV/بطاقة · صيانة SQL — أصلح المصدر عبر Tree Engine (رفض parent=NULL).",
+      "كيفية الإصلاح: اربط السجل بأب موجود في الشجرة (مندوب · إدارة الشجرة · استيراد · صيانة) بعد الموافقة.",
     parent_empty:
-      "Validation + Tree Engine يجب أن يرفضا الكتابة بلا أب؛ الصفوف القديمة = إصلاح staged.",
+      "كيفية الإصلاح: امنع الكتابة بلا أب للمستجد؛ السجلات القديمة تُصلح خطوة بخطوة بعد موافقة.",
     missing_father:
-      "طلب مندوب / Workflow اعتماد / استيراد — ارفض عند غياب الأب في الشجرة.",
+      "كيفية الإصلاح: أنشئ الأب أولًا في الشجرة، أو صحّح اسم الأب ليطابق سجلًا موجودًا — ارفض الاعتماد بلا أب.",
     path_mismatch:
-      "أي مسار يحدّث name دون parent (مندوب/إدارة/استيراد) — وحّد عبر Tree Engine.prepareChildWriteRow.",
+      "كيفية الإصلاح: وحّد حقل الأب مع المسار عبر إصلاح صف واحد بعد موافقة (مندوب/إدارة/استيراد).",
     possible_spelling_duplicates:
-      "لا دمج تلقائي — المشرف يقرر يدويًا (مراجعة / دمج لاحقًا). Health Center يعرض الغموض فقط (Truth Before Speed).",
-    duplicate_person_id: "استيراد/دمج — Canonical Person + Tree Engine sole writer.",
-    spouses_without_husband: "مسار ربط الزوجات (إدارة/مندوب) — حل الزوج بـ person_id.",
-    broken_relation: "نفس مسارات سلامة البيانات أعلاه.",
+      "كيفية الإصلاح: مراجعة يدوية فقط — لا دمج تلقائي. قرّر لاحقًا الإبقاء أو الدمج بعد التحقق.",
+    duplicate_person_id:
+      "كيفية الإصلاح: ربط المعرف الداخلي عبر مسار الكتابة الموحّد — بلا إعادة تسمية.",
+    spouses_without_husband:
+      "كيفية الإصلاح: اربط الزوجة بزوج موجود عبر معرف الزوج (إدارة/مندوب).",
+    broken_relation: "كيفية الإصلاح: راجع الفئة الأساسية لنفس السجل أعلاه.",
   };
 
   var GROUP_DATA_INTEGRITY = "data_integrity";
@@ -175,6 +182,61 @@
     var na = normalizeArabicForCompare(a);
     var nb = normalizeArabicForCompare(b);
     return !!na && !!nb && na === nb;
+  }
+
+  /**
+   * Explain why two Arabic spellings match after normalize (tree-manager language).
+   * e.g. أنس / انس → اختلاف همزة
+   */
+  function explainArabicSpellingDiff(a, b) {
+    var s1 = norm(a);
+    var s2 = norm(b);
+    if (!s1 || !s2) return "غير موثّق";
+    if (s1 === s2) return "نفس الكتابة";
+
+    function stripMarks(s) {
+      return String(s || "").replace(/[\u064B-\u065F\u0670\u0640]/g, "");
+    }
+    function foldHamza(s) {
+      return String(s || "")
+        .replace(/[إأآٱ]/g, "ا")
+        .replace(/ؤ/g, "و")
+        .replace(/ئ/g, "ي")
+        .replace(/ء/g, "");
+    }
+
+    var reasons = [];
+    var curA = s1;
+    var curB = s2;
+    var nextA = stripMarks(curA);
+    var nextB = stripMarks(curB);
+    if (curA !== curB && nextA === nextB) reasons.push("اختلاف تشكيل");
+    curA = nextA;
+    curB = nextB;
+
+    nextA = foldHamza(curA);
+    nextB = foldHamza(curB);
+    if (curA !== curB && nextA === nextB) reasons.push("اختلاف همزة");
+    curA = nextA;
+    curB = nextB;
+
+    nextA = curA.replace(/ى/g, "ي");
+    nextB = curB.replace(/ى/g, "ي");
+    if (curA !== curB && nextA === nextB) reasons.push("اختلاف ياء (ى/ي)");
+    curA = nextA;
+    curB = nextB;
+
+    nextA = curA.replace(/ة/g, "ه");
+    nextB = curB.replace(/ة/g, "ه");
+    if (curA !== curB && nextA === nextB) reasons.push("اختلاف تاء مربوطة (ة/ه)");
+    curA = nextA;
+    curB = nextB;
+
+    if (reasons.length) return reasons.join(" + ");
+    if (normalizeArabicForCompare(s1) === normalizeArabicForCompare(s2)) {
+      return "الاسم مكتوب بطريقة مختلفة";
+    }
+    return "الاسم مكتوب بطريقة مختلفة";
   }
 
   function childPath(row) {
@@ -451,6 +513,9 @@
           var path2 = childPath(second);
           var fatherLabel = fatherDisplay(first) || fatherDisplay(second);
           var sameRaw = name1 === name2;
+          var diffReason = sameRaw
+            ? "نفس الكتابة تحت الأب"
+            : explainArabicSpellingDiff(name1, name2);
           pairs.push({
             id: pairKey,
             id_a: first.id,
@@ -473,9 +538,12 @@
             normalized_name: normA,
             similarity_pct: 100,
             similarity_ar: "100%",
+            diff_reason_ar: diffReason,
             status_ar: "يحتاج مراجعة",
             created_at: first.created_at || null,
             updated_at: first.updated_at || null,
+            created_by: first.created_by || null,
+            updated_by: first.updated_by || first.modified_by || null,
             category: CAT.POSSIBLE_SPELLING_DUPLICATES,
             category_ar: CAT_AR.possible_spelling_duplicates,
             group: GROUP_DATA_INTEGRITY,
@@ -491,18 +559,20 @@
             repair_forbidden: true,
             never_auto_merge: true,
             reason_ar: sameRaw
-              ? "صفّان بنفس الاسم تحت الأب «" +
+              ? "سجلان بنفس الاسم تحت الأب «" +
                 fatherLabel +
                 "»: «" +
                 name1 +
                 "» — يحتاج قرار المشرف (لا دمج تلقائي)."
-              : "تطابق بعد تطبيع العربية تحت الأب «" +
+              : "تطابق بعد توحيد العربية تحت الأب «" +
                 fatherLabel +
                 "»: «" +
                 name1 +
                 "» ↔ «" +
                 name2 +
-                "» — يحتاج قرار المشرف (لا دمج تلقائي).",
+                "» (" +
+                diffReason +
+                ") — يحتاج قرار المشرف (لا دمج تلقائي).",
           });
         }
       }
@@ -557,7 +627,7 @@
       if (colNull && !isRoot) {
         parentNull.push(
           issueRow(c, CAT.PARENT_NULL, {
-            reason_ar: "عمود parent فارغ بينما الاسم/المسار موجود",
+            reason_ar: "حقل الأب فارغ بينما الاسم/المسار موجود",
           }),
         );
       }
@@ -582,12 +652,12 @@
           pathMismatch.push(
             issueRow(c, CAT.PATH_MISMATCH, {
               reason_ar:
-                "المستخرج من الاسم: «" +
+                "الأب من المسار: «" +
                 extracted +
-                "» ≠ parent: «" +
-                (pCol || "NULL") +
-                "» / parent_name: «" +
-                (pName || "NULL") +
+                "» ≠ حقل الأب: «" +
+                (pCol || "فارغ") +
+                "» / اسم الأب: «" +
+                (pName || "فارغ") +
                 "»",
               canonical_father_path: fatherForExtract
                 ? childPath(fatherForExtract)
@@ -604,9 +674,9 @@
           pathMismatch.push(
             issueRow(c, CAT.PATH_MISMATCH, {
               reason_ar:
-                "عمود parent «" +
+                "حقل الأب «" +
                 pCol +
-                "» لا يطابق parent_name/المستخرج بعد التطبيع",
+                "» لا يطابق اسم الأب / الأب من المسار بعد التوحيد",
             }),
           );
         }
@@ -750,13 +820,13 @@
         healthy: healthy,
         possible_spelling_duplicates: spellingDupes.length,
         labels: {
-          critical: "🔴 حرج (parent=NULL · أب مفقود)",
-          needs_review: "🟠 يحتاج مراجعة (مسار/علاقة/أسماء متشابهة)",
-          uuid_link_needed: "🟡 يحتاج ربط UUID",
+          critical: "🔴 حرج (أب فارغ · أب غير موجود في الشجرة)",
+          needs_review: "🟠 يحتاج مراجعة (مسار/علاقة/أسماء قد تكون مكررة)",
+          uuid_link_needed: "🟡 يحتاج ربط المعرف الداخلي",
           healthy: "🟢 علاقات سليمة",
         },
         note_ar:
-          "أولوية الإصلاح للمدير: حرج → مراجعة → UUID. الأسماء المتشابهة للمراجعة فقط — بلا دمج تلقائي.",
+          "أولوية الإصلاح: حرج → مراجعة → ربط المعرف. الأسماء التي قد تكون مكررة للمراجعة فقط — بلا دمج تلقائي.",
       },
       groups: {
         data_integrity: {
@@ -775,11 +845,11 @@
         },
         uuid_link: {
           id: GROUP_UUID_LINK,
-          label: "🟡 الربط الداخلي (UUID)",
+          label: "🟡 الربط الداخلي",
           label_short: "الربط الداخلي",
           severity: "warning",
           note_ar:
-            "TREE-003 / يحتاج ربط UUID — ليس تافهًا؛ يمنع الاعتماد الآمن ويؤثر على Workflow.",
+            "يحتاج ربط المعرف الداخلي — مهم للاعتماد الآمن ومسار الطلبات.",
         },
       },
       categories: [
@@ -912,6 +982,7 @@
     GROUP_DATA_INTEGRITY: GROUP_DATA_INTEGRITY,
     GROUP_UUID_LINK: GROUP_UUID_LINK,
     normalizeArabicForCompare: normalizeArabicForCompare,
+    explainArabicSpellingDiff: explainArabicSpellingDiff,
     pathsEqual: pathsEqual,
     extractParentFromName: extractParentFromName,
     storedParent: storedParent,

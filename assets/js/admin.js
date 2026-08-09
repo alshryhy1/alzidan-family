@@ -2182,9 +2182,9 @@ where c.id = matches.id; commit;
       analyze: "1 تحليل",
       preview: "2 معاينة",
       approve: "3 موافقة",
-      execute: "4 تنفيذ",
+      execute: "4 تنفيذ الإصلاح",
       reverify: "5 إعادة تحقق",
-      log: "6 سجل",
+      log: "6 تم الإصلاح",
     };
     const idx = order.indexOf(active);
     healthRepairStages.innerHTML = order
@@ -2248,8 +2248,8 @@ where c.id = matches.id; commit;
       "النوع: " + (analysis.category_ar || analysis.category),
       "الأولوية: " + (analysis.priority_ar || analysis.priority),
       "الأثر: " + (analysis.impact_ar || "—"),
-      "السبب الجذري: " + (analysis.root_cause_ar || "—"),
-      "مسار الكتابة المشتبه: " + (analysis.write_path_ar || "—"),
+      "سبب المشكلة: " + (analysis.root_cause_ar || "—"),
+      "كيفية إصلاحها: " + (analysis.write_path_ar || "—"),
       "",
     ];
     if (analysis.repair_type === "manual_review_no_merge") {
@@ -2257,22 +2257,26 @@ where c.id = matches.id; commit;
         "الأب: " + String((issue && issue.father_label) || "—"),
         "الاسم الأول: " + String((issue && issue.name_a) || "—"),
         "الاسم الثاني: " + String((issue && issue.name_b) || "—"),
-        "نسبة التشابه: " +
-          String((issue && (issue.similarity_ar || issue.similarity_pct)) || "100%"),
+        "السبب: " +
+          String(
+            (issue && issue.diff_reason_ar) ||
+              (issue && (issue.similarity_ar || issue.similarity_pct)) ||
+              "الاسم مكتوب بطريقة مختلفة",
+          ),
         "الحالة: يحتاج مراجعة",
         "",
-        "لا دمج تلقائي — لا أمر SQL من هذه البطاقة. قرار المشرف لاحقًا بعد التحقق.",
+        "لا دمج تلقائي — لا أمر إصلاح من هذه البطاقة. قرار المشرف لاحقًا بعد التحقق.",
       );
       (analysis.decision_logic_ar || []).forEach((ln) => lines.push("· " + ln));
     } else {
       lines.push(
-        "قبل ← parent: " +
-          String((preview.before && preview.before.parent) || "NULL") +
-          " · UUID: " +
+        "قبل ← الأب: " +
+          String((preview.before && preview.before.parent) || "فارغ") +
+          " · المعرف: " +
           String((preview.before && preview.before.parent_person_id) || "—"),
-        "بعد ← parent: " +
+        "بعد ← الأب: " +
           String((preview.after && preview.after.parent) || "—") +
-          " · UUID: " +
+          " · المعرف: " +
           String((preview.after && preview.after.parent_person_id) || "—"),
       );
       if (preview.preview_flags_ar) {
@@ -2285,7 +2289,7 @@ where c.id = matches.id; commit;
       }
       if (analysis.requires_manual_choice) {
         lines.push("");
-        lines.push("يتطلب اختيارًا يدويًا — لا تطبيق تلقائي.");
+        lines.push("يتطلب اختيارًا يدويًا — لا تنفيذ تلقائي.");
         if (analysis.suggestions && analysis.suggestions.length) {
           lines.push("مرشّحات الأب الأقرب:");
           analysis.suggestions.forEach((s, i) => {
@@ -2298,7 +2302,7 @@ where c.id = matches.id; commit;
                 s.child_path +
                 " · " +
                 s.score_ar +
-                (s.person_id ? " · UUID:" + s.person_id : ""),
+                (s.person_id ? " · معرف:" + s.person_id : ""),
             );
           });
           lines.push("اختر رقم المرشّح من الأزرار أدناه إن وُجدت.");
@@ -2344,13 +2348,13 @@ where c.id = matches.id; commit;
             const blockLines = [
               "النوع: " + (analysis.category_ar || analysis.category),
               "مرشّح مختار: #" + sug.id + " · " + sug.child_path,
-              "قبل ← parent: " +
-                String((preview2.before && preview2.before.parent) || "NULL") +
-                " · UUID: " +
+              "قبل ← الأب: " +
+                String((preview2.before && preview2.before.parent) || "فارغ") +
+                " · المعرف: " +
                 String((preview2.before && preview2.before.parent_person_id) || "—"),
-              "بعد ← parent: " +
+              "بعد ← الأب: " +
                 String((preview2.after && preview2.after.parent) || "—") +
-                " · UUID: " +
+                " · المعرف: " +
                 String((preview2.after && preview2.after.parent_person_id) || "—"),
             ];
             if (p2 && p2.preview_flags_ar) {
@@ -2359,7 +2363,7 @@ where c.id = matches.id; commit;
             if (p2 && p2.would_flip_only && p2.block_message_ar) {
               blockLines.push("", "⛔ " + p2.block_message_ar);
             } else {
-              blockLines.push("", "فعّل خانة الموافقة ثم أرسل إلى SQL Workspace.");
+              blockLines.push("", "فعّل خانة الموافقة ثم نفّذ الإصلاح عبر مساحة SQL.");
             }
             healthRepairBody.textContent = blockLines.join("\n");
           }
@@ -2395,7 +2399,7 @@ where c.id = matches.id; commit;
           ? preview.block_message_ar ||
             "هذا الإصلاح سينقل الخطأ إلى فئة أخرى — اختر أبًا موجودًا يطابق المسار"
           : preview.executable
-            ? "معاينة جاهزة — وافق ثم أرسل أمر صف واحد إلى SQL Workspace."
+            ? "معاينة جاهزة — وافق ثم نفّذ الإصلاح لسجل واحد عبر مساحة SQL."
             : "تحليل مكتمل — لا تنفيذ تلقائي.",
     );
     try {
@@ -2414,7 +2418,36 @@ where c.id = matches.id; commit;
     healthProvenanceBox.textContent = "جاري البحث عن سبب الإدخال…";
     const sb = getClient();
     let requestHint = null;
+    let rowMeta = {
+      created_at: issue.created_at || null,
+      updated_at: issue.updated_at || null,
+      created_by: issue.created_by || null,
+      updated_by: issue.updated_by || issue.modified_by || null,
+    };
     const path = issue.child_path || "";
+    if (sb && issue.id != null && String(issue.id).indexOf("dup:") !== 0) {
+      try {
+        const metaQ = await sb
+          .from("tree_children")
+          .select("id,created_at,updated_at,created_by,updated_by")
+          .eq("id", issue.id)
+          .maybeSingle();
+        if (!metaQ.error && metaQ.data) {
+          rowMeta = Object.assign({}, rowMeta, metaQ.data);
+        }
+      } catch (_) {
+        try {
+          const metaQ2 = await sb
+            .from("tree_children")
+            .select("id,created_at,created_by")
+            .eq("id", issue.id)
+            .maybeSingle();
+          if (!metaQ2.error && metaQ2.data) {
+            rowMeta = Object.assign({}, rowMeta, metaQ2.data);
+          }
+        } catch (__) {}
+      }
+    }
     if (sb && path) {
       try {
         const leaf = path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path;
@@ -2431,28 +2464,28 @@ where c.id = matches.id; commit;
       } catch (_) {}
     }
     let heuristic = "";
+    let heuristicKind = "";
     if (issue.category === "parent_null" && issue.parent_name && !issue.parent) {
-      heuristic = "استدلال: انجراف ثنائي الأعمدة من مسار كتابة legacy";
+      heuristic = "استدلال: حقل الأب فارغ واسم الأب موجود (مسار كتابة قديم)";
+      heuristicKind = "maintenance";
     } else if (issue.category === "missing_father") {
-      heuristic = "استدلال: أب نصّي بلا صف مطابق (إملاء/استيراد)";
+      heuristic = "استدلال: أب مذكور بلا سجل مطابق (إملاء/استيراد)";
+      heuristicKind = "import";
     }
-    const prov = Pipe.buildProvenance(
-      {
-        created_at: issue.created_at,
-        updated_at: issue.updated_at,
-      },
-      {
-        request_kind: requestHint && requestHint.kind,
-        heuristic_ar: heuristic || "",
-        modified_by_ar: "غير موثّق",
-      },
-    );
+    const prov = Pipe.buildProvenance(rowMeta, {
+      request_kind: requestHint && requestHint.kind,
+      heuristic_ar: heuristic || "",
+      heuristic_kind: heuristicKind,
+      created_by_ar: rowMeta.created_by || null,
+      modified_by_ar: rowMeta.updated_by || null,
+    });
     const lines = [
-      "سبب الإدخال — صف #" + String(issue.id),
-      "المصدر: " + prov.source_ar,
+      "سبب الإدخال — السجل رقم " + String(issue.id),
+      "أنشئ بواسطة: " + (prov.source_ar || "غير موثّق"),
       "تاريخ الإنشاء: " + (prov.created_at || "غير موثّق"),
+      "المنشئ: " + (prov.created_by_ar || "غير موثّق"),
       "آخر تعديل: " + (prov.updated_at || "غير موثّق"),
-      "من عدّل: " + (prov.modified_by_ar || "غير موثّق"),
+      "آخر معدّل: " + (prov.modified_by_ar || "غير موثّق"),
       prov.detail_ar || "",
       prov.note_ar || "",
       requestHint
@@ -2483,13 +2516,13 @@ where c.id = matches.id; commit;
     const isSpellDup = healthStructureActiveCat === "possible_spelling_duplicates";
     if (theadRow) {
       theadRow.innerHTML = isSpellDup
-        ? "<th>الأب</th><th>الاسم الأول</th><th>الاسم الثاني</th><th>نسبة التشابه</th><th>الحالة</th><th>الأثر</th><th>إجراء</th>"
-        : "<th>id</th><th>الأولوية</th><th>الفرع</th><th>المسار (name)</th><th>parent</th><th>مستخرج</th><th>الأثر</th><th>سبب جذري</th><th>إجراء</th>";
+        ? "<th>الأب</th><th>الاسم الأول</th><th>الاسم الثاني</th><th>السبب</th><th>الحالة</th><th>إجراء</th>"
+        : "<th>رقم السجل</th><th>الأولوية</th><th>الفرع</th><th>المسار</th><th>الأب</th><th>الأب من المسار</th><th>الأثر</th><th>سبب المشكلة</th><th>إجراء</th>";
     }
     if (!audit) {
       healthStructureBody.innerHTML =
         '<tr><td colspan="' +
-        (isSpellDup ? "7" : "9") +
+        (isSpellDup ? "6" : "9") +
         '" class="hint">لا تقرير بعد — اضغط تحديث التقرير.</td></tr>';
       if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = "";
       return;
@@ -2509,13 +2542,13 @@ where c.id = matches.id; commit;
         (catMeta && catMeta.label ? catMeta.label : healthStructureActiveCat) +
         " — " +
         String(rows.length) +
-        (isSpellDup ? " زوج" : " صف") +
+        (isSpellDup ? " زوج" : " سجل") +
         (catMeta && catMeta.priority_ar ? " · " + catMeta.priority_ar : "") +
         (catMeta && catMeta.impact_ar ? " · أثر: " + catMeta.impact_ar : "") +
         (isSpellDup ? " · مراجعة فقط — لا دمج تلقائي" : "");
     }
     if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = title;
-    const emptyCols = isSpellDup ? "7" : "9";
+    const emptyCols = isSpellDup ? "6" : "9";
     if (!rows.length) {
       healthStructureBody.innerHTML =
         healthStructureActiveCat === "total" || healthStructureActiveCat === "healthy_relations"
@@ -2533,13 +2566,12 @@ where c.id = matches.id; commit;
           const father = escapeHtml(row.father_label || row.stored_parent || "—");
           const n1 = escapeHtml(row.name_a || "");
           const n2 = escapeHtml(row.name_b || "");
-          const sim = escapeHtml(row.similarity_ar || String(row.similarity_pct || 100) + "%");
-          const status = escapeHtml(row.status_ar || "يحتاج مراجعة");
-          const impact = escapeHtml(
-            row.impact_ar ||
-              (Array.isArray(row.impact) ? row.impact.join(" · ") : "") ||
-              "—",
+          const reason = escapeHtml(
+            row.diff_reason_ar ||
+              row.reason_ar ||
+              "الاسم مكتوب بطريقة مختلفة",
           );
+          const status = escapeHtml(row.status_ar || "يحتاج مراجعة");
           return (
             "<tr><td>" +
             father +
@@ -2548,11 +2580,9 @@ where c.id = matches.id; commit;
             "</td><td>" +
             n2 +
             "</td><td>" +
-            sim +
+            reason +
             "</td><td>" +
             status +
-            "</td><td>" +
-            impact +
             '</td><td><div class="health-row-actions">' +
             '<button type="button" class="btn btn-outline btn-sm" data-health-analyze="' +
             pairId +
@@ -2570,7 +2600,7 @@ where c.id = matches.id; commit;
           const branch = escapeHtml(row.branch_key || "");
           const path = escapeHtml(row.child_path || "");
           const parent = escapeHtml(
-            row.parent != null && row.parent !== "" ? row.parent : "NULL",
+            row.parent != null && row.parent !== "" ? row.parent : "فارغ",
           );
           const extracted = escapeHtml(row.extracted_parent || "—");
           const impact = escapeHtml(
@@ -2698,9 +2728,9 @@ where c.id = matches.id; commit;
 
   function tree003Impact(row) {
     if (row && row.severity === "error") {
-      return "يؤثر على Workflow · يحتاج ربط UUID · لا يظهر ضمن أبناء الأب";
+      return "يعطل مسار الطلبات · يحتاج ربط المعرف · لا يظهر ضمن أبناء الأب";
     }
-    return "يحتاج ربط UUID · يؤثر على Workflow · يسمح بطلبات مكررة";
+    return "يحتاج ربط المعرف · يعطل مسار الطلبات · يسمح بطلبات مكررة";
   }
 
   function renderRequestIntegrityAudit(audit) {
@@ -2847,13 +2877,15 @@ where c.id = matches.id; commit;
       "—";
     const healthyCount = counts.healthy_root_or_tree_parent ?? "—";
     const lines = [
-      "وضع التقرير: تشخيص + إصلاح مرحلي بعد موافقة — بلا تعديل صامت وبدون «إصلاح الكل».",
-      "المجموعة: 🟡 الربط الداخلي (UUID) — ليس تافهًا · TREE-003: ربط فقط بلا إعادة تسمية.",
-      "🟢 أبناء جذر الفرع / tree_parents (سليمون): " + String(healthyCount),
-      "🟡 يحتاج ربط UUID فقط: " + String(warnCount) + " · أثر: يحتاج ربط UUID · يؤثر على Workflow",
-      "🔴 أخطاء TREE-003 الحقيقية (أب UUID مكسور): " +
+      "وضع التقرير: تشخيص + خطوات أوضح بعد موافقة — بلا تعديل صامت وبدون «إصلاح الكل».",
+      "المجموعة: 🟡 الربط الداخلي — مهم · ربط المعرف فقط بلا إعادة تسمية.",
+      "🟢 أبناء جذر الفرع / آباء الشجرة (سليمون): " + String(healthyCount),
+      "🟡 يحتاج ربط المعرف فقط: " +
+        String(warnCount) +
+        " · أثر: يحتاج ربط المعرف · يعطل مسار الطلبات",
+      "🔴 أخطاء الربط الحقيقية (معرف أب مكسور): " +
         String(errCount) +
-        " · أثر: يؤثر على Workflow · لا يظهر ضمن أبناء الأب",
+        " · أثر: يعطل مسار الطلبات · لا يظهر ضمن أبناء الأب",
       "مجموع الأخطاء الحقيقية فقط: " + String(errCount),
       "عناقيد اسم ورقة غامض: " +
         String(counts.ambiguous_leaf_clusters ?? "—"),
@@ -2892,8 +2924,8 @@ where c.id = matches.id; commit;
               row.reason_ar ||
                 row.reason ||
                 (row.severity === "error"
-                  ? "أب UUID مكسور"
-                  : "يحتاج ربط UUID فقط"),
+                  ? "معرف الأب مكسور"
+                  : "يحتاج ربط المعرف فقط"),
             );
             const sev =
               row.severity === "error"
@@ -2957,9 +2989,9 @@ where c.id = matches.id; commit;
     let from = 0;
     const all = [];
     const fieldsWithMeta =
-      "id,branch_key,child_name,name,parent_name,parent,person_id,parent_person_id,created_at";
+      "id,branch_key,child_name,name,parent_name,parent,person_id,parent_person_id,created_at,updated_at,created_by,updated_by";
     const fieldsBasic =
-      "id,branch_key,child_name,name,parent_name,parent,person_id,parent_person_id";
+      "id,branch_key,child_name,name,parent_name,parent,person_id,parent_person_id,created_at";
     let useMeta = true;
     for (;;) {
       let q = sb
@@ -3174,17 +3206,17 @@ where c.id = matches.id; commit;
     if (!error && data) {
       renderHealthCenterReport(data, "المصدر: admin_integrity_report_v1 + مسح هيكل محلي + رحلة الطلب");
       setHealthCenterStatus(
-        "تم تحديث التقرير: سلامة البيانات + UUID + رحلة الطلب · إصلاح مرحلي بعد موافقة فقط.",
+        "تم تحديث التقرير: سلامة البيانات + الربط الداخلي + رحلة الطلب · خطوات أوضح بعد موافقة فقط.",
       );
       return;
     }
     const report = buildClientIntegrityReport(children, spouses, parents);
     renderHealthCenterReport(
       report,
-      "المصدر: مسح محلي Integrity v2 + سلامة البيانات + رحلة الطلب",
+      "المصدر: مسح محلي + سلامة البيانات + رحلة الطلب",
     );
     setHealthCenterStatus(
-      "تم المسح المحلي. TREE-003 RPC اختياري. الإصلاح: تحليل → معاينة → موافقة → SQL Workspace — بلا إصلاح الكل.",
+      "تم المسح المحلي. الربط الداخلي اختياري عبر الخدمة. الإصلاح: تحليل → معاينة → موافقة → تنفيذ الإصلاح — بلا إصلاح الكل.",
     );
   }
 
@@ -4405,13 +4437,13 @@ where c.id = matches.id; commit;
       if (ready) {
         healthRepairState.stage = "approve";
         setHealthRepairStage("approve");
-        setHealthRepairStatus("موافقة مسجّلة لهذا الصف فقط — يمكنك الإرسال إلى SQL Workspace.");
+        setHealthRepairStatus("موافقة مسجّلة لهذا السجل فقط — يمكنك تنفيذ الإصلاح عبر مساحة SQL.");
       } else if (healthRepairApprove.checked && healthRepairState.preview && !healthRepairState.preview.executable) {
         setHealthRepairStage("preview");
         setHealthRepairStatus("المعاينة غير قابلة للتنفيذ — اختر مرشّحًا أو راجع يدويًا.");
       } else {
         setHealthRepairStage("preview");
-        setHealthRepairStatus("فعّل الموافقة بعد مراجعة المعاينة (صف واحد فقط).");
+        setHealthRepairStatus("فعّل الموافقة بعد مراجعة المعاينة (سجل واحد فقط).");
       }
     };
     healthRepairApprove.addEventListener("change", syncHealthRepairApprove);
@@ -4466,7 +4498,20 @@ where c.id = matches.id; commit;
       const ws = window.AlzidanSqlWorkspace;
       let loaded = false;
       if (ws && typeof ws.loadSql === "function") {
-        loaded = !!ws.loadSql(built.sql, { title: built.title });
+        loaded = !!ws.loadSql(built.sql, {
+          title: built.title,
+          health_repair: built.success_meta || {
+            row_id: built.row_id,
+            father_name:
+              (built.after && (built.after.parent || built.after.parent_name)) ||
+              "",
+            after_parent:
+              (built.after && (built.after.parent || built.after.parent_name)) ||
+              "",
+            updated_parent: !!(built.after && built.after.parent),
+            updated_uuid: !!(built.after && built.after.parent_person_id),
+          },
+        });
       }
       if (!loaded) {
         try {
@@ -4478,11 +4523,11 @@ where c.id = matches.id; commit;
         try {
           navigator.clipboard.writeText(built.sql);
           setHealthRepairStatus(
-            "تعذّر تحميل المحرر — نُسخ SQL للحافظة. افتح «أدوات الصيانة» → SQL Workspace والصق الأمر.",
+            "تعذّر تحميل المحرر — نُسخ الأمر للحافظة. افتح «أدوات الصيانة» → مساحة SQL والصق الأمر.",
           );
         } catch (_) {
           setHealthRepairStatus(
-            "مساحة SQL غير متاحة. افتح #module=tools والصق أمر الصف يدويًا.",
+            "مساحة SQL غير متاحة. افتح أدوات الصيانة والصق أمر السجل يدويًا.",
           );
         }
         return;
@@ -4503,7 +4548,7 @@ where c.id = matches.id; commit;
         action: "sent_to_sql_workspace",
       });
       setHealthRepairStatus(
-        "✅ نُقلت إلى أدوات الصيانة · SQL Workspace محمّل بـ UPDATE صف واحد (بلا تعليقات كتلية). راجع ثم شغّل وأكّد الكتابة. بعدها «تحديث التقرير». بلا إصلاح الكل.",
+        "✅ جاهز لتنفيذ الإصلاح · مساحة SQL محمّلة بتحديث سجل واحد. راجع ثم شغّل وأكّد الكتابة. بعدها «تحديث التقرير». بلا إصلاح الكل.",
       );
     });
   }

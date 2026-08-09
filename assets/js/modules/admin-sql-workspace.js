@@ -740,7 +740,16 @@
     }
   }
 
+  let pendingHealthRepair = null;
+
   function friendlyRpcError(error, data) {
+    const Pipe = window.AlzidanIntegrityRepairPipeline;
+    if (Pipe && typeof Pipe.friendlySqlFailureAr === "function") {
+      const mapped = Pipe.friendlySqlFailureAr(error, data);
+      if (mapped) {
+        // Keep workspace-specific overrides below for multi/v2/timeout.
+      }
+    }
     if (data && data.message_ar) return String(data.message_ar);
     const code = String((error && error.code) || (data && data.error_code) || "");
     const rawMsg = String(
@@ -751,7 +760,7 @@
       /statement timeout|canceling statement/i.test(rawMsg)
     ) {
       return (
-        "انتهت مهلة التنفيذ (timeout). غالبًا تعليق كتلي /* … */ مع مسارات فيها '/' علّق التصنيف القديم — أزل التعليق الكتلي أو أعد الإرسال من مركز الصحة (UPDATE صف واحد فقط)، أو الصق COPY-ME-admin-sql-workspace-run-v2.sql مرة في Supabase ثم Hard Refresh."
+        "انتهت مهلة التنفيذ. غالبًا تعليق كتلي مع مسارات فيها '/' علّق التصنيف القديم — أزل التعليق الكتلي أو أعد الإرسال من مركز الصحة (تحديث سجل واحد فقط)، أو ثبّت منفّذ مساحة SQL ثم Hard Refresh."
       );
     }
     if (
@@ -763,16 +772,35 @@
     if (isMultiFailMessage(rawMsg) || code === "SQL-WS-MULTI") {
       return V2_SUPABASE_HINT;
     }
-    if (/pg_proc|42501/i.test(rawMsg)) {
+    if (/pg_proc|42501/i.test(rawMsg) && /pg_proc/i.test(rawMsg)) {
       return (
-        "مسار UPDATE pg_proc مُلغى وغير مسموح في Supabase. " + V2_SUPABASE_HINT
+        "مسار تحديث النظام مُلغى وغير مسموح. " + V2_SUPABASE_HINT
       );
     }
-    if (/not allowed|permission|JWT/i.test(String((error && error.message) || ""))) {
-      return "غير مصرح. سجّل دخول الإدارة ثم أعد المحاولة.";
+    if (/not allowed|permission|JWT|RLS|42501/i.test(rawMsg) || code === "42501") {
+      return (
+        "صلاحية غير كافية لتنفيذ الأمر" +
+        (rawMsg ? " — " + rawMsg.slice(0, 140) : ". سجّل دخول الإدارة ثم أعد المحاولة.")
+      );
+    }
+    if (/0 rows|no rows affected|did not update|ROW_COUNT/i.test(rawMsg)) {
+      return "الصف غير موجود أو لم يتأثر أي سجل بالأمر" + (rawMsg ? " — " + rawMsg.slice(0, 120) : "");
+    }
+    if (/foreign key|23503|violates foreign/i.test(rawMsg) || code === "23503") {
+      return "لم يتم العثور على الأب أو المعرف المشار إليه — " + rawMsg.slice(0, 140);
+    }
+    if (/unique|duplicate|23505/i.test(rawMsg) || code === "23505") {
+      return "تعارض فريد في القاعدة — " + rawMsg.slice(0, 140);
+    }
+    if (/syntax|42601/i.test(rawMsg) || code === "42601") {
+      return "خطأ في صياغة الأمر — " + rawMsg.slice(0, 140);
     }
     if (code === "ADMIN-RPC-001") {
       return String((error && error.message) || "تعذّر الاتصال بخدمة الإدارة.");
+    }
+    if (Pipe && typeof Pipe.friendlySqlFailureAr === "function") {
+      const fromPipe = Pipe.friendlySqlFailureAr(error, data);
+      if (fromPipe) return fromPipe;
     }
     if (rawMsg) {
       return (
@@ -1565,7 +1593,12 @@
         setError(up.error || "تعذّر تثبيت منفّذ SQL Workspace v2");
       }
       const msg = friendlyRpcError(error, payload);
-      setError(msg);
+      const Pipe = window.AlzidanIntegrityRepairPipeline;
+      const failLine =
+        Pipe && typeof Pipe.formatRepairFailureAr === "function"
+          ? Pipe.formatRepairFailureAr(msg)
+          : "فشل التنفيذ — سبب الفشل: " + msg;
+      setError(failLine);
       setStatus("err", "فشل التنفيذ");
       if (els.meta) {
         const ms =
@@ -1591,7 +1624,7 @@
         ok: false,
         status: "failed",
         rowCount: null,
-        error: msg,
+        error: failLine,
         sql: sql,
         actor: actor,
         requestId: requestId,
@@ -1631,7 +1664,19 @@
     });
 
     let statusMsg = "✅ تم التنفيذ — نُقل إلى الأرشيف";
-    if (requestId) {
+    if (pendingHealthRepair) {
+      const hr = pendingHealthRepair;
+      pendingHealthRepair = null;
+      const Pipe = window.AlzidanIntegrityRepairPipeline;
+      if (Pipe && typeof Pipe.formatRepairSuccessAr === "function") {
+        statusMsg = "✅ " + Pipe.formatRepairSuccessAr(hr);
+      } else {
+        statusMsg =
+          "✅ تم إصلاح السجل رقم " +
+          (hr.row_id != null ? hr.row_id : "?") +
+          " بنجاح.";
+      }
+    } else if (requestId) {
       const closed = await closeLinkedRequest(requestId, at);
       if (closed.ok) {
         statusMsg = closed.message;
@@ -2163,6 +2208,11 @@
 
     if (error || !payload || payload.ok === false) {
       const msg = friendlyRpcError(error, payload);
+      const Pipe = window.AlzidanIntegrityRepairPipeline;
+      const failLine =
+        Pipe && typeof Pipe.formatRepairFailureAr === "function"
+          ? Pipe.formatRepairFailureAr(msg)
+          : "فشل التنفيذ — سبب الفشل: " + msg;
       inProgress = null;
       if (typeof api.markFail === "function") {
         api.markFail(p.id, {
@@ -2178,7 +2228,7 @@
         status: "failed",
         title: p.title,
         presetId: p.id,
-        error: msg,
+        error: failLine,
         sql: sql,
         actor: actor,
         requestId: requestId,
@@ -2186,7 +2236,7 @@
         source: "preset",
         auditId: payload && payload.audit_id,
       });
-      setError(msg);
+      setError(failLine);
       setStatus("err", "فشل التنفيذ");
       renderPresets();
       return;
@@ -2468,11 +2518,15 @@
       if (!els.editor) return false;
       els.editor.value = text;
       activeEditorPresetId = "";
+      pendingHealthRepair =
+        meta && meta.health_repair ? Object.assign({}, meta.health_repair) : null;
       setEditorVisible(true);
       const title = (meta && meta.title) || "أمر من مركز الصحة";
       setStatus(
         "ok",
-        "✅ محمّل من مركز الصحة: " + title + " — UPDATE صف واحد · راجع ثم شغّل وأكّد الكتابة.",
+        "✅ محمّل من مركز الصحة: " +
+          title +
+          " — تحديث سجل واحد · راجع ثم نفّذ الإصلاح وأكّد الكتابة.",
       );
       setError("");
       const reveal = function () {

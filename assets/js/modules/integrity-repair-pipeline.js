@@ -150,7 +150,46 @@
   }
 
   var FLIP_BLOCK_AR =
-    "هذا الإصلاح سينقل الخطأ إلى فئة أخرى — اختر أبًا موجودًا يطابق المسار";
+    "هذا الإصلاح سينقل المشكلة إلى فئة أخرى — اختر أبًا موجودًا في الشجرة يطابق المسار";
+
+  /** Count living father rows matching a parent path (exact or Arabic-normalized). */
+  function listFatherMatches(children, branch, parentPath) {
+    var b = norm(branch);
+    var p = norm(parentPath);
+    if (!b || !p) return [];
+    var pNorm = normalizeArabicForCompare(p);
+    var hits = [];
+    (children || []).forEach(function (c) {
+      if (!c || norm(c.branch_key) !== b) return;
+      var path = childPathOf(c);
+      if (!path) return;
+      if (path === p || normalizeArabicForCompare(path) === pNorm) hits.push(c);
+    });
+    return hits;
+  }
+
+  function fatherLookupFailureAr(extracted, children, branch) {
+    var label = norm(extracted);
+    if (!label) {
+      return "لم يتم استخراج اسم الأب من المسار — لا يمكن التحديث.";
+    }
+    var hits = listFatherMatches(children, branch, label);
+    if (hits.length > 1) {
+      return (
+        "يوجد أكثر من أب بنفس الاسم «" +
+        label +
+        "» — لا يمكن التحديث حتى يُختار الأب الصحيح."
+      );
+    }
+    if (hits.length === 1 && !hits[0].person_id) {
+      return "لم يتم العثور على معرف الأب لـ «" + label + "».";
+    }
+    return (
+      "لم يتم العثور على الأب: «" +
+      label +
+      "» — لا يمكن التحديث حتى يُنشأ الأب في الشجرة."
+    );
+  }
 
   /**
    * Unified repair target for parent_null / missing_father / path_mismatch.
@@ -192,17 +231,18 @@
         clears_path_mismatch: true,
         would_flip_only: false,
         reason_ar: spellingDrift
-          ? "مواءمة parent لاسم الأب الكانوني في الشجرة («" +
+          ? "مواءمة حقل الأب لاسم الأب الموجود في الشجرة («" +
             canonicalFromExtract +
-            "») — المستخرج إملاء مختلف («" +
+            "») — الأب من المسار مكتوب بطريقة مختلفة («" +
             extracted +
-            "») بعد تطبيع العربية."
-          : "ربط parent باسم الأب الموجود فعليًا في الشجرة مع UUID إن وُجد.",
+            "») بعد توحيد العربية."
+          : "ربط حقل الأب باسم الأب الموجود فعليًا في الشجرة مع المعرف إن وُجد.",
         block_message_ar: null,
       };
     }
 
     // No living father for extract — never propose writing the raw extract.
+    var failAr = fatherLookupFailureAr(extracted, children, branch);
     return {
       ok: false,
       parent: null,
@@ -213,9 +253,8 @@
       clears_missing_father: false,
       clears_path_mismatch: false,
       would_flip_only: true,
-      reason_ar:
-        "لا صف أب يطابق المسار المستخرج (حتى بعد التطبيع) — لا يُكتب مسار غير موجود.",
-      block_message_ar: FLIP_BLOCK_AR,
+      reason_ar: failAr,
+      block_message_ar: failAr || FLIP_BLOCK_AR,
       requires_suggestions: true,
     };
   }
@@ -273,7 +312,7 @@
         clears_path_mismatch: false,
         block_message_ar: FLIP_BLOCK_AR,
         reason_ar:
-          "المرشّح يصلح «أب غير موجود» لكنه لا يطابق المسار المستخرج — سينقل الخطأ إلى عدم تطابق المسار.",
+          "المرشّح يصلح «أب غير موجود في الشجرة» لكنه لا يطابق الأب من المسار — سينقل المشكلة إلى اختلاف كتابة المسار.",
       };
     }
 
@@ -452,11 +491,11 @@
         analysis.root_cause_ar =
           analysis.root_cause_ar ||
           (stored && !parentCol
-            ? "كتابة ثنائية الأعمدة ناقصة: parent_name موجود و parent فارغ (مسار مندوب/استيراد/صيانة legacy)."
-            : "أُنشئ الصف بلا parent، أو فُقد العمود عند الاستيراد/الصيانة.");
+            ? "كتابة ناقصة: اسم الأب موجود وحقل الأب فارغ (مسار مندوب/استيراد/صيانة قديمة)."
+            : "أُنشئ السجل بلا أب، أو فُقد الحقل عند الاستيراد/الصيانة.");
         analysis.write_path_ar =
           analysis.write_path_ar ||
-          "مسارات دين Tree Engine: مندوب · إدارة شجرة · استيراد CSV/بطاقة · صيانة SQL — الحارس الجديد يمنع التكرار؛ الصفوف القديمة تُصلح يدويًا.";
+          "كيفية الإصلاح: مندوب · إدارة الشجرة · استيراد · صيانة — بعد موافقة على سجل واحد.";
         if (unified.ok) {
           analysis.can_auto_propose = true;
           analysis.requires_manual_choice = false;
@@ -467,12 +506,12 @@
             reason_ar: unified.reason_ar,
           };
           analysis.decision_logic_ar = [
-            "عمود parent فارغ (أو كلا العمودين).",
+            "حقل الأب فارغ (أو كلا حقلي الأب).",
             extracted
-              ? "استُخرج مسار الأب من name → «" + extracted + "»."
-              : "لا مستخرج من الاسم.",
-            "وُجد أب حي بالاسم الكانوني «" + unified.parent + "».",
-            "سيمسح: أب غير موجود؟ نعم · عدم تطابق المسار؟ نعم.",
+              ? "الأب من المسار: «" + extracted + "»."
+              : "تعذّر معرفة الأب من المسار.",
+            "وُجد أب في الشجرة بالاسم «" + unified.parent + "».",
+            "سيمسح: أب غير موجود في الشجرة؟ نعم · اختلاف كتابة المسار؟ نعم.",
           ];
         } else {
           analysis.can_auto_propose = false;
@@ -480,19 +519,19 @@
           analysis.proposed = null;
           analysis.suggestions = suggestFatherMatches(issue, children, 5);
           analysis.decision_logic_ar = [
-            "عمود parent فارغ — لكن المستخرج لا يطابق صف أب حي.",
-            "ممنوع ملء مسار يتيم (سيُنشئ «أب غير موجود»).",
-            FLIP_BLOCK_AR,
+            "حقل الأب فارغ — لكن الأب من المسار لا يطابق سجل أب في الشجرة.",
+            fatherLookupFailureAr(extracted, children, norm(issue && issue.branch_key)),
+            "ممنوع ملء اسم أب غير موجود (سيُنشئ «أب غير موجود في الشجرة»).",
           ];
         }
       } else if (cat === "path_mismatch") {
         analysis.repair_type = "align_parent_to_canonical";
         analysis.root_cause_ar =
           analysis.root_cause_ar ||
-          "تعديل اسم/مسار دون مزامنة parent، أو إملاء مختلف عن صف الأب الحي، أو استيراد جزئي.";
+          "تعديل الاسم/المسار دون تحديث حقل الأب، أو الاسم مكتوب بطريقة مختلفة عن صف الأب، أو استيراد جزئي.";
         analysis.write_path_ar =
           analysis.write_path_ar ||
-          "راجع مسار الكتابة الذي عدّل name دون parent (مندوب/إدارة/استيراد).";
+          "كيفية الإصلاح: راجع من عدّل المسار دون حقل الأب (مندوب/إدارة/استيراد) ووحّد بعد موافقة.";
         var spellOnly =
           !!extracted &&
           !!stored &&
@@ -512,15 +551,15 @@
           analysis.requires_manual_choice = false;
           analysis.proposed = null;
           analysis.decision_logic_ar = [
-            "المستخرج من name: «" + (extracted || "—") + "».",
-            "المخزّن: «" + (stored || "NULL") + "».",
+            "الأب من المسار: «" + (extracted || "—") + "».",
+            "المذكور في السجل: «" + (stored || "فارغ") + "».",
             spellOnly
-              ? "بعد تطبيع العربية (ى↔ي / همزة / ة↔ه) المساران متكافئان — ليست عدم تطابق هيكلي."
-              : "parent مضبوط أصلًا على الاسم الكانوني للأب الحي.",
-            "لا UPDATE من Health Center — أعد فحص مركز الصحة (المقارنة أصبحت بالتطبيع).",
+              ? "بعد توحيد العربية (ى↔ي / همزة / ة↔ه) المساران متكافئان — ليست مشكلة هيكلية."
+              : "حقل الأب مضبوط أصلًا على اسم الأب الموجود في الشجرة.",
+            "لا تنفيذ إصلاح من مركز الصحة — أعد فحص التقرير (المقارنة أصبحت بالتوحيد).",
           ];
           analysis.root_cause_ar =
-            "اختلاف إملائي عربي بين مقاطع المسار وعمود parent (مثل دوخي/دوخى أو فضى/فضي) — الأب نفسه بعد التطبيع.";
+            "الاسم مكتوب بطريقة مختلفة عن حقل الأب (مثل دوخي/دوخى أو فضى/فضي) — الأب نفسه بعد التوحيد.";
         } else if (unified.ok) {
           analysis.can_auto_propose = true;
           analysis.requires_manual_choice = false;
@@ -531,13 +570,13 @@
             reason_ar: unified.reason_ar,
           };
           analysis.decision_logic_ar = [
-            "المستخرج من name: «" + (extracted || "—") + "».",
-            "المخزّن: «" + (stored || "NULL") + "».",
-            "الأب الكانوني في الشجرة: «" + unified.parent + "».",
+            "الأب من المسار: «" + (extracted || "—") + "».",
+            "المذكور في السجل: «" + (stored || "فارغ") + "».",
+            "الأب الموجود في الشجرة: «" + unified.parent + "».",
             unified.spelling_drift
-              ? "انحراف إملائي بين المسار والصف الحي — نكتب الاسم الكانوني فقط (لا يتيم)."
-              : "مواءمة parent مع الأب الحي.",
-            "سيمسح: أب غير موجود؟ نعم · عدم تطابق المسار؟ نعم.",
+              ? "الاسم مكتوب بطريقة مختلفة عن صف الأب — نكتب اسم الأب الموجود فقط."
+              : "مواءمة حقل الأب مع الأب الموجود في الشجرة.",
+            "سيمسح: أب غير موجود في الشجرة؟ نعم · اختلاف كتابة المسار؟ نعم.",
           ];
         } else {
           analysis.can_auto_propose = false;
@@ -552,19 +591,19 @@
             5,
           );
           analysis.decision_logic_ar = [
-            "المستخرج «" + (extracted || "—") + "» بلا صف أب حي — لا يُكتب كـ parent.",
-            "ابقَ في اختيار أب موجود يطابق المسار (وإلا سينتقل الخطأ إلى «أب غير موجود»).",
-            FLIP_BLOCK_AR,
+            fatherLookupFailureAr(extracted, children, norm(issue && issue.branch_key)),
+            "لا يُكتب الأب من المسار كحقل أب إن لم يوجد في الشجرة.",
+            "اختر أبًا موجودًا يطابق المسار (وإلا ستنتقل المشكلة إلى «أب غير موجود في الشجرة»).",
           ];
         }
       } else if (cat === "missing_father") {
         analysis.repair_type = "suggest_father_match";
         analysis.root_cause_ar =
           analysis.root_cause_ar ||
-          "خطأ إملائي / متغيرات كتابة · أب لم يُستورد · اعتماد طلب بلا أب صالح.";
+          "إملاء مختلف · أب لم يُضف بعد · اعتماد طلب بلا أب صالح.";
         analysis.write_path_ar =
           analysis.write_path_ar ||
-          "طلب مندوب / Workflow اعتماد / استيراد — يجب رفض الكتابة بلا أب موجود (Validation + Tree Engine).";
+          "كيفية الإصلاح: طلب مندوب / اعتماد / استيراد — ارفض الكتابة بلا أب موجود في الشجرة.";
         if (unified.ok) {
           // Extract resolves to a living father — one proposal clears both buckets.
           analysis.can_auto_propose = true;
@@ -577,11 +616,11 @@
           };
           analysis.suggestions = [];
           analysis.decision_logic_ar = [
-            "الأب المخزّن «" + (stored || "—") + "» غير موجود حرفيًا.",
-            "المستخرج من المسار يطابق أبًا حيًا بالاسم الكانوني «" +
+            "الأب المذكور «" + (stored || "—") + "» غير موجود حرفيًا في الشجرة.",
+            "الأب من المسار يطابق أبًا موجودًا بالاسم «" +
               unified.parent +
               "».",
-            "اقتراح موحّد يمسح «أب غير موجود» و«عدم تطابق المسار» معًا.",
+            "اقتراح واحد يمسح «أب غير موجود في الشجرة» و«اختلاف كتابة المسار» معًا.",
           ];
         } else {
           analysis.can_auto_propose = false;
@@ -589,9 +628,9 @@
           analysis.proposed = null;
           analysis.suggestions = suggestFatherMatches(issue, children, 5);
           analysis.decision_logic_ar = [
-            "الأب النصّي غير موجود كصف في tree_children لنفس الفرع.",
-            "لا إصلاح تلقائي بمسار يتيم — مرشّحات فقط.",
-            "عند الاختيار: يجب أن يطابق المرشّح المسار المستخرج وإلا يُحظر التنفيذ (منع التنقل بين الفئات).",
+            fatherLookupFailureAr(stored || extracted, children, norm(issue && issue.branch_key)),
+            "لا تنفيذ تلقائي باسم أب غير موجود — مرشّحات فقط.",
+            "عند الاختيار: يجب أن يطابق المرشّح الأب من المسار وإلا يُحظر التنفيذ.",
           ];
         }
       }
@@ -607,27 +646,43 @@
       var canon3 = link3.canonical_path || parentKey;
       analysis.can_auto_propose = !!link3.person_id;
       analysis.requires_manual_choice = !link3.person_id;
+      var linkFailAr = "";
+      if (!link3.person_id) {
+        if (link3.candidates && link3.candidates.length > 1) {
+          linkFailAr =
+            "يوجد أكثر من أب بنفس الاسم «" +
+            (parentKey || "—") +
+            "» — لا يمكن ربط المعرف تلقائيًا.";
+        } else if (!parentKey) {
+          linkFailAr = "لم يتم العثور على معرف الأب — لا مسار أب نصّي.";
+        } else {
+          linkFailAr =
+            "لم يتم العثور على معرف الأب لـ «" +
+            parentKey +
+            "» — يلزم اختيار يدوي أو إصلاح سلامة البيانات أولًا.";
+        }
+      }
       analysis.decision_logic_ar = [
-        "TREE-003: لا إعادة تسمية أبدًا — ربط parent_person_id فقط.",
+        "ربط داخلي: لا إعادة تسمية أبدًا — ربط معرف الأب فقط.",
         parentKey ? "مسار الأب النصّي: «" + parentKey + "»." : "لا مسار أب نصّي.",
         link3.person_id
-          ? "وُجد UUID أب وحيد مطابق للمسار → اقتراح ربط بالاسم الكانوني «" +
+          ? "وُجد معرف أب وحيد مطابق للمسار → اقتراح ربط بالاسم «" +
             canon3 +
             "»."
-          : "لا تطابق وحيد — يلزم اختيار يدوي أو إصلاح سلامة البيانات أولًا.",
+          : linkFailAr,
       ];
       analysis.root_cause_ar =
         analysis.root_cause_ar ||
-        "اعتماد/مندوب/استيراد كتب الصف بلا UUID أب صالح، أو UUID يشير لشخص محذوف.";
+        "اعتماد/مندوب/استيراد كتب السجل بلا معرف أب صالح، أو المعرف يشير لشخص محذوف.";
       analysis.write_path_ar =
         analysis.write_path_ar ||
-        "مسار الكتابة يجب يمر Tree Engine ويربط parent_person_id عند وجود أب وحيد.";
+        "كيفية الإصلاح: اربط معرف الأب عند وجود أب وحيد في الشجرة.";
       if (link3.person_id) {
         analysis.proposed = {
           parent: canon3 || null,
           parent_name: canon3 || null,
           parent_person_id: link3.person_id,
-          reason_ar: "ربط UUID الأب المطابق للمسار الكانوني — دون تغيير اسم الشخص.",
+          reason_ar: "ربط معرف الأب المطابق للمسار — دون تغيير اسم الشخص.",
         };
       }
       if (!link3.person_id && link3.candidates.length) {
@@ -647,30 +702,40 @@
       analysis.can_auto_propose = false;
       analysis.proposed = null;
       analysis.never_rename = true;
+      var diffReason =
+        norm(issue && issue.diff_reason_ar) ||
+        (function () {
+          var Struct = global.AlzidanIntegrityTreeStructure;
+          if (Struct && typeof Struct.explainArabicSpellingDiff === "function") {
+            return Struct.explainArabicSpellingDiff(
+              issue && issue.name_a,
+              issue && issue.name_b,
+            );
+          }
+          return "الاسم مكتوب بطريقة مختلفة";
+        })();
       analysis.decision_logic_ar = [
-        "أسماء متشابهة تحت نفس الأب بعد تطبيع العربية (همزة / ى↔ي / ة↔ه / تشكيل).",
+        "أسماء قد تكون مكررة تحت نفس الأب بعد توحيد العربية (همزة / ى↔ي / ة↔ه / تشكيل).",
         "الاسم الأول: «" +
           norm(issue && issue.name_a) +
           "» · الاسم الثاني: «" +
           norm(issue && issue.name_b) +
           "».",
-        "نسبة التشابه: " +
-          String((issue && (issue.similarity_ar || issue.similarity_pct)) || "100%") +
-          ".",
-        "الحالة: يحتاج مراجعة — لا اقتراح دمج ولا SQL إصلاح من Health Center.",
-        "قرار المشرف لاحقًا: إبقاء صفّين · أو دمج يدوي بعد التحقق — Truth Before Speed.",
+        "السبب: " + diffReason + ".",
+        "الحالة: يحتاج مراجعة — لا اقتراح دمج ولا أمر إصلاح من مركز الصحة.",
+        "قرار المشرف لاحقًا: إبقاء سجلين · أو دمج يدوي بعد التحقق.",
       ];
       analysis.root_cause_ar =
         analysis.root_cause_ar ||
-        "متغيرات إملائية عربية أو صفوف مكررة تحت نفس الأب — الغموض مقصود حتى يقرر المشرف.";
+        "متغيرات إملائية عربية أو سجلات مكررة تحت نفس الأب — الغموض مقصود حتى يقرر المشرف.";
       analysis.write_path_ar =
         analysis.write_path_ar ||
-        "لا مسار إصلاح تلقائي. أي دمج لاحق يجب أن يكون يدويًا بعد موافقة صريحة خارج هذا المسار.";
+        "كيفية الإصلاح: لا مسار تنفيذ تلقائي. أي دمج لاحق يجب أن يكون يدويًا بعد موافقة صريحة.";
     } else {
       analysis.repair_type = "manual_review";
       analysis.requires_manual_choice = true;
       analysis.decision_logic_ar = [
-        "لا اقتراح آلي لهذا النوع بعد — مراجعة يدوية عبر SQL Workspace.",
+        "لا اقتراح آلي لهذا النوع بعد — مراجعة يدوية عبر مساحة SQL.",
       ];
       analysis.root_cause_ar =
         analysis.root_cause_ar || "غير مصنّف لخط إصلاح مُنمّط.";
@@ -764,8 +829,8 @@
       would_flip_only: wouldFlip,
       block_message_ar: wouldFlip ? blockMsg || FLIP_BLOCK_AR : null,
       preview_flags_ar: [
-        "سيمسح «أب غير موجود»؟ " + (clearsMissing ? "نعم" : "لا"),
-        "سيمسح «عدم تطابق المسار»؟ " + (clearsPath ? "نعم" : "لا"),
+        "سيمسح «أب غير موجود في الشجرة»؟ " + (clearsMissing ? "نعم" : "لا"),
+        "سيمسح «الاسم مكتوب بطريقة مختلفة»؟ " + (clearsPath ? "نعم" : "لا"),
       ].join("\n"),
     };
     if (wouldFlip && preview.block_message_ar) {
@@ -784,17 +849,17 @@
     if (after && after.reason_ar) out.push("سبب القيم المقترحة: " + after.reason_ar);
     if (analysis && analysis.repair_type === "fill_parent_from_name") {
       out.push(
-        "المنطق: parent فارغ + أب حي مطابق للمستخرج → اقترح الاسم الكانوني — ليس تخمينًا.",
+        "المنطق: حقل الأب فارغ + أب موجود يطابق الأب من المسار → اقترح اسم الأب الموجود — ليس تخمينًا.",
       );
     }
     if (analysis && analysis.repair_type === "align_parent_to_canonical") {
-      out.push("المنطق الموحّد: لا تُكتب قيمة parent إلا إن وُجد صف أب حي.");
+      out.push("المنطق: لا يُكتب حقل الأب إلا إن وُجد سجل أب في الشجرة.");
     }
     if (analysis && analysis.never_rename) {
-      out.push("قيد صارم: لا إعادة تسمية — ربط UUID فقط.");
+      out.push("قيد صارم: لا إعادة تسمية — ربط المعرف فقط.");
     }
     if (analysis && analysis.repair_type === "manual_review_no_merge") {
-      out.push("قيد صارم: لا دمج تلقائي — الأسماء المتشابهة للمراجعة فقط.");
+      out.push("قيد صارم: لا دمج تلقائي — الأسماء التي قد تكون مكررة للمراجعة فقط.");
     }
     if (!out.length) out.push("لا منطق اقتراح موثّق لهذه الحالة.");
     return out.join("\n");
@@ -826,7 +891,7 @@
       return {
         ok: false,
         message_ar:
-          "الأسماء المتشابهة للمراجعة فقط — ممنوع توليد SQL دمج من Health Center.",
+          "الأسماء التي قد تكون مكررة للمراجعة فقط — ممنوع توليد أمر دمج من مركز الصحة.",
       };
     }
     if (p.analysis && p.analysis.repair_type === "spelling_equivalent_no_write") {
@@ -857,7 +922,7 @@
 
     var rowId = Number(id);
     var sql = [
-      "-- Health Center · صف واحد · بعد موافقة المدير",
+      "-- مركز الصحة · سجل واحد · بعد موافقة المدير",
       "-- id: " + rowId + " · actor: " + String(actor).replace(/\n/g, " "),
       "-- reason: " + String(reason).replace(/\n/g, " ").slice(0, 200),
       "-- before.parent: " + String(before.parent == null ? "" : before.parent),
@@ -871,10 +936,17 @@
     return {
       ok: true,
       sql: sql,
-      title: "إصلاح صف #" + rowId + " (مركز الصحة)",
+      title: "إصلاح السجل رقم " + rowId + " (مركز الصحة)",
       row_id: rowId,
       before: before,
       after: after,
+      success_meta: {
+        row_id: rowId,
+        father_name: after.parent || after.parent_name || "",
+        after_parent: after.parent || after.parent_name || "",
+        updated_parent: !!(after.parent != null && after.parent !== ""),
+        updated_uuid: !!after.parent_person_id,
+      },
     };
   }
 
@@ -896,47 +968,135 @@
 
   /**
    * Best-effort provenance from row + optional request matches.
+   * Source labels for managers: طلب مندوب / استيراد / إدارة / صيانة / غير موثّق
    */
+  function mapProvenanceSource(h) {
+    var hints = h || {};
+    if (hints.source_ar) return { source_ar: hints.source_ar, documented: true };
+    var kind = String(hints.request_kind || "").toLowerCase();
+    if (
+      kind === "tree_delegate" ||
+      kind === "events_delegate" ||
+      kind.indexOf("delegate") >= 0
+    ) {
+      return { source_ar: "طلب مندوب", documented: true };
+    }
+    if (kind === "tree_card") {
+      return { source_ar: "طلب مندوب", documented: true };
+    }
+    if (kind.indexOf("import") >= 0) {
+      return { source_ar: "استيراد", documented: true };
+    }
+    if (kind) {
+      return { source_ar: "إدارة", documented: true };
+    }
+    var heur = String(hints.heuristic_kind || "").toLowerCase();
+    if (heur === "import" || /استيراد/.test(String(hints.heuristic_ar || ""))) {
+      return { source_ar: "استيراد", documented: false };
+    }
+    if (
+      heur === "maintenance" ||
+      heur === "sql" ||
+      /صيانة/.test(String(hints.heuristic_ar || ""))
+    ) {
+      return { source_ar: "صيانة", documented: false };
+    }
+    if (heur === "admin" || /إدارة/.test(String(hints.heuristic_ar || ""))) {
+      return { source_ar: "إدارة", documented: false };
+    }
+    if (hints.heuristic_ar) {
+      return { source_ar: "غير موثّق", documented: false };
+    }
+    return { source_ar: "غير موثّق", documented: false };
+  }
+
   function buildProvenance(row, hints) {
     var h = hints || {};
+    var mapped = mapProvenanceSource(h);
     var known = [];
-    var source = "غير موثّق";
-    var documented = false;
+    if (h.source_ar) known.push("مصدر صريح: " + h.source_ar);
+    if (h.request_kind) known.push("مطابقة طلبات الاعتماد");
+    if (h.heuristic_ar && !mapped.documented) known.push(h.heuristic_ar);
 
-    if (h.source_ar) {
-      source = h.source_ar;
-      documented = true;
-      known.push("مصدر صريح: " + h.source_ar);
-    } else if (h.request_kind) {
-      source =
-        h.request_kind === "tree_card"
-          ? "طلب بطاقة شجرة (اعتماد/Workflow)"
-          : h.request_kind.indexOf("delegate") >= 0
-            ? "طلب مندوب"
-            : "طلب إداري: " + h.request_kind;
-      documented = true;
-      known.push("مطابقة approval_requests");
-    } else if (h.heuristic_ar) {
-      source = h.heuristic_ar + " (استدلال — غير مؤكد)";
-      known.push(h.heuristic_ar);
-    }
+    var createdBy =
+      h.created_by_ar ||
+      (row && (row.created_by_name || row.created_by)) ||
+      null;
+    var modifiedBy =
+      h.modified_by_ar ||
+      (row && (row.updated_by_name || row.updated_by || row.modified_by)) ||
+      null;
 
     return {
-      source_ar: source,
-      documented: documented,
+      source_ar: mapped.source_ar,
+      documented: mapped.documented,
       created_at: row && row.created_at ? row.created_at : null,
-      updated_at: row && (row.updated_at || row.modified_at) ? row.updated_at || row.modified_at : null,
-      modified_by_ar:
-        h.modified_by_ar ||
-        (row && (row.updated_by || row.modified_by)) ||
-        "غير موثّق",
+      updated_at:
+        row && (row.updated_at || row.modified_at)
+          ? row.updated_at || row.modified_at
+          : null,
+      created_by_ar: createdBy ? String(createdBy) : "غير موثّق",
+      modified_by_ar: modifiedBy ? String(modifiedBy) : "غير موثّق",
       detail_ar: known.length
         ? known.join(" · ")
-        : "لا أعمدة تدقيق كافية على الصف — صادقًا: غير موثّق.",
-      note_ar: documented
+        : "لا أعمدة تدقيق كافية على السجل — صادقًا: غير موثّق.",
+      note_ar: mapped.documented
         ? ""
         : "إن لم يُذكر المصدر في القاعدة نكتب «غير موثّق» بدل التخمين.",
     };
+  }
+
+  /** Specific success line after a Health Center row repair runs in SQL Workspace. */
+  function formatRepairSuccessAr(meta) {
+    var m = meta || {};
+    var id = m.row_id != null ? m.row_id : "?";
+    var father = norm(m.father_name || m.after_parent || "");
+    var msg = "تم إصلاح السجل رقم " + id + " بنجاح.";
+    if (father) {
+      msg += " تم ربطه بالأب «" + father + "»";
+      var bits = [];
+      if (m.updated_parent !== false) bits.push("حقل الأب");
+      if (m.updated_uuid) bits.push("المعرّف");
+      if (bits.length) msg += "، وتحديث " + bits.join(" و");
+      msg += ".";
+    }
+    return msg;
+  }
+
+  /** Failure line that always includes WHY (سبب الفشل). */
+  function formatRepairFailureAr(reason) {
+    var why = String(reason || "").trim();
+    if (!why) why = "سبب غير معروف — راجع رسالة النظام.";
+    if (/^سبب الفشل/.test(why)) return why;
+    return "فشل التنفيذ — سبب الفشل: " + why;
+  }
+
+  /**
+   * Map raw SQL/RPC errors into Arabic-friendly reasons for managers.
+   */
+  function friendlySqlFailureAr(error, data) {
+    if (data && data.message_ar) return String(data.message_ar);
+    var code = String((error && error.code) || (data && data.error_code) || "");
+    var raw = String(
+      (error && error.message) || (data && data.message) || "",
+    );
+    if (/permission|not allowed|42501|JWT|RLS/i.test(raw) || code === "42501") {
+      return "صلاحية غير كافية لتنفيذ الأمر" + (raw ? " — " + raw.slice(0, 120) : "");
+    }
+    if (/0 rows|no rows|ROW_COUNT|did not affect/i.test(raw)) {
+      return "الصف غير موجود أو لم يتأثر أي سجل بالأمر";
+    }
+    if (/violates|foreign key|23503/i.test(raw) || code === "23503") {
+      return "لم يتم العثور على الأب أو المعرف المشار إليه — " + raw.slice(0, 140);
+    }
+    if (/unique|duplicate|23505/i.test(raw) || code === "23505") {
+      return "تعارض فريد في القاعدة — " + raw.slice(0, 140);
+    }
+    if (/syntax|42601/i.test(raw) || code === "42601") {
+      return "خطأ في صياغة SQL — " + raw.slice(0, 140);
+    }
+    if (raw) return raw.slice(0, 220);
+    return "تعذّر تنفيذ الأمر. راجع الصياغة أو الصلاحيات.";
   }
 
   var api = {
@@ -951,10 +1111,14 @@
     resolveUnifiedParentTarget: resolveUnifiedParentTarget,
     evaluateChosenFather: evaluateChosenFather,
     FLIP_BLOCK_AR: FLIP_BLOCK_AR,
+    fatherLookupFailureAr: fatherLookupFailureAr,
     issueStillPresent: issueStillPresent,
     logRepair: logRepair,
     loadLog: loadLog,
     buildProvenance: buildProvenance,
+    formatRepairSuccessAr: formatRepairSuccessAr,
+    formatRepairFailureAr: formatRepairFailureAr,
+    friendlySqlFailureAr: friendlySqlFailureAr,
     priorityLabel: priorityLabel,
     inferPriority: inferPriority,
   };

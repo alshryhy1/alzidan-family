@@ -137,7 +137,8 @@ const uncleRow = {
   assert(preview.executable === false, "orphan extract not executable");
   assert(preview.would_flip_only === true, "marked as flip-only");
   assert(
-    String(preview.block_message_ar || "").indexOf("فئة أخرى") >= 0,
+    String(preview.block_message_ar || "").indexOf("لم يتم العثور على الأب") >= 0 ||
+      String(preview.block_message_ar || "").indexOf("فئة أخرى") >= 0,
     "Arabic flip-block message",
   );
   const sql = Pipe.buildExecuteSql(preview, { actor: "test" });
