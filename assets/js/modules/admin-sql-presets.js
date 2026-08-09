@@ -53,14 +53,14 @@
     {
       id: "maint.link_uuid_nada_tuaisan_hamad_mohammad_dry_run_v1",
       title: "ربط UUID سلسلة نداء-طعيسان-حمد-محمد (1738-1740) — معاينة",
-      desc: "قراءة فقط لـ ids 1738/1739/1740: يثبت اسم الأب وperson_id المقترح. إن لم يُحل نداء بفرادة يظهر المرشحون دون APPLY.",
+      desc: "SELECT واحد آمن لـ Workspace: اسم الأب وperson_id لـ 1738/1739/1740. إن لم يُحل نداء بفرادة يظهر المرشحون دون APPLY.",
       file: "../supabase/sql/COPY-ME-link-uuid-nada-tuaisan-hamad-mohammad-dry-run.sql",
       order: 50,
     },
     {
       id: "maint.link_uuid_nada_tuaisan_hamad_mohammad_apply_v1",
       title: "ربط UUID سلسلة نداء-طعيسان-حمد-محمد (1738-1740) — APPLY",
-      desc: "كتابة parent_person_id فقط لتلك الثلاثة بعد نجاح المعاينة. 1740 يُحدَّث فقط إذا وُجد أب نداء فريد. لا Auto Repair.",
+      desc: "UPDATE واحد لـ parent_person_id فقط (بلا CTE). 1740 بشرط نداء فريد. أعد المعاينة بعد النجاح. لا Auto Repair.",
       file: "../supabase/sql/COPY-ME-link-uuid-nada-tuaisan-hamad-mohammad-apply.sql",
       order: 51,
     },

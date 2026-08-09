@@ -81,3 +81,5 @@
 ## ربط UUID 1738–1740 (نداء→طعيسان→حمد→محمد)
 
 صيانة لمرة واحدة — تفاصيل التشغيل والنتائج المتوقعة ومرشحي نداء: [`MAINT-LINK-UUID-NADA-TUAISAN-1738-1740.md`](./MAINT-LINK-UUID-NADA-TUAISAN-1738-1740.md).
+
+**فشل Workspace السابق (معاينة + APPLY عند الأمر 1/2):** الصيغة الأولى استخدمت `WITH … UPDATE … SELECT` (يُصنَّف selectish ويُلفّ داخل subquery) وتعليقات تذكر علامات تعليقات كتلية فخرجت عن مسار `execute_v1` البسيط. **الآن:** معاينة = SELECT واحد؛ APPLY = UPDATE واحد لـ `parent_person_id` فقط — بلا CTE كتابة وبلا تعليقات كتلية.
