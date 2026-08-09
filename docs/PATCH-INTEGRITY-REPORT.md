@@ -97,7 +97,7 @@ npm run verify:integrity-v2
 
 **مهم:** نقص الأبناء تحت أب (مثل خميس) قد يكون **كتابة parent=NULL** وليس LIMIT واجهة البحث وحده. الجلب عبر `parent_person_id` أصح للعرض، وإصلاح العمود مطلوب لمسارات `WHERE parent = …`.
 
-الإصلاح اليدوي الجماعي (اختياري): SQL Workspace → preset «إصلاح parent/child_name الفارغ» — dry-run ثم APPLY بعد موافقة منفصلة. **لا** Auto Repair و**لا** «إصلاح الكل» من مركز الصحة (R-7).
+الإصلاح اليدوي الجماعي (اختياري): SQL Workspace → «معاينة parent/child_name الفارغ (dry-run)» ثم بعد المراجعة «تطبيق ملء parent/child_name (APPLY)» بموافقة منفصلة. **لا** Auto Repair و**لا** «إصلاح الكل» من مركز الصحة (R-7).
 
 ### تشخيص + إصلاح مرحلي — 2026-08-09هـ
 

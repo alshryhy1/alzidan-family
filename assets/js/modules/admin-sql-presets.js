@@ -37,11 +37,18 @@
       order: 30,
     },
     {
-      id: "maint.repair_null_parent_columns_v1",
-      title: "إصلاح parent/child_name الفارغ (يدوي)",
-      desc: "Dry-run ثم APPLY اختياري لملء عمود parent من parent_name أو من مسار name — ليس إصلاحًا تلقائيًا من مركز الصحة.",
-      file: "../supabase/sql/COPY-ME-repair-null-parent-columns.sql",
+      id: "maint.repair_null_parent_columns_dry_run_v1",
+      title: "معاينة parent/child_name الفارغ (dry-run)",
+      desc: "قراءة فقط: يعرض الصفوف ذات parent أو child_name فارغ ومقترح الملء. شغّله أولًا قبل APPLY. ليس إصلاحًا تلقائيًا.",
+      file: "../supabase/sql/COPY-ME-repair-null-parent-columns-dry-run.sql",
       order: 40,
+    },
+    {
+      id: "maint.repair_null_parent_columns_apply_v1",
+      title: "تطبيق ملء parent/child_name (APPLY)",
+      desc: "كتابة: املأ parent من parent_name أو مسار name بعد نجاح dry-run وموافقة صريحة. لا Auto Repair من مركز الصحة.",
+      file: "../supabase/sql/COPY-ME-repair-null-parent-columns-apply.sql",
+      order: 41,
     },
   ];
 

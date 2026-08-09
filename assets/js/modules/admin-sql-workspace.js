@@ -703,8 +703,16 @@
     if (data && data.message_ar) return String(data.message_ar);
     const code = String((error && error.code) || (data && data.error_code) || "");
     const rawMsg = String(
-      (error && error.message) || (data && data.message_ar) || "",
+      (error && error.message) || (data && data.message) || (data && data.message_ar) || "",
     );
+    if (
+      code === "57014" ||
+      /statement timeout|canceling statement/i.test(rawMsg)
+    ) {
+      return (
+        "انتهت مهلة التنفيذ (timeout). إن كان السكربت يحتوي تعليقًا كتليًا /* … */ فأزلْه أو استخدم بطاقة dry-run / APPLY المنفصلتين، أو أعد تثبيت منفّذ v2 المحدَّث ثم أعد المحاولة."
+      );
+    }
     if (
       code === "PGRST202" ||
       /could not find|schema cache|admin_sql_workspace_run_v2/i.test(rawMsg)
@@ -724,6 +732,13 @@
     }
     if (code === "ADMIN-RPC-001") {
       return String((error && error.message) || "تعذّر الاتصال بخدمة الإدارة.");
+    }
+    if (rawMsg) {
+      return (
+        "تعذّر تنفيذ الأمر. راجع الصياغة أو الصلاحيات. (" +
+        rawMsg.slice(0, 160) +
+        ")"
+      );
     }
     return "تعذّر تنفيذ الأمر. راجع الصياغة أو الصلاحيات.";
   }
@@ -1606,6 +1621,20 @@
       desc: "نية منفصلة delegate_secret_reset + اعتماد/رفض يحدّثون الرقم السري.",
       file: "../supabase/sql/COPY-ME-delegate-secret-reset.sql",
       order: 30,
+    },
+    {
+      id: "maint.repair_null_parent_columns_dry_run_v1",
+      title: "معاينة parent/child_name الفارغ (dry-run)",
+      desc: "قراءة فقط: صفوف parent/child_name الفارغ ومقترح الملء — قبل APPLY.",
+      file: "../supabase/sql/COPY-ME-repair-null-parent-columns-dry-run.sql",
+      order: 40,
+    },
+    {
+      id: "maint.repair_null_parent_columns_apply_v1",
+      title: "تطبيق ملء parent/child_name (APPLY)",
+      desc: "كتابة بعد نجاح dry-run وموافقة صريحة — لا Auto Repair.",
+      file: "../supabase/sql/COPY-ME-repair-null-parent-columns-apply.sql",
+      order: 41,
     },
   ];
 

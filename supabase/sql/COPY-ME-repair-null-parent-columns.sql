@@ -1,13 +1,15 @@
 -- =============================================================================
--- COPY-ME: إصلاح عمود parent / child_name الفارغ (قراءة ثم تطبيق يدوي)
--- Ref: مركز صحة البيانات → سلامة الشجرة (parent = NULL)
--- سياسة: لا تشغيل تلقائي من Health Center (R-7). Dry-run أولًا ثم APPLY بعد موافقة.
--- Safe to re-run. لا يحذف صفوفًا.
+-- COPY-ME (مُجزّأ): إصلاح parent / child_name الفارغ — يدوي مرحلي
+-- السبب الجذري لفشل الملف الموحّد السابق:
+--   تعليق كتلي /* UPDATE … */ كان يُعامل كأمر ثالث فيصل إلى
+--   admin_sql_classify_v1 ويتسبب في statement timeout → رسالة عامة في الواجهة.
+-- المسار الصحيح الآن (preset منفصلان):
+--   1) COPY-ME-repair-null-parent-columns-dry-run.sql  — قراءة فقط
+--   2) COPY-ME-repair-null-parent-columns-apply.sql    — كتابة بعد موافقة
+-- لا Auto Repair. لا تشغيل من مركز الصحة (R-7).
 -- =============================================================================
 
--- ---------------------------------------------------------------------------
--- 0) Dry-run — صفوف parent فارغ (يشمل حسين/عبدالعزيز/منصور/مبارك/زيد إن وُجدت)
--- ---------------------------------------------------------------------------
+-- Dry-run (أمر واحد) — نفس محتوى بطاقة dry-run:
 SELECT
   id,
   branch_key,
@@ -15,74 +17,17 @@ SELECT
   parent_name,
   child_name,
   name,
-  -- أب مستخرج من المسار (إزالة آخر مقطع)
-  CASE
-    WHEN position('/' in coalesce(name, child_name, '')) > 0
-      THEN regexp_replace(coalesce(name, child_name), '/[^/]+$', '')
-    ELSE NULL
-  END AS extracted_parent,
+  coalesce(
+    nullif(btrim(parent_name), ''),
+    CASE
+      WHEN position('/' in coalesce(name, child_name, '')) > 0
+        THEN regexp_replace(coalesce(name, child_name), '/[^/]+$', '')
+      ELSE NULL
+    END
+  ) AS proposed_parent,
   parent_person_id
 FROM public.tree_children
 WHERE nullif(btrim(coalesce(parent, '')), '') IS NULL
+   OR nullif(btrim(coalesce(child_name, '')), '') IS NULL
 ORDER BY branch_key, id
 LIMIT 200;
-
--- ---------------------------------------------------------------------------
--- 1) Dry-run — parent_name/parent لا يطابق المستخرج من name
--- ---------------------------------------------------------------------------
-SELECT
-  id,
-  branch_key,
-  parent,
-  parent_name,
-  name,
-  CASE
-    WHEN position('/' in coalesce(name, child_name, '')) > 0
-      THEN regexp_replace(coalesce(name, child_name), '/[^/]+$', '')
-    ELSE NULL
-  END AS extracted_parent
-FROM public.tree_children
-WHERE position('/' in coalesce(name, child_name, '')) > 0
-  AND (
-    nullif(btrim(coalesce(parent, '')), '') IS NULL
-    OR btrim(parent) IS DISTINCT FROM
-       regexp_replace(coalesce(name, child_name), '/[^/]+$', '')
-  )
-ORDER BY id
-LIMIT 200;
-
--- ---------------------------------------------------------------------------
--- 2) APPLY — املأ parent من parent_name أو من المسار؛ child_name من name
---    (شغّل فقط بعد مراجعة dry-run والموافقة الصريحة)
--- ---------------------------------------------------------------------------
-/*
-UPDATE public.tree_children c
-SET
-  parent = coalesce(
-    nullif(btrim(c.parent), ''),
-    nullif(btrim(c.parent_name), ''),
-    CASE
-      WHEN position('/' in coalesce(c.name, c.child_name, '')) > 0
-        THEN regexp_replace(coalesce(c.name, c.child_name), '/[^/]+$', '')
-      ELSE NULL
-    END
-  ),
-  parent_name = coalesce(
-    nullif(btrim(c.parent_name), ''),
-    nullif(btrim(c.parent), ''),
-    CASE
-      WHEN position('/' in coalesce(c.name, c.child_name, '')) > 0
-        THEN regexp_replace(coalesce(c.name, c.child_name), '/[^/]+$', '')
-      ELSE c.parent_name
-    END
-  ),
-  child_name = coalesce(nullif(btrim(c.child_name), ''), nullif(btrim(c.name), '')),
-  name = coalesce(nullif(btrim(c.name), ''), nullif(btrim(c.child_name), ''))
-WHERE nullif(btrim(coalesce(c.parent, '')), '') IS NULL
-   OR nullif(btrim(coalesce(c.child_name, '')), '') IS NULL;
-
--- تحقق بعد التطبيق:
-SELECT count(*) AS still_null_parent
-FROM public.tree_children
-WHERE nullif(btrim(coalesce(parent, '')), '') IS NULL;
-*/

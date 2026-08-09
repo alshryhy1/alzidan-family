@@ -48,6 +48,14 @@
 | `maint.sql_workspace_run_v2` | تثبيت منفّذ SQL Workspace v2 | `COPY-ME-admin-sql-workspace-run-v2.sql` |
 | `maint.fix_delegate_portal_path_v1` | إصلاح دخول المندوب بعد القبول | `COPY-ME-fix-delegate-portal-path.sql` |
 | `maint.delegate_secret_reset_v1` | طلب إعادة تعيين الرقم السري | `COPY-ME-delegate-secret-reset.sql` |
+| `maint.repair_null_parent_columns_dry_run_v1` | معاينة parent/child_name الفارغ | `COPY-ME-repair-null-parent-columns-dry-run.sql` |
+| `maint.repair_null_parent_columns_apply_v1` | تطبيق ملء parent/child_name | `COPY-ME-repair-null-parent-columns-apply.sql` |
+
+## إصلاح parent الفارغ — لماذا فشل الملف الموحّد
+
+الملف السابق جمع SELECT + تعليق كتلي `/* UPDATE … */`. المنفّذ v2 اعتبر التعليق أمرًا ثالثًا؛ `admin_sql_classify_v1` علق على regex التعليقات الكتلية → `statement timeout` → رسالة عامة في الواجهة.
+
+المسار اليدوي الآن: dry-run (SELECT واحد) ثم APPLY (UPDATE) بعد موافقة — بلا Auto Repair.
 
 ## إعادة الاختبار (دقيق)
 

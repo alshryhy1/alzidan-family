@@ -21,25 +21,42 @@ declare
   v_first text;
   v_mutating boolean := false;
   v_selectish boolean := false;
+  v_block_end int;
 begin
   if v_raw = '' then
     return jsonb_build_object('empty', true, 'mutating', false, 'selectish', false, 'first', null);
   end if;
 
+  -- Strip leading line/block comments without regex backtracking.
+  -- (Naive '/\*.*?\*/' with flag n can statement-timeout on SQL that contains '/' paths.)
   v_work := v_raw;
   loop
-    if v_work ~ '^\s*--' then
-      v_work := regexp_replace(v_work, '^\s*--[^\n]*\n?', '');
+    v_work := btrim(v_work);
+    if v_work = '' then
+      exit;
+    end if;
+    if substr(v_work, 1, 2) = '--' then
+      v_work := regexp_replace(v_work, '^--[^\n]*\n?', '');
       continue;
     end if;
-    if v_work ~ '^\s*/\*' then
-      v_work := regexp_replace(v_work, '^\s*/\*.*?\*/\s*', '', 'n');
-      continue;
+    if substr(v_work, 1, 2) = '/*' then
+      v_block_end := position('*/' in substr(v_work, 3));
+      if v_block_end > 0 then
+        -- substr(v_work,3) index + 2 (for '/*') + 2 (for '*/') - 1 = v_block_end + 3
+        v_work := substr(v_work, v_block_end + 4);
+        continue;
+      end if;
+      -- Unclosed block comment → treat as empty
+      v_work := '';
+      exit;
     end if;
     exit;
   end loop;
 
   v_work := btrim(v_work);
+  if v_work = '' then
+    return jsonb_build_object('empty', true, 'mutating', false, 'selectish', false, 'first', null);
+  end if;
   v_first := upper(substring(v_work from '^\s*([A-Za-z]+)'));
 
   v_selectish := v_first in ('SELECT', 'WITH', 'SHOW', 'EXPLAIN', 'VALUES', 'TABLE');
@@ -510,6 +527,9 @@ begin
 
   for i in 1..v_stmt_count loop
     v_cls := public.admin_sql_classify_v1(v_stmts[i]);
+    if coalesce((v_cls->>'empty')::boolean, false) then
+      continue;
+    end if;
     if coalesce((v_cls->>'mutating')::boolean, false) then
       v_any_mutating := true;
       exit;
@@ -537,6 +557,9 @@ begin
     end if;
 
     v_cls := public.admin_sql_classify_v1(v_stmt);
+    if coalesce((v_cls->>'empty')::boolean, false) then
+      continue;
+    end if;
     v_is_mutating := coalesce((v_cls->>'mutating')::boolean, false);
     v_is_selectish := coalesce((v_cls->>'selectish')::boolean, false);
     v_first := v_cls->>'first';
