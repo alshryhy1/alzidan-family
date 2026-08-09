@@ -313,6 +313,22 @@
       const meta = getPersonRowMeta(payload.parent_name);
       if (meta && meta.person_id) payload.parent_person_id = meta.person_id;
     }
+    const TE = window.AlzidanTreeEngine;
+    if (TE && typeof TE.prepareChildWriteRow === "function") {
+      const prepared = TE.prepareChildWriteRow(payload, {
+        allowBranchRoot: isBranchRoot,
+      });
+      if (!prepared.ok) {
+        return {
+          ok: false,
+          error: {
+            message: prepared.message_ar || TE.MSG_PARENT_NULL_AR || "parent مطلوب",
+            code: prepared.code || "TREE-PARENT-NULL",
+          },
+        };
+      }
+      payload = prepared.row;
+    }
     // TREE-004: refuse name-only writes for non-root parents.
     if (!isBranchRoot && !normalizePersonName(payload.parent_person_id || "")) {
       return {

@@ -2355,5 +2355,26 @@
     cleanLog: cleanLogToArchive,
     renderPresets: renderPresets,
     runPreset: runPreset,
+    /** Load explicit SQL into the editor (Health Center staged repair). */
+    loadSql: function (sql, meta) {
+      const text = String(sql || "");
+      if (!els.editor) {
+        els.editor = document.getElementById("sql-ws-editor");
+      }
+      if (!els.editor) return false;
+      els.editor.value = text;
+      activeEditorPresetId = "";
+      setEditorVisible(true);
+      const title = (meta && meta.title) || "أمر من مركز الصحة";
+      setStatus("ok", "محمّل للمعاينة: " + title + " — راجع ثم شغّل بعد الموافقة.");
+      setError("");
+      try {
+        const section = document.getElementById("sql-workspace-section");
+        if (section && typeof section.scrollIntoView === "function") {
+          section.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      } catch (_) {}
+      return true;
+    },
   };
 })();

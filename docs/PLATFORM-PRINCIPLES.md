@@ -192,7 +192,7 @@ Business Services / Family Engine لا تستورد شكل الشاشة ولا �
 | بيانات قديمة سيئة (مثل `parent = NULL`) | **Data Integrity** (كشف) + **SQL Workspace** (إصلاح يدوي بعد موافقة · أرشفة بعد الإغلاق) |
 | منع التكرار مستقبلًا | **Validation Engine** + **Workflow** — كل مسار كتابة إلى `tree_children` يرفض `parent=NULL` عبر Tree Engine |
 | منع وصول المستخدم للخطأ | **Request Experience** — لا طلب إن كان الشخص موجودًا / الأب خطأ / البيانات ناقصة |
-| مراقبة مستمرة | **Health Center** (قراءة فقط — R-7) |
+| مراقبة مستمرة + تشخيص | **Health Center** (قراءة أولًا — R-7؛ إصلاح صف بصف بعد موافقة عبر SQL Workspace فقط — بلا Auto Repair / بلا «إصلاح الكل») |
 
 **سلسلة الطبقات:**
 
@@ -208,7 +208,7 @@ User → Request Experience → Validation Engine → Workflow Engine
 | نقطة كتابة معروفة (دين) | ملاحظة |
 |---------------------------|--------|
 | `delegate.js` → `tree_children_insert_v1` / update / delete | مسار مندوب مباشر — حارس parent مضاف؛ الهدف: تمرير عبر Tree Engine فقط |
-| `admin-family-mgmt.js` / إدارة الشجرة | كتابة إدارية موازية |
+| `admin-family-mgmt.js` / إدارة الشجرة | كتابة إدارية — حارس parent عبر Tree Engine مضاف؛ الهدف sole writer كامل |
 | `request-actions.js` → `admin_tree_children_import_v1` | اعتماد بطاقة — يستدعي `prepareChildWriteRow` قبل RPC |
 | `admin_tree_children_import_v1` / `admin_tree_child_upsert_v1` (SQL) | مسارات خادم — لم تُغلف بالكامل بعد |
 | استيراد جماعي / صيانة SQL Workspace | إصلاح legacy فقط — ليس مسار منتج يومي |
@@ -229,4 +229,4 @@ User → Request Experience → Validation Engine → Workflow Engine
 7. هل تكرر منطقًا موجودًا في صفحة أخرى؟ → انقله للمحرك/الخدمة (Zero Duplicate Logic).  
 8. هل تخزّن حقيقة لها مصدر آخر؟ → SSOT — اقرأ من المصدر.  
 9. هل القفز يتجاوز البوابتين (Delegates قبول · تجميد الدستور الحي) أو سلّم المراحل؟ → راجع [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md).  
-10. هل بيانات legacy فاسدة؟ → Health Center للكشف · SQL Workspace للإصلاح اليدوي — **لا** إصلاح تلقائي من الواجهة.
+10. هل بيانات legacy فاسدة؟ → Health Center للتشخيص · Analyze→Preview→Approve→SQL Workspace لصف واحد — **لا** إصلاح تلقائي و**لا** «إصلاح الكل».

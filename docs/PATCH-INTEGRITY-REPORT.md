@@ -97,10 +97,36 @@ npm run verify:integrity-v2
 
 **مهم:** نقص الأبناء تحت أب (مثل خميس) قد يكون **كتابة parent=NULL** وليس LIMIT واجهة البحث وحده. الجلب عبر `parent_person_id` أصح للعرض، وإصلاح العمود مطلوب لمسارات `WHERE parent = …`.
 
-الإصلاح اليدوي: SQL Workspace → preset «إصلاح parent/child_name الفارغ» (`COPY-ME-repair-null-parent-columns.sql`) — dry-run ثم APPLY بعد موافقة. لا auto-repair من Health Center (R-7).
+الإصلاح اليدوي الجماعي (اختياري): SQL Workspace → preset «إصلاح parent/child_name الفارغ» — dry-run ثم APPLY بعد موافقة منفصلة. **لا** Auto Repair و**لا** «إصلاح الكل» من مركز الصحة (R-7).
+
+### تشخيص + إصلاح مرحلي — 2026-08-09هـ
+
+Health Center: **تشخيص أولًا** ثم إصلاح **صف بصف** بعد موافقة.
+
+| أولوية | معنى |
+|--------|------|
+| 🔴 حرج | parent=NULL · أب مفقود |
+| 🟠 مرتفع | عدم تطابق المسار / علاقة مكسورة |
+| 🟡 متوسط | ربط UUID / TREE-003 |
+| 🟢 سليم | علاقات صحيحة |
+
+**بطاقة الملخص:** حرج · يحتاج مراجعة · UUID · سليم.
+
+**سبب جذري + مسار الكتابة** على كل صف؛ **«اعرض سبب الإدخال»** best-effort (`created_at` + مطابقة طلبات) أو **غير موثّق**.
+
+**المسار:** Analyze → Preview → Approve → Execute (SQL Workspace · صف واحد) → Re-verify → Log.  
+أزرار: تحليل · لماذا اقترحت هذا الإصلاح؟ · إرسال إلى SQL Workspace بعد الموافقة.
+
+| نوع | سلوك |
+|-----|------|
+| parent=NULL | ملء من المسار + ربط UUID إن أب وحيد |
+| أب مفقود | مرشّحات فقط — بعد اختيار + موافقة |
+| TREE-003 | ربط `parent_person_id` فقط — ممنوع إعادة تسمية |
+
+الوحدات: `integrity-repair-pipeline.js` · معاينات `tree-engine.js` · `AlzidanSqlWorkspace.loadSql`.
 
 ### Tree Engine sole writer (دستور)
 
-الكتابة الجديدة ترفض `parent=NULL` عبر `AlzidanTreeEngine` (`assets/js/modules/tree-engine.js`). مسارات المندوب/الإدارة المباشرة ما زالت دين مواءمة — انظر [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) و[`PATCH-1-WRITE-PATHS.md`](./PATCH-1-WRITE-PATHS.md).
+الكتابة الجديدة ترفض `parent=NULL` عبر `AlzidanTreeEngine`. مربوط جزئيًا: اعتماد · مندوب · إدارة الشجرة الإدارية. استيراد SQL الخادم = دين مواءمة — [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`PATCH-1-WRITE-PATHS.md`](./PATCH-1-WRITE-PATHS.md).
 
-**كيف تفتح التقرير:** لوحة الإدارة → مركز صحة البيانات → «تحديث التقرير» → 🔴 سلامة البيانات / 🟡 الربط الداخلي / اختبار رحلة الطلب.
+**كيف تفتح التقرير:** لوحة الإدارة → مركز صحة البيانات → «تحديث التقرير» → بطاقة الملخص → تحليل صف.

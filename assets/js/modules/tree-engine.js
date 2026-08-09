@@ -94,6 +94,77 @@
     return prepareChildWriteRow(row, options);
   }
 
+  /**
+   * Preview-only: fill parent from name path (Health Center staged repair).
+   * Does NOT write — returns before/after payload for Approve → SQL Workspace.
+   */
+  function previewFillParentFromName(row) {
+    var path = resolveChildPath(row);
+    var parts = path.split("/").map(norm).filter(Boolean);
+    var extracted =
+      parts.length >= 2 ? parts.slice(0, -1).join("/") : "";
+    if (!extracted) {
+      return {
+        ok: false,
+        code: "TREE-NO-EXTRACT",
+        message_ar: "لا يمكن استخراج الأب من الاسم.",
+      };
+    }
+    var before = {
+      parent: norm(row && row.parent) || null,
+      parent_name: norm(row && row.parent_name) || null,
+      parent_person_id: (row && row.parent_person_id) || null,
+    };
+    var after = {
+      parent: extracted,
+      parent_name: extracted,
+      parent_person_id: (row && row.parent_person_id) || null,
+    };
+    return {
+      ok: true,
+      repair_type: "fill_parent_from_name",
+      before: before,
+      after: after,
+      decision_logic_ar: [
+        "استخراج الأب = إزالة آخر مقطع من مسار الاسم.",
+        "توحيد parent و parent_name لنفس القيمة (ضد الانجراف).",
+      ],
+      never_rename: true,
+    };
+  }
+
+  /**
+   * Preview-only: link parent_person_id UUID — NEVER renames.
+   */
+  function previewLinkParentUuid(row, parentPersonId) {
+    var pid = norm(parentPersonId);
+    if (!pid) {
+      return {
+        ok: false,
+        code: "TREE-NO-UUID",
+        message_ar: "لا UUID أب للربط.",
+      };
+    }
+    return {
+      ok: true,
+      repair_type: "link_parent_uuid",
+      before: {
+        parent: resolveParentPath(row) || null,
+        parent_name: resolveParentPath(row) || null,
+        parent_person_id: (row && row.parent_person_id) || null,
+      },
+      after: {
+        parent: resolveParentPath(row) || null,
+        parent_name: resolveParentPath(row) || null,
+        parent_person_id: pid,
+      },
+      decision_logic_ar: [
+        "TREE-003: ربط parent_person_id فقط — ممنوع إعادة تسمية.",
+      ],
+      never_rename: true,
+    };
+  }
+
   var api = {
     CODE_PARENT_NULL: CODE_PARENT_NULL,
     MSG_PARENT_NULL_AR: MSG_PARENT_NULL_AR,
@@ -102,6 +173,8 @@
     assertParentNotNull: assertParentNotNull,
     prepareChildWriteRow: prepareChildWriteRow,
     prepareInsert: prepareInsert,
+    previewFillParentFromName: previewFillParentFromName,
+    previewLinkParentUuid: previewLinkParentUuid,
   };
 
   global.AlzidanTreeEngine = api;

@@ -65,6 +65,60 @@
     ],
   };
 
+  /** Priority: manager sees what to fix first. */
+  var PRIORITY = {
+    CRITICAL: "critical",
+    HIGH: "high",
+    MEDIUM: "medium",
+    HEALTHY: "healthy",
+  };
+
+  var PRIORITY_AR = {
+    critical: "🔴 حرج",
+    high: "🟠 مرتفع",
+    medium: "🟡 متوسط",
+    healthy: "🟢 سليم",
+  };
+
+  var CAT_PRIORITY = {
+    parent_null: PRIORITY.CRITICAL,
+    parent_empty: PRIORITY.CRITICAL,
+    missing_father: PRIORITY.CRITICAL,
+    path_mismatch: PRIORITY.HIGH,
+    broken_relation: PRIORITY.HIGH,
+    duplicate_person_id: PRIORITY.MEDIUM,
+    spouses_without_husband: PRIORITY.MEDIUM,
+  };
+
+  /** Root-cause templates (fix the source, not only the symptom). */
+  var CAT_ROOT_CAUSE = {
+    parent_null:
+      "أُنشئ بلا parent، أو انجراف ثنائي الأعمدة (parent_name موجود و parent فارغ) من استيراد/مندوب/صيانة legacy.",
+    parent_empty:
+      "صف بلا أب نصّي — غالبًا استيراد ناقص أو أداة صيانة أو مسار كتابة تجاوز الحارس.",
+    missing_father:
+      "قيمة أب لا تطابق صفًا حيًا: خطأ إملائي / متغيرات كتابة / أب لم يُستورد / اعتماد طلب بلا أب صالح.",
+    path_mismatch:
+      "تعديل المسار (name) دون مزامنة parent، أو استيراد جزئي، أو صيانة يدوية.",
+    duplicate_person_id: "دمج/استيراد مكرر أو نسخ صفوف — يحتاج ربط UUID لا إعادة تسمية.",
+    spouses_without_husband: "زوجة رُبطت بزوج غير موجود أو UUID مكسور.",
+    broken_relation: "فشل هيكلي مركّب — راجع الفئة الأساسية للصف.",
+  };
+
+  var CAT_WRITE_PATH = {
+    parent_null:
+      "مسار الكتابة المشتبه: مندوب · إدارة شجرة · استيراد CSV/بطاقة · صيانة SQL — أصلح المصدر عبر Tree Engine (رفض parent=NULL).",
+    parent_empty:
+      "Validation + Tree Engine يجب أن يرفضا الكتابة بلا أب؛ الصفوف القديمة = إصلاح staged.",
+    missing_father:
+      "طلب مندوب / Workflow اعتماد / استيراد — ارفض عند غياب الأب في الشجرة.",
+    path_mismatch:
+      "أي مسار يحدّث name دون parent (مندوب/إدارة/استيراد) — وحّد عبر Tree Engine.prepareChildWriteRow.",
+    duplicate_person_id: "استيراد/دمج — Canonical Person + Tree Engine sole writer.",
+    spouses_without_husband: "مسار ربط الزوجات (إدارة/مندوب) — حل الزوج بـ person_id.",
+    broken_relation: "نفس مسارات سلامة البيانات أعلاه.",
+  };
+
   var GROUP_DATA_INTEGRITY = "data_integrity";
   var GROUP_UUID_LINK = "uuid_link";
 
@@ -163,9 +217,26 @@
     return impactFor(category).join(" · ");
   }
 
+  function priorityFor(category) {
+    return CAT_PRIORITY[category] || PRIORITY.MEDIUM;
+  }
+
+  function priorityLabel(category) {
+    return PRIORITY_AR[priorityFor(category)] || PRIORITY_AR.medium;
+  }
+
+  function rootCauseFor(category) {
+    return CAT_ROOT_CAUSE[category] || "سبب غير مصنّف — راجع الصف يدويًا.";
+  }
+
+  function writePathFor(category) {
+    return CAT_WRITE_PATH[category] || "مسار كتابة غير موثّق.";
+  }
+
   function issueRow(row, category, extra) {
     var path = childPath(row);
     var extracted = extractParentFromName(path);
+    var pri = priorityFor(category);
     return Object.assign(
       {
         id: row.id,
@@ -177,13 +248,19 @@
         extracted_parent: extracted || null,
         person_id: row.person_id || null,
         parent_person_id: row.parent_person_id || null,
+        created_at: row.created_at || null,
+        updated_at: row.updated_at || null,
         category: category,
         category_ar: CAT_AR[category] || category,
         group: GROUP_DATA_INTEGRITY,
         group_ar: "سلامة البيانات",
         severity: "error",
+        priority: pri,
+        priority_ar: PRIORITY_AR[pri] || pri,
         impact: impactFor(category),
         impact_ar: impactLabel(category),
+        root_cause_ar: rootCauseFor(category),
+        write_path_ar: writePathFor(category),
         code: "TREE-STRUCT",
       },
       extra || {},
@@ -351,8 +428,12 @@
           group: GROUP_UUID_LINK,
           group_ar: "الربط الداخلي",
           severity: "warning",
+          priority: PRIORITY.MEDIUM,
+          priority_ar: PRIORITY_AR.medium,
           impact: impactFor(CAT.SPOUSES_WITHOUT_HUSBAND),
           impact_ar: impactLabel(CAT.SPOUSES_WITHOUT_HUSBAND),
+          root_cause_ar: rootCauseFor(CAT.SPOUSES_WITHOUT_HUSBAND),
+          write_path_ar: writePathFor(CAT.SPOUSES_WITHOUT_HUSBAND),
           code: "TREE-STRUCT",
           reason_ar: "زوجة بلا زوج صالح في الشجرة: " + norm(s.wife_name),
         });
@@ -368,9 +449,15 @@
     lists[CAT.SPOUSES_WITHOUT_HUSBAND] = spousesBad;
     lists[CAT.BROKEN_RELATION] = brokenRelation;
 
+    var criticalCount =
+      parentNull.length + parentEmpty.length + missingFather.length;
+    var highCount = pathMismatch.length;
+    // broken_relation overlaps — counted in high "needs review" separately via path
+    var needsReview = highCount + brokenRelation.length;
+
     return {
       mode: "read_only",
-      schema: "tree_structure_audit_v1",
+      schema: "tree_structure_audit_v2",
       totals: {
         tree_children: rows.length,
         healthy_relations: healthy,
@@ -381,6 +468,23 @@
         duplicate_person_id: duplicatePersonId.length,
         spouses_without_husband: spousesBad.length,
         broken_relation: brokenRelation.length,
+        priority_critical: criticalCount,
+        priority_high: needsReview,
+        priority_medium: duplicatePersonId.length + spousesBad.length,
+      },
+      summary_card: {
+        critical: criticalCount,
+        needs_review: needsReview,
+        uuid_link_needed: duplicatePersonId.length + spousesBad.length,
+        healthy: healthy,
+        labels: {
+          critical: "🔴 حرج (parent=NULL · أب مفقود)",
+          needs_review: "🟠 يحتاج مراجعة (مسار/علاقة)",
+          uuid_link_needed: "🟡 يحتاج ربط UUID",
+          healthy: "🟢 علاقات سليمة",
+        },
+        note_ar:
+          "أولوية الإصلاح للمدير: حرج → مراجعة → UUID. بلا «إصلاح الكل».",
       },
       groups: {
         data_integrity: {
@@ -415,10 +519,11 @@
         },
         {
           id: "healthy_relations",
-          label: "علاقات صحيحة",
+          label: "🟢 علاقات صحيحة",
           count: healthy,
           ok: true,
           group: "summary",
+          priority: PRIORITY.HEALTHY,
         },
         {
           id: CAT.PARENT_NULL,
@@ -427,7 +532,10 @@
           ok: parentNull.length === 0,
           group: GROUP_DATA_INTEGRITY,
           group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.parent_null,
+          priority_ar: PRIORITY_AR.critical,
           impact_ar: impactLabel(CAT.PARENT_NULL),
+          root_cause_ar: rootCauseFor(CAT.PARENT_NULL),
         },
         {
           id: CAT.MISSING_FATHER,
@@ -436,16 +544,22 @@
           ok: missingFather.length === 0,
           group: GROUP_DATA_INTEGRITY,
           group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.missing_father,
+          priority_ar: PRIORITY_AR.critical,
           impact_ar: impactLabel(CAT.MISSING_FATHER),
+          root_cause_ar: rootCauseFor(CAT.MISSING_FATHER),
         },
         {
           id: CAT.PATH_MISMATCH,
-          label: "🔴 " + CAT_AR.path_mismatch,
+          label: "🟠 " + CAT_AR.path_mismatch,
           count: pathMismatch.length,
           ok: pathMismatch.length === 0,
           group: GROUP_DATA_INTEGRITY,
           group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.path_mismatch,
+          priority_ar: PRIORITY_AR.high,
           impact_ar: impactLabel(CAT.PATH_MISMATCH),
+          root_cause_ar: rootCauseFor(CAT.PATH_MISMATCH),
         },
         {
           id: CAT.PARENT_EMPTY,
@@ -454,7 +568,10 @@
           ok: parentEmpty.length === 0,
           group: GROUP_DATA_INTEGRITY,
           group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.parent_empty,
+          priority_ar: PRIORITY_AR.critical,
           impact_ar: impactLabel(CAT.PARENT_EMPTY),
+          root_cause_ar: rootCauseFor(CAT.PARENT_EMPTY),
         },
         {
           id: CAT.DUPLICATE_PERSON_ID,
@@ -463,16 +580,22 @@
           ok: duplicatePersonId.length === 0,
           group: GROUP_UUID_LINK,
           group_ar: "الربط الداخلي",
+          priority: CAT_PRIORITY.duplicate_person_id,
+          priority_ar: PRIORITY_AR.medium,
           impact_ar: impactLabel(CAT.DUPLICATE_PERSON_ID),
+          root_cause_ar: rootCauseFor(CAT.DUPLICATE_PERSON_ID),
         },
         {
           id: CAT.BROKEN_RELATION,
-          label: "🔴 " + CAT_AR.broken_relation,
+          label: "🟠 " + CAT_AR.broken_relation,
           count: brokenRelation.length,
           ok: brokenRelation.length === 0,
           group: GROUP_DATA_INTEGRITY,
           group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.broken_relation,
+          priority_ar: PRIORITY_AR.high,
           impact_ar: impactLabel(CAT.BROKEN_RELATION),
+          root_cause_ar: rootCauseFor(CAT.BROKEN_RELATION),
         },
         {
           id: CAT.SPOUSES_WITHOUT_HUSBAND,
@@ -481,7 +604,10 @@
           ok: spousesBad.length === 0,
           group: GROUP_UUID_LINK,
           group_ar: "الربط الداخلي",
+          priority: CAT_PRIORITY.spouses_without_husband,
+          priority_ar: PRIORITY_AR.medium,
           impact_ar: impactLabel(CAT.SPOUSES_WITHOUT_HUSBAND),
+          root_cause_ar: rootCauseFor(CAT.SPOUSES_WITHOUT_HUSBAND),
         },
       ],
       lists: lists,
@@ -492,12 +618,20 @@
     CAT: CAT,
     CAT_AR: CAT_AR,
     CAT_IMPACT: CAT_IMPACT,
+    PRIORITY: PRIORITY,
+    PRIORITY_AR: PRIORITY_AR,
+    CAT_PRIORITY: CAT_PRIORITY,
+    CAT_ROOT_CAUSE: CAT_ROOT_CAUSE,
+    CAT_WRITE_PATH: CAT_WRITE_PATH,
     GROUP_DATA_INTEGRITY: GROUP_DATA_INTEGRITY,
     GROUP_UUID_LINK: GROUP_UUID_LINK,
     extractParentFromName: extractParentFromName,
     storedParent: storedParent,
     impactFor: impactFor,
     impactLabel: impactLabel,
+    priorityFor: priorityFor,
+    rootCauseFor: rootCauseFor,
+    writePathFor: writePathFor,
     auditTreeStructure: auditTreeStructure,
   };
 

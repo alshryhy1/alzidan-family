@@ -112,8 +112,8 @@ iOS Experience Rebuild
 | **Delegates v2 — Foundation + Enforce** | 🟢 | قبول حي + «اغلاق ١» 2026-08-09 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |
-| **Health Center** | 🟢 | 🔴 سلامة البيانات · 🟡 الربط الداخلي (UUID/TREE-003) · اختبار رحلة الطلب (وكلاء + دخان) · عمود الأثر |
-| **Repair يدوي** | 🟢 | مغلق للتخطيط — لا مسار apply تلقائي من الواجهة |
+| **Health Center** | 🟢 | ملخص أولوية · سبب جذري · تحليل→معاينة→موافقة→SQL Workspace (صف بصف) · بلا إصلاح الكل · سلامة بيانات + UUID + رحلة الطلب |
+| **Repair يدوي** | 🟢 | staged pipeline + preset جماعي اختياري — لا apply تلقائي من الواجهة |
 | **DateEngine (أساس + حارس ends_at)** | 🟢 | مكتبة + ADR-009 + مستهلك أوّل |
 | **DateEngine على كل النماذج** | ⚪ | ميلاد/وفاة/مناسبات — دين تقني (§ دين تقني) |
 | **Admin-SC / قائمة البطاقات** | 🟡 | حفظ ✅؛ قائمة **بانتظار SQL** `admin_special_cards_list_v1` إن لم يُطبَّق |
@@ -290,7 +290,7 @@ Search Name        ← للبحث/التطبيع
 | المسار | المحتوى | الحالة |
 |--------|---------|--------|
 | **Integrity** | محرك سلامة قراءة فقط (views + RPC تقرير) | 🟡 v2 بانتظار SQL · أساس v1/تقرير 🟢 |
-| **Health Center** | واجهة المدير للمشاكل (قراءة فقط) | 🟢 سلامة بيانات + UUID + رحلة الطلب |
+| **Health Center** | واجهة المدير للتشخيص + إصلاح مرحلي بعد موافقة (صف بصف → SQL Workspace) | 🟢 ملخص · أولوية · Analyze/Preview |
 | **Tree Repair** | تنظيف/إصلاح يدوي + dry-run؛ لا auto-repair من UI | 🟢 مغلق للتخطيط (يدوي) |
 | **Data Migration** | Versioning · COPY-ME · backfill هويات/تواريخ | 🔵/🟡 حسب الملف المعلّق |
 

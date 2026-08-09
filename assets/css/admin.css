@@ -238,6 +238,107 @@ body.admin-authenticated #admin-requests-section #sb-status { display: none !imp
   line-height: 1.45;
   font-weight: 600;
 }
+.health-summary-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.health-summary-pill {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 12px 14px;
+  background: #f8fafc;
+  min-height: 76px;
+}
+.health-summary-pill .hs-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+  line-height: 1.35;
+}
+.health-summary-pill .hs-count {
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.2;
+  margin-top: 4px;
+}
+.health-summary-pill.is-critical {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.health-summary-pill.is-high {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+.health-summary-pill.is-medium {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.health-summary-pill.is-healthy {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+}
+.health-repair-panel {
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  background: #f8fafc;
+}
+.health-repair-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.health-repair-stage {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #64748b;
+}
+.health-repair-stage.is-done {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
+.health-repair-stage.is-active {
+  background: #ecfeff;
+  border-color: #67e8f9;
+  color: #0e7490;
+}
+.health-repair-body {
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-line;
+}
+.health-approve-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.health-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+.health-row-actions .btn {
+  width: 100%;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.health-structure-card .hs-priority {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+}
 
  /* requests stats 4x2 layout */
 .requests-stats-cards { grid-template-columns: repeat(4, minmax(150px, 1fr)) !important; align-items: stretch;

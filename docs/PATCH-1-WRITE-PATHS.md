@@ -40,14 +40,14 @@
 | 21 | دمج تكرارات يدوي | `duplicate_merge_plan.sql` | دمج صفوف | **person_id-based** (يدوي؛ ليس UI حي) |
 | 22 | تدقيق أسماء جماعي | `assets/js/admin-bulk-name-audit.js` | يستدعي import RPC | عبر #17 |
 | 23 | جودة الشجرة | `assets/js/admin-quality.js` | قراءة/تشخيص | لا كتابة علاقات مباشرة |
-| 24 | **Tree Engine guard** | `assets/js/modules/tree-engine.js` | `prepareChildWriteRow` / رفض `parent=NULL` | **هدف sole writer** — غلاف رقيق اليوم؛ ليس كل المسارات تمر عبره بعد |
+| 24 | **Tree Engine guard** | `assets/js/modules/tree-engine.js` | `prepareChildWriteRow` / رفض `parent=NULL` + معاينات إصلاح | **هدف sole writer** — مربوط: اعتماد · مندوب · إدارة إدارية؛ استيراد SQL = دين |
 
 ---
 
 ## دين Tree Engine sole writer (2026-08-09)
 
 الدستور: لا كتابة مباشرة في `tree_children` — Validation → Workflow → **Tree Engine** فقط.  
-**الواقع اليوم:** الحارس موجود ومربوط جزئيًا (`request-actions` اعتماد · `delegate` حفظ ابن). المسارات أعلاه (#1–#19 وغيرها) = **دين مواءمة** حتى Family Engine Alignment — لا ندّعي فرضًا كاملًا.
+**الواقع اليوم:** الحارس موجود ومربوط جزئيًا (`request-actions` اعتماد · `delegate` حفظ ابن · `admin-family-mgmt` upsert). المسارات أعلاه (#1–#19 وغيرها) = **دين مواءمة** حتى Family Engine Alignment — لا ندّعي فرضًا كاملًا.
 
 ---
 
