@@ -127,11 +127,37 @@ assert(
   analysis.repair_type === "spelling_equivalent_no_write",
   "spell-only → no write repair",
 );
-assert(!analysis.proposed, "spell-only proposes nothing");
+assert(!analysis.proposed, "spell-only proposes nothing on parent");
+assert(analysis.would_flip_only === false, "spell-only must not flip-only");
+assert(
+  /إملائي فقط/.test(String(analysis.resolved_message_ar || "")),
+  "spell-only Arabic resolved message",
+);
 const preview = Pipe.previewRepair(analysis);
 assert(preview.executable === false, "spell-only not executable");
+assert(preview.would_flip_only === false, "preview not flip-only");
+assert(
+  preview.after && preview.after.unchanged,
+  "spell-only After shows unchanged parent (not empty)",
+);
 const built = Pipe.buildExecuteSql(preview, { actor: "test" });
 assert(built.ok === false, "spell-only blocks SQL");
+assert(/إملائي فقط/.test(String(built.message_ar || "")), "SQL block uses resolved msg");
+
+const align = Pipe.buildAlignNamePathSpelling(issue, [father, child1508]);
+assert(align && align.ok, "optional align name path available");
+assert(
+  align.child_path.indexOf("دوخي") >= 0 && align.child_path.indexOf("/عبيد") >= 0,
+  "align rewrites ancestor spelling only",
+);
+const adopted = Pipe.adoptAlignNamePathSpelling(analysis);
+assert(adopted.ok, "adopt align path");
+const alignPreview = Pipe.previewRepair(adopted.analysis);
+assert(alignPreview.executable === true, "align path executable");
+const alignSql = Pipe.buildExecuteSql(alignPreview, { actor: "test" });
+assert(alignSql.ok === true, "align path builds SQL");
+assert(/child_name/.test(alignSql.sql), "align SQL updates name");
+assert(!/parent =/.test(alignSql.sql.split("SET")[1].split("WHERE")[0]), "align SQL does not set parent");
 
 const realIssue = {
   id: 9999,

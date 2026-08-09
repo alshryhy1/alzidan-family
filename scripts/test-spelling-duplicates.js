@@ -115,11 +115,19 @@ pipeCtx.globalThis = pipeCtx;
 vm.runInNewContext(PipeSrc, pipeCtx, { filename: "integrity-repair-pipeline.js" });
 const Pipe = pipeCtx.window.AlzidanIntegrityRepairPipeline;
 const analysis = Pipe.analyzeIssue(found[0], { children });
-assert(analysis.repair_type === "manual_review_no_merge", "analyze → no merge");
+assert(analysis.repair_type === "manual_review_no_merge", "analyze → no merge by default");
 const preview = Pipe.previewRepair(analysis, null);
-assert(preview.executable === false, "preview not executable");
+assert(preview.executable === false, "preview not executable by default");
 const sql = Pipe.buildExecuteSql(preview, { actor: "test" });
-assert(sql.ok === false, "buildExecuteSql refused for spelling dupes");
+assert(sql.ok === false, "buildExecuteSql refused for spelling dupes by default");
+
+const unify = Pipe.buildUnifyLeafName(found[0], "انس", "أنس", children);
+assert(unify.ok, "unify leaf builds");
+assert(unify.from_leaf === "انس" && unify.to_leaf === "أنس", "unify direction");
+assert(unify.confirm_ar && unify.confirm_ar.affected >= 1, "unify confirm payload");
+const merge = Pipe.buildMergePairPreview(found[0], found[0].id_a, children);
+assert(merge.ok && merge.survivor_id && merge.loser_id, "merge preview ok");
+assert(/تحذير/.test(merge.danger_ar || ""), "merge warns");
 
 if (process.exitCode) {
   console.error("\nSome assertions failed.");

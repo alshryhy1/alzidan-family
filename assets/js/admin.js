@@ -219,6 +219,36 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
     preview: null,
     chosenSuggestion: null,
   };
+  const HEALTH_SPELL_SUPPRESS_KEY = "alzidan_health_spell_suppress_v1";
+
+  function loadSpellSuppressSet() {
+    try {
+      const raw = localStorage.getItem(HEALTH_SPELL_SUPPRESS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  function saveSpellSuppressSet(set) {
+    try {
+      localStorage.setItem(
+        HEALTH_SPELL_SUPPRESS_KEY,
+        JSON.stringify(Array.from(set || []).slice(0, 500)),
+      );
+    } catch (_) {}
+  }
+
+  function isSpellPairSuppressed(pairId) {
+    return loadSpellSuppressSet().has(String(pairId || ""));
+  }
+
+  function suppressSpellPair(pairId) {
+    const set = loadSpellSuppressSet();
+    set.add(String(pairId || ""));
+    saveSpellSuppressSet(set);
+  }
   const specialCardsList = document.getElementById("special-cards-list");
   const specialCardsForm = document.getElementById("special-cards-form");
   const specialCardsId = document.getElementById("special-cards-id");
@@ -2252,7 +2282,33 @@ where c.id = matches.id; commit;
       "كيفية إصلاحها: " + (analysis.write_path_ar || "—"),
       "",
     ];
-    if (analysis.repair_type === "manual_review_no_merge") {
+    if (analysis.repair_type === "spelling_equivalent_no_write") {
+      lines.push(
+        "✅ " +
+          (analysis.resolved_message_ar ||
+            "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة"),
+      );
+      lines.push(
+        "قبل ← الأب: " +
+          String((preview.before && preview.before.parent) || "فارغ") +
+          " · المعرف: " +
+          String((preview.before && preview.before.parent_person_id) || "—"),
+      );
+      lines.push("بعد ← بلا تغيير (لا يُفرَّغ الأب · لا SQL على حقل الأب).");
+      lines.push("");
+      (analysis.decision_logic_ar || []).forEach((ln) => lines.push("· " + ln));
+      if (
+        analysis.optional_align_name_path &&
+        analysis.optional_align_name_path.ok
+      ) {
+        lines.push("");
+        lines.push(
+          "اختياري: توحيد إملاء المسار في الاسم → «" +
+            analysis.optional_align_name_path.child_path +
+            "»",
+        );
+      }
+    } else if (analysis.repair_type === "manual_review_no_merge") {
       lines.push(
         "الأب: " + String((issue && issue.father_label) || "—"),
         "الاسم الأول: " + String((issue && issue.name_a) || "—"),
@@ -2263,9 +2319,8 @@ where c.id = matches.id; commit;
               (issue && (issue.similarity_ar || issue.similarity_pct)) ||
               "الاسم مكتوب بطريقة مختلفة",
           ),
-        "الحالة: يحتاج مراجعة",
+        "الحالة: يحتاج مراجعة — استخدم أزرار الصف: توحيد / دمج / تجاهل",
         "",
-        "لا دمج تلقائي — لا أمر إصلاح من هذه البطاقة. قرار المشرف لاحقًا بعد التحقق.",
       );
       (analysis.decision_logic_ar || []).forEach((ln) => lines.push("· " + ln));
     } else {
@@ -2275,9 +2330,19 @@ where c.id = matches.id; commit;
           " · المعرف: " +
           String((preview.before && preview.before.parent_person_id) || "—"),
         "بعد ← الأب: " +
-          String((preview.after && preview.after.parent) || "—") +
+          String(
+            (preview.after && preview.after.unchanged
+              ? "(بلا تغيير)"
+              : preview.after && preview.after.child_path && preview.after.keep_parent
+                ? "(الأب بلا تغيير) · الاسم: " + preview.after.child_path
+                : (preview.after && preview.after.parent) || "—"),
+          ) +
           " · المعرف: " +
-          String((preview.after && preview.after.parent_person_id) || "—"),
+          String(
+            (preview.after && preview.after.keep_parent
+              ? (preview.before && preview.before.parent_person_id) || "—"
+              : (preview.after && preview.after.parent_person_id) || "—"),
+          ),
       );
       if (preview.preview_flags_ar) {
         lines.push("");
@@ -2314,23 +2379,36 @@ where c.id = matches.id; commit;
     }
     if (healthRepairBody) {
       let html = escapeHtml(lines.join("\n"));
+      const actionBtns = [];
+      if (
+        analysis.repair_type === "spelling_equivalent_no_write" &&
+        analysis.optional_align_name_path &&
+        analysis.optional_align_name_path.ok
+      ) {
+        actionBtns.push(
+          '<button type="button" class="btn btn-primary btn-sm" data-health-align-path="1">توحيد إملاء المسار في الاسم</button>',
+        );
+      }
       if (
         analysis.repair_type !== "manual_review_no_merge" &&
+        analysis.repair_type !== "spelling_equivalent_no_write" &&
         analysis.suggestions &&
         analysis.suggestions.length
       ) {
+        analysis.suggestions.forEach((s, i) => {
+          actionBtns.push(
+            '<button type="button" class="btn btn-outline btn-sm" data-health-suggest="' +
+              i +
+              '">اعتماد مرشّح ' +
+              (i + 1) +
+              "</button>",
+          );
+        });
+      }
+      if (actionBtns.length) {
         html +=
           '<div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">' +
-          analysis.suggestions
-            .map(
-              (s, i) =>
-                '<button type="button" class="btn btn-outline btn-sm" data-health-suggest="' +
-                i +
-                '">اعتماد مرشّح ' +
-                (i + 1) +
-                "</button>",
-            )
-            .join("") +
+          actionBtns.join("") +
           "</div>";
       }
       healthRepairBody.innerHTML = html;
@@ -2377,34 +2455,86 @@ where c.id = matches.id; commit;
           );
         });
       });
+      healthRepairBody.querySelectorAll("[data-health-align-path]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const adopted = Pipe.adoptAlignNamePathSpelling(analysis);
+          if (!adopted.ok) {
+            setHealthRepairStatus(adopted.message_ar || "تعذر اعتماد التوحيد.");
+            return;
+          }
+          healthRepairState.analysis = adopted.analysis;
+          healthRepairState.preview = Pipe.previewRepair(adopted.analysis, null);
+          openHealthRepairPanelFromState();
+          setHealthRepairStatus(
+            "معاينة توحيد إملاء المسار جاهزة — وافق ثم نفّذ عبر مساحة SQL (الأب بلا تغيير).",
+          );
+        });
+      });
     }
+    const hideExecute =
+      analysis.repair_type === "manual_review_no_merge" ||
+      analysis.repair_type === "spelling_equivalent_no_write";
     if (healthRepairToSql) {
       healthRepairToSql.disabled = true;
-      if (analysis.repair_type === "manual_review_no_merge") {
-        healthRepairToSql.style.display = "none";
+      healthRepairToSql.style.display = hideExecute ? "none" : "";
+    }
+    if (healthRepairApprove) {
+      if (hideExecute) {
+        healthRepairApprove.checked = false;
+        healthRepairApprove.disabled = true;
       } else {
-        healthRepairToSql.style.display = "";
+        healthRepairApprove.disabled = false;
       }
     }
-    if (healthRepairApprove && analysis.repair_type === "manual_review_no_merge") {
-      healthRepairApprove.checked = false;
-      healthRepairApprove.disabled = true;
-    } else if (healthRepairApprove) {
-      healthRepairApprove.disabled = false;
-    }
     setHealthRepairStatus(
-      analysis.repair_type === "manual_review_no_merge"
-        ? "مراجعة فقط — لا دمج تلقائي ولا إرسال SQL."
-        : preview.would_flip_only
-          ? preview.block_message_ar ||
-            "هذا الإصلاح سينقل الخطأ إلى فئة أخرى — اختر أبًا موجودًا يطابق المسار"
-          : preview.executable
-            ? "معاينة جاهزة — وافق ثم نفّذ الإصلاح لسجل واحد عبر مساحة SQL."
-            : "تحليل مكتمل — لا تنفيذ تلقائي.",
+      analysis.repair_type === "spelling_equivalent_no_write"
+        ? analysis.resolved_message_ar ||
+            "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة"
+        : analysis.repair_type === "manual_review_no_merge"
+          ? "مراجعة أسماء متشابهة — اختر توحيدًا أو دمجًا أو تجاهلًا من صف الزوج."
+          : preview.would_flip_only
+            ? preview.block_message_ar ||
+              "هذا الإصلاح سينقل الخطأ إلى فئة أخرى — اختر أبًا موجودًا يطابق المسار"
+            : preview.executable
+              ? "معاينة جاهزة — وافق ثم نفّذ الإصلاح لسجل واحد عبر مساحة SQL."
+              : "تحليل مكتمل — لا تنفيذ تلقائي.",
     );
     try {
       healthRepairPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (_) {}
+  }
+
+  function openHealthRepairPanelFromState() {
+    const Pipe = window.AlzidanIntegrityRepairPipeline;
+    const analysis = healthRepairState.analysis;
+    const preview = healthRepairState.preview;
+    const issue = healthRepairState.issue;
+    if (!Pipe || !analysis || !preview) return;
+    if (healthRepairPanel) healthRepairPanel.hidden = false;
+    if (healthRepairApprove) {
+      healthRepairApprove.checked = false;
+      healthRepairApprove.disabled = false;
+    }
+    if (healthRepairToSql) {
+      healthRepairToSql.disabled = true;
+      healthRepairToSql.style.display = "";
+    }
+    setHealthRepairStage("preview");
+    const after = preview.after || {};
+    const lines = [
+      "النوع: " + (analysis.category_ar || analysis.category),
+      "الإصلاح: " + (analysis.repair_type || ""),
+      "سبب الاقتراح: " + (after.reason_ar || analysis.root_cause_ar || "—"),
+      "",
+      "قبل ← المسار: " + String((preview.before && preview.before.child_path) || issue && issue.child_path || "—"),
+      "بعد ← المسار: " + String(after.child_path || after.name || "—"),
+      "الأب/المعرف: بلا تغيير",
+      "عدد السجلات المتأثرة: " + String(after.affected_rows || 1),
+      after.impact_ar || "",
+      "",
+      "فعّل الموافقة ثم «تنفيذ الإصلاح (مساحة SQL)».",
+    ];
+    if (healthRepairBody) healthRepairBody.textContent = lines.filter(Boolean).join("\n");
   }
 
   function setHealthRepairStatus(msg) {
@@ -2500,6 +2630,179 @@ where c.id = matches.id; commit;
     healthProvenanceBox.textContent = lines.join("\n");
   }
 
+  function showProposedFixForIssue(issue) {
+    const Pipe = window.AlzidanIntegrityRepairPipeline;
+    if (!Pipe || !issue) return;
+    const analysis = Pipe.analyzeIssue(issue, { children: healthChildrenCache });
+    const preview = Pipe.previewRepair(analysis, null);
+    healthRepairState = {
+      stage: "preview",
+      issue: issue,
+      analysis: analysis,
+      preview: preview,
+      chosenSuggestion: null,
+    };
+    const text =
+      typeof Pipe.formatProposedFixAr === "function"
+        ? Pipe.formatProposedFixAr(analysis, preview)
+        : preview.why_ar || analysis.root_cause_ar || "";
+    if (healthProvenanceBox) {
+      healthProvenanceBox.style.display = "block";
+      healthProvenanceBox.textContent =
+        "الإصلاح المقترح — السجل/الزوج " +
+        String(issue.id) +
+        "\n" +
+        text;
+    }
+    openHealthRepairPanel(issue);
+    setHealthRepairStatus(
+      preview.executable
+        ? "عرض الإصلاح المقترح — وافق ثم نفّذ عبر مساحة SQL."
+        : analysis.resolved_message_ar ||
+            "عرض التحليل — لا تنفيذ تلقائي حتى يعتمد اقتراحًا قابلاً للتنفيذ.",
+    );
+  }
+
+  function stageUnifySpellName(issue) {
+    const Pipe = window.AlzidanIntegrityRepairPipeline;
+    if (!Pipe || !issue) return;
+    const preferred =
+      (Pipe.preferArabicSpelling &&
+        Pipe.preferArabicSpelling(issue.name_a, issue.name_b)) ||
+      issue.name_a;
+    const fromLeaf =
+      preferred === issue.name_a ? issue.name_b : issue.name_a;
+    const toLeaf = preferred;
+    const built = Pipe.buildUnifyLeafName(
+      issue,
+      fromLeaf,
+      toLeaf,
+      healthChildrenCache,
+    );
+    if (!built.ok) {
+      setHealthRepairStatus(built.message_ar || "تعذر بناء توحيد الاسم.");
+      return;
+    }
+    const conf = built.confirm_ar || {};
+    const msg =
+      "الاسم الحالي: " +
+      (conf.current || fromLeaf) +
+      "\nالاسم المقترح: " +
+      (conf.proposed || toLeaf) +
+      "\nسبب الاقتراح: " +
+      (conf.reason || issue.diff_reason_ar || "اختلاف إملائي") +
+      "\nعدد السجلات المتأثرة: " +
+      (conf.affected != null ? conf.affected : built.affected_rows || 1) +
+      "\n\nتطبيق التوحيد؟";
+    if (!window.confirm(msg)) return;
+    const analysis = Pipe.analyzeIssue(issue, { children: healthChildrenCache });
+    analysis.repair_type = "unify_leaf_name";
+    analysis.issue_id = built.issue_id;
+    analysis.can_auto_propose = true;
+    analysis.requires_manual_choice = false;
+    analysis.never_auto_merge = false;
+    analysis.would_flip_only = false;
+    analysis.proposed = built;
+    analysis.before = {
+      parent: null,
+      parent_name: null,
+      parent_person_id: null,
+      child_path: built.old_path,
+    };
+    const preview = Pipe.previewRepair(analysis, null);
+    healthRepairState = {
+      stage: "preview",
+      issue: issue,
+      analysis: analysis,
+      preview: preview,
+      chosenSuggestion: null,
+    };
+    openHealthRepairPanelFromState();
+    setHealthRepairStatus(
+      "معاينة توحيد الاسم جاهزة — وافق ثم نفّذ عبر مساحة SQL.",
+    );
+  }
+
+  function stageMergeSpellPair(issue) {
+    const Pipe = window.AlzidanIntegrityRepairPipeline;
+    if (!Pipe || !issue) return;
+    const preferredName =
+      (Pipe.preferArabicSpelling &&
+        Pipe.preferArabicSpelling(issue.name_a, issue.name_b)) ||
+      issue.name_a;
+    const survivor =
+      preferredName === issue.name_a ? issue.id_a : issue.id_b;
+    const built = Pipe.buildMergePairPreview(
+      issue,
+      survivor,
+      healthChildrenCache,
+    );
+    if (!built.ok) {
+      setHealthRepairStatus(built.message_ar || "تعذر بناء معاينة الدمج.");
+      return;
+    }
+    const msg =
+      built.reason_ar +
+      "\n" +
+      built.impact_ar +
+      "\n" +
+      built.danger_ar +
+      "\n\nالمتابعة لمعاينة SQL فقط (بلا تنفيذ فوري)؟";
+    if (!window.confirm(msg)) return;
+    const analysis = Pipe.analyzeIssue(issue, { children: healthChildrenCache });
+    analysis.repair_type = "merge_duplicate_pair";
+    analysis.issue_id = built.loser_id;
+    analysis.can_auto_propose = true;
+    analysis.requires_manual_choice = false;
+    analysis.never_auto_merge = false;
+    analysis.proposed = built;
+    analysis.before = {
+      parent: null,
+      parent_name: null,
+      parent_person_id: null,
+      child_path: built.loser_path,
+    };
+    const preview = Pipe.previewRepair(analysis, null);
+    healthRepairState = {
+      stage: "preview",
+      issue: issue,
+      analysis: analysis,
+      preview: preview,
+      chosenSuggestion: null,
+    };
+    if (healthRepairPanel) healthRepairPanel.hidden = false;
+    if (healthRepairApprove) {
+      healthRepairApprove.disabled = false;
+      healthRepairApprove.checked = false;
+    }
+    if (healthRepairToSql) {
+      healthRepairToSql.style.display = "";
+      healthRepairToSql.disabled = true;
+    }
+    setHealthRepairStage("preview");
+    if (healthRepairBody) {
+      healthRepairBody.textContent = [
+        "دمج السجلين (نفس الشخص فقط)",
+        built.reason_ar,
+        built.impact_ar,
+        built.danger_ar,
+        "عدد السجلات المتأثرة: " + built.affected_rows,
+        "",
+        "فعّل الموافقة ثم نفّذ عبر مساحة SQL — راجع الأمر قبل التشغيل.",
+      ].join("\n");
+    }
+    setHealthRepairStatus("معاينة دمج جاهزة — موافقة ثم مساحة SQL.");
+  }
+
+  function ignoreSpellPair(issue) {
+    if (!issue || issue.id == null) return;
+    suppressSpellPair(issue.id);
+    setHealthRepairStatus("تم تجاهل الزوج — لن يظهر كمشكلة في هذه الجلسة/الجهاز.");
+    if (healthStructureActiveCat === "possible_spelling_duplicates") {
+      renderHealthStructureDetail("possible_spelling_duplicates");
+    }
+  }
+
   function renderHealthStructureDetail(categoryId) {
     healthStructureActiveCat = String(categoryId || "");
     if (healthStructureCards) {
@@ -2545,7 +2848,9 @@ where c.id = matches.id; commit;
         (isSpellDup ? " زوج" : " سجل") +
         (catMeta && catMeta.priority_ar ? " · " + catMeta.priority_ar : "") +
         (catMeta && catMeta.impact_ar ? " · أثر: " + catMeta.impact_ar : "") +
-        (isSpellDup ? " · مراجعة فقط — لا دمج تلقائي" : "");
+        (isSpellDup
+          ? " · مراجعة / توحيد / دمج (بعد تأكيد) / تجاهل"
+          : "");
     }
     if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = title;
     const emptyCols = isSpellDup ? "6" : "9";
@@ -2561,6 +2866,7 @@ where c.id = matches.id; commit;
     if (isSpellDup) {
       healthStructureBody.innerHTML = rows
         .slice(0, 200)
+        .filter((row) => !isSpellPairSuppressed(row.id))
         .map((row) => {
           const pairId = escapeHtml(row.id != null ? row.id : "");
           const father = escapeHtml(row.father_label || row.stored_parent || "—");
@@ -2586,7 +2892,16 @@ where c.id = matches.id; commit;
             '</td><td><div class="health-row-actions">' +
             '<button type="button" class="btn btn-outline btn-sm" data-health-analyze="' +
             pairId +
-            '" data-health-cat="possible_spelling_duplicates">ملاحظات المراجعة</button>' +
+            '" data-health-cat="possible_spelling_duplicates">🔍 مراجعة</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-health-spell-unify="' +
+            pairId +
+            '">✏️ توحيد الاسم</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-health-spell-merge="' +
+            pairId +
+            '">🔗 دمج السجلين</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-health-spell-ignore="' +
+            pairId +
+            '">🚫 تجاهل</button>' +
             "</div></td></tr>"
           );
         })
@@ -2633,6 +2948,11 @@ where c.id = matches.id; commit;
             '" data-health-cat="' +
             cat +
             '">تحليل</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-health-fix="' +
+            id +
+            '" data-health-cat="' +
+            cat +
+            '">اعرض الإصلاح المقترح</button>' +
             '<button type="button" class="btn btn-outline btn-sm" data-health-prov="' +
             id +
             '" data-health-cat="' +
@@ -2659,6 +2979,42 @@ where c.id = matches.id; commit;
           btn.getAttribute("data-health-prov"),
         );
         if (issue) showProvenanceForIssue(issue);
+      });
+    });
+    healthStructureBody.querySelectorAll("[data-health-fix]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(
+          btn.getAttribute("data-health-cat"),
+          btn.getAttribute("data-health-fix"),
+        );
+        if (issue) showProposedFixForIssue(issue);
+      });
+    });
+    healthStructureBody.querySelectorAll("[data-health-spell-unify]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(
+          "possible_spelling_duplicates",
+          btn.getAttribute("data-health-spell-unify"),
+        );
+        if (issue) stageUnifySpellName(issue);
+      });
+    });
+    healthStructureBody.querySelectorAll("[data-health-spell-merge]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(
+          "possible_spelling_duplicates",
+          btn.getAttribute("data-health-spell-merge"),
+        );
+        if (issue) stageMergeSpellPair(issue);
+      });
+    });
+    healthStructureBody.querySelectorAll("[data-health-spell-ignore]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(
+          "possible_spelling_duplicates",
+          btn.getAttribute("data-health-spell-ignore"),
+        );
+        if (issue) ignoreSpellPair(issue);
       });
     });
   }
@@ -2955,6 +3311,9 @@ where c.id = matches.id; commit;
               '<button type="button" class="btn btn-outline btn-sm" data-health-uuid-analyze="' +
               id +
               '">تحليل</button>' +
+              '<button type="button" class="btn btn-outline btn-sm" data-health-uuid-fix="' +
+              id +
+              '">اعرض الإصلاح المقترح</button>' +
               '<button type="button" class="btn btn-outline btn-sm" data-health-uuid-prov="' +
               id +
               '">اعرض سبب الإدخال</button>' +
@@ -2969,6 +3328,15 @@ where c.id = matches.id; commit;
               btn.getAttribute("data-health-uuid-analyze"),
             );
             if (issue) openHealthRepairPanel(issue);
+          });
+        });
+        healthCenterBadBody.querySelectorAll("[data-health-uuid-fix]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const issue = findIssueRow(
+              "TREE-003",
+              btn.getAttribute("data-health-uuid-fix"),
+            );
+            if (issue) showProposedFixForIssue(issue);
           });
         });
         healthCenterBadBody.querySelectorAll("[data-health-uuid-prov]").forEach((btn) => {
@@ -4440,7 +4808,17 @@ where c.id = matches.id; commit;
         setHealthRepairStatus("موافقة مسجّلة لهذا السجل فقط — يمكنك تنفيذ الإصلاح عبر مساحة SQL.");
       } else if (healthRepairApprove.checked && healthRepairState.preview && !healthRepairState.preview.executable) {
         setHealthRepairStage("preview");
-        setHealthRepairStatus("المعاينة غير قابلة للتنفيذ — اختر مرشّحًا أو راجع يدويًا.");
+        const resolved =
+          healthRepairState.preview.resolved_by_normalize ||
+          (healthRepairState.analysis &&
+            healthRepairState.analysis.repair_type === "spelling_equivalent_no_write");
+        setHealthRepairStatus(
+          resolved
+            ? healthRepairState.preview.resolved_message_ar ||
+                healthRepairState.analysis.resolved_message_ar ||
+                "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة"
+            : "المعاينة غير قابلة للتنفيذ — اختر مرشّحًا أو راجع يدويًا.",
+        );
       } else {
         setHealthRepairStage("preview");
         setHealthRepairStatus("فعّل الموافقة بعد مراجعة المعاينة (سجل واحد فقط).");

@@ -146,7 +146,244 @@
   function leafOf(path) {
     var p = norm(path);
     if (!p) return "";
-    return p.indexOf("/") >= 0 ? p.slice(p.lastIndexOf("/") + 1) : p;
+    return p.indexOf("/") >= 0 ? norm(p.slice(p.lastIndexOf("/") + 1)) : p;
+  }
+
+  function parentPrefixOf(path) {
+    var p = norm(path);
+    if (!p || p.indexOf("/") < 0) return "";
+    return norm(p.slice(0, p.lastIndexOf("/")));
+  }
+
+  /** Prefer the more orthographically marked Arabic spelling (همزة / أ …). */
+  function preferArabicSpelling(a, b) {
+    var s1 = norm(a);
+    var s2 = norm(b);
+    if (!s1) return s2;
+    if (!s2) return s1;
+    if (s1 === s2) return s1;
+    function score(s) {
+      var n = 0;
+      if (/[أإآؤئء]/.test(s)) n += 3;
+      if (/ة/.test(s)) n += 1;
+      if (s !== normalizeArabicForCompare(s)) n += 1;
+      return n;
+    }
+    var sc1 = score(s1);
+    var sc2 = score(s2);
+    if (sc1 !== sc2) return sc1 > sc2 ? s1 : s2;
+    return s1.length >= s2.length ? s1 : s2;
+  }
+
+  /**
+   * Spelling-only path fix: rewrite child name prefix to canonical parent spelling.
+   * Never nulls parent / parent_person_id.
+   */
+  function buildAlignNamePathSpelling(issue, children) {
+    var path = norm(issue && (issue.child_path || issue.name));
+    var extracted =
+      norm(issue && issue.extracted_parent) || parentPrefixOf(path);
+    var stored = norm(
+      issue && (issue.stored_parent || issue.parent_name || issue.parent),
+    );
+    var parentCol = issue && issue.parent != null ? norm(issue.parent) : "";
+    var leaf = leafOf(path);
+    if (!path || !leaf || !extracted) return null;
+
+    var unified = resolveUnifiedParentTarget(issue, children || []);
+    var canonical =
+      (unified && unified.ok && unified.parent) || stored || extracted;
+    if (!canonical) return null;
+    if (!pathsEqual(extracted, canonical)) return null;
+    if (extracted === canonical) return null;
+
+    var newPath = canonical + "/" + leaf;
+    if (newPath === path) return null;
+    if (!pathsEqual(newPath, path)) return null;
+
+    return {
+      ok: true,
+      repair_type: "align_name_path_spelling",
+      child_path: newPath,
+      name: newPath,
+      child_name: newPath,
+      parent: parentCol || stored || null,
+      parent_name: stored || parentCol || null,
+      parent_person_id: (issue && issue.parent_person_id) || null,
+      keep_parent: true,
+      reason_ar:
+        "توحيد إملاء المسار في الاسم من «" +
+        extracted +
+        "» إلى «" +
+        canonical +
+        "» — دون تغيير حقل الأب أو المعرف.",
+      impact_ar:
+        "المعرف والأبناء وحقل الأب بلا تغيير · يُحدَّث مسار الاسم فقط ليطابق إملاء الأب الكانوني.",
+      affected_rows: 1,
+    };
+  }
+
+  /** Count rows whose name/parent path uses oldPath as exact path or prefix. */
+  function countPathPrefixImpact(children, branch, oldPath) {
+    var b = norm(branch);
+    var old = norm(oldPath);
+    if (!old) return 0;
+    var n = 0;
+    (children || []).forEach(function (c) {
+      if (!c) return;
+      if (b && norm(c.branch_key) !== b) return;
+      var name = norm(c.child_name || c.name);
+      var p = norm(c.parent || c.parent_name);
+      if (name === old || name.indexOf(old + "/") === 0) n += 1;
+      else if (p === old || p.indexOf(old + "/") === 0) n += 1;
+    });
+    return n;
+  }
+
+  /**
+   * Unify leaf spelling for one row (possible_spelling_duplicates action).
+   */
+  function buildUnifyLeafName(issue, chosenFrom, chosenTo, children) {
+    var fromLeaf = norm(chosenFrom);
+    var toLeaf = norm(chosenTo);
+    if (!fromLeaf || !toLeaf || fromLeaf === toLeaf) {
+      return { ok: false, message_ar: "لا اختلاف إملائي لتوحيده." };
+    }
+    if (!pathsEqual(fromLeaf, toLeaf)) {
+      return {
+        ok: false,
+        message_ar: "الاسمان ليسا متكافئين بعد توحيد العربية — راجع يدويًا.",
+      };
+    }
+    var pathA = norm(issue && issue.child_path_a);
+    var pathB = norm(issue && issue.child_path_b);
+    var idA = issue && issue.id_a;
+    var idB = issue && issue.id_b;
+    var targetId = null;
+    var oldPath = "";
+    var newPath = "";
+    if (leafOf(pathA) === fromLeaf) {
+      targetId = idA;
+      oldPath = pathA;
+      newPath = parentPrefixOf(pathA)
+        ? parentPrefixOf(pathA) + "/" + toLeaf
+        : toLeaf;
+    } else if (leafOf(pathB) === fromLeaf) {
+      targetId = idB;
+      oldPath = pathB;
+      newPath = parentPrefixOf(pathB)
+        ? parentPrefixOf(pathB) + "/" + toLeaf
+        : toLeaf;
+    }
+    if (targetId == null || !oldPath || !newPath || oldPath === newPath) {
+      return {
+        ok: false,
+        message_ar: "تعذر تحديد السجل المراد توحيد اسمه.",
+      };
+    }
+    var Struct = global.AlzidanIntegrityTreeStructure;
+    var diffReason =
+      (issue && issue.diff_reason_ar) ||
+      (Struct && typeof Struct.explainArabicSpellingDiff === "function"
+        ? Struct.explainArabicSpellingDiff(fromLeaf, toLeaf)
+        : "اختلاف إملائي");
+    var affected = countPathPrefixImpact(
+      children,
+      issue && issue.branch_key,
+      oldPath,
+    );
+    if (affected < 1) affected = 1;
+    return {
+      ok: true,
+      repair_type: "unify_leaf_name",
+      issue_id: targetId,
+      from_leaf: fromLeaf,
+      to_leaf: toLeaf,
+      old_path: oldPath,
+      child_path: newPath,
+      name: newPath,
+      child_name: newPath,
+      keep_parent: true,
+      parent: null,
+      parent_name: null,
+      parent_person_id: null,
+      reason_ar:
+        "توحيد الاسم من «" +
+        fromLeaf +
+        "» إلى «" +
+        toLeaf +
+        "» (" +
+        diffReason +
+        ").",
+      diff_reason_ar: diffReason,
+      affected_rows: affected,
+      impact_ar:
+        "يُحدَّث مسار الاسم للسجل" +
+        (affected > 1
+          ? " وما يتفرّع منه من مسارات (" + affected + ")"
+          : "") +
+        " — بلا دمج ودون حذف.",
+      confirm_ar: {
+        current: fromLeaf,
+        proposed: toLeaf,
+        reason: diffReason,
+        affected: affected,
+      },
+    };
+  }
+
+  /** Merge preview for spelling-duplicate pair — never silent. */
+  function buildMergePairPreview(issue, survivorId, children) {
+    var idA = issue && issue.id_a;
+    var idB = issue && issue.id_b;
+    var survivor = survivorId != null ? Number(survivorId) : Number(idA);
+    var loser = survivor === Number(idA) ? Number(idB) : Number(idA);
+    if (!survivor || !loser || survivor === loser) {
+      return {
+        ok: false,
+        message_ar: "اختر سجلًا يبقى وسجلًا يُدمَج — نفس الشخص فقط.",
+      };
+    }
+    var survPath =
+      survivor === Number(idA)
+        ? norm(issue && issue.child_path_a)
+        : norm(issue && issue.child_path_b);
+    var losePath =
+      loser === Number(idA)
+        ? norm(issue && issue.child_path_a)
+        : norm(issue && issue.child_path_b);
+    var childCount = 0;
+    (children || []).forEach(function (c) {
+      if (!c) return;
+      var p = norm(c.parent || c.parent_name);
+      if (p === losePath) childCount += 1;
+    });
+    return {
+      ok: true,
+      repair_type: "merge_duplicate_pair",
+      survivor_id: survivor,
+      loser_id: loser,
+      survivor_path: survPath,
+      loser_path: losePath,
+      children_to_reparent: childCount,
+      affected_rows: 1 + childCount,
+      reason_ar:
+        "دمج السجل #" +
+        loser +
+        " («" +
+        leafOf(losePath) +
+        "») في #" +
+        survivor +
+        " («" +
+        leafOf(survPath) +
+        "») — بعد تأكيد أنهما نفس الشخص.",
+      impact_ar:
+        "أبناء المتأثرون بإعادة ربط الأب: " +
+        childCount +
+        " · يُحذف سجل المكرر بعد إعادة الربط · بلا تنفيذ صامت.",
+      danger_ar:
+        "تحذير: الدمج يغيّر علاقات الأبناء ويحذف سجلًا. راجع المعاينة ثم نفّذ من مساحة SQL فقط.",
+    };
   }
 
   var FLIP_BLOCK_AR =
@@ -532,11 +769,23 @@
         analysis.write_path_ar =
           analysis.write_path_ar ||
           "كيفية الإصلاح: راجع من عدّل المسار دون حقل الأب (مندوب/إدارة/استيراد) ووحّد بعد موافقة.";
+        var sameCanonicalFather =
+          !!(
+            unified.ok &&
+            unified.parent &&
+            ((stored && pathsEqual(stored, unified.parent)) ||
+              (parentCol && pathsEqual(parentCol, unified.parent)) ||
+              (extracted && pathsEqual(extracted, unified.parent)))
+          );
         var spellOnly =
-          !!extracted &&
-          !!stored &&
-          pathsEqual(extracted, stored) &&
-          (!parentCol || pathsEqual(parentCol, extracted));
+          (!!extracted &&
+            !!stored &&
+            pathsEqual(extracted, stored) &&
+            (!parentCol || pathsEqual(parentCol, extracted))) ||
+          (sameCanonicalFather &&
+            !!extracted &&
+            !!stored &&
+            pathsEqual(extracted, stored));
         var alreadyCanonical =
           !!(
             unified.ok &&
@@ -544,22 +793,39 @@
             parentCol === unified.parent &&
             norm(issue && issue.parent_name) === unified.parent
           );
-        if (spellOnly || alreadyCanonical) {
-          // دوخي↔دوخى بعد التطبيع: ليست مشكلة هيكلية. كتابة extracted تيتّم الأب.
+        if (spellOnly || alreadyCanonical || (sameCanonicalFather && pathsEqual(extracted, stored))) {
+          // دوخي↔دوخى بعد التطبيع: ليست مشكلة هيكلية — لا نفرّغ الأب ولا نقلب الفئة.
           analysis.repair_type = "spelling_equivalent_no_write";
           analysis.can_auto_propose = false;
           analysis.requires_manual_choice = false;
           analysis.proposed = null;
+          analysis.would_flip_only = false;
+          analysis.block_message_ar = null;
+          analysis.clears_missing_father = true;
+          analysis.clears_path_mismatch = true;
+          analysis.resolved_by_normalize = true;
+          analysis.resolved_message_ar =
+            "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة";
           analysis.decision_logic_ar = [
             "الأب من المسار: «" + (extracted || "—") + "».",
             "المذكور في السجل: «" + (stored || "فارغ") + "».",
-            spellOnly
+            spellOnly || pathsEqual(extracted, stored)
               ? "بعد توحيد العربية (ى↔ي / همزة / ة↔ه) المساران متكافئان — ليست مشكلة هيكلية."
               : "حقل الأب مضبوط أصلًا على اسم الأب الموجود في الشجرة.",
-            "لا تنفيذ إصلاح من مركز الصحة — أعد فحص التقرير (المقارنة أصبحت بالتوحيد).",
+            analysis.resolved_message_ar,
+            "لا يُفرَّغ حقل الأب · لا تنفيذ يفرّغ المعاينة.",
           ];
           analysis.root_cause_ar =
             "الاسم مكتوب بطريقة مختلفة عن حقل الأب (مثل دوخي/دوخى أو فضى/فضي) — الأب نفسه بعد التوحيد.";
+          var alignOpt = buildAlignNamePathSpelling(issue, children);
+          analysis.optional_align_name_path = alignOpt;
+          if (alignOpt && alignOpt.ok) {
+            analysis.decision_logic_ar.push(
+              "اختياري: «توحيد إملاء المسار في الاسم» → «" +
+                alignOpt.child_path +
+                "» دون تغيير الأب/المعرف.",
+            );
+          }
         } else if (unified.ok) {
           analysis.can_auto_propose = true;
           analysis.requires_manual_choice = false;
@@ -701,7 +967,8 @@
       analysis.requires_manual_choice = true;
       analysis.can_auto_propose = false;
       analysis.proposed = null;
-      analysis.never_rename = true;
+      analysis.never_rename = false;
+      analysis.never_auto_merge = true;
       var diffReason =
         norm(issue && issue.diff_reason_ar) ||
         (function () {
@@ -714,6 +981,23 @@
           }
           return "الاسم مكتوب بطريقة مختلفة";
         })();
+      var preferred = preferArabicSpelling(
+        issue && issue.name_a,
+        issue && issue.name_b,
+      );
+      var otherLeaf =
+        preferred === norm(issue && issue.name_a)
+          ? norm(issue && issue.name_b)
+          : norm(issue && issue.name_a);
+      analysis.spelling_pair = {
+        name_a: norm(issue && issue.name_a),
+        name_b: norm(issue && issue.name_b),
+        preferred: preferred,
+        other: otherLeaf,
+        diff_reason_ar: diffReason,
+        id_a: issue && issue.id_a,
+        id_b: issue && issue.id_b,
+      };
       analysis.decision_logic_ar = [
         "أسماء قد تكون مكررة تحت نفس الأب بعد توحيد العربية (همزة / ى↔ي / ة↔ه / تشكيل).",
         "الاسم الأول: «" +
@@ -722,15 +1006,15 @@
           norm(issue && issue.name_b) +
           "».",
         "السبب: " + diffReason + ".",
-        "الحالة: يحتاج مراجعة — لا اقتراح دمج ولا أمر إصلاح من مركز الصحة.",
-        "قرار المشرف لاحقًا: إبقاء سجلين · أو دمج يدوي بعد التحقق.",
+        "إجراءات متاحة للمشرف: مراجعة · توحيد الاسم · دمج السجلين (نفس الشخص فقط) · تجاهل.",
+        "لا دمج تلقائي — أي كتابة تمر بتحليل → معاينة → موافقة → مساحة SQL.",
       ];
       analysis.root_cause_ar =
         analysis.root_cause_ar ||
         "متغيرات إملائية عربية أو سجلات مكررة تحت نفس الأب — الغموض مقصود حتى يقرر المشرف.";
       analysis.write_path_ar =
         analysis.write_path_ar ||
-        "كيفية الإصلاح: لا مسار تنفيذ تلقائي. أي دمج لاحق يجب أن يكون يدويًا بعد موافقة صريحة.";
+        "كيفية الإصلاح: توحيد الإملاء إن كانا نفس الشخص بأسماء مختلفة، أو دمج يدوي بعد تأكيد الهوية، أو تجاهل إن كانا شخصين.";
     } else {
       analysis.repair_type = "manual_review";
       analysis.requires_manual_choice = true;
@@ -806,12 +1090,56 @@
       }
     }
 
+    // Spelling-only: never show empty After as if parent would be nulled.
+    if (a.repair_type === "spelling_equivalent_no_write") {
+      wouldFlip = false;
+      blockMsg = null;
+      after = {
+        parent: (a.before && a.before.parent) || null,
+        parent_name: (a.before && a.before.parent_name) || null,
+        parent_person_id: (a.before && a.before.parent_person_id) || null,
+        child_path: (a.before && a.before.child_path) || null,
+        unchanged: true,
+        reason_ar:
+          a.resolved_message_ar ||
+          "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة",
+      };
+    }
+
+    if (a.repair_type === "align_name_path_spelling" && a.proposed) {
+      after = Object.assign({}, a.proposed);
+      wouldFlip = false;
+      blockMsg = null;
+      clearsPath = true;
+      clearsMissing = true;
+    }
+
+    if (a.repair_type === "unify_leaf_name" && a.proposed) {
+      after = Object.assign({}, a.proposed);
+      wouldFlip = false;
+      blockMsg = null;
+    }
+
+    if (a.repair_type === "merge_duplicate_pair" && a.proposed) {
+      after = Object.assign({}, a.proposed);
+      wouldFlip = false;
+    }
+
+    var nameOnly =
+      a.repair_type === "align_name_path_spelling" ||
+      a.repair_type === "unify_leaf_name";
+    var mergePair = a.repair_type === "merge_duplicate_pair";
+
     var executable =
       a.repair_type === "manual_review_no_merge" ||
       a.repair_type === "manual_review" ||
       a.repair_type === "spelling_equivalent_no_write"
         ? false
-        : !wouldFlip && !!(after && (after.parent || after.parent_person_id));
+        : nameOnly
+          ? !!(after && (after.child_path || after.child_name || after.name))
+          : mergePair
+            ? !!(after && after.survivor_id && after.loser_id)
+            : !wouldFlip && !!(after && (after.parent || after.parent_person_id));
 
     var preview = {
       stage: "preview",
@@ -824,14 +1152,20 @@
       requires_approve: true,
       never_rename: !!a.never_rename,
       never_auto_merge: a.repair_type === "manual_review_no_merge",
+      resolved_by_normalize: !!a.resolved_by_normalize,
+      resolved_message_ar: a.resolved_message_ar || null,
+      optional_align_name_path: a.optional_align_name_path || null,
       clears_missing_father: clearsMissing,
       clears_path_mismatch: clearsPath,
       would_flip_only: wouldFlip,
       block_message_ar: wouldFlip ? blockMsg || FLIP_BLOCK_AR : null,
-      preview_flags_ar: [
-        "سيمسح «أب غير موجود في الشجرة»؟ " + (clearsMissing ? "نعم" : "لا"),
-        "سيمسح «الاسم مكتوب بطريقة مختلفة»؟ " + (clearsPath ? "نعم" : "لا"),
-      ].join("\n"),
+      preview_flags_ar: a.resolved_by_normalize
+        ? a.resolved_message_ar ||
+          "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة"
+        : [
+            "سيمسح «أب غير موجود في الشجرة»؟ " + (clearsMissing ? "نعم" : "لا"),
+            "سيمسح «الاسم مكتوب بطريقة مختلفة»؟ " + (clearsPath ? "نعم" : "لا"),
+          ].join("\n"),
     };
     if (wouldFlip && preview.block_message_ar) {
       preview.why_ar =
@@ -878,6 +1212,8 @@
     var id = p.analysis && p.analysis.issue_id;
     var actor = (meta && meta.actor) || "admin";
     var reason = (meta && meta.reason) || (after && after.reason_ar) || "";
+    var repairType = (p.analysis && p.analysis.repair_type) || "";
+
     if (p.would_flip_only || (p.analysis && p.analysis.would_flip_only && !p.after)) {
       return {
         ok: false,
@@ -886,21 +1222,64 @@
     }
     if (
       p.never_auto_merge ||
-      (p.analysis && p.analysis.repair_type === "manual_review_no_merge")
+      repairType === "manual_review_no_merge"
     ) {
       return {
         ok: false,
         message_ar:
-          "الأسماء التي قد تكون مكررة للمراجعة فقط — ممنوع توليد أمر دمج من مركز الصحة.",
+          "الأسماء التي قد تكون مكررة للمراجعة فقط — ممنوع توليد أمر دمج من مركز الصحة دون اختيار صريح «دمج السجلين».",
       };
     }
-    if (p.analysis && p.analysis.repair_type === "spelling_equivalent_no_write") {
+    if (repairType === "spelling_equivalent_no_write" || p.resolved_by_normalize) {
       return {
         ok: false,
         message_ar:
-          "المساران متكافئان بعد تطبيع العربية (مثل دوخي/دوخى) — لا UPDATE على parent. أعد فحص مركز الصحة.",
+          p.resolved_message_ar ||
+          "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة",
       };
     }
+
+    if (repairType === "merge_duplicate_pair") {
+      var survivor = after.survivor_id;
+      var loser = after.loser_id;
+      var survPath = norm(after.survivor_path);
+      var losePath = norm(after.loser_path);
+      if (!survivor || !loser || !survPath || !losePath) {
+        return { ok: false, message_ar: "معاينة الدمج غير مكتملة." };
+      }
+      var mergeSql = [
+        "-- مركز الصحة · دمج مكرر محتمل · بعد موافقة المدير — راجع بحذر",
+        "-- survivor: " + survivor + " · loser: " + loser + " · actor: " + String(actor).replace(/\n/g, " "),
+        "-- reason: " + String(reason).replace(/\n/g, " ").slice(0, 200),
+        "-- 1) إعادة ربط أبناء السجل المحذوف إلى المسار الناجي",
+        "UPDATE public.tree_children",
+        "SET parent = " + sqlLit(survPath) + ",",
+        "    parent_name = " + sqlLit(survPath),
+        "WHERE (parent = " + sqlLit(losePath) + " OR parent_name = " + sqlLit(losePath) + ")",
+        "  AND id <> " + Number(loser) + ";",
+        "",
+        "-- 2) حذف السجل المكرر (نفس الشخص فقط — راجع العدد قبل التشغيل)",
+        "DELETE FROM public.tree_children",
+        "WHERE id = " + Number(loser) + ";",
+      ].join("\n");
+      return {
+        ok: true,
+        sql: mergeSql,
+        title: "دمج السجلين #" + loser + " → #" + survivor + " (مركز الصحة)",
+        row_id: loser,
+        before: before,
+        after: after,
+        success_meta: {
+          row_id: survivor,
+          father_name: "",
+          merge: true,
+          survivor_id: survivor,
+          loser_id: loser,
+        },
+      };
+    }
+
+    if (id == null && after.issue_id != null) id = after.issue_id;
     if (id == null || !after) {
       return {
         ok: false,
@@ -909,45 +1288,264 @@
     }
 
     var sets = [];
-    if (after.parent != null && after.parent !== "") {
-      sets.push("  parent = " + sqlLit(after.parent));
-      sets.push("  parent_name = " + sqlLit(after.parent_name || after.parent));
-    }
-    if (after.parent_person_id) {
-      sets.push("  parent_person_id = " + sqlLit(after.parent_person_id) + "::uuid");
+    var newName = norm(after.child_path || after.child_name || after.name);
+    var nameOnly =
+      repairType === "align_name_path_spelling" ||
+      repairType === "unify_leaf_name" ||
+      !!after.keep_parent;
+
+    if (nameOnly && newName) {
+      sets.push("  child_name = " + sqlLit(newName));
+      sets.push("  name = " + sqlLit(newName));
+      if (repairType === "unify_leaf_name" && after.old_path && after.affected_rows > 1) {
+        // Also rewrite descendant prefixes — separate UPDATEs after the leaf row.
+      }
+    } else {
+      if (after.parent != null && after.parent !== "") {
+        sets.push("  parent = " + sqlLit(after.parent));
+        sets.push("  parent_name = " + sqlLit(after.parent_name || after.parent));
+      }
+      if (after.parent_person_id) {
+        sets.push(
+          "  parent_person_id = " + sqlLit(after.parent_person_id) + "::uuid",
+        );
+      }
     }
     if (!sets.length) {
       return { ok: false, message_ar: "لا حقول للتحديث في المعاينة." };
     }
 
     var rowId = Number(id);
-    var sql = [
+    var sqlParts = [
       "-- مركز الصحة · سجل واحد · بعد موافقة المدير",
       "-- id: " + rowId + " · actor: " + String(actor).replace(/\n/g, " "),
       "-- reason: " + String(reason).replace(/\n/g, " ").slice(0, 200),
       "-- before.parent: " + String(before.parent == null ? "" : before.parent),
-      "-- after.parent: " + String(after.parent == null ? "" : after.parent),
-      "UPDATE public.tree_children",
-      "SET",
-      sets.join(",\n"),
-      "WHERE id = " + rowId + ";",
-    ].join("\n");
+      "-- after.parent: " +
+        String(
+          nameOnly
+            ? "(بدون تغيير الأب)"
+            : after.parent == null
+              ? ""
+              : after.parent,
+        ),
+    ];
+    if (newName && nameOnly) {
+      sqlParts.push("-- after.name: " + newName);
+    }
+    sqlParts.push("UPDATE public.tree_children");
+    sqlParts.push("SET");
+    sqlParts.push(sets.join(",\n"));
+    sqlParts.push("WHERE id = " + rowId + ";");
+
+    if (
+      repairType === "unify_leaf_name" &&
+      after.old_path &&
+      newName &&
+      after.old_path !== newName
+    ) {
+      var oldP = norm(after.old_path);
+      sqlParts.push("");
+      sqlParts.push("-- تحديث المسارات المتفرّعة التي تبدأ بالمسار القديم (إن وُجدت)");
+      sqlParts.push("UPDATE public.tree_children");
+      sqlParts.push("SET");
+      sqlParts.push(
+        "  child_name = " +
+          sqlLit(newName) +
+          " || substr(child_name, " +
+          (oldP.length + 1) +
+          "),",
+      );
+      sqlParts.push(
+        "  name = " +
+          sqlLit(newName) +
+          " || substr(name, " +
+          (oldP.length + 1) +
+          ")",
+      );
+      sqlParts.push(
+        "WHERE id <> " +
+          rowId +
+          " AND (child_name LIKE " +
+          sqlLit(oldP + "/%") +
+          " OR name LIKE " +
+          sqlLit(oldP + "/%") +
+          ");",
+      );
+      sqlParts.push("UPDATE public.tree_children");
+      sqlParts.push("SET");
+      sqlParts.push("  parent = " + sqlLit(newName) + " || substr(parent, " + (oldP.length + 1) + "),");
+      sqlParts.push(
+        "  parent_name = " +
+          sqlLit(newName) +
+          " || substr(parent_name, " +
+          (oldP.length + 1) +
+          ")",
+      );
+      sqlParts.push(
+        "WHERE parent LIKE " +
+          sqlLit(oldP + "/%") +
+          " OR parent = " +
+          sqlLit(oldP) +
+          " OR parent_name LIKE " +
+          sqlLit(oldP + "/%") +
+          " OR parent_name = " +
+          sqlLit(oldP) +
+          ";",
+      );
+    }
+
+    var sql = sqlParts.join("\n");
 
     return {
       ok: true,
       sql: sql,
-      title: "إصلاح السجل رقم " + rowId + " (مركز الصحة)",
+      title: nameOnly
+        ? "توحيد إملاء الاسم للسجل رقم " + rowId + " (مركز الصحة)"
+        : "إصلاح السجل رقم " + rowId + " (مركز الصحة)",
       row_id: rowId,
       before: before,
       after: after,
       success_meta: {
         row_id: rowId,
-        father_name: after.parent || after.parent_name || "",
-        after_parent: after.parent || after.parent_name || "",
-        updated_parent: !!(after.parent != null && after.parent !== ""),
-        updated_uuid: !!after.parent_person_id,
+        father_name: nameOnly
+          ? ""
+          : after.parent || after.parent_name || "",
+        after_parent: nameOnly
+          ? ""
+          : after.parent || after.parent_name || "",
+        updated_parent: !nameOnly && !!(after.parent != null && after.parent !== ""),
+        updated_uuid: !nameOnly && !!after.parent_person_id,
+        updated_name: !!nameOnly,
+        from_leaf: after.from_leaf || null,
+        to_leaf: after.to_leaf || null,
       },
     };
+  }
+
+  /** Activate optional path-spelling unify on an existing spelling_equivalent analysis. */
+  function adoptAlignNamePathSpelling(analysis) {
+    var a = analysis || {};
+    var opt = a.optional_align_name_path;
+    if (!opt || !opt.ok) {
+      return {
+        ok: false,
+        message_ar: "لا اقتراح لتوحيد إملاء المسار في الاسم.",
+      };
+    }
+    a.repair_type = "align_name_path_spelling";
+    a.resolved_by_normalize = false;
+    a.can_auto_propose = true;
+    a.requires_manual_choice = false;
+    a.would_flip_only = false;
+    a.block_message_ar = null;
+    a.proposed = {
+      child_path: opt.child_path,
+      name: opt.child_path,
+      child_name: opt.child_path,
+      parent: opt.parent,
+      parent_name: opt.parent_name,
+      parent_person_id: opt.parent_person_id,
+      keep_parent: true,
+      reason_ar: opt.reason_ar,
+      impact_ar: opt.impact_ar,
+      affected_rows: opt.affected_rows || 1,
+    };
+    a.decision_logic_ar = (a.decision_logic_ar || []).concat([
+      "تم اعتماد توحيد إملاء المسار في الاسم — الأب/المعرف بلا تغيير.",
+    ]);
+    return { ok: true, analysis: a };
+  }
+
+  /** Build human-readable proposed-fix explanation (اعرض الإصلاح المقترح). */
+  function formatProposedFixAr(analysis, preview) {
+    var a = analysis || {};
+    var p = preview || {};
+    var after = (p && p.after) || a.proposed || {};
+    var lines = [];
+    lines.push("سبب المشكلة: " + (a.root_cause_ar || "—"));
+    lines.push("كيفية إصلاحها: " + (a.write_path_ar || "—"));
+    if (a.resolved_by_normalize || a.repair_type === "spelling_equivalent_no_write") {
+      lines.push(
+        a.resolved_message_ar ||
+          "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة",
+      );
+      lines.push("الأثر: لا تغيير على UUID أو الأبناء أو حقل الأب.");
+      if (a.optional_align_name_path && a.optional_align_name_path.ok) {
+        lines.push(
+          "اقتراح اختياري: توحيد إملاء المسار → «" +
+            a.optional_align_name_path.child_path +
+            "».",
+        );
+        lines.push(
+          "عدد السجلات المتأثرة (إن اعتُمد التوحيد): " +
+            (a.optional_align_name_path.affected_rows || 1),
+        );
+      }
+      return lines.join("\n");
+    }
+    if (a.repair_type === "unify_leaf_name") {
+      lines.push("الإصلاح المقترح: " + (after.reason_ar || "توحيد الاسم"));
+      lines.push(
+        "من «" +
+          (after.from_leaf || "") +
+          "» إلى «" +
+          (after.to_leaf || "") +
+          "».",
+      );
+      lines.push("عدد السجلات المتأثرة: " + (after.affected_rows || 1));
+      lines.push(after.impact_ar || "تحديث مسار الاسم فقط.");
+      return lines.join("\n");
+    }
+    if (a.repair_type === "merge_duplicate_pair") {
+      lines.push("الإصلاح المقترح: " + (after.reason_ar || "دمج السجلين"));
+      lines.push(after.impact_ar || "");
+      lines.push(after.danger_ar || "");
+      lines.push("عدد السجلات المتأثرة: " + (after.affected_rows || "—"));
+      return lines.filter(Boolean).join("\n");
+    }
+    if (a.repair_type === "align_name_path_spelling") {
+      lines.push("الإصلاح المقترح: توحيد إملاء المسار في الاسم");
+      lines.push(
+        "قبل: «" +
+          ((a.before && a.before.child_path) || "—") +
+          "»",
+      );
+      lines.push("بعد: «" + (after.child_path || after.name || "—") + "»");
+      lines.push(
+        after.impact_ar ||
+          "UUID/الأبناء/حقل الأب بلا تغيير — مسار الاسم فقط.",
+      );
+      lines.push("عدد السجلات المتأثرة: " + (after.affected_rows || 1));
+      return lines.join("\n");
+    }
+    lines.push(
+      "الإصلاح المقترح: " +
+        (after.reason_ar ||
+          (after.parent
+            ? "تعيين الأب إلى «" + after.parent + "»"
+            : "— لا اقتراح")),
+    );
+    lines.push(
+      "قبل ← الأب: " +
+        String((a.before && a.before.parent) || "فارغ") +
+        " · المعرف: " +
+        String((a.before && a.before.parent_person_id) || "—"),
+    );
+    lines.push(
+      "بعد ← الأب: " +
+        String(after.parent || "—") +
+        " · المعرف: " +
+        String(after.parent_person_id || "—"),
+    );
+    lines.push("الأثر: " + (a.impact_ar || "—"));
+    if (p.preview_flags_ar) lines.push(p.preview_flags_ar);
+    lines.push(
+      p.executable
+        ? "الحالة: قابل للتنفيذ بعد الموافقة عبر مساحة SQL."
+        : "الحالة: غير قابل للتنفيذ تلقائيًا — اختر مرشّحًا أو راجع يدويًا.",
+    );
+    return lines.join("\n");
   }
 
   /**
@@ -1050,6 +1648,23 @@
   function formatRepairSuccessAr(meta) {
     var m = meta || {};
     var id = m.row_id != null ? m.row_id : "?";
+    if (m.merge) {
+      return (
+        "✅ تم تجهيز دمج السجل #" +
+        (m.loser_id || "?") +
+        " في #" +
+        (m.survivor_id || id) +
+        " عبر مساحة SQL — أكّد التنفيذ هناك."
+      );
+    }
+    if (m.updated_name && m.from_leaf && m.to_leaf) {
+      return (
+        "✅ تم توحيد الاسم من «" + m.from_leaf + "» إلى «" + m.to_leaf + "»."
+      );
+    }
+    if (m.updated_name) {
+      return "✅ تم توحيد إملاء المسار في الاسم للسجل رقم " + id + ".";
+    }
     var father = norm(m.father_name || m.after_parent || "");
     var msg = "تم إصلاح السجل رقم " + id + " بنجاح.";
     if (father) {
@@ -1110,6 +1725,13 @@
     findParentPersonId: findParentPersonId,
     resolveUnifiedParentTarget: resolveUnifiedParentTarget,
     evaluateChosenFather: evaluateChosenFather,
+    buildAlignNamePathSpelling: buildAlignNamePathSpelling,
+    buildUnifyLeafName: buildUnifyLeafName,
+    buildMergePairPreview: buildMergePairPreview,
+    adoptAlignNamePathSpelling: adoptAlignNamePathSpelling,
+    formatProposedFixAr: formatProposedFixAr,
+    preferArabicSpelling: preferArabicSpelling,
+    countPathPrefixImpact: countPathPrefixImpact,
     FLIP_BLOCK_AR: FLIP_BLOCK_AR,
     fatherLookupFailureAr: fatherLookupFailureAr,
     issueStillPresent: issueStillPresent,

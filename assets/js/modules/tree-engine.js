@@ -201,6 +201,125 @@
     };
   }
 
+  /**
+   * Preview-only: unify leaf/path spelling in child name without touching parent fields.
+   */
+  function previewAlignNamePathSpelling(row, canonicalParentPath) {
+    var path = resolveChildPath(row);
+    var canonical = norm(canonicalParentPath);
+    var parts = path.split("/").map(norm).filter(Boolean);
+    if (parts.length < 2 || !canonical) {
+      return {
+        ok: false,
+        code: "TREE-NO-ALIGN",
+        message_ar: "لا يمكن توحيد إملاء المسار — مسار أو أب كانوني ناقص.",
+      };
+    }
+    var leaf = parts[parts.length - 1];
+    var extracted = parts.slice(0, -1).join("/");
+    var Struct = global.AlzidanIntegrityTreeStructure;
+    var equal =
+      Struct && typeof Struct.pathsEqual === "function"
+        ? Struct.pathsEqual(extracted, canonical)
+        : extracted === canonical;
+    if (!equal) {
+      return {
+        ok: false,
+        code: "TREE-NOT-SPELLING",
+        message_ar: "المسار والأب الكانوني ليسا اختلافًا إملائيًا فقط.",
+      };
+    }
+    if (extracted === canonical) {
+      return {
+        ok: false,
+        code: "TREE-ALREADY",
+        message_ar: "المسار مطابق أصلًا لإملاء الأب.",
+      };
+    }
+    var newPath = canonical + "/" + leaf;
+    return {
+      ok: true,
+      repair_type: "align_name_path_spelling",
+      before: {
+        parent: resolveParentPath(row) || null,
+        parent_name: resolveParentPath(row) || null,
+        parent_person_id: (row && row.parent_person_id) || null,
+        child_path: path,
+      },
+      after: {
+        parent: resolveParentPath(row) || null,
+        parent_name: resolveParentPath(row) || null,
+        parent_person_id: (row && row.parent_person_id) || null,
+        child_path: newPath,
+        name: newPath,
+        child_name: newPath,
+        keep_parent: true,
+      },
+      decision_logic_ar: [
+        "توحيد إملاء مقطع الأب داخل مسار الاسم فقط.",
+        "حقل الأب والمعرف والأبناء بلا تغيير.",
+      ],
+      never_rename: false,
+      keep_parent: true,
+    };
+  }
+
+  /**
+   * Preview-only: rename leaf segment when Arabic-normalize-equivalent.
+   */
+  function previewUnifyLeafName(row, newLeaf) {
+    var path = resolveChildPath(row);
+    var leaf = path.indexOf("/") >= 0 ? path.slice(path.lastIndexOf("/") + 1) : path;
+    var prefix = path.indexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/")) : "";
+    var to = norm(newLeaf);
+    if (!path || !to || leaf === to) {
+      return {
+        ok: false,
+        code: "TREE-NO-LEAF",
+        message_ar: "لا اسم ورقة لتوحيده.",
+      };
+    }
+    var Struct = global.AlzidanIntegrityTreeStructure;
+    var equal =
+      Struct && typeof Struct.pathsEqual === "function"
+        ? Struct.pathsEqual(leaf, to)
+        : leaf === to;
+    if (!equal) {
+      return {
+        ok: false,
+        code: "TREE-NOT-SPELLING",
+        message_ar: "الاسمان ليسا متكافئين بعد توحيد العربية.",
+      };
+    }
+    var newPath = prefix ? prefix + "/" + to : to;
+    return {
+      ok: true,
+      repair_type: "unify_leaf_name",
+      before: {
+        parent: resolveParentPath(row) || null,
+        parent_name: resolveParentPath(row) || null,
+        parent_person_id: (row && row.parent_person_id) || null,
+        child_path: path,
+      },
+      after: {
+        parent: resolveParentPath(row) || null,
+        parent_name: resolveParentPath(row) || null,
+        parent_person_id: (row && row.parent_person_id) || null,
+        child_path: newPath,
+        name: newPath,
+        child_name: newPath,
+        from_leaf: leaf,
+        to_leaf: to,
+        keep_parent: true,
+      },
+      decision_logic_ar: [
+        "توحيد إملاء ورقة الاسم من «" + leaf + "» إلى «" + to + "».",
+        "حقل الأب والمعرف بلا تغيير على هذا الصف.",
+      ],
+      keep_parent: true,
+    };
+  }
+
   var api = {
     CODE_PARENT_NULL: CODE_PARENT_NULL,
     MSG_PARENT_NULL_AR: MSG_PARENT_NULL_AR,
@@ -211,6 +330,8 @@
     prepareInsert: prepareInsert,
     previewFillParentFromName: previewFillParentFromName,
     previewLinkParentUuid: previewLinkParentUuid,
+    previewAlignNamePathSpelling: previewAlignNamePathSpelling,
+    previewUnifyLeafName: previewUnifyLeafName,
   };
 
   global.AlzidanTreeEngine = api;

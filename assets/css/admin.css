@@ -327,7 +327,7 @@ body.admin-authenticated #admin-requests-section #sb-status { display: none !imp
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 110px;
+  min-width: 140px;
 }
 .health-row-actions .btn {
   width: 100%;
