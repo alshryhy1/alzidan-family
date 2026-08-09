@@ -5,12 +5,16 @@
  * Categories:
  *  - parent_null: column `parent` is NULL/blank (dual-column drift)
  *  - parent_empty: both parent and parent_name empty
- *  - missing_father: parent string set but no matching tree_children.name/child_name
- *  - path_mismatch: parent extracted from name path ≠ stored parent
+ *  - missing_father: no valid parent_person_id AND parent string matches no living father
+ *  - path_mismatch: parent extracted from name path ≠ stored parent, OR stored parent
+ *    text conflicts with a valid parent_person_id (orange review — not missing_father)
  *  - possible_spelling_duplicates: sibling names match after Arabic normalize (review only)
  *  - duplicate_person_id
  *  - spouses_without_husband
  *  - broken_relation: union of structural failures (no healthy father link)
+ *
+ * TREE-003 / missing-father rule: a resolvable parent_person_id is primary relationship
+ * evidence. Never emit red «الأب غير موجود» when the UUID points at a living father row.
  */
 (function (global) {
   "use strict";
@@ -30,7 +34,7 @@
     parent_null: "حقل الأب فارغ",
     parent_empty: "الأب غير مذكور",
     missing_father: "الأب غير موجود في الشجرة",
-    path_mismatch: "الاسم مكتوب بطريقة مختلفة عن الأب",
+    path_mismatch: "عدم تطابق/مراجعة",
     possible_spelling_duplicates: "أسماء قد تكون مكررة",
     duplicate_person_id: "معرف شخص مكرر",
     spouses_without_husband: "زوجات بلا زوج صالح",
@@ -109,9 +113,9 @@
     parent_empty:
       "سجل بلا أب مذكور — غالبًا استيراد ناقص أو أداة صيانة تجاوزت التحقق.",
     missing_father:
-      "اسم الأب لا يطابق أحدًا في الشجرة: إملاء مختلف، أو الأب لم يُضف بعد، أو اعتماد طلب بلا أب صالح.",
+      "لا يوجد parent_person_id صالح، ونص الأب لا يطابق أحدًا في الشجرة: إملاء مختلف، أو الأب لم يُضف بعد، أو اعتماد طلب بلا أب صالح.",
     path_mismatch:
-      "عُدّل المسار دون تحديث حقل الأب، أو الاسم مكتوب بطريقة مختلفة عن صف الأب. اختلاف ى/ي وحده بعد التوحيد لا يُعدّ مشكلة هيكلية.",
+      "عُدّل المسار دون تحديث حقل الأب، أو نص الأب لا يطابق الأب المرتبط بـ UUID، أو الاسم مكتوب بطريقة مختلفة عن صف الأب. اختلاف ى/ي وحده بعد التوحيد لا يُعدّ مشكلة هيكلية.",
     possible_spelling_duplicates:
       "اسمان تحت نفس الأب تطابقا بعد توحيد العربية (همزة / ى↔ي / ة↔ه / تشكيل) — قد يكونان شخصًا واحدًا أو شخصين مختلفين.",
     duplicate_person_id:
@@ -262,10 +266,62 @@
     return p.indexOf("/") >= 0 ? norm(p.slice(p.lastIndexOf("/") + 1)) : p;
   }
 
+  /** First path segment — short names like محمد/حمد → محمد (person given name). */
+  function givenName(path) {
+    var p = norm(path);
+    if (!p) return "";
+    return p.indexOf("/") >= 0 ? norm(p.slice(0, p.indexOf("/"))) : p;
+  }
+
   function fatherDisplay(row) {
     var stored = storedParent(row);
     if (stored) return leafName(stored) || stored;
     return "—";
+  }
+
+  /**
+   * Living father row via parent_person_id (primary TREE-003 evidence).
+   * Returns null when UUID missing or not present in the children index.
+   */
+  function resolveFatherByPersonId(index, parentPersonId) {
+    if (!index || parentPersonId == null) return null;
+    var pid = String(parentPersonId).trim();
+    if (!pid) return null;
+    var list = index.personIdMap.get(pid) || [];
+    if (!list.length) return null;
+    return list[0];
+  }
+
+  /**
+   * True when stored parent text identifies the same living father as parent_person_id.
+   * Accepts full path, leaf, given-name, or unique text resolve to same person_id.
+   */
+  function textAgreesWithUuidFather(index, branch, stored, fatherRow) {
+    var s = norm(stored);
+    if (!s || !fatherRow) return true;
+    var fPath = childPath(fatherRow);
+    if (pathsEqual(s, fPath)) return true;
+    var fLeaf = leafName(fPath);
+    if (fLeaf && pathsEqual(s, fLeaf)) return true;
+    var fGiven = givenName(fPath);
+    if (fGiven && pathsEqual(s, fGiven)) return true;
+    var resolved = resolveFatherRow(index, branch, s);
+    if (
+      resolved &&
+      resolved.person_id &&
+      fatherRow.person_id &&
+      String(resolved.person_id) === String(fatherRow.person_id)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Arabic relation label via UUID: محمد→حمد */
+  function relationViaUuidAr(childRow, fatherRow) {
+    var childLabel = givenName(childPath(childRow)) || childPath(childRow) || "—";
+    var fatherLabel = givenName(childPath(fatherRow)) || childPath(fatherRow) || "—";
+    return childLabel + "→" + fatherLabel;
   }
 
   /**
@@ -641,6 +697,19 @@
 
       // Path vs stored: Arabic-normalize + same canonical father → leave path_mismatch.
       // Dual-column parent=NULL alone stays in parent_null (not path_mismatch).
+      // Valid parent_person_id is primary for missing_father only — never red «أب غير موجود»
+      // when UUID resolves; text≠UUID becomes orange path_mismatch review instead.
+      var uuidFather = resolveFatherByPersonId(index, c.parent_person_id);
+      var textFatherOk =
+        !!stored && !isRoot && fatherExists(index, branch, stored);
+      var uuidFatherOk = !!uuidFather;
+      var livingFatherOk = isRoot || uuidFatherOk || textFatherOk;
+      var uuidTextConflict =
+        uuidFatherOk &&
+        !!stored &&
+        !isRoot &&
+        !textAgreesWithUuidFather(index, branch, stored, uuidFather);
+
       if (extracted && !isRoot) {
         var aligned = parentAlignedWithExtract(index, branch, stored, extracted);
         var colAligned =
@@ -682,12 +751,38 @@
         }
       }
 
-      // Missing father: has a parent string but no person row with that name
-      if (stored && !isRoot && !fatherExists(index, branch, stored)) {
+      // Text parent conflicts with valid UUID father → orange review, NOT missing_father
+      if (uuidTextConflict) {
+        var rel = relationViaUuidAr(c, uuidFather);
+        pathMismatch.push(
+          issueRow(c, CAT.PATH_MISMATCH, {
+            reason_ar:
+              "عدم تطابق/مراجعة: نص الأب «" +
+              stored +
+              "» لا يطابق الأب عبر UUID — العلاقة الفعلية: " +
+              rel +
+              " («" +
+              childPath(uuidFather) +
+              "»)",
+            relation_via_uuid_ar: rel,
+            uuid_father_path: childPath(uuidFather),
+            uuid_father_person_id: uuidFather.person_id || null,
+            review_kind: "parent_text_uuid_mismatch",
+          }),
+        );
+      }
+
+      // Missing father: only when UUID is absent/broken AND text parent has no living row
+      if (stored && !isRoot && !livingFatherOk) {
         missingFather.push(
           issueRow(c, CAT.MISSING_FATHER, {
             reason_ar:
-              "الأب «" + stored + "» غير موجود في tree_children.name لنفس الفرع",
+              "الأب «" +
+              stored +
+              "» غير موجود في tree_children.name لنفس الفرع" +
+              (c.parent_person_id
+                ? " وparent_person_id لا يشير لصف أب صالح"
+                : " (بلا parent_person_id صالح)"),
           }),
         );
       }
@@ -695,12 +790,16 @@
       var structurallyOk =
         !bothEmpty &&
         (isRoot ||
-          (stored &&
-            fatherExists(index, branch, stored) &&
-            (!extracted || parentAlignedWithExtract(index, branch, stored, extracted))));
+          (livingFatherOk &&
+            (!extracted ||
+              parentAlignedWithExtract(index, branch, stored, extracted))));
       // Dual-column: parent col should match when path has parent
-      if (extracted && colNull) structurallyOk = false;
-      if (stored && !isRoot && !fatherExists(index, branch, stored)) {
+      if (extracted && colNull && !uuidFatherOk) structurallyOk = false;
+      if (stored && !isRoot && !livingFatherOk) {
+        structurallyOk = false;
+      }
+      // UUID-valid but text conflicts → still needs orange review (not healthy)
+      if (uuidTextConflict) {
         structurallyOk = false;
       }
 
@@ -710,16 +809,19 @@
         var primary =
           bothEmpty
             ? CAT.PARENT_EMPTY
-            : !stored || (stored && !fatherExists(index, branch, stored))
+            : !livingFatherOk
               ? CAT.MISSING_FATHER
-              : colNull
+              : colNull && !uuidFatherOk
                 ? CAT.PARENT_NULL
                 : CAT.PATH_MISMATCH;
-        markBroken(
-          issueRow(c, primary, {
-            reason_ar: CAT_AR[primary] || primary,
-          }),
-        );
+        var brokenExtra = {
+          reason_ar: CAT_AR[primary] || primary,
+        };
+        if (uuidFatherOk) {
+          brokenExtra.relation_via_uuid_ar = relationViaUuidAr(c, uuidFather);
+          brokenExtra.uuid_father_path = childPath(uuidFather);
+        }
+        markBroken(issueRow(c, primary, brokenExtra));
       }
     });
 
@@ -989,6 +1091,10 @@
     fatherGroupKey: fatherGroupKey,
     fatherExists: fatherExists,
     resolveFatherRow: resolveFatherRow,
+    resolveFatherByPersonId: resolveFatherByPersonId,
+    textAgreesWithUuidFather: textAgreesWithUuidFather,
+    relationViaUuidAr: relationViaUuidAr,
+    givenName: givenName,
     parentAlignedWithExtract: parentAlignedWithExtract,
     childPath: childPath,
     buildNameIndex: buildNameIndex,
