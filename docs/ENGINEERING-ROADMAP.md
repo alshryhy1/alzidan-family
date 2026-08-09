@@ -3,7 +3,7 @@
 
 **الحالة:** معتمد رسميًا — وثيقة إدارة مشروع (ليست قائمة مزايا فقط)  
 **التاريخ:** 2026-08-07  
-**آخر تحديث تخطيط:** 2026-08-09 — رحلة القرار [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) 🟡 مسودة · مراجعة الرحلة [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) · بوابة 1 🟡 · بوابة 2 🟡 · لا كود شاشات حتى اعتماد رحلة القرار 
+**آخر تحديث تخطيط:** 2026-08-09 — بوابة 1 Delegates v2 🟢 («اغلاق ١») · بوابة 2 🟡 مسودة تجميد · رحلة القرار [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) 🟡 · [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) · لا كود شاشات حتى اعتماد رحلة القرار + تجميد بوابة 2 
 **القرارات المعمارية المقفلَة:** [`docs/ADR.md`](./ADR.md)
 
 ### دستور المنصة مقابل هذه الخارطة
@@ -31,20 +31,20 @@
 
 ### بوابتان قبل بدء مراحل المنتج (Request Experience فما بعد)
 
-الحالة صادقة: **البوابتان ما زالتا 🟡** — لا تُعلَنان 🟢 إلا بعد القبول / التجميد.  
+الحالة صادقة: **بوابة 1 🟢** · **بوابة 2 🟡** حتى التجميد الصريح.  
 **لا يُشترط** Workflow Engine 🟢 قبل Request Experience. إغلاق المحرك (سلامة + إزالة مسار اعتماد قديم + إعلان استقرار) يحدث **عند الوصول لمرحلته في السلّم**.
 
 | البوابة | الاسم | الحالة | المعنى |
 |---------|--------|--------|--------|
-| **1** | **Delegates v2** | 🟡 | فشل قبول حي (دخول بعد القبول) — ثبّت منفّذ Workspace v2 (`maint.sql_workspace_run_v2` / CREATE OR REPLACE) ثم `maint.fix_delegate_portal_path_v1` + إعادة اختبار |
-| **2** | **Product Foundation** = **دستور المنصة / دستور حي** | 🟡 | تجميد الدستور + **Truth Before Speed** — ليست «مرحلة وثائق» |
+| **1** | **Delegates v2** | 🟢 | قبول حي ناجح — تأكيد صاحب المنتج «اغلاق ١» (2026-08-09) — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) |
+| **2** | **Product Foundation** = **دستور المنصة / دستور حي** | 🟡 | تجميد الدستور + **Truth Before Speed** — مسودة جاهزة · **لا تلقائي** — [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) |
 
-**بوابة 1 — Delegates v2 🟡→🟢** (قبول فقط):
+**بوابة 1 — Delegates v2 🟢** (مغلقة — قبول صاحب المنتج):
 
-- اختبار الصلاحيات  
-- اختبار الأدوار  
-- اختبار التفعيل والتعطيل  
-- اختبار سجل التدقيق  
+- اختبار الصلاحيات ✅  
+- اختبار الأدوار ✅  
+- اختبار التفعيل والتعطيل ✅  
+- اختبار سجل التدقيق ✅  
 
 **بوابة 2 — Product Foundation 🟡→🟢** (**دستور المنصة / دستور حي** — ليس «مرحلة docs»):
 
@@ -77,7 +77,7 @@ iOS Experience Rebuild
 
 **ملاحظة Workflow على main:** أساس Workflow Engine v1 الموجود = **مؤقت / provisional** — لا يُوسَّع كإنتاج حتى تُنشأ مرحلة Validation Engine وتتم المواءمة.
 
-**الهدف التنفيذي الحالي:** إغلاق البوابتين 1→2 (🟡 الآن) → Request Experience → Validation Engine → ثم إغلاق Workflow على السلّم. iOS **بعد** المراحل الكانونية فقط.
+**الهدف التنفيذي الحالي:** تجميد بوابة 2 (Product Foundation) بأمر صريح → Request Experience → Validation Engine → ثم إغلاق Workflow على السلّم. iOS **بعد** المراحل الكانونية فقط.
 
 ---
 
@@ -108,7 +108,7 @@ iOS Experience Rebuild
 | البند | الحالة | ملاحظة |
 |--------|--------|--------|
 | **Admin Hub / Phase 1 شِلّ** | 🟢 | شِلّ + Hub + `#module=` — [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md)؛ **SQL Workspace** داخل `#module=tools` — [`SQL-WORKSPACE-REPORT.md`](./SQL-WORKSPACE-REPORT.md) (منفّذ v2 عبر CREATE OR REPLACE فقط — مسار `pg_proc` مُلغى؛ RPC 🟡 حتى تثبيت v2 مرة) |
-| **Delegates v2 — Foundation + Enforce** | 🟡 | قبول حي فشل على تفعيل الدخول بعد «قبول»؛ إصلاح مسار التفعيل في المستودع — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
+| **Delegates v2 — Foundation + Enforce** | 🟢 | قبول حي + «اغلاق ١» 2026-08-09 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |
 | **Health Center** | 🟢 | أساس قراءة فقط في الإدارة |
@@ -117,7 +117,7 @@ iOS Experience Rebuild
 | **DateEngine على كل النماذج** | ⚪ | ميلاد/وفاة/مناسبات — دين تقني (§ دين تقني) |
 | **Admin-SC / قائمة البطاقات** | 🟡 | حفظ ✅؛ قائمة **بانتظار SQL** `admin_special_cards_list_v1` إن لم يُطبَّق |
 | **TREE-004** | 🟢 | عزل أبناء + unlink يدوي مكتمل؛ **لا يُعاد** |
-| **Product Foundation (بوابة 2)** | 🟡 | **دستور حي** + Truth Before Speed — **بانتظار التجميد** بعد 🟢 Delegates — ليست مرحلة docs |
+| **Product Foundation (بوابة 2)** | 🟡 | **دستور حي** + Truth Before Speed — بوابة 1 🟢 · **بانتظار أمر التجميد** — [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) |
 | **Request Experience** | ⚪ | بعد البوابتين 1+2 🟢 فقط — **لا يُشترط** Workflow 🟢 |
 | **Validation Engine** | ⚪ | مرحلة مستقلة بعد RX — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **Workflow Engine v1** | 🟡 | أساس **provisional** على main — إغلاق (سلامة + إزالة مسار قديم) **عند مرحلته** بعد Validation — لا توسيع قبلها — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
@@ -296,8 +296,8 @@ Search Name        ← للبحث/التطبيع
 | المسار | المحتوى | الحالة |
 |--------|---------|--------|
 | **Admin Hub / Redesign** | شِلّ موديولات (عرض فقط — بلا منطق سير) | 🟢 أساس · تكراري |
-| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟡 **بوابة 1** — فشل دخول بعد القبول؛ إصلاح بانتظار إعادة اختبار — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) |
-| **Product Foundation** | **دستور حي** + Truth Before Speed — تجميد لا «مرحلة docs» | 🟡 **بوابة 2** — بانتظار التجميد بعد 🟢 Delegates |
+| **Delegates v2** | أدوار · عمليات · فرع · تفعيل/تعطيل · Audit صلاحيات | 🟢 **بوابة 1** — مغلقة («اغلاق ١» 2026-08-09) — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) |
+| **Product Foundation** | **دستور حي** + Truth Before Speed — تجميد لا «مرحلة docs» | 🟡 **بوابة 2** — مسودة جاهزة · بانتظار أمر «جمّدوا بوابة ٢» |
 | **Request Experience** | نية المستخدم · نماذج قصيرة · تتبع إنساني | ⚪ — بعد البوابتين 🟢 |
 | **Validation Engine** | تحقق قبل المندوب/الشجرة — لا تنفيذ | ⚪ — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **Workflow Engine v1** | حالات · تعيين · سجل · إزالة مسار اعتماد قديم · إعلان استقرار | 🟡 أساس **provisional** — إغلاق عند مرحلته بعد Validation — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
@@ -428,11 +428,11 @@ DateEngine  مكتبة + حارس ends_at
 TREE-004    عزل حالة الأبناء
 ```
 
-### بانتظار نشر/قبول — البوابتان 🟡 + أساس مؤقت
+### بانتظار نشر/قبول — بوابة 2 🟡 + أساس مؤقت
 
 ```
-بوابة 1  Delegates v2 — اختبار قبول (صلاحيات·أدوار·تفعيل·تدقيق) فقط
-بوابة 2  Product Foundation — تجميد الدستور الحي + Truth Before Speed (ليس docs phase)
+بوابة 1  Delegates v2 — 🟢 مغلقة («اغلاق ١» 2026-08-09)
+بوابة 2  Product Foundation — تجميد الدستور الحي + Truth Before Speed (مسودة · أمر صريح)
 —        Workflow Engine v1 foundation = provisional على main (لا توسيع قبل Validation)
 —        tree-import reuse SQL · Integrity Engine v2 SQL · Admin-SC-List (إن لزم)
 ```
@@ -440,9 +440,9 @@ TREE-004    عزل حالة الأبناء
 ### الترتيب الكانوني / السلّم الرسمي (معتمد — لا يُعاد ترتيبه بلا قرار)
 
 ```
-═══ بوابتان قبل مراحل المنتج (🟡 الآن) ═══
-★ 1  Delegates v2                 اختبار قبول — ليس برمجة جديدة                               🟡
-★ 2  Product Foundation           دستور حي + Truth Before Speed — تجميد                       🟡
+═══ بوابتان قبل مراحل المنتج ═══
+★ 1  Delegates v2                 قبول حي مغلق («اغلاق ١»)                                    🟢
+★ 2  Product Foundation           دستور حي + Truth Before Speed — تجميد بأمر صريح              🟡
 ═══ بعد البوابتين 🟢 — السلّم ═══
      Request Experience           نية المستخدم                                               ⚪
      Validation Engine            تحقق مستقل — لا تنفيذ                                      ⚪
@@ -468,7 +468,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر وما يُمنع 
 | **B عرض** | Patch Mobile 36 | ج (عرض) | 🟢 |
 | **C أخبار/كاش** | Patch News Expiry | ج/كاش | 🟢 |
 | **D إصلاح/سلامة** | Repair · Integrity · Health | أ | 🟢 أساس · 🟡 Integrity v2 SQL |
-| **E إدارة/سير** | بوابتان 🟡 → RX → Validation → Workflow → DW → Admin UX → Family Align → iOS | ب | 🟢 P1 · 🟡 Gates 1–2 · 🟡 WE provisional · ⚪ الباقي |
+| **E إدارة/سير** | بوابة 1 🟢 · بوابة 2 🟡 → RX → Validation → Workflow → DW → Admin UX → Family Align → iOS | ب | 🟢 P1 · 🟢 Gate 1 · 🟡 Gate 2 · 🟡 WE provisional · ⚪ الباقي |
 | **F UX موبايل / iOS** | إعادة بناء تجربة iOS · بحث · عضو · إشعارات · … | ج | ⬛ |
 | **I بنية تحتية** | DateEngine عبر كل الأسطح | — | 🟢 أساس · ⚪ تعميم النماذج |
 | **T Tree Engine v2** | person_id-only · merge · move · dry-run | أ/ب | ⚪ |
@@ -533,8 +533,8 @@ Validation (معايير القبول + KPI جزئية)
 | **Health** | Health Center | 🟢 | قراءة فقط (R-7) |
 | **Tests** | Smoke + Regression | 🟢 أدوات | `verify:repair` · `verify:children-isolation` · `verify:tree-import-reuse` |
 | **Admin-P1** | Redesign شِلّ | 🟢 | تكراري |
-| **Admin-P2** | Delegates v2 | 🟡 | SQL أساس+فرض مُطبَّق — بانتظار قبول — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
-| **PF-0** | Product Foundation | 🟡 | بوابة 2 — دستور حي + Truth Before Speed؛ بانتظار التجميد |
+| **Admin-P2** | Delegates v2 | 🟢 | بوابة 1 مغلقة («اغلاق ١» 2026-08-09) — [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) |
+| **PF-0** | Product Foundation | 🟡 | بوابة 2 — دستور حي + Truth Before Speed؛ مسودة جاهزة — [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) |
 | **RX-v1** | Request Experience | ⚪ | بعد البوابتين 1+2 🟢 |
 | **VE-v1** | Validation Engine | ⚪ | مرحلة مستقلة — [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) |
 | **WE-v1** | Workflow Engine v1 | 🟡 | provisional على main — إغلاق عند مرحلته بعد VE |
@@ -689,24 +689,24 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 - شريط/عدّادات التدفق في الـ Hub تُغذَّى لاحقًا من **Workflow Engine** (لا منطق سير داخل الواجهة)
 - موديولات: شجرة · أعضاء · مناسبات · ذكريات · مندوبون · صحة · سجل · طلبات · بطاقات · تصويت · إحصاءات · أدوات
 
-### بوابة 1 — Delegates v2 🟡 ← **قبول فقط · ليس برمجة جديدة** ← **الخطوة الفورية الآن**
+### بوابة 1 — Delegates v2 🟢 ← **مغلقة** («اغلاق ١» 2026-08-09)
 
-**المخرج:** اختبار قبول ناجح → 🟢 قبل تجميد الدستور.  
-**نفّذ الآن:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) (خانات عربية قابلة للتنفيذ)  
-تفاصيل تقنية: [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · SQL `COPY-ME-delegates-v2.sql` + enforce
+**المخرج:** قبول حي ناجح.  
+**المرجع:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) · [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md)
 
 | بند قبول | الحالة |
 |----------|--------|
-| اختبار الصلاحيات | 🟡 بانتظار قبول — ACCEPTANCE §1 |
-| اختبار الأدوار | 🟡 بانتظار قبول — ACCEPTANCE §2 |
-| اختبار التفعيل والتعطيل | 🟡 بانتظار قبول — ACCEPTANCE §3 |
-| اختبار سجل التدقيق | 🟡 بانتظار قبول — ACCEPTANCE §4 |
+| اختبار الصلاحيات | 🟢 |
+| اختبار الأدوار | 🟢 |
+| اختبار التفعيل والتعطيل | 🟢 |
+| اختبار سجل التدقيق | 🟢 |
 | اعتماد متعدد المراحل | ⚪ يُبنى لاحقًا فوق Workflow Engine — ليس بديلًا عنه |
 
-### بوابة 2 — Product Foundation 🟡 = **دستور المنصة / دستور حي** (ليست مرحلة وثائق)
+### بوابة 2 — Product Foundation 🟡 = **دستور المنصة / دستور حي** (ليست مرحلة وثائق) ← **الخطوة الفورية الآن**
 
 **المخرج:** تجميد الدستور الحي + **Truth Before Speed** — يمنع أي تطوير يخالفه إلا بقرار معماري.  
-**ليس** «docs phase» — هذا **دستور المنصة**.
+**ليس** «docs phase» — هذا **دستور المنصة**.  
+**مسودة جاهزة — لا تجميد تلقائي:** [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) · الزناد: **«جمّدوا بوابة ٢»**
 
 | وثيقة | المحتوى |
 |--------|---------|
@@ -715,7 +715,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 | [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) | فهرس النوايا — المرجع الوحيد لإضافة عملية |
 | [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) | المبادئ · الطبقة · لغة المستخدم · Truth Before Speed · SSOT · Single Write Rule |
 
-الوثائق الأربع **موجودة**؛ البوابة 🟡 حتى **التجميد الرسمي** بعد 🟢 Delegates.
+الوثائق الأربع **موجودة**؛ البوابة 🟡 حتى **التجميد الرسمي** بأمر صريح.
 
 ### المرحلة — Request Experience ⚪
 
@@ -855,7 +855,7 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 - `new Date(...)` لتواريخ أعمال خارج DateEngine (ADR-009 / R-5)
 - تخزين سنة هجرية في أعمدة timestamp ميلادية
 - اعتبار ملف SQL في المستودع = 🟢 دون تطبيق واختبار قبول
-- اعتبار البوابتين 🟢 قبل القبول/التجميد
+- اعتبار بوابة 2 🟢 قبل التجميد الصريح · أو القفز إلى RX قبل 🟢 بوابة 2
 - تجاهل **قاعدة بوابة الميزة** (§1ب) أو الدستور الحي عند تصميم ميزة جديدة
 - مصطلحات محظورة في الواجهة (JSON · Parent · tree_card كعنوان · …) — [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)
 - تكرار منطق التحقق في صفحات متعددة (خرق Zero Duplicate Logic)
@@ -868,22 +868,23 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 | الحالة | المحتوى |
 |--------|---------|
 | 🟢 | Patch 0–4 · Mobile 36 · News · Repair يدوي · Health · Admin P1 شِلّ · DateEngine أساس · TREE-004 |
-| 🟡 | **البوابتان** — (1) Delegates قبول ← [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) · (2) تجميد الدستور الحي + Truth Before Speed — **ما زالتا 🟡** · DW UX معتمد («ابدا») بلا كود · Workflow provisional · tree-import · Integrity v2 · (Admin-SC-List إن لزم) |
+| 🟢 | **بوابة 1** Delegates v2 — مغلقة («اغلاق ١» 2026-08-09) |
+| 🟡 | **بوابة 2** تجميد الدستور الحي + Truth Before Speed — مسودة [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) · DW UX معتمد («ابدا») بلا كود · Workflow provisional · tree-import · Integrity v2 · (Admin-SC-List إن لزم) |
 | ⚪ | Multi-stage فوق Workflow — ليس حاجزًا لإغلاق صلاحيات v2 |
-| ⚪ | Request Experience · Validation Engine · (إغلاق Workflow عند مرحلته) · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 — **بعد البوابتين 🟢** |
+| ⚪ | Request Experience · Validation Engine · (إغلاق Workflow عند مرحلته) · Delegate Workspace · Admin UX · Family Engine Alignment · Tree Engine v2 — **بعد بوابة 2 🟢** |
 | ⬛ | iOS Experience Rebuild — برنامج (ج) |
 
 المرجع طويل الأمد: **الدستور الحي** · قاعدة الطبقة · لغة المستخدم · Truth Before Speed · Validation Engine · Single Write Rule · المعمارية · ADR · Versioning · Rollback · KPI · DoD · قواعد الانحدار · البرامج الثلاثة.
 
 ---
 
-**الخطوة التالية الفورية (لا قفز) — بعد «ابدا» 2026-08-09:**  
+**الخطوة التالية الفورية (لا قفز) — بعد إغلاق بوابة 1 («اغلاق ١» 2026-08-09):**  
 (0) UX مساحة المندوب ✅ معتمد — **لا يفتح كود DW** · الصفحة الحالية legacy — راجع [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md)  
 (0b) **رحلة القرار** 🟡 مسودة — [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) · **إيقاف أي شاشة منفردة** · بانتظار عبارة المنتج **«اعتمدوا رحلة القرار»** قبل أي تنفيذ RX/DW/Admin UI  
-(1) **بوابة 1 الآن** — كود موثّق ✅ · تبقّى تشغيل 5 دقائق في [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) → 🟢  
-(2) **بوابة 2** — جاهزة كمسودة [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) · تُنفَّذ فور 🟢 بوابة 1  
+(1) **بوابة 1** 🟢 مغلقة — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)  
+(2) **بوابة 2 الآن** — مسودة [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) · **لا تجميد تلقائي** · قل **«جمّدوا بوابة ٢»**  
 (3) **بعدها السلّم:** Request Experience → Validation Engine → Workflow Engine (سلامة + إزالة مسار قديم + إعلان استقرار) → Delegate Workspace (كود) → Admin UX → Family Engine Alignment → iOS Experience Rebuild  
 
-لا توسيع Workflow provisional · لا كود Delegate Workspace / iOS الآن · **لا تطوير لواجهة المندوب/الإدارة/الرئيسية الآن** حتى اعتماد رحلة القرار + بوابات السلّم.
+لا توسيع Workflow provisional · لا كود Delegate Workspace / iOS الآن · **لا تطوير لواجهة المندوب/الإدارة/الرئيسية الآن** حتى اعتماد رحلة القرار + تجميد بوابة 2.
 
 **تسليم SQL لـ Supabase:** افتح ملف `.sql` → Select All → Copy. لا تنسخ من الشات (أسوار Markdown تكسر اللصق). قاعدة Cursor: `.cursor/rules/supabase-sql-delivery.mdc`.

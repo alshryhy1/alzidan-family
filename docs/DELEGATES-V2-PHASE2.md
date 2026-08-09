@@ -1,13 +1,13 @@
 # المرحلة 2 — Delegates v2
 
-**الحالة:** 🟡 قبول حي **فشل** على خطوة دخول المندوب بعد «قبول» — إصلاح مسار التفعيل في المستودع (2026-08-09) · **بانتظار** `COPY-ME-fix-delegate-portal-path.sql` + إعادة اختبار  
+**الحالة:** 🟢 **منشور ومختبر** — قبول حي ناجح · إغلاق بوابة 1 بتأكيد صاحب المنتج «اغلاق ١» (2026-08-09)  
 **التاريخ:** 2026-08-08 · **آخر تحديث قبول:** 2026-08-09  
-**قائمة القبول + إعادة اختبار الدخول بعد القبول:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)  
-**مسودة بوابة 2 (لا تُنفَّذ قبل 🟢):** [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md)  
+**قائمة القبول:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)  
+**التالي (بوابة 2 — لا تُنفَّذ تلقائيًا):** [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md)  
 **المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §0 نموذج الحالات · §22 · برنامج (ب) · [`ADMIN-REDESIGN-PHASE1.md`](./ADMIN-REDESIGN-PHASE1.md) · [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)
 
-> **ملاحظة إدارة مشروع:** لا تُعلَّم الشريحة 🟢 «منشور ومختبر» قبل نجاح اختبار القبول. وجود SQL في المستودع أو تطبيقه ≠ 🟢 دون §§ القبول.  
-> **2026-08-09:** اعتماد UX («ابدا») لا يفتح DW. اختبار القبول كشف انقسام مصدر: Legacy يُعتمد بينما الدخول يقرأ v2 — أُصلح في COPY-ME-fix.
+> **ملاحظة إدارة مشروع:** بوابة 1 = 🟢. تجميد Product Foundation (بوابة 2) يبقى مسودة حتى أمر صريح من صاحب المنتج.  
+> **2026-08-09:** اعتماد UX («ابدا») لا يفتح DW. مسار القبول→الدخول + الأرقام العربية مقبولان حيًا.
 
 ## الهدف
 
@@ -71,22 +71,13 @@
 - بلا صلاحية عملية → «دورك الحالي لا يسمح…»
 - سر غير مطابق → «بيانات الدخول لا تطابق…»
 
-## اختبار قبول (بعد SQL)
+## اختبار قبول (مغلق 🟢)
 
-**المصدر التنفيذي الكامل (خانات ☐ + معايير إغلاق):** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)
-
-ملخص سريع:
-
-1. طبّق الملف 1 ثم 2 → Hard Refresh للإدارة.
-2. إدارة → المندوبون → مزامنة من الطلبات القديمة.
-3. عطّل مندوبًا → حاول الدخول/الكتابة من بوابة المندوب → يجب الرفض برسالة التعطيل + صف تدقيق.
-4. فعّل مندوبًا بدور `viewer` → محاولة حفظ شجرة/مناسبة → رفض «لا يسمح».
-5. غيّر الدور إلى `branch_editor` أو `full_delegate` → الكتابة المسموحة تنجح؛ صف تدقيق يعرض الدور السابق والجديد.
-6. مندوب بلا صف v2 (إن وُجد) يبقى على مسار legacy حتى المزامنة.
+**المصدر التنفيذي الكامل:** [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) — §6 ✅ · تأكيد «اغلاق ١» 2026-08-09
 
 ## التالي (خارج هذه الشريحة)
 
-1. **بعد قبول ✅:** تجميد Product Foundation (بوابة 2) ثم Request Experience — ليس Delegate Workspace.
+1. **بوابة 2:** تجميد Product Foundation من [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) — **بعد أمر صريح فقط** (لا تلقائي).
 2. منطق Multi-stage فوق **Workflow Engine** (ليس الآن).
 3. واجهة منح/سحب صلاحيات عمليات أدق من قائمة الدور.
 4. Event Bus بعد تغيير صلاحيات (ADR-003).
@@ -108,7 +99,7 @@
 - [x] موديول إدارة يتجاوز الـ stub
 - [x] تفعيل/تعطيل + عرض الدور/الفرع
 - [x] تحقق كود (UI/RPC/Enforce/عربي) — انظر مصفوفة القبول 2026-08-09
-- [ ] اختبار قبول حي — تشغيل 5 دقائق في [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)
+- [x] اختبار قبول حي — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) · تأكيد «اغلاق ١»
 
 ### شريحة 2 — Enforce (هذه)
 - [x] فرض `is_enabled` + دور + مفاتيح العمليات في RPC
@@ -117,4 +108,4 @@
 - [x] COPY-ME نظيف بلا أسوار Markdown
 - [x] تطبيق SQL على الإنتاج (مفترض / أكّد في قبول §0)
 - [x] تحقق كود لبنود القبول الأربعة (مصفوفة كود ↔ حي)
-- [ ] قبول حي للأربعة → بعدها 🟢 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) §6
+- [x] قبول حي للأربعة → 🟢 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) §6 · «اغلاق ١» 2026-08-09
