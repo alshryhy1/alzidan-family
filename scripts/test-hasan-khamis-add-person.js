@@ -285,23 +285,38 @@ function makeRestClient() {
       "data-rx-submit handler calls submitAddPerson"
     );
     const fnStart = rx.indexOf("async function submitAddPerson");
-    const fnBody = rx.slice(fnStart, fnStart + 9000);
+    const fnBody = rx.slice(fnStart, fnStart + 12000);
     assert(
       fnBody.indexOf("refreshChildrenUnderParent") >= 0 &&
         /await\s+Create\.create\s*\(/.test(fnBody),
       "submitAddPerson: findExistingChildUnderParent + Create.create before insert"
     );
     const gateAt = fnBody.indexOf("refreshChildrenUnderParent");
+    const liveAt = fnBody.indexOf("liveChildExistsUnderParentPid");
     const insertAt = fnBody.search(/await\s+Create\.create\s*\(/);
     assert(
       gateAt >= 0 && insertAt >= 0 && gateAt < insertAt,
       "hard sibling gate runs before Create.create"
     );
     assert(
+      liveAt >= 0 && liveAt < insertAt,
+      "submitAddPerson live parent_person_id gate before Create.create"
+    );
+    assert(
       fs
         .readFileSync(path.join(root, "assets/js/modules/home-request-create.js"), "utf8")
         .indexOf('from("approval_requests").insert') >= 0,
       "INSERT site: home-request-create insertApprovalRequest"
+    );
+    const app = fs.readFileSync(path.join(root, "assets/js/app.js"), "utf8");
+    const a = app.indexOf('const form = document.querySelector("[data-tree-card-form]")');
+    const b = app.indexOf("FAMILY_TREE_CHILDREN_TABLE", a);
+    const chunk = app.slice(a, b > a ? b : a + 20000);
+    assert(chunk.indexOf("AlzidanHomeRequestCreate") >= 0, "legacy tree-card uses AlzidanHomeRequestCreate");
+    assert(chunk.indexOf("Create.create") >= 0, "legacy tree-card calls Create.create");
+    assert(
+      chunk.indexOf('from("approval_requests").insert') < 0,
+      "legacy tree-card has no bare approval_requests.insert"
     );
   }
 

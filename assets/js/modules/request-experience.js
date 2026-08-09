@@ -656,6 +656,42 @@
     return null;
   }
 
+
+  /** Live DB proof: child leaf already under this parent_person_id (ignores UI sibling cache). */
+  async function liveChildExistsUnderParentPid(parentPersonId, personName) {
+    var pid = text(parentPersonId || "");
+    var leafQ = normalizeSearchText(personName || "");
+    if (!pid || !leafQ) return null;
+    var sb = getClient();
+    if (!sb) return null;
+    try {
+      var res = await sb
+        .from("tree_children")
+        .select("person_id,parent_person_id,parent_name,child_name,name")
+        .eq("parent_person_id", pid)
+        .limit(1000);
+      if (res.error) return null;
+      var rows = Array.isArray(res.data) ? res.data : [];
+      for (var i = 0; i < rows.length; i++) {
+        var raw = normalizePersonName(rows[i].child_name || rows[i].name || "");
+        var leaf = raw.indexOf("/") >= 0
+          ? getDisplayNameForNodeId(raw, "")
+          : raw;
+        if (normalizeSearchText(leaf) === leafQ) {
+          return {
+            leaf: leaf,
+            personId: normalizePersonName(rows[i].person_id || ""),
+            parentPersonId: pid,
+            path: normalizePersonName(rows[i].parent_name || ""),
+          };
+        }
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
+
   function isAlreadyChildUnderParent(personName, parent, candidates) {
     return !!findExistingChildUnderParent(personName, parent, candidates);
   }
@@ -1755,6 +1791,33 @@
       // Hard gate on live tree_children siblings — before any insert.
       var children = await refreshChildrenUnderParent();
       var underSameFather = findExistingChildUnderParent(f.personName, p, children);
+      var hasHasanProbe =
+        normalizeSearchText(f.personName) === normalizeSearchText("حسن") &&
+        normalizeSearchText(p.leaf || "") === normalizeSearchText("خميس");
+      try {
+        console.info("[RX submitAddPerson pre-insert]", {
+          personName: f.personName,
+          parentPersonId: text(p.personId || ""),
+          parentPath: text(p.id || p.path || ""),
+          childrenUnderParentLength: (children || []).length,
+          hasanInChildren: !!(children || []).some(function (c) {
+            return normalizeSearchText(c.leaf) === normalizeSearchText("حسن");
+          }),
+          findExistingChildUnderParent: underSameFather
+            ? {
+                leaf: underSameFather.leaf,
+                personId: underSameFather.personId || underSameFather.person_id || "",
+              }
+            : null,
+          guardDecision: underSameFather ? "block" : "continue",
+          guardReason: underSameFather
+            ? "submit-under-parent"
+            : "no-sibling-leaf-match",
+          different_person_same_name: !!state.differentPersonSameName,
+          acknowledgeReview: !!state.differentPersonSameName,
+          probeHasanKhamis: hasHasanProbe,
+        });
+      } catch (logErr) {}
       if (underSameFather) {
         state.busy = false;
         blockExistingPerson(underSameFather, "submit-under-parent");
@@ -1786,6 +1849,27 @@
         "تعذر تحديد هوية الأب في الشجرة. أعد اختيار السياق من نتائج البحث ثم أكّد المسار."
       );
       state.view = "confirm";
+      render();
+      return;
+    }
+    // Hard live fetch by parent_person_id — empty siblings / different_person_same_name cannot bypass.
+    var liveUnderParent = await liveChildExistsUnderParentPid(parentPersonId, f.personName);
+    try {
+      console.info("[RX submitAddPerson live-pid-gate]", {
+        personName: f.personName,
+        parentPersonId: parentPersonId,
+        parentPath: text(p.id || p.path || ""),
+        liveHit: liveUnderParent,
+        different_person_same_name: !!state.differentPersonSameName,
+        acknowledgeReview: !!state.differentPersonSameName,
+        guardDecision: liveUnderParent ? "block" : "continue",
+        guardReason: liveUnderParent ? "live-parent-person-id" : "no-live-pid-match",
+      });
+    } catch (logErr2) {}
+    if (liveUnderParent) {
+      state.busy = false;
+      state.differentPersonSameName = false;
+      blockExistingPerson(liveUnderParent, "live-parent-person-id");
       render();
       return;
     }
