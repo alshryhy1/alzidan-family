@@ -182,8 +182,21 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const healthStructureCards = document.getElementById("health-structure-cards");
   const healthStructureBody = document.getElementById("health-structure-body");
   const healthStructureDetailTitle = document.getElementById("health-structure-detail-title");
+  const healthRequestIntegrityCards = document.getElementById(
+    "health-request-integrity-cards",
+  );
+  const healthRequestIntegrityBody = document.getElementById(
+    "health-request-integrity-body",
+  );
+  const healthRequestIntegrityDetail = document.getElementById(
+    "health-request-integrity-detail",
+  );
+  const healthRequestIntegrityManual = document.getElementById(
+    "health-request-integrity-manual",
+  );
   let healthStructureAudit = null;
   let healthStructureActiveCat = "";
+  let healthRequestIntegrityAudit = null;
   const specialCardsList = document.getElementById("special-cards-list");
   const specialCardsForm = document.getElementById("special-cards-form");
   const specialCardsId = document.getElementById("special-cards-id");
@@ -2094,7 +2107,7 @@ where c.id = matches.id; commit;
     const audit = healthStructureAudit;
     if (!audit) {
       healthStructureBody.innerHTML =
-        '<tr><td colspan="6" class="hint">لا تقرير بعد — اضغط تحديث التقرير.</td></tr>';
+        '<tr><td colspan="7" class="hint">لا تقرير بعد — اضغط تحديث التقرير.</td></tr>';
       if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = "";
       return;
     }
@@ -2113,14 +2126,15 @@ where c.id = matches.id; commit;
         (catMeta && catMeta.label ? catMeta.label : healthStructureActiveCat) +
         " — " +
         String(rows.length) +
-        " صف";
+        " صف" +
+        (catMeta && catMeta.impact_ar ? " · أثر: " + catMeta.impact_ar : "");
     }
     if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = title;
     if (!rows.length) {
       healthStructureBody.innerHTML =
         healthStructureActiveCat === "total" || healthStructureActiveCat === "healthy_relations"
-          ? '<tr><td colspan="6" class="hint">بطاقة ملخص فقط — اختر بطاقة تحذير لعرض الصفوف.</td></tr>'
-          : '<tr><td colspan="6" class="hint">لا صفوف في هذه الفئة.</td></tr>';
+          ? '<tr><td colspan="7" class="hint">بطاقة ملخص فقط — اختر بطاقة تحذير لعرض الصفوف.</td></tr>'
+          : '<tr><td colspan="7" class="hint">لا صفوف في هذه الفئة.</td></tr>';
       return;
     }
     healthStructureBody.innerHTML = rows
@@ -2133,6 +2147,11 @@ where c.id = matches.id; commit;
           row.parent != null && row.parent !== "" ? row.parent : "NULL",
         );
         const extracted = escapeHtml(row.extracted_parent || "—");
+        const impact = escapeHtml(
+          row.impact_ar ||
+            (Array.isArray(row.impact) ? row.impact.join(" · ") : "") ||
+            "—",
+        );
         const reason = escapeHtml(row.reason_ar || row.category_ar || "");
         return (
           "<tr><td>" +
@@ -2145,6 +2164,8 @@ where c.id = matches.id; commit;
           parent +
           "</td><td>" +
           extracted +
+          "</td><td>" +
+          impact +
           "</td><td>" +
           reason +
           "</td></tr>"
@@ -2165,10 +2186,18 @@ where c.id = matches.id; commit;
     audit.categories.forEach((cat) => {
       const btn = document.createElement("button");
       btn.type = "button";
+      const groupClass =
+        cat.group === "data_integrity"
+          ? "is-di"
+          : cat.group === "uuid_link"
+            ? "is-uuid"
+            : "";
       btn.className =
-        "health-structure-card " + (cat.ok ? "is-ok" : "is-warn");
+        "health-structure-card " +
+        (cat.ok ? "is-ok" : "is-warn") +
+        (groupClass ? " " + groupClass : "");
       btn.setAttribute("data-cat", cat.id);
-      const mark = cat.ok ? "✓" : "⚠";
+      const mark = cat.ok ? "✓" : cat.group === "uuid_link" ? "🟡" : "🔴";
       btn.innerHTML =
         '<span class="hs-mark">' +
         mark +
@@ -2178,7 +2207,10 @@ where c.id = matches.id; commit;
         "</span>" +
         '<span class="hs-count">' +
         escapeHtml(cat.count != null ? cat.count : "—") +
-        "</span>";
+        "</span>" +
+        (cat.impact_ar
+          ? '<span class="hs-impact">' + escapeHtml(cat.impact_ar) + "</span>"
+          : "");
       btn.addEventListener("click", () => renderHealthStructureDetail(cat.id));
       healthStructureCards.appendChild(btn);
     });
@@ -2191,6 +2223,133 @@ where c.id = matches.id; commit;
     );
     if (!start) start = "parent_null";
     renderHealthStructureDetail(start);
+  }
+
+  function tree003Impact(row) {
+    if (row && row.severity === "error") {
+      return "يؤثر على Workflow · يحتاج ربط UUID · لا يظهر ضمن أبناء الأب";
+    }
+    return "يحتاج ربط UUID · يؤثر على Workflow · يسمح بطلبات مكررة";
+  }
+
+  function renderRequestIntegrityAudit(audit) {
+    healthRequestIntegrityAudit = audit || null;
+    if (healthRequestIntegrityCards) {
+      healthRequestIntegrityCards.innerHTML = "";
+    }
+    if (!audit || !Array.isArray(audit.checks)) {
+      if (healthRequestIntegrityBody) {
+        healthRequestIntegrityBody.innerHTML =
+          '<tr><td colspan="6" class="hint">تعذر بناء اختبار رحلة الطلب.</td></tr>';
+      }
+      if (healthRequestIntegrityManual) {
+        healthRequestIntegrityManual.textContent = "";
+      }
+      return;
+    }
+    const failed = (audit.totals && audit.totals.auto_failed) || 0;
+    if (healthRequestIntegrityCards) {
+      const summaryBtn = document.createElement("button");
+      summaryBtn.type = "button";
+      summaryBtn.className =
+        "health-structure-card " + (failed ? "is-warn" : "is-ok");
+      summaryBtn.innerHTML =
+        '<span class="hs-mark">' +
+        (failed ? "⚠" : "✓") +
+        "</span>" +
+        '<span class="hs-label">فشل آلي</span>' +
+        '<span class="hs-count">' +
+        escapeHtml(failed) +
+        "</span>" +
+        '<span class="hs-impact">وكلاء بيانات — ليس E2E كاملًا</span>';
+      healthRequestIntegrityCards.appendChild(summaryBtn);
+      audit.checks.forEach((chk) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const ok = chk.ok;
+        btn.className =
+          "health-structure-card " +
+          (ok === true ? "is-ok" : ok === false ? "is-warn" : "is-manual");
+        btn.innerHTML =
+          '<span class="hs-mark">' +
+          (ok === true ? "✓" : ok === false ? "⚠" : "◎") +
+          "</span>" +
+          '<span class="hs-label">' +
+          escapeHtml(chk.label || chk.id) +
+          "</span>" +
+          '<span class="hs-count">' +
+          escapeHtml(
+            chk.count != null
+              ? chk.count
+              : chk.related_auto_count != null
+                ? chk.related_auto_count
+                : "—",
+          ) +
+          "</span>" +
+          '<span class="hs-impact">' +
+          escapeHtml((chk.mode_ar || chk.mode || "") + " · " + (chk.impact || "")) +
+          "</span>";
+        btn.addEventListener("click", () => {
+          if (healthRequestIntegrityDetail) {
+            healthRequestIntegrityDetail.textContent =
+              (chk.label || "") +
+              " — " +
+              (chk.detail_ar || "") +
+              (chk.samples && chk.samples.length
+                ? " · عيّنات: " +
+                  chk.samples
+                    .slice(0, 5)
+                    .map((s) => s.id)
+                    .join(", ")
+                : "");
+          }
+        });
+        healthRequestIntegrityCards.appendChild(btn);
+      });
+    }
+    if (healthRequestIntegrityBody) {
+      healthRequestIntegrityBody.innerHTML = audit.checks
+        .map((chk) => {
+          const status =
+            chk.ok === true
+              ? "🟢 سليم"
+              : chk.ok === false
+                ? "🔴 مشكلة"
+                : "◎ دخان يدوي";
+          return (
+            "<tr><td>" +
+            escapeHtml(chk.label || chk.id) +
+            "</td><td>" +
+            escapeHtml(chk.mode_ar || chk.mode || "") +
+            "</td><td>" +
+            status +
+            "</td><td>" +
+            escapeHtml(chk.count != null ? chk.count : "—") +
+            "</td><td>" +
+            escapeHtml(chk.impact || "—") +
+            "</td><td>" +
+            escapeHtml(chk.detail_ar || "") +
+            "</td></tr>"
+          );
+        })
+        .join("");
+    }
+    if (healthRequestIntegrityManual) {
+      const steps = Array.isArray(audit.manual_smoke_steps)
+        ? audit.manual_smoke_steps
+        : [];
+      const legend = audit.legend || {};
+      healthRequestIntegrityManual.textContent = [
+        "آلي: " + (legend.auto || ""),
+        "يدوي: " + (legend.manual_smoke || ""),
+        "خطوات الدخان:",
+        ...steps.map((s, i) => String(i + 1) + ") " + s),
+      ].join("\n");
+    }
+    if (healthRequestIntegrityDetail) {
+      healthRequestIntegrityDetail.textContent =
+        "اضغط بطاقة فحص لعرض التفصيل/العيّنات.";
+    }
   }
 
   function setHealthCenterStatus(msg) {
@@ -2217,9 +2376,12 @@ where c.id = matches.id; commit;
     const healthyCount = counts.healthy_root_or_tree_parent ?? "—";
     const lines = [
       "وضع التقرير: قراءة فقط (Integrity v2) — بلا تعديل بيانات.",
+      "المجموعة: 🟡 الربط الداخلي (UUID) — ليس تافهًا.",
       "🟢 أبناء جذر الفرع / tree_parents (سليمون): " + String(healthyCount),
-      "🟡 يحتاج ربط UUID فقط: " + String(warnCount),
-      "🔴 أخطاء TREE-003 الحقيقية (أب UUID مكسور): " + String(errCount),
+      "🟡 يحتاج ربط UUID فقط: " + String(warnCount) + " · أثر: يحتاج ربط UUID · يؤثر على Workflow",
+      "🔴 أخطاء TREE-003 الحقيقية (أب UUID مكسور): " +
+        String(errCount) +
+        " · أثر: يؤثر على Workflow · لا يظهر ضمن أبناء الأب",
       "مجموع الأخطاء الحقيقية فقط: " + String(errCount),
       "عناقيد اسم ورقة غامض: " +
         String(counts.ambiguous_leaf_clusters ?? "—"),
@@ -2244,7 +2406,7 @@ where c.id = matches.id; commit;
     if (healthCenterBadBody) {
       if (!bad.length) {
         healthCenterBadBody.innerHTML =
-          '<tr><td colspan="6" class="hint">لا عيّنات أخطاء/تحذيرات في التقرير.</td></tr>';
+          '<tr><td colspan="7" class="hint">لا عيّنات أخطاء/تحذيرات في التقرير.</td></tr>';
       } else {
         healthCenterBadBody.innerHTML = bad
           .slice(0, 25)
@@ -2267,6 +2429,7 @@ where c.id = matches.id; commit;
                   ? "🟡 "
                   : "";
             const code = escapeHtml(row.code || row.issue || "");
+            const impact = escapeHtml(tree003Impact(row));
             return (
               "<tr><td>" +
               id +
@@ -2276,6 +2439,8 @@ where c.id = matches.id; commit;
               path +
               "</td><td>" +
               parent +
+              "</td><td>" +
+              impact +
               "</td><td>" +
               sev +
               reason +
@@ -2470,20 +2635,41 @@ where c.id = matches.id; commit;
       renderHealthStructureAudit(null);
     }
 
+    let pendingReqs = [];
+    try {
+      const rq = await sb
+        .from("approval_requests")
+        .select(
+          "id,request_id,kind,status,branch_key,parent_person_id,father_person_id,created_at",
+        )
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (!rq.error) pendingReqs = Array.isArray(rq.data) ? rq.data : [];
+    } catch (e) {
+      pendingReqs = [];
+    }
+    const RJ = window.AlzidanIntegrityRequestJourney;
+    if (RJ && typeof RJ.auditRequestJourney === "function") {
+      renderRequestIntegrityAudit(RJ.auditRequestJourney(children, pendingReqs));
+    } else {
+      renderRequestIntegrityAudit(null);
+    }
+
     const { data, error } = await invokeAdminRpc("admin_integrity_report_v1", {
       p_token: token,
     });
     if (!error && data) {
-      renderHealthCenterReport(data, "المصدر: admin_integrity_report_v1 + مسح هيكل محلي");
+      renderHealthCenterReport(data, "المصدر: admin_integrity_report_v1 + مسح هيكل محلي + رحلة الطلب");
       setHealthCenterStatus(
-        "تم تحديث التقرير (قراءة فقط): سلامة الشجرة محليًا + TREE-003 من RPC.",
+        "تم تحديث التقرير (قراءة فقط): سلامة البيانات + UUID + رحلة الطلب.",
       );
       return;
     }
     const report = buildClientIntegrityReport(children, spouses, parents);
     renderHealthCenterReport(
       report,
-      "المصدر: مسح محلي Integrity v2 + سلامة الهيكل",
+      "المصدر: مسح محلي Integrity v2 + سلامة البيانات + رحلة الطلب",
     );
     setHealthCenterStatus(
       "تم المسح المحلي قراءة فقط. TREE-003 RPC اختياري: supabase/sql/20260808_integrity_engine_v2.sql — بلا apply.",

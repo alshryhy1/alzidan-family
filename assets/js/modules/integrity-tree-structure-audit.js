@@ -34,6 +34,40 @@
     broken_relation: "أبناء بدون أب صالح",
   };
 
+  /** Impact hints shown in Health Center (product language). */
+  var CAT_IMPACT = {
+    parent_null: [
+      "لا يظهر ضمن أبناء الأب",
+      "لا يظهر في البحث",
+      "يسمح بطلبات مكررة",
+    ],
+    parent_empty: [
+      "لا يظهر ضمن أبناء الأب",
+      "لا يظهر في البحث",
+      "يؤثر على Workflow",
+    ],
+    missing_father: [
+      "لا يظهر ضمن أبناء الأب",
+      "يؤثر على Workflow",
+      "يسمح بطلبات مكررة",
+    ],
+    path_mismatch: [
+      "لا يظهر ضمن أبناء الأب",
+      "لا يظهر في البحث",
+      "يؤثر على Workflow",
+    ],
+    duplicate_person_id: ["يسمح بطلبات مكررة", "يحتاج ربط UUID", "يؤثر على Workflow"],
+    spouses_without_husband: ["يؤثر على Workflow", "لا يظهر في البحث"],
+    broken_relation: [
+      "لا يظهر ضمن أبناء الأب",
+      "لا يظهر في البحث",
+      "يؤثر على Workflow",
+    ],
+  };
+
+  var GROUP_DATA_INTEGRITY = "data_integrity";
+  var GROUP_UUID_LINK = "uuid_link";
+
   function norm(v) {
     return String(v == null ? "" : v)
       .replace(/\s+/g, " ")
@@ -121,6 +155,14 @@
     return false;
   }
 
+  function impactFor(category) {
+    return (CAT_IMPACT[category] || []).slice();
+  }
+
+  function impactLabel(category) {
+    return impactFor(category).join(" · ");
+  }
+
   function issueRow(row, category, extra) {
     var path = childPath(row);
     var extracted = extractParentFromName(path);
@@ -137,6 +179,11 @@
         parent_person_id: row.parent_person_id || null,
         category: category,
         category_ar: CAT_AR[category] || category,
+        group: GROUP_DATA_INTEGRITY,
+        group_ar: "سلامة البيانات",
+        severity: "error",
+        impact: impactFor(category),
+        impact_ar: impactLabel(category),
         code: "TREE-STRUCT",
       },
       extra || {},
@@ -301,6 +348,11 @@
           husband_id: hid || null,
           category: CAT.SPOUSES_WITHOUT_HUSBAND,
           category_ar: CAT_AR.spouses_without_husband,
+          group: GROUP_UUID_LINK,
+          group_ar: "الربط الداخلي",
+          severity: "warning",
+          impact: impactFor(CAT.SPOUSES_WITHOUT_HUSBAND),
+          impact_ar: impactLabel(CAT.SPOUSES_WITHOUT_HUSBAND),
           code: "TREE-STRUCT",
           reason_ar: "زوجة بلا زوج صالح في الشجرة: " + norm(s.wife_name),
         });
@@ -330,60 +382,106 @@
         spouses_without_husband: spousesBad.length,
         broken_relation: brokenRelation.length,
       },
+      groups: {
+        data_integrity: {
+          id: GROUP_DATA_INTEGRITY,
+          label: "🔴 سلامة البيانات",
+          label_short: "سلامة البيانات",
+          severity: "error",
+          categories: [
+            CAT.PARENT_NULL,
+            CAT.MISSING_FATHER,
+            CAT.PATH_MISMATCH,
+            CAT.PARENT_EMPTY,
+            CAT.BROKEN_RELATION,
+          ],
+        },
+        uuid_link: {
+          id: GROUP_UUID_LINK,
+          label: "🟡 الربط الداخلي (UUID)",
+          label_short: "الربط الداخلي",
+          severity: "warning",
+          note_ar:
+            "TREE-003 / يحتاج ربط UUID — ليس تافهًا؛ يمنع الاعتماد الآمن ويؤثر على Workflow.",
+        },
+      },
       categories: [
         {
           id: "total",
           label: "إجمالي الأشخاص",
           count: rows.length,
           ok: true,
+          group: "summary",
         },
         {
           id: "healthy_relations",
           label: "علاقات صحيحة",
           count: healthy,
           ok: true,
+          group: "summary",
         },
         {
           id: CAT.PARENT_NULL,
-          label: CAT_AR.parent_null,
+          label: "🔴 " + CAT_AR.parent_null,
           count: parentNull.length,
           ok: parentNull.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          impact_ar: impactLabel(CAT.PARENT_NULL),
         },
         {
           id: CAT.MISSING_FATHER,
-          label: CAT_AR.missing_father,
+          label: "🔴 " + CAT_AR.missing_father,
           count: missingFather.length,
           ok: missingFather.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          impact_ar: impactLabel(CAT.MISSING_FATHER),
         },
         {
           id: CAT.PATH_MISMATCH,
-          label: CAT_AR.path_mismatch,
+          label: "🔴 " + CAT_AR.path_mismatch,
           count: pathMismatch.length,
           ok: pathMismatch.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          impact_ar: impactLabel(CAT.PATH_MISMATCH),
         },
         {
           id: CAT.PARENT_EMPTY,
-          label: CAT_AR.parent_empty,
+          label: "🔴 " + CAT_AR.parent_empty,
           count: parentEmpty.length,
           ok: parentEmpty.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          impact_ar: impactLabel(CAT.PARENT_EMPTY),
         },
         {
           id: CAT.DUPLICATE_PERSON_ID,
-          label: CAT_AR.duplicate_person_id,
+          label: "🟡 " + CAT_AR.duplicate_person_id,
           count: duplicatePersonId.length,
           ok: duplicatePersonId.length === 0,
+          group: GROUP_UUID_LINK,
+          group_ar: "الربط الداخلي",
+          impact_ar: impactLabel(CAT.DUPLICATE_PERSON_ID),
         },
         {
           id: CAT.BROKEN_RELATION,
-          label: CAT_AR.broken_relation,
+          label: "🔴 " + CAT_AR.broken_relation,
           count: brokenRelation.length,
           ok: brokenRelation.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          impact_ar: impactLabel(CAT.BROKEN_RELATION),
         },
         {
           id: CAT.SPOUSES_WITHOUT_HUSBAND,
-          label: CAT_AR.spouses_without_husband,
+          label: "🟡 " + CAT_AR.spouses_without_husband,
           count: spousesBad.length,
           ok: spousesBad.length === 0,
+          group: GROUP_UUID_LINK,
+          group_ar: "الربط الداخلي",
+          impact_ar: impactLabel(CAT.SPOUSES_WITHOUT_HUSBAND),
         },
       ],
       lists: lists,
@@ -393,8 +491,13 @@
   var api = {
     CAT: CAT,
     CAT_AR: CAT_AR,
+    CAT_IMPACT: CAT_IMPACT,
+    GROUP_DATA_INTEGRITY: GROUP_DATA_INTEGRITY,
+    GROUP_UUID_LINK: GROUP_UUID_LINK,
     extractParentFromName: extractParentFromName,
     storedParent: storedParent,
+    impactFor: impactFor,
+    impactLabel: impactLabel,
     auditTreeStructure: auditTreeStructure,
   };
 

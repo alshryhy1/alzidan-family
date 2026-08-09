@@ -219,6 +219,26 @@ body.admin-authenticated #admin-requests-section #sb-status { display: none !imp
   font-size: 12px;
   opacity: 0.85;
 }
+.health-structure-card.is-di.is-warn {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.health-structure-card.is-uuid.is-warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.health-structure-card.is-manual {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  border-style: dashed;
+}
+.health-structure-card .hs-impact {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
  /* requests stats 4x2 layout */
 .requests-stats-cards { grid-template-columns: repeat(4, minmax(150px, 1fr)) !important; align-items: stretch;
 } .requests-stat-card { min-height: 96px !important;

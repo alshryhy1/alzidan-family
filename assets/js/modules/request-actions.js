@@ -732,7 +732,7 @@
       const key = branchKey + "|" + p + "|" + c;
       if (seen.has(key)) return;
       seen.add(key);
-      const row = {
+      let row = {
         branch_key: branchKey,
         parent_name: p,
         parent: p,
@@ -741,11 +741,18 @@
         created_at: createdAt,
       };
       if (extra && typeof extra === "object") Object.assign(row, extra);
+      const TE = global.AlzidanTreeEngine;
+      if (TE && typeof TE.prepareChildWriteRow === "function") {
+        const prepared = TE.prepareChildWriteRow(row);
+        if (!prepared.ok) return;
+        row = prepared.row;
+      }
       const fatherPath = normalizeTreeCardText(payload.father_path || father);
       if (
         fatherPersonId &&
         fatherPath &&
-        p === fatherPath &&
+        normalizeTreeCardText(row.parent_name || row.parent || "") ===
+          fatherPath &&
         !normalizeTreeCardText(row.parent_person_id || "")
       ) {
         row.parent_person_id = fatherPersonId;
@@ -1711,10 +1718,32 @@
         continue;
       }
 
-      const before = await fetchTreeCardChildRow(sb, row);
+      const TE = global.AlzidanTreeEngine;
+      let writeRow = row;
+      if (TE && typeof TE.prepareChildWriteRow === "function") {
+        const prepared = TE.prepareChildWriteRow(row);
+        if (!prepared.ok) {
+          return requestFail(
+            prepared.code || "TREE-PARENT-NULL",
+            prepared.message_ar ||
+              "رفض كتابة صف بلا مسار أب (Tree Engine).",
+            { detail: prepared.message || "" },
+          );
+        }
+        writeRow = prepared.row;
+      } else if (
+        !normalizeTreeCardText(row.parent_name || row.parent || "")
+      ) {
+        return requestFail(
+          "TREE-PARENT-NULL",
+          "رفض كتابة صف بلا مسار أب.",
+        );
+      }
+
+      const before = await fetchTreeCardChildRow(sb, writeRow);
       const { data, error } = await sb.rpc("admin_tree_children_import_v1", {
         p_token: token,
-        p_rows: [row],
+        p_rows: [writeRow],
       });
       if (error) {
         const msg = String(error.message || "");
@@ -1742,15 +1771,16 @@
       updatedTotal += Number.isFinite(updated) ? updated : 0;
       skippedTotal += Number.isFinite(skipped) ? skipped : 0;
 
-      const after = await fetchTreeCardChildRow(sb, row);
-      const parent = normalizeTreeCardText(row.parent_name || "");
-      const branch = normalizeTreeCardText(row.branch_key || "");
+      const after = await fetchTreeCardChildRow(sb, writeRow);
+      const parent = normalizeTreeCardText(writeRow.parent_name || "");
+      const branch = normalizeTreeCardText(writeRow.branch_key || "");
       const branchRoot = branch ? branch + " بن مطلق بن زيدان" : "";
       const isBranchRoot =
         !!branch && (parent === branch || parent === branchRoot);
-      const linkedOk = row.parent_person_id
+      const linkedOk = writeRow.parent_person_id
         ? after &&
-          String(after.parent_person_id || "") === String(row.parent_person_id)
+          String(after.parent_person_id || "") ===
+            String(writeRow.parent_person_id)
         : !!after && (isBranchRoot || !!after.parent_person_id);
       if (!linkedOk) {
         return requestFail(

@@ -1435,11 +1435,25 @@ async function familyApiSaveChild(payload) {
       }
       if (bound.parentPersonId) payload.parent_person_id = bound.parentPersonId;
     }
-    const p = normalizePersonName(payload.parent_name || payload.parent || "");
-    if (p) {
-      payload.parent_name = p;
-      payload.parent = p;
+    const TE = window.AlzidanTreeEngine;
+    if (TE && typeof TE.prepareChildWriteRow === "function") {
+      const prepared = TE.prepareChildWriteRow(payload);
+      if (!prepared.ok) {
+        throw Object.assign(new Error(prepared.message_ar || prepared.message || "parent_required"), {
+          code: prepared.code || "TREE-PARENT-NULL",
+          message_ar: prepared.message_ar,
+        });
+      }
+      return prepared.row;
     }
+    const p = normalizePersonName(payload.parent_name || payload.parent || "");
+    if (!p) {
+      throw Object.assign(new Error("لا يُسمح بكتابة صف في الشجرة دون مسار أب (parent)."), {
+        code: "TREE-PARENT-NULL",
+      });
+    }
+    payload.parent_name = p;
+    payload.parent = p;
     const c = normalizePersonName(payload.child_name || payload.name || "");
     if (c) {
       payload.child_name = c;
@@ -1447,6 +1461,19 @@ async function familyApiSaveChild(payload) {
     }
     return payload;
   };
+  const safeBindChildWriteRow = (row) => {
+    try {
+      if (typeof bindChildWriteRow === "function") return { ok: true, row: bindChildWriteRow(row) };
+      return { ok: true, row: row };
+    } catch (err) {
+      return {
+        ok: false,
+        message: (err && (err.message_ar || err.message)) || "رفض كتابة صف بلا مسار أب.",
+        code: (err && err.code) || "TREE-PARENT-NULL",
+      };
+    }
+  };
+
   const rawName = normalizePersonName(payload.name || "");
   const deceased = !!payload.deceased;
   const hijriInput = deceased ? "" : String(payload.hijri || "").trim();
@@ -1537,7 +1564,9 @@ async function familyApiSaveChild(payload) {
         is_deceased: deceased,
         created_at: nowIso,
       };
-      const insertRes = await rpcInsertTreeChildRow(sb, typeof bindChildWriteRow === "function" ? bindChildWriteRow(row) : row);
+      const boundWrite = safeBindChildWriteRow(row);
+      if (!boundWrite.ok) return { ok: false, message: boundWrite.message, code: boundWrite.code };
+      const insertRes = await rpcInsertTreeChildRow(sb, boundWrite.row);
       if (!insertRes.ok) {
         if (isRpcMissingError(insertRes.error)) return { ok: false, message: "تعذر الحفظ حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
         return { ok: false, message: formatTreeChildrenDbError(insertRes.error, "save") };
@@ -1587,7 +1616,9 @@ async function familyApiSaveChild(payload) {
         is_deceased: isYoungest ? deceased : null,
         created_at: nowIso,
       };
-      const insertRes = await rpcInsertTreeChildRow(sb, typeof bindChildWriteRow === "function" ? bindChildWriteRow(row) : row);
+      const boundWrite = safeBindChildWriteRow(row);
+      if (!boundWrite.ok) return { ok: false, message: boundWrite.message, code: boundWrite.code };
+      const insertRes = await rpcInsertTreeChildRow(sb, boundWrite.row);
       if (!insertRes.ok) {
         if (isRpcMissingError(insertRes.error)) return { ok: false, message: "تعذر الحفظ حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
         return { ok: false, message: formatTreeChildrenDbError(insertRes.error, "save") };
@@ -1629,7 +1660,9 @@ async function familyApiSaveChild(payload) {
     is_deceased: deceased,
     created_at: nowIso,
   };
-  const insertRes = await rpcInsertTreeChildRow(sb, typeof bindChildWriteRow === "function" ? bindChildWriteRow(row) : row);
+  const boundWrite = safeBindChildWriteRow(row);
+      if (!boundWrite.ok) return { ok: false, message: boundWrite.message, code: boundWrite.code };
+      const insertRes = await rpcInsertTreeChildRow(sb, boundWrite.row);
   if (!insertRes.ok) {
     if (isRpcMissingError(insertRes.error)) return { ok: false, message: "تعذر الحفظ حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
     return { ok: false, message: formatTreeChildrenDbError(insertRes.error, "save") };
