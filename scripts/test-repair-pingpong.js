@@ -115,7 +115,8 @@ const uncleRow = {
   assert(preview.would_flip_only === false, "does not flip-only");
 }
 
-// 3) path extract with no living father → block (no orphan parent write)
+// 3) path extract with no living father, but stored parent is living →
+//    rewrite name under stored father (1602-style) — never empty After / flip thrash
 {
   const orphanExtract = "مزيد بن مطلق بن زيدان/صلف/يتيم_لا_يوجد";
   const row = {
@@ -126,23 +127,30 @@ const uncleRow = {
     parent: fatherPath,
     parent_name: fatherPath,
     person_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    parent_person_id: fatherPid,
   };
   const children = [fatherRow, row];
   const report = Struct.auditTreeStructure(children, []);
   const issue = report.lists.path_mismatch.find((r) => r.id === 1509);
   assert(!!issue, "orphan-extract path mismatch flagged");
   const analysis = Pipe.analyzeIssue(issue, { children });
-  assert(analysis.proposed == null, "never propose non-existent extract");
-  const preview = Pipe.previewRepair(analysis, null);
-  assert(preview.executable === false, "orphan extract not executable");
-  assert(preview.would_flip_only === true, "marked as flip-only");
   assert(
-    String(preview.block_message_ar || "").indexOf("لم يتم العثور على الأب") >= 0 ||
-      String(preview.block_message_ar || "").indexOf("فئة أخرى") >= 0,
-    "Arabic flip-block message",
+    analysis.repair_type === "align_name_to_parent_path",
+    "orphan extract + living stored → align name under parent",
   );
+  assert(
+    analysis.proposed &&
+      analysis.proposed.child_path === fatherPath + "/مسلم",
+    "proposes name under canonical stored father",
+  );
+  assert(analysis.proposed.keep_parent === true, "keeps parent fields");
+  const preview = Pipe.previewRepair(analysis, null);
+  assert(preview.executable === true, "name-under-parent executable");
+  assert(preview.would_flip_only === false, "not flip-only thrash");
+  assert(preview.after && preview.after.child_path, "After not empty");
   const sql = Pipe.buildExecuteSql(preview, { actor: "test" });
-  assert(sql.ok === false, "buildExecuteSql refused flip");
+  assert(sql.ok === true, "buildExecuteSql for name-under-parent");
+  assert(/child_name/.test(sql.sql), "SQL updates name");
 }
 
 // 4) missing_father with extract matching living father → unified auto propose

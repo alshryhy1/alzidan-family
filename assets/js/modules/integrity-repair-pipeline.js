@@ -175,6 +175,26 @@
     return s1.length >= s2.length ? s1 : s2;
   }
 
+  /** Resolve living father from parent_person_id, then stored parent path. */
+  function resolveStoredFatherRow(issue, children) {
+    var branch = norm(issue && issue.branch_key);
+    var ppid =
+      issue && issue.parent_person_id != null
+        ? String(issue.parent_person_id).trim()
+        : "";
+    if (ppid) {
+      var byPid = (children || []).find(function (c) {
+        return c && String(c.person_id || "") === ppid;
+      });
+      if (byPid) return byPid;
+    }
+    var stored = norm(
+      issue && (issue.stored_parent || issue.parent_name || issue.parent),
+    );
+    if (!stored) return null;
+    return resolveFatherRow(children || [], branch, stored);
+  }
+
   /**
    * Spelling-only path fix: rewrite child name prefix to canonical parent spelling.
    * Never nulls parent / parent_person_id.
@@ -219,6 +239,56 @@
         "» — دون تغيير حقل الأب أو المعرف.",
       impact_ar:
         "المعرف والأبناء وحقل الأب بلا تغيير · يُحدَّث مسار الاسم فقط ليطابق إملاء الأب الكانوني.",
+      affected_rows: 1,
+    };
+  }
+
+  /**
+   * Truncated/wrong name path while stored parent (or parent_person_id) is a living father.
+   * Rewrite name under that father — never null parent / never flip buckets.
+   */
+  function buildAlignNameToStoredParent(issue, children) {
+    var path = norm(issue && (issue.child_path || issue.name));
+    var leaf = leafOf(path);
+    if (!path || !leaf) return null;
+
+    var fatherRow = resolveStoredFatherRow(issue, children || []);
+    if (!fatherRow) return null;
+
+    var canonical = childPathOf(fatherRow);
+    if (!canonical) return null;
+
+    var newPath = canonical + "/" + leaf;
+    if (newPath === path) return null;
+    if (parentPrefixOf(newPath) !== canonical) return null;
+
+    var parentCol = issue && issue.parent != null ? norm(issue.parent) : "";
+    var stored = norm(
+      issue && (issue.stored_parent || issue.parent_name || issue.parent),
+    );
+    var pid =
+      (issue && issue.parent_person_id) ||
+      (fatherRow && fatherRow.person_id) ||
+      null;
+
+    return {
+      ok: true,
+      repair_type: "align_name_to_parent_path",
+      child_path: newPath,
+      name: newPath,
+      child_name: newPath,
+      parent: parentCol || stored || canonical,
+      parent_name: stored || parentCol || canonical,
+      parent_person_id: pid ? String(pid) : null,
+      keep_parent: true,
+      reason_ar:
+        "تصحيح مسار الاسم ليطابق الأب الموجود «" +
+        canonical +
+        "» — الاسم الحالي «" +
+        path +
+        "» لا يستخرج أبًا صالحًا؛ حقل الأب/المعرف بلا تغيير.",
+      impact_ar:
+        "يُحدَّث الاسم/المسار فقط · الأب ومعرف الأب بلا تغيير · تختفي «الاسم مكتوب بطريقة مختلفة».",
       affected_rows: 1,
     };
   }
@@ -528,14 +598,45 @@
       (chosen && chosen.person_id) ||
       null;
 
+    var leaf = leafOf(path);
+    var extractFather = extracted
+      ? resolveFatherRow(children, branch, extracted)
+      : null;
     var alignsWithExtract = true;
     if (extracted) {
-      var extractFather = resolveFatherRow(children, branch, extracted);
       if (extractFather) {
         alignsWithExtract = childPathOf(extractFather) === canonical;
       } else {
         alignsWithExtract = pathsEqual(canonical, extracted);
       }
+    }
+
+    // Truncated/orphan extract: choosing a living father + rewriting name under him
+    // clears path_mismatch without flipping to missing_father.
+    if (!alignsWithExtract && !extractFather && leaf && canonical) {
+      var fixedName = canonical + "/" + leaf;
+      return {
+        ok: true,
+        parent: canonical,
+        parent_name: canonical,
+        parent_person_id: pid ? String(pid) : null,
+        child_path: fixedName,
+        child_name: fixedName,
+        name: fixedName,
+        keep_parent: false,
+        would_flip_only: false,
+        clears_missing_father: true,
+        clears_path_mismatch: true,
+        block_message_ar: null,
+        reason_ar:
+          "اختيار المدير: ربط الأب «" +
+          canonical +
+          "» وتصحيح مسار الاسم إلى «" +
+          fixedName +
+          "» (الأب من المسار «" +
+          extracted +
+          "» غير موجود).",
+      };
     }
 
     if (!alignsWithExtract) {
@@ -793,6 +894,7 @@
             parentCol === unified.parent &&
             norm(issue && issue.parent_name) === unified.parent
           );
+        var nameUnderStored = buildAlignNameToStoredParent(issue, children);
         if (spellOnly || alreadyCanonical || (sameCanonicalFather && pathsEqual(extracted, stored))) {
           // دوخي↔دوخى بعد التطبيع: ليست مشكلة هيكلية — لا نفرّغ الأب ولا نقلب الفئة.
           analysis.repair_type = "spelling_equivalent_no_write";
@@ -821,12 +923,15 @@
           analysis.optional_align_name_path = alignOpt;
           if (alignOpt && alignOpt.ok) {
             analysis.decision_logic_ar.push(
-              "اختياري: «توحيد إملاء المسار في الاسم» → «" +
+              "اختياري: «توحيد إملاء الاسم ليطابق الأب» → «" +
                 alignOpt.child_path +
                 "» دون تغيير الأب/المعرف.",
             );
           }
         } else if (unified.ok) {
+          // Extract resolves to a living father — align parent fields to that father.
+          // (Do this before name-under-stored so a wrong-but-living stored parent
+          // does not swallow a valid extract match.)
           analysis.can_auto_propose = true;
           analysis.requires_manual_choice = false;
           analysis.proposed = {
@@ -844,14 +949,38 @@
               : "مواءمة حقل الأب مع الأب الموجود في الشجرة.",
             "سيمسح: أب غير موجود في الشجرة؟ نعم · اختلاف كتابة المسار؟ نعم.",
           ];
+        } else if (nameUnderStored && nameUnderStored.ok) {
+          // 1602-style: parent/UUID صالحان لكن الاسم مختصر أو لا يستخرج أبًا موجودًا.
+          analysis.repair_type = "align_name_to_parent_path";
+          analysis.can_auto_propose = true;
+          analysis.requires_manual_choice = false;
+          analysis.proposed = nameUnderStored;
+          analysis.would_flip_only = false;
+          analysis.block_message_ar = null;
+          analysis.clears_missing_father = true;
+          analysis.clears_path_mismatch = true;
+          analysis.root_cause_ar =
+            "مسار الاسم ناقص أو لا يطابق الأب المخزّن — حقل الأب صحيح؛ يُصحَّح الاسم فقط.";
+          analysis.write_path_ar =
+            "كيفية الإصلاح: توحيد مسار الاسم تحت الأب الموجود دون تفريغ الأب أو المعرف.";
+          analysis.decision_logic_ar = [
+            "الأب من المسار: «" + (extracted || "—") + "» (غير صالح أو لا يطابق).",
+            "المذكور في السجل: «" + (stored || "فارغ") + "».",
+            "وُجد الأب في الشجرة — يُقترح تصحيح الاسم إلى «" +
+              nameUnderStored.child_path +
+              "».",
+            "حقل الأب والمعرف بلا تغيير · لا After فارغ · لا نقل للفئة.",
+          ];
         } else {
           analysis.can_auto_propose = false;
           analysis.requires_manual_choice = true;
           analysis.proposed = null;
+          // Prefer stored parent for suggestions when present (not the orphan extract).
           analysis.suggestions = suggestFatherMatches(
             Object.assign({}, issue, {
-              stored_parent: extracted || stored,
-              parent: extracted || stored,
+              stored_parent: stored || extracted,
+              parent: stored || extracted,
+              parent_name: stored || extracted,
             }),
             children,
             5,
@@ -859,7 +988,7 @@
           analysis.decision_logic_ar = [
             fatherLookupFailureAr(extracted, children, norm(issue && issue.branch_key)),
             "لا يُكتب الأب من المسار كحقل أب إن لم يوجد في الشجرة.",
-            "اختر أبًا موجودًا يطابق المسار (وإلا ستنتقل المشكلة إلى «أب غير موجود في الشجرة»).",
+            "اختر أبًا موجودًا؛ إن كان المسار مختصرًا سيُصحَّح الاسم تحت الأب المختار.",
           ];
         }
       } else if (cat === "missing_father") {
@@ -1085,6 +1214,12 @@
           parent_person_id: evalChosen.parent_person_id,
           reason_ar: evalChosen.reason_ar,
         };
+        if (evalChosen.child_path) {
+          after.child_path = evalChosen.child_path;
+          after.child_name = evalChosen.child_name || evalChosen.child_path;
+          after.name = evalChosen.name || evalChosen.child_path;
+          after.keep_parent = !!evalChosen.keep_parent;
+        }
       } else {
         after = null;
       }
@@ -1106,7 +1241,11 @@
       };
     }
 
-    if (a.repair_type === "align_name_path_spelling" && a.proposed) {
+    if (
+      (a.repair_type === "align_name_path_spelling" ||
+        a.repair_type === "align_name_to_parent_path") &&
+      a.proposed
+    ) {
       after = Object.assign({}, a.proposed);
       wouldFlip = false;
       blockMsg = null;
@@ -1127,7 +1266,9 @@
 
     var nameOnly =
       a.repair_type === "align_name_path_spelling" ||
-      a.repair_type === "unify_leaf_name";
+      a.repair_type === "align_name_to_parent_path" ||
+      a.repair_type === "unify_leaf_name" ||
+      !!(after && after.keep_parent && (after.child_path || after.child_name));
     var mergePair = a.repair_type === "merge_duplicate_pair";
 
     var executable =
@@ -1139,7 +1280,13 @@
           ? !!(after && (after.child_path || after.child_name || after.name))
           : mergePair
             ? !!(after && after.survivor_id && after.loser_id)
-            : !wouldFlip && !!(after && (after.parent || after.parent_person_id));
+            : !wouldFlip &&
+              !!(
+                after &&
+                (after.parent ||
+                  after.parent_person_id ||
+                  after.child_path)
+              );
 
     var preview = {
       stage: "preview",
@@ -1188,6 +1335,15 @@
     }
     if (analysis && analysis.repair_type === "align_parent_to_canonical") {
       out.push("المنطق: لا يُكتب حقل الأب إلا إن وُجد سجل أب في الشجرة.");
+    }
+    if (
+      analysis &&
+      (analysis.repair_type === "align_name_to_parent_path" ||
+        analysis.repair_type === "align_name_path_spelling")
+    ) {
+      out.push(
+        "المنطق: حقل الأب صالح — يُصحَّح مسار الاسم فقط دون تفريغ الأب أو المعرف.",
+      );
     }
     if (analysis && analysis.never_rename) {
       out.push("قيد صارم: لا إعادة تسمية — ربط المعرف فقط.");
@@ -1291,14 +1447,26 @@
     var newName = norm(after.child_path || after.child_name || after.name);
     var nameOnly =
       repairType === "align_name_path_spelling" ||
+      repairType === "align_name_to_parent_path" ||
       repairType === "unify_leaf_name" ||
       !!after.keep_parent;
+    var nameAndParent = !!(newName && after.parent && !after.keep_parent);
 
     if (nameOnly && newName) {
       sets.push("  child_name = " + sqlLit(newName));
       sets.push("  name = " + sqlLit(newName));
       if (repairType === "unify_leaf_name" && after.old_path && after.affected_rows > 1) {
         // Also rewrite descendant prefixes — separate UPDATEs after the leaf row.
+      }
+    } else if (nameAndParent) {
+      sets.push("  child_name = " + sqlLit(newName));
+      sets.push("  name = " + sqlLit(newName));
+      sets.push("  parent = " + sqlLit(after.parent));
+      sets.push("  parent_name = " + sqlLit(after.parent_name || after.parent));
+      if (after.parent_person_id) {
+        sets.push(
+          "  parent_person_id = " + sqlLit(after.parent_person_id) + "::uuid",
+        );
       }
     } else {
       if (after.parent != null && after.parent !== "") {
@@ -1330,7 +1498,7 @@
               : after.parent,
         ),
     ];
-    if (newName && nameOnly) {
+    if (newName && (nameOnly || nameAndParent)) {
       sqlParts.push("-- after.name: " + newName);
     }
     sqlParts.push("UPDATE public.tree_children");
@@ -1401,7 +1569,9 @@
       ok: true,
       sql: sql,
       title: nameOnly
-        ? "توحيد إملاء الاسم للسجل رقم " + rowId + " (مركز الصحة)"
+        ? repairType === "align_name_to_parent_path"
+          ? "تصحيح مسار الاسم للسجل رقم " + rowId + " (مركز الصحة)"
+          : "توحيد إملاء الاسم للسجل رقم " + rowId + " (مركز الصحة)"
         : "إصلاح السجل رقم " + rowId + " (مركز الصحة)",
       row_id: rowId,
       before: before,
@@ -1414,9 +1584,10 @@
         after_parent: nameOnly
           ? ""
           : after.parent || after.parent_name || "",
-        updated_parent: !nameOnly && !!(after.parent != null && after.parent !== ""),
+        updated_parent:
+          !nameOnly && !!(after.parent != null && after.parent !== ""),
         updated_uuid: !nameOnly && !!after.parent_person_id,
-        updated_name: !!nameOnly,
+        updated_name: !!(nameOnly || nameAndParent),
         from_leaf: after.from_leaf || null,
         to_leaf: after.to_leaf || null,
       },
@@ -1505,7 +1676,7 @@
       return lines.filter(Boolean).join("\n");
     }
     if (a.repair_type === "align_name_path_spelling") {
-      lines.push("الإصلاح المقترح: توحيد إملاء المسار في الاسم");
+      lines.push("الإصلاح المقترح: توحيد إملاء الاسم ليطابق الأب");
       lines.push(
         "قبل: «" +
           ((a.before && a.before.child_path) || "—") +
@@ -1515,6 +1686,20 @@
       lines.push(
         after.impact_ar ||
           "UUID/الأبناء/حقل الأب بلا تغيير — مسار الاسم فقط.",
+      );
+      lines.push("عدد السجلات المتأثرة: " + (after.affected_rows || 1));
+      return lines.join("\n");
+    }
+    if (a.repair_type === "align_name_to_parent_path") {
+      lines.push("الإصلاح المقترح: تصحيح مسار الاسم ليطابق الأب");
+      lines.push(
+        "قبل: «" + ((a.before && a.before.child_path) || "—") + "»",
+      );
+      lines.push("بعد: «" + (after.child_path || after.name || "—") + "»");
+      lines.push("الأب/المعرف: بلا تغيير");
+      lines.push(
+        after.impact_ar ||
+          "يُحدَّث الاسم فقط حتى يختفي اختلاف المسار.",
       );
       lines.push("عدد السجلات المتأثرة: " + (after.affected_rows || 1));
       return lines.join("\n");
@@ -1726,6 +1911,7 @@
     resolveUnifiedParentTarget: resolveUnifiedParentTarget,
     evaluateChosenFather: evaluateChosenFather,
     buildAlignNamePathSpelling: buildAlignNamePathSpelling,
+    buildAlignNameToStoredParent: buildAlignNameToStoredParent,
     buildUnifyLeafName: buildUnifyLeafName,
     buildMergePairPreview: buildMergePairPreview,
     adoptAlignNamePathSpelling: adoptAlignNamePathSpelling,

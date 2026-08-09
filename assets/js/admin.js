@@ -2303,11 +2303,44 @@ where c.id = matches.id; commit;
       ) {
         lines.push("");
         lines.push(
-          "اختياري: توحيد إملاء المسار في الاسم → «" +
+          "اختياري: توحيد إملاء الاسم ليطابق الأب → «" +
             analysis.optional_align_name_path.child_path +
             "»",
         );
       }
+    } else if (
+      analysis.repair_type === "align_name_to_parent_path" ||
+      analysis.repair_type === "align_name_path_spelling"
+    ) {
+      lines.push(
+        analysis.repair_type === "align_name_to_parent_path"
+          ? "الإصلاح: تصحيح مسار الاسم ليطابق الأب (الأب بلا تغيير)."
+          : "الإصلاح: توحيد إملاء الاسم ليطابق الأب (الأب بلا تغيير).",
+      );
+      lines.push(
+        "قبل ← الاسم: " +
+          String((preview.before && preview.before.child_path) || "—"),
+      );
+      lines.push(
+        "بعد ← الاسم: " +
+          String(
+            (preview.after &&
+              (preview.after.child_path || preview.after.name)) ||
+              "—",
+          ),
+      );
+      lines.push(
+        "الأب ← " +
+          String((preview.before && preview.before.parent) || "فارغ") +
+          " · المعرف: " +
+          String((preview.before && preview.before.parent_person_id) || "—") +
+          " (بلا تغيير)",
+      );
+      if (preview.preview_flags_ar) {
+        lines.push("");
+        lines.push(preview.preview_flags_ar);
+      }
+      (analysis.decision_logic_ar || []).forEach((ln) => lines.push("· " + ln));
     } else if (analysis.repair_type === "manual_review_no_merge") {
       lines.push(
         "الأب: " + String((issue && issue.father_label) || "—"),
@@ -2386,7 +2419,7 @@ where c.id = matches.id; commit;
         analysis.optional_align_name_path.ok
       ) {
         actionBtns.push(
-          '<button type="button" class="btn btn-primary btn-sm" data-health-align-path="1">توحيد إملاء المسار في الاسم</button>',
+          '<button type="button" class="btn btn-primary btn-sm" data-health-align-path="1">توحيد إملاء الاسم ليطابق الأب</button>',
         );
       }
       if (
@@ -2431,9 +2464,24 @@ where c.id = matches.id; commit;
                 " · المعرف: " +
                 String((preview2.before && preview2.before.parent_person_id) || "—"),
               "بعد ← الأب: " +
-                String((preview2.after && preview2.after.parent) || "—") +
+                String(
+                  (preview2.after && preview2.after.unchanged
+                    ? "(بلا تغيير)"
+                    : preview2.after && preview2.after.child_path
+                      ? (preview2.after.keep_parent
+                          ? "(الأب بلا تغيير) · الاسم: "
+                          : "الاسم: ") + preview2.after.child_path
+                      : (preview2.after && preview2.after.parent) || "—"),
+                ) +
                 " · المعرف: " +
-                String((preview2.after && preview2.after.parent_person_id) || "—"),
+                String(
+                  (preview2.after && preview2.after.keep_parent) ||
+                    (preview2.after && preview2.after.unchanged)
+                    ? (preview2.before && preview2.before.parent_person_id) ||
+                        "—"
+                    : (preview2.after && preview2.after.parent_person_id) ||
+                        "—",
+                ),
             ];
             if (p2 && p2.preview_flags_ar) {
               blockLines.push("", p2.preview_flags_ar);
@@ -2490,7 +2538,9 @@ where c.id = matches.id; commit;
       analysis.repair_type === "spelling_equivalent_no_write"
         ? analysis.resolved_message_ar ||
             "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة"
-        : analysis.repair_type === "manual_review_no_merge"
+        : analysis.repair_type === "align_name_to_parent_path"
+          ? "معاينة جاهزة: تصحيح مسار الاسم ليطابق الأب — وافق ثم نفّذ عبر مساحة SQL."
+          : analysis.repair_type === "manual_review_no_merge"
           ? "مراجعة أسماء متشابهة — اختر توحيدًا أو دمجًا أو تجاهلًا من صف الزوج."
           : preview.would_flip_only
             ? preview.block_message_ar ||
