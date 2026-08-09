@@ -208,6 +208,21 @@
   border-radius: 14px;
   padding: 14px;
 }
+.rx-exists-gate .rx-lead {
+  color: #991b1b;
+  font-weight: 800;
+}
+.rx-actions-stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+.rx-actions-stack .btn,
+.rx-actions-stack a.btn {
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
 .rx-review dl {
   margin: 0;
   display: grid;

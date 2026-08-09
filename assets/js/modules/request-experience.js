@@ -1,6 +1,7 @@
 /**
  * Request Experience (RX) — visitor intent-first entry.
  * Slice RX-1: hub + أضف فردًا end-to-end → approval_requests (no tree_* writes).
+ * P0 gate: affirming an existing person identity never creates tree_card add.
  * Spec: docs/REQUEST-EXPERIENCE-UX-v1.md (adopted 2026-08-09).
  */
 (function () {
@@ -84,6 +85,13 @@
     parentCandidates: [],
     selectedParent: null,
     parentConfirmed: false,
+    /** Matches for the person being added (identity), not father/context. */
+    identityCandidates: [],
+    selectedIdentity: null,
+    /** User affirmed an existing tree person is the one they meant → never create add. */
+    identityAffirmedExisting: false,
+    /** User insists this is a different person who shares the same name. */
+    differentPersonSameName: false,
     lastRequestId: "",
     lastStatusLabel: "",
     busy: false,
@@ -261,9 +269,12 @@
     }
   }
 
-  async function searchParents(query) {
+  async function searchPeople(query, opts) {
+    opts = opts || {};
     var q = normalizeSearchText(query);
     if (q.length < 2) return [];
+    var leafOnly = !!opts.leafOnly;
+    var exactLeafOnly = !!opts.exactLeafOnly;
     var all = [];
     for (var i = 0; i < BRANCHES.length; i++) {
       var rows = await loadBranchRows(BRANCHES[i]);
@@ -275,10 +286,10 @@
         var path = normalizeSearchText(item.path);
         var score = 0;
         if (leaf === q) score = 100;
-        else if (leaf.indexOf(q) === 0) score = 80;
-        else if (leaf.indexOf(q) >= 0) score = 60;
-        else if (path.indexOf(q) >= 0) score = 40;
-        else if (item.searchText.indexOf(q) >= 0) score = 20;
+        else if (!exactLeafOnly && leaf.indexOf(q) === 0) score = 80;
+        else if (!exactLeafOnly && !leafOnly && leaf.indexOf(q) >= 0) score = 60;
+        else if (!exactLeafOnly && !leafOnly && path.indexOf(q) >= 0) score = 40;
+        else if (!exactLeafOnly && !leafOnly && item.searchText.indexOf(q) >= 0) score = 20;
         return { item: item, score: score };
       })
       .filter(function (x) {
@@ -287,11 +298,53 @@
       .sort(function (a, b) {
         return b.score - a.score || a.item.leaf.localeCompare(b.item.leaf, "ar");
       })
-      .slice(0, 12)
+      .slice(0, opts.limit || 12)
       .map(function (x) {
         return x.item;
       });
     return scored;
+  }
+
+  /** Father / context search (path-aware). */
+  async function searchParents(query) {
+    return searchPeople(query, { limit: 12 });
+  }
+
+  /**
+   * Soft identity collision for the person being added.
+   * Prefer exact leaf matches; fall back to strong leaf prefix when rare.
+   */
+  async function searchIdentityCollisions(personName) {
+    var exact = await searchPeople(personName, { exactLeafOnly: true, limit: 12 });
+    if (exact.length) return exact;
+    return searchPeople(personName, { leafOnly: true, limit: 12 }).filter(function (item) {
+      var leaf = normalizeSearchText(item.leaf);
+      var q = normalizeSearchText(personName);
+      return leaf === q || leaf.indexOf(q) === 0;
+    });
+  }
+
+  /** True if a child with this leaf name already sits under the chosen parent path. */
+  function isAlreadyChildUnderParent(personName, parent, candidates) {
+    if (!parent || !personName) return false;
+    var leafQ = normalizeSearchText(personName);
+    var parentId = normalizePersonName(parent.id || "");
+    var parentPath = normalizeSearchText(parent.path || "");
+    return (candidates || []).some(function (item) {
+      if (normalizeSearchText(item.leaf) !== leafQ) return false;
+      var id = normalizePersonName(item.id || "");
+      if (parentId && id.indexOf(parentId + "/") === 0) return true;
+      var path = normalizeSearchText(item.path || "");
+      if (parentPath && path.indexOf(parentPath) === 0 && path !== parentPath) return true;
+      return false;
+    });
+  }
+
+  function resetIdentityGate() {
+    state.identityCandidates = [];
+    state.selectedIdentity = null;
+    state.identityAffirmedExisting = false;
+    state.differentPersonSameName = false;
   }
 
   function ancestorsFromParent(parent) {
@@ -367,6 +420,7 @@
     state.selectedParent = null;
     state.parentConfirmed = false;
     state.parentCandidates = [];
+    resetIdentityGate();
     state.error = "";
     render();
   }
@@ -375,6 +429,9 @@
     if (state.view === "home") renderHome();
     else if (state.view === "intent") renderIntentPreview();
     else if (state.view === "facts") renderFacts();
+    else if (state.view === "identity") renderIdentityCollision();
+    else if (state.view === "identity_confirm") renderIdentityConfirm();
+    else if (state.view === "exists") renderExistsGate();
     else if (state.view === "confirm") renderConfirm();
     else if (state.view === "review") renderReview();
     else if (state.view === "done") renderDone();
@@ -420,8 +477,18 @@
         } else if (state.view === "facts") {
           state.view = "intent";
           render();
-        } else if (state.view === "confirm") {
+        } else if (state.view === "identity" || state.view === "exists") {
           state.view = "facts";
+          state.selectedIdentity = null;
+          state.identityAffirmedExisting = false;
+          render();
+        } else if (state.view === "identity_confirm") {
+          state.view = "identity";
+          state.selectedIdentity = null;
+          state.identityAffirmedExisting = false;
+          render();
+        } else if (state.view === "confirm") {
+          state.view = state.identityCandidates.length && !state.differentPersonSameName ? "identity" : "facts";
           state.parentConfirmed = false;
           render();
         } else if (state.view === "review") {
@@ -537,6 +604,7 @@
       state.selectedParent = null;
       state.parentConfirmed = false;
       state.parentCandidates = [];
+      resetIdentityGate();
       render();
     });
     root.querySelector("[data-rx-cancel]").addEventListener("click", goHome);
@@ -618,8 +686,8 @@
         escapeHtml(f.birthDate) +
         '" /></label>' +
         '<fieldset class="rx-fieldset">' +
-        "<legend>تحت من في العائلة؟</legend>" +
-        '<p class="rx-muted">ابحث بالاسم ثم أكّد المسار. عند أكثر من احتمال اختر بوضوح — لا تخمين.</p>' +
+        "<legend>تحت من في العائلة؟ (الأب / السياق)</legend>" +
+        '<p class="rx-muted">هذا البحث لتحديد <strong>من سيُضاف تحته</strong> الشخص الجديد — وليس للبحث عن الشخص المراد إضافته. عند أكثر من احتمال اختر بوضوح.</p>' +
         '<label class="rx-field"><span>بحث عن الأب / السياق</span>' +
         '<input name="parentQuery" value="' +
         escapeHtml(f.parentQuery) +
@@ -643,10 +711,10 @@
         '" autocomplete="email" /></label>' +
         "</fieldset>" +
         '<div class="rx-actions">' +
-        '<button type="submit" class="btn btn-primary">متابعة لتأكيد السياق</button>' +
+        '<button type="submit" class="btn btn-primary">متابعة</button>' +
         "</div>" +
         "</form>",
-      { sub: "أقل حقول لازمة — ثم تأكيد بشري للمسار." }
+      { sub: "أقل حقول لازمة — فحص الاسم الموجود ثم تأكيد سياق الأب." }
     );
 
     var form = root.querySelector("[data-rx-facts-form]");
@@ -654,6 +722,7 @@
 
     function readForm() {
       var fd = new FormData(form);
+      var prevName = state.facts.personName;
       state.facts.personName = text(fd.get("personName"));
       state.facts.gender = text(fd.get("gender"));
       state.facts.birthDate = text(fd.get("birthDate"));
@@ -661,6 +730,9 @@
       state.facts.submitterName = text(fd.get("submitterName"));
       state.facts.submitterPhone = normalizePhone(fd.get("submitterPhone"));
       state.facts.submitterEmail = text(fd.get("submitterEmail"));
+      if (normalizeSearchText(prevName) !== normalizeSearchText(state.facts.personName)) {
+        resetIdentityGate();
+      }
     }
 
     searchBtn.addEventListener("click", async function () {
@@ -692,7 +764,7 @@
       });
     });
 
-    form.addEventListener("submit", function (e) {
+    form.addEventListener("submit", async function (e) {
       e.preventDefault();
       clearError();
       readForm();
@@ -716,7 +788,213 @@
         render();
         return;
       }
+
+      var submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "جاري التحقق…";
+      }
+
+      try {
+        state.identityCandidates = await searchIdentityCollisions(state.facts.personName);
+
+        if (isAlreadyChildUnderParent(state.facts.personName, state.selectedParent, state.identityCandidates)) {
+          var underMatch =
+            state.identityCandidates.find(function (item) {
+              return isAlreadyChildUnderParent(state.facts.personName, state.selectedParent, [item]);
+            }) || state.identityCandidates[0] || null;
+          state.selectedIdentity = underMatch;
+          state.identityAffirmedExisting = true;
+          state.view = "exists";
+          setError("لا يمكن إضافة شخص موجود مسبقًا تحت نفس السياق.");
+          render();
+          return;
+        }
+
+        if (state.identityCandidates.length && !state.differentPersonSameName) {
+          state.selectedIdentity = null;
+          state.identityAffirmedExisting = false;
+          state.view = "identity";
+          render();
+          return;
+        }
+
+        state.view = "confirm";
+        render();
+      } catch (err) {
+        setError("تعذر التحقق من الاسم حاليًا. حاول مرة أخرى.");
+        render();
+      }
+    });
+  }
+
+  function renderIdentityCollision() {
+    var name = state.facts.personName;
+    var list =
+      state.identityCandidates.length === 0
+        ? '<p class="rx-muted">لا تطابقات ظاهرة.</p>'
+        : '<ul class="rx-search-results">' +
+          state.identityCandidates
+            .map(function (item, idx) {
+              return (
+                '<li><button type="button" class="rx-search-item" data-rx-id-pick="' +
+                idx +
+                '">' +
+                "<strong>" +
+                escapeHtml(item.leaf) +
+                "</strong>" +
+                '<span class="rx-muted">الفرع: ' +
+                escapeHtml(item.branch) +
+                "</span>" +
+                '<span class="rx-path">' +
+                escapeHtml(item.path) +
+                "</span>" +
+                "</button></li>"
+              );
+            })
+            .join("") +
+          "</ul>";
+
+    shell(
+      "هل تقصد شخصًا موجودًا؟",
+      '<div class="rx-confirm-card">' +
+        '<p class="rx-lead">وجدنا في الشجرة أشخاصًا باسم «' +
+        escapeHtml(name) +
+        '».</p>' +
+        '<p class="rx-note">إن كان المقصود أحدهم، <strong>لا يُنشأ طلب إضافة</strong> — الشخص موجود مسبقًا.</p>' +
+        "<p>اختر الشخص إن كان هو المقصود، أو أكّد أنه شخص آخر بنفس الاسم:</p>" +
+        list +
+        '<div class="rx-actions">' +
+        '<button type="button" class="btn btn-outline" data-rx-different-name>شخص آخر بنفس الاسم — أريد إضافة فرد جديد</button>' +
+        '<button type="button" class="btn btn-outline" data-rx-back-facts>تعديل الاسم</button>' +
+        "</div>" +
+        "</div>",
+      { sub: "بوابة الهوية — منفصلة عن تأكيد الأب/السياق." }
+    );
+
+    root.querySelectorAll("[data-rx-id-pick]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var idx = Number(btn.getAttribute("data-rx-id-pick"));
+        state.selectedIdentity = state.identityCandidates[idx] || null;
+        state.identityAffirmedExisting = false;
+        clearError();
+        state.view = "identity_confirm";
+        render();
+      });
+    });
+    root.querySelector("[data-rx-different-name]").addEventListener("click", function () {
+      state.differentPersonSameName = true;
+      state.selectedIdentity = null;
+      state.identityAffirmedExisting = false;
+      clearError();
       state.view = "confirm";
+      render();
+    });
+    root.querySelector("[data-rx-back-facts]").addEventListener("click", function () {
+      resetIdentityGate();
+      clearError();
+      state.view = "facts";
+      render();
+    });
+  }
+
+  function renderIdentityConfirm() {
+    var p = state.selectedIdentity;
+    if (!p) {
+      state.view = "identity";
+      render();
+      return;
+    }
+    shell(
+      "تأكيد: شخص موجود؟",
+      '<div class="rx-confirm-card">' +
+        "<p>هل تقصد هذا الشخص <strong>الموجود مسبقًا</strong> في الشجرة؟</p>" +
+        "<h3>" +
+        escapeHtml(p.leaf) +
+        "</h3>" +
+        '<p class="rx-path"><strong>المسار:</strong> ' +
+        escapeHtml(p.path) +
+        "</p>" +
+        '<p class="rx-muted">الفرع: ' +
+        escapeHtml(p.branch) +
+        "</p>" +
+        '<p class="rx-note">إن أجبت بنعم: لن يُنشأ طلب «إضافة شخص» — هذا يمنع التكرار.</p>' +
+        '<div class="rx-actions">' +
+        '<button type="button" class="btn btn-primary" data-rx-id-yes>نعم، هذا هو المقصود</button>' +
+        '<button type="button" class="btn btn-outline" data-rx-id-other>لا، اختيار آخر</button>' +
+        "</div>" +
+        "</div>",
+      { sub: "تأكيد هوية الشخص المراد إضافته — ليس تأكيد الأب." }
+    );
+    root.querySelector("[data-rx-id-yes]").addEventListener("click", function () {
+      state.identityAffirmedExisting = true;
+      state.differentPersonSameName = false;
+      clearError();
+      state.view = "exists";
+      render();
+    });
+    root.querySelector("[data-rx-id-other]").addEventListener("click", function () {
+      state.selectedIdentity = null;
+      state.identityAffirmedExisting = false;
+      clearError();
+      state.view = "identity";
+      render();
+    });
+  }
+
+  function renderExistsGate() {
+    var p = state.selectedIdentity;
+    var personBlock = p
+      ? "<h3>" +
+        escapeHtml(p.leaf) +
+        "</h3>" +
+        '<p class="rx-path"><strong>المسار:</strong> ' +
+        escapeHtml(p.path) +
+        "</p>" +
+        '<p class="rx-muted">الفرع: ' +
+        escapeHtml(p.branch) +
+        "</p>"
+      : "";
+    shell(
+      "الشخص موجود مسبقًا",
+      '<div class="rx-confirm-card rx-exists-gate">' +
+        '<p class="rx-lead">هذا الشخص موجود مسبقًا في الشجرة.</p>' +
+        '<p class="rx-note"><strong>لا يمكن إضافة شخص موجود مسبقًا.</strong> لن يُرسل طلب «إضافة فرد».</p>' +
+        personBlock +
+        "<p>ماذا تريد؟</p>" +
+        '<div class="rx-actions rx-actions-stack">' +
+        '<a class="btn btn-outline" href="#search">عرض / بحث عن الشخص في الشجرة</a>' +
+        '<button type="button" class="btn btn-primary" data-rx-to-edit>تصحيح بيانات شخص</button>' +
+        '<button type="button" class="btn btn-outline" data-rx-change-sel>تغيير الاسم أو السياق</button>' +
+        '<button type="button" class="btn btn-outline" data-rx-diff-anyway>شخص آخر بنفس الاسم (سياق مختلف)</button>' +
+        "</div>" +
+        "</div>",
+      { sub: "Truth Before Speed — لا تكرار بعد تأكيد الوجود." }
+    );
+    root.querySelector("[data-rx-to-edit]").addEventListener("click", function () {
+      clearError();
+      state.intentId = "tree_edit";
+      state.view = "scaffold";
+      render();
+    });
+    root.querySelector("[data-rx-change-sel]").addEventListener("click", function () {
+      resetIdentityGate();
+      state.parentConfirmed = false;
+      clearError();
+      state.view = "facts";
+      render();
+    });
+    root.querySelector("[data-rx-diff-anyway]").addEventListener("click", function () {
+      state.differentPersonSameName = true;
+      state.identityAffirmedExisting = false;
+      state.selectedIdentity = null;
+      clearError();
+      if (!state.selectedParent) {
+        state.view = "facts";
+        setError("اختر أبًا/سياقًا مختلفًا ثم تابع — لا إضافة صامتة لنفس المسار.");
+      } else {
+        state.view = "confirm";
+      }
       render();
     });
   }
@@ -728,10 +1006,20 @@
       render();
       return;
     }
+    if (state.identityAffirmedExisting) {
+      state.view = "exists";
+      render();
+      return;
+    }
+    var sameNameNote = state.differentPersonSameName
+      ? '<p class="rx-note">أشرت أن هذا <strong>شخص جديد</strong> بنفس الاسم. أكّد أن الأب/السياق صحيح ومختلف عن الشخص الموجود.</p>'
+      : "";
     shell(
-      "تأكيد الشخص / السياق",
+      "تأكيد الأب / السياق",
       '<div class="rx-confirm-card">' +
-        "<p>سيُضاف الشخص تحت:</p>" +
+        "<p>سيُضاف <strong>الشخص الجديد</strong> «" +
+        escapeHtml(state.facts.personName) +
+        "» تحت:</p>" +
         "<h3>" +
         escapeHtml(p.leaf) +
         "</h3>" +
@@ -741,13 +1029,14 @@
         '<p class="rx-muted">الفرع: ' +
         escapeHtml(p.branch) +
         "</p>" +
-        "<p>هل هذا الشخص المقصود؟</p>" +
+        sameNameNote +
+        "<p>هل هذا هو <strong>الأب / السياق</strong> المقصود؟</p>" +
         '<div class="rx-actions">' +
-        '<button type="button" class="btn btn-primary" data-rx-confirm-yes>نعم، هذا هو المقصود</button>' +
-        '<button type="button" class="btn btn-outline" data-rx-confirm-other>اختيار شخص آخر</button>' +
+        '<button type="button" class="btn btn-primary" data-rx-confirm-yes>نعم، هذا هو السياق</button>' +
+        '<button type="button" class="btn btn-outline" data-rx-confirm-other>اختيار سياق آخر</button>' +
         "</div>" +
         "</div>",
-      { sub: "تأكيد بشري إلزامي — خاصة عند تشابه الأسماء." }
+      { sub: "تأكيد مكان الإضافة — ليس تأكيد أن الشخص الجديد موجود مسبقًا." }
     );
     root.querySelector("[data-rx-confirm-yes]").addEventListener("click", function () {
       state.parentConfirmed = true;
@@ -765,6 +1054,11 @@
   }
 
   function renderReview() {
+    if (state.identityAffirmedExisting) {
+      state.view = "exists";
+      render();
+      return;
+    }
     if (!state.selectedParent || !state.parentConfirmed) {
       state.view = "confirm";
       render();
@@ -797,6 +1091,9 @@
         escapeHtml(f.submitterPhone) +
         "</dd></div>" +
         "</dl>" +
+        (state.differentPersonSameName
+          ? '<p class="rx-note">تنبيه: يوجد أشخاص بنفس الاسم في الشجرة؛ هذا الطلب لشخص <strong>جديد</strong> تحت السياق أعلاه.</p>'
+          : "") +
         '<p class="rx-note">سيتم إرسال هذه المعلومات للمراجعة (لن تُحفظ في الشجرة الآن).</p>' +
         '<div class="rx-actions">' +
         '<button type="button" class="btn btn-primary" data-rx-submit' +
@@ -881,6 +1178,12 @@
   async function submitAddPerson() {
     if (state.busy) return;
     clearError();
+    if (state.identityAffirmedExisting) {
+      setError("لا يمكن إضافة شخص موجود مسبقًا.");
+      state.view = "exists";
+      render();
+      return;
+    }
     if (!state.selectedParent || !state.parentConfirmed) {
       setError("يلزم تأكيد السياق قبل الإرسال.");
       state.view = "confirm";
@@ -897,6 +1200,36 @@
     render();
     var f = state.facts;
     var p = state.selectedParent;
+
+    try {
+      var collisions = await searchIdentityCollisions(f.personName);
+      state.identityCandidates = collisions;
+      if (isAlreadyChildUnderParent(f.personName, p, collisions)) {
+        state.busy = false;
+        state.selectedIdentity =
+          collisions.find(function (item) {
+            return isAlreadyChildUnderParent(f.personName, p, [item]);
+          }) || collisions[0] || null;
+        state.identityAffirmedExisting = true;
+        setError("هذا الشخص موجود مسبقًا تحت نفس السياق — لا يُنشأ طلب إضافة.");
+        state.view = "exists";
+        render();
+        return;
+      }
+      if (collisions.length && !state.differentPersonSameName) {
+        state.busy = false;
+        setError("يوجد تطابق بالاسم في الشجرة. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم.");
+        state.view = "identity";
+        render();
+        return;
+      }
+    } catch (gateErr) {
+      state.busy = false;
+      setError("تعذر التحقق قبل الإرسال. حاول مرة أخرى.");
+      render();
+      return;
+    }
+
     var parentPersonId = text(p.personId || "");
     if (!parentPersonId) {
       state.busy = false;
@@ -998,6 +1331,7 @@
         submitterEmail: "",
         parentQuery: "",
       };
+      resetIdentityGate();
       goHome();
     });
   }
