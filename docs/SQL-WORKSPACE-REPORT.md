@@ -50,6 +50,8 @@
 | `maint.delegate_secret_reset_v1` | طلب إعادة تعيين الرقم السري | `COPY-ME-delegate-secret-reset.sql` |
 | `maint.repair_null_parent_columns_dry_run_v1` | معاينة parent/child_name الفارغ | `COPY-ME-repair-null-parent-columns-dry-run.sql` |
 | `maint.repair_null_parent_columns_apply_v1` | تطبيق ملء parent/child_name | `COPY-ME-repair-null-parent-columns-apply.sql` |
+| `maint.link_uuid_nada_tuaisan_hamad_mohammad_dry_run_v1` | ربط UUID سلسلة نداء-طعيسان-حمد-محمد (1738-1740) — معاينة | `COPY-ME-link-uuid-nada-tuaisan-hamad-mohammad-dry-run.sql` |
+| `maint.link_uuid_nada_tuaisan_hamad_mohammad_apply_v1` | ربط UUID سلسلة نداء-طعيسان-حمد-محمد (1738-1740) — APPLY | `COPY-ME-link-uuid-nada-tuaisan-hamad-mohammad-apply.sql` |
 
 ## إصلاح parent الفارغ — لماذا فشل الملف الموحّد
 
@@ -75,3 +77,7 @@
 5. ثم **إعادة تعيين الرقم السري** إن لزم.
 
 **بوابة 1 = 🟢** («اغلاق ١» 2026-08-09) · **بوابة 2 = 🟢** («ابدا» 2026-08-09) · **رحلة القرار = ✅** («ابدا» 2026-08-09). التالي: مراجعة تصميم Request Experience — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md).
+
+## ربط UUID 1738–1740 (نداء→طعيسان→حمد→محمد)
+
+صيانة لمرة واحدة — تفاصيل التشغيل والنتائج المتوقعة ومرشحي نداء: [`MAINT-LINK-UUID-NADA-TUAISAN-1738-1740.md`](./MAINT-LINK-UUID-NADA-TUAISAN-1738-1740.md).

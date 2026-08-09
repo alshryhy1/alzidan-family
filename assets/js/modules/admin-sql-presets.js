@@ -50,6 +50,20 @@
       file: "../supabase/sql/COPY-ME-repair-null-parent-columns-apply.sql",
       order: 41,
     },
+    {
+      id: "maint.link_uuid_nada_tuaisan_hamad_mohammad_dry_run_v1",
+      title: "ربط UUID سلسلة نداء-طعيسان-حمد-محمد (1738-1740) — معاينة",
+      desc: "قراءة فقط لـ ids 1738/1739/1740: يثبت اسم الأب وperson_id المقترح. إن لم يُحل نداء بفرادة يظهر المرشحون دون APPLY.",
+      file: "../supabase/sql/COPY-ME-link-uuid-nada-tuaisan-hamad-mohammad-dry-run.sql",
+      order: 50,
+    },
+    {
+      id: "maint.link_uuid_nada_tuaisan_hamad_mohammad_apply_v1",
+      title: "ربط UUID سلسلة نداء-طعيسان-حمد-محمد (1738-1740) — APPLY",
+      desc: "كتابة parent_person_id فقط لتلك الثلاثة بعد نجاح المعاينة. 1740 يُحدَّث فقط إذا وُجد أب نداء فريد. لا Auto Repair.",
+      file: "../supabase/sql/COPY-ME-link-uuid-nada-tuaisan-hamad-mohammad-apply.sql",
+      order: 51,
+    },
   ];
 
   function loadDone() {
