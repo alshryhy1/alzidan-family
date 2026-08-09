@@ -5,10 +5,10 @@
 **تأكيد الإغلاق:** «نعم اغلاق ١» / «اغلاق ١» (2026-08-09)  
 **آخر تحقق كود:** 2026-08-09 (مسار قبول→دخول · أرقام عربية/إنجليزية)  
 **الغرض:** إغلاق بوابة Delegates v2 → 🟢 حتى يُسمح بتجميد الدستور الحي ثم Request Experience  
-**المراجع:** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · مسودة بوابة 2: [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md)
+**المراجع:** [`DELEGATES-V2-PHASE2.md`](./DELEGATES-V2-PHASE2.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · ختم بوابة 2: [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)
 
-> **قاعدة:** لا ميزات مندوب جديدة · لا تحسين تجميلي · لا كود Delegate Workspace · لا Request Experience حتى 🟢 بوابة 2 (تجميد الدستور الحي).  
-> بوابة 1 = 🟢 بقبول صاحب المنتج. **لا** تجميد تلقائي لبوابة 2 — نفّذ المسودة فقط بعد أمر صريح.
+> **قاعدة:** لا ميزات مندوب جديدة · لا تحسين تجميلي · لا كود Delegate Workspace · لا كود Request Experience حتى اعتماد رحلة القرار («اعتمدوا رحلة القرار»).  
+> بوابة 1 = 🟢 · بوابة 2 = 🟢 مجمّدة («ابدا» 2026-08-09).
 
 ---
 
@@ -149,7 +149,7 @@
 | اعتماد متعدد المراحل | ⚪ فوق Workflow Engine لاحقًا |
 | واجهة منح/سحب عمليات أدق من الدور | خارج شريحة القبول |
 | Delegate Workspace / تحسين `delegate.js` تجميليًا | مجمّد |
-| Request Experience | بعد بوابة 1 🟢 ثم تجميد Foundation (بوابة 2) |
+| Request Experience | بعد بوابة 2 🟢 + «اعتمدوا رحلة القرار» — تصميم أولًا |
 
 ---
 
@@ -164,7 +164,7 @@
 
 | قرار | المعنى |
 |------|--------|
-| **كل الخانات في §6 ✅** | بوابة 1 → 🟢 — PHASE2 + الخارطة محدَّثان · **التالي:** تجميد بوابة 2 من [`PRODUCT-FOUNDATION-FREEZE-DRAFT.md`](./PRODUCT-FOUNDATION-FREEZE-DRAFT.md) **بعد أمر صريح فقط** |
+| **كل الخانات في §6 ✅** | بوابة 1 → 🟢 — PHASE2 + الخارطة محدَّثان · بوابة 2 🟢 مجمّدة («ابدا») — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md) · **التالي:** «اعتمدوا رحلة القرار» |
 | **أي فشل** | ابقَ 🟡 — سجّل رقم الخطوة + نص الرسالة على الشاشة · **لا** برمجة ميزات جديدة |
 
 **لا** يُفتح كود Delegate Workspace من هذه البوابة.
@@ -192,4 +192,5 @@
 - [x] تشغيل 5 دقائق / بنود §6 — مغلقة بقبول المنتج
 - [x] §6 كل البنود الأربعة ✅
 - [x] تحديث PHASE2 + ENGINEERING-ROADMAP إلى 🟢 بعد إبلاغ صاحب المنتج
-- [ ] بعده: تجميد بوابة 2 من المسودة **بأمر صريح** — **ثم فقط** Request Experience (تصميم أولًا)
+- [x] بعده: تجميد بوابة 2 («ابدا» 2026-08-09) — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)
+- [ ] بعده: «اعتمدوا رحلة القرار» — **ثم فقط** Request Experience (تصميم أولًا)

@@ -1,9 +1,14 @@
 # Platform Principles — دستور المنصة
 
-**الحالة:** معتمد رسميًا كمضمون · **بوابة Product Foundation (تجميد رسمي):** 🟡 جاهز للتجميد بعد Delegates v2 🟢  
-**Truth Before Speed:** ساري كمبدأ دستوري (قاعدة ج) — يُدرَج في ختم التجميد مع الوثائق الأربع عند إغلاق بوابة 2  
-**التاريخ:** 2026-08-08 · ختم جاهزية التجميد: 2026-08-09  
-**المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) · قبول المناديب: [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md)
+**الحالة:** دستور المنصة / دستور حي  
+**تجميد بوابة 2 (Product Foundation):** 🟢 مجمّد رسميًا — 2026-08-09  
+**عبارة التجميد:** «ابدا»  
+**Truth Before Speed:** دستوري ساري — لا اعتماد يتخطى فحوصات الصحة  
+**Single Write Rule:** دستوري ساري — لا كتابة شجرة من UI خارج Workflow + Validation  
+**قاعدة الطبقة (أ):** دستوري ساري — لا شاشة/ميزة بلا طبقة واضحة  
+**السابق:** بوابة 1 Delegates v2 🟢 (قبول حي)  
+**التاريخ:** 2026-08-08 · **تاريخ التجميد:** 2026-08-09  
+**المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) · قبول المناديب: [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) · الختم: [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)
 
 هذه أهم وثيقة طويلة الأمد. كل مطوّر ينضم للمشروع يقرأها أولًا.
 

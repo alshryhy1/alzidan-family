@@ -1,8 +1,12 @@
 # Request Catalog — فهرس نوايا المستخدم
 
-**الحالة:** دستور المنصة (مضمون معتمد) — **تجميد بوابة 2:** 🟡 بعد Delegates 🟢  
-**التاريخ:** 2026-08-08 · ختم جاهزية التجميد: 2026-08-09  
-**المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md)
+**الحالة:** دستور المنصة / دستور حي  
+**تجميد بوابة 2 (Product Foundation):** 🟢 مجمّد رسميًا — 2026-08-09  
+**عبارة التجميد:** «ابدا»  
+**Truth Before Speed:** دستوري ساري — لا اعتماد يتخطى فحوصات الصحة  
+**السابق:** بوابة 1 Delegates v2 🟢 (قبول حي)  
+**التاريخ:** 2026-08-08 · **تاريخ التجميد:** 2026-08-09  
+**المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · الختم: [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)
 
 هذا هو **المرجع الوحيد** لإضافة عملية جديدة يعتمدها المستخدم.
 

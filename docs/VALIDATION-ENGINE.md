@@ -1,7 +1,7 @@
 # Validation Engine — محرك التحقق
 
-**الحالة:** مخطّط (مرحلة كانونية رسمية) — ⚪  
-**التاريخ:** 2026-08-08  
+**الحالة:** مخطّط (مرحلة كانونية رسمية) — ⚪ تنفيذ · **مرجع دستوري ضمن تجميد بوابة 2 🟢**  
+**التاريخ:** 2026-08-08 · **ختم الدستور الحي:** 2026-08-09 («ابدا») — [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)  
 **النوع:** مرحلة مستقلة — **ليست** ملاحظة داخل Workflow · **ليست** مجرد دوال مساعدة  
 **المراجع:** [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md)
 

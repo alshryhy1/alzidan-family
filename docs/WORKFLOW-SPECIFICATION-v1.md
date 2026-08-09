@@ -1,8 +1,13 @@
 # Workflow Specification v1 — محرك سير الطلبات
 
-**الحالة:** دستور المنصة (مضمون معتمد) — **تجميد بوابة 2:** 🟡 بعد Delegates 🟢 · أساس Workflow Engine v1 في المستودع (🟡 provisional) — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
-**التاريخ:** 2026-08-08 · ختم جاهزية التجميد: 2026-08-09  
-**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) (ADR-010) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md)  
+**الحالة:** دستور المنصة / دستور حي  
+**تجميد بوابة 2 (Product Foundation):** 🟢 مجمّد رسميًا — 2026-08-09  
+**عبارة التجميد:** «ابدا»  
+**Truth Before Speed:** دستوري ساري — لا اعتماد يتخطى فحوصات الصحة  
+**السابق:** بوابة 1 Delegates v2 🟢 (قبول حي)  
+**أساس Workflow Engine v1 في المستودع:** 🟡 provisional — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md)  
+**التاريخ:** 2026-08-08 · **تاريخ التجميد:** 2026-08-09  
+**المرجع:** [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) (ADR-010) · [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · الختم: [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)  
 **النطاق:** طبقة Workflow Engine — بلا Delegate Workspace ولا Request Experience كاملة؛ لوحة حالة إدارية مصغّرة مسموحة للقراءة/انتقال إداري فقط
 
 **اسم الملف:** الرسمي = `WORKFLOW-SPECIFICATION-v1.md`.  
