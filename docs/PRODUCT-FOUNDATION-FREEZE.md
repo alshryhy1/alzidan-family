@@ -14,6 +14,7 @@
 **عبارة التجميد:** «ابدا»  
 **Truth Before Speed:** دستوري ساري — لا اعتماد يتخطى فحوصات الصحة  
 **Single Write Rule:** دستوري ساري — لا كتابة شجرة من UI خارج Workflow + Validation  
+**Tree Engine sole writer:** إضافة دستورية 2026-08-09 — لا كتابة مباشرة في `tree_children` إلا عبر Tree Engine  
 **قاعدة الطبقة (أ):** دستوري ساري — لا شاشة/ميزة بلا طبقة واضحة  
 **Validation Engine:** جزء من الدستور الحي (مرحلة كانونية مستقلة — يتحقق ولا ينفّذ)  
 **السابق:** بوابة 1 Delegates v2 🟢 (قبول حي)
@@ -27,10 +28,25 @@
 | 1 | [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) | لغة المنتج · Human First · محظورات |
 | 2 | [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) | حالات · انتقالات · Audit |
 | 3 | [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) | فهرس النوايا الوحيد |
-| 4 | [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) | المبادئ · قاعدة الطبقة · SSOT · Single Write · Truth Before Speed |
+| 4 | [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) | المبادئ · قاعدة الطبقة · SSOT · Single Write · Truth Before Speed · **Tree Engine الكاتب الوحيد** |
 | + | [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) | مرجع المرحلة المستقلة — التحقق قبل الشجرة (ضمن المجموعة الدستورية) |
 
 يمنع أي تطوير يخالف هذا الدستور إلا بقرار معماري صريح.
+
+---
+
+## إضافة دستورية بعد التجميد — Tree Engine sole writer (2026-08-09)
+
+**الحالة:** إضافة دستورية بتوجيه صاحب المنتج بعد تجميد بوابة 2 («ابدا»).  
+**لا تُلغى التجميد** — تُسجَّل كـ **addendum** على الدستور الحي.
+
+> لا يجوز لأي جزء من النظام أن يكتب مباشرة في `tree_children`.  
+> أي تعديل: Validation → Workflow → Tree Engine فقط.  
+> Tree Engine = المسؤول الوحيد عن الكتابة.
+
+**الملكية حسب نوع المشكلة:** بيانات legacy → Integrity + SQL Workspace · منع التكرار → Validation + Workflow + Tree Engine · منع خطأ المستخدم → Request Experience · المراقبة → Health Center.
+
+**صدق التنفيذ:** الفرض الكامل **ليس** مكتملًا بعد — مسارات مندوب/إدارة/استيراد ما زالت دينًا تحت Tree Engine. التفاصيل الحيّة: [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md) § Tree Engine · [`PATCH-1-WRITE-PATHS.md`](./PATCH-1-WRITE-PATHS.md).
 
 ---
 

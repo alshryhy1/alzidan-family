@@ -112,7 +112,7 @@ iOS Experience Rebuild
 | **Delegates v2 — Foundation + Enforce** | 🟢 | قبول حي + «اغلاق ١» 2026-08-09 — [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md). Multi-stage = ⚪ |
 | **tree-import reuse** | 🟡 | عميل + `verify:tree-import-reuse`؛ **بانتظار COPY-ME على الإنتاج** — [`PATCH-TREE-IMPORT-REUSE.md`](./PATCH-TREE-IMPORT-REUSE.md) · Data Version `5` معلّق النشر |
 | **Integrity Engine v2 (RPC/views)** | 🟡 | ملف SQL جاهز؛ **بانتظار نشر SQL** — [`PATCH-INTEGRITY-DEPLOY-SQL.md`](./PATCH-INTEGRITY-DEPLOY-SQL.md) · قراءة فقط |
-| **Health Center** | 🟢 | أساس قراءة فقط + بطاقات **سلامة الشجرة** (parent NULL / أب مفقود / تطابق المسار) |
+| **Health Center** | 🟢 | 🔴 سلامة البيانات · 🟡 الربط الداخلي (UUID/TREE-003) · اختبار رحلة الطلب (وكلاء + دخان) · عمود الأثر |
 | **Repair يدوي** | 🟢 | مغلق للتخطيط — لا مسار apply تلقائي من الواجهة |
 | **DateEngine (أساس + حارس ends_at)** | 🟢 | مكتبة + ADR-009 + مستهلك أوّل |
 | **DateEngine على كل النماذج** | ⚪ | ميلاد/وفاة/مناسبات — دين تقني (§ دين تقني) |
@@ -124,7 +124,7 @@ iOS Experience Rebuild
 | **Workflow Engine v1** | 🟡 | أساس **provisional** على main — إغلاق (سلامة + إزالة مسار قديم) **عند مرحلته** بعد Validation — لا توسيع قبلها — [`WORKFLOW-ENGINE-V1-REPORT.md`](./WORKFLOW-ENGINE-V1-REPORT.md) |
 | **Delegate Workspace v1** | ⚪ | UX ✅ معتمد («ابدا») — [`DELEGATE-WORKSPACE-UX-v1.md`](./DELEGATE-WORKSPACE-UX-v1.md) · **كود ❄️** حتى RX→VE→WF · رحلة: [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md) · قرار: [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) ✅ |
 | **Admin UX (مراقبة)** | ⚪ | بعد Delegate Workspace |
-| **Family Engine Alignment** | ⚪ | مواءمة + **Single Write Rule** — لا إعادة بناء |
+| **Family Engine Alignment** | ⚪ | مواءمة + **Single Write Rule** + توجيه كل كتابات `tree_children` عبر **Tree Engine** — لا إعادة بناء |
 | **iOS Experience Rebuild** | ⬛ | بعد إغلاق المراحل الكانونية فقط |
 
 ---
@@ -140,7 +140,7 @@ iOS Experience Rebuild
       Request Experience     ← ماذا يريد أن يفعل؟ (نية / حقائق)
                    │
                    ▼
-      Validation Engine      ← يتحقق — لا ينفّذ (تعارض · تكرار · اكتمال · سلامة)
+      Validation Engine      ← يتحقق — لا ينفّذ (تعارض · تكرار · اكتمال · سلامة · رفض parent=NULL)
                    │
                    ▼
         Workflow Engine      ← إنشاء · حالات · تعيين · سجل · إشعارات (مستقل عن الواجهة)
@@ -151,11 +151,16 @@ iOS Experience Rebuild
       (التنفيذ)           (مراقبة التدفق)
                    │
                    ▼
+        Tree Engine          ← الكاتب الوحيد لـ tree_children (Sole Writer)
+                   │
         Family Engine / Business Services
      (شجرة · مناسبات · ذكريات · بطاقات · …)  ← Single Write Rule
                    │
                    ▼
-              Data Layer
+     Data Integrity (مراقبة) → Health Center
+                   │
+                   ▼
+     SQL Workspace (إصلاح legacy فقط · بعد موافقة · بلا auto-run)
 ```
 
 **Presentation (تفصيل الأدوار):**
@@ -198,7 +203,7 @@ Presentation
 | 5 | **Truth Before Speed** — الصحة قبل سرعة الاعتماد |
 | 6 | **Validation Engine** يتحقق ولا ينفّذ — قبل المندوب/الشجرة |
 | 7 | **Workflow = مصدر الحقيقة** لحالة الطلب |
-| 8 | **Single Write Rule** — لا كتابة شجرة مباشرة من UI؛ عبر Workflow + Validation |
+| 8 | **Single Write Rule** — لا كتابة شجرة مباشرة من UI؛ عبر Workflow + Validation ثم **Tree Engine** (الكاتب الوحيد لـ `tree_children`) |
 | 9 | الواجهات **بلا منطق أعمال** — تستخدم المحركات |
 | 10 | **واجهة واحدة لكل دور** · الحقائق تُقدَّم — النظام يتحقق ويربط |
 | 11 | أي إشعار من **انتقال حالة** — لا من زر/شاشة |
@@ -242,6 +247,7 @@ Presentation
 | E9 | تجميد الدستور الحي قبل Request Experience؛ إغلاق Workflow عند مرحلته (بعد Validation) — لا توسيع provisional قبلها |
 | E10 | **قواعد أ+ب+ج** دستورية — بلا طبقة / بلا لغة مستخدم / بلا Truth Before Speed = لا تنفيذ |
 | E11 | **Single Write Rule** — لا كتابة شجرة خارج Workflow + Validation |
+| E12 | **Tree Engine sole writer** — ممنوع INSERT/RPC مباشر إلى `tree_children` من UI؛ الدين الحالي موثّق حتى المواءمة |
 
 ---
 
@@ -284,7 +290,7 @@ Search Name        ← للبحث/التطبيع
 | المسار | المحتوى | الحالة |
 |--------|---------|--------|
 | **Integrity** | محرك سلامة قراءة فقط (views + RPC تقرير) | 🟡 v2 بانتظار SQL · أساس v1/تقرير 🟢 |
-| **Health Center** | واجهة المدير للمشاكل (قراءة فقط) | 🟢 |
+| **Health Center** | واجهة المدير للمشاكل (قراءة فقط) | 🟢 سلامة بيانات + UUID + رحلة الطلب |
 | **Tree Repair** | تنظيف/إصلاح يدوي + dry-run؛ لا auto-repair من UI | 🟢 مغلق للتخطيط (يدوي) |
 | **Data Migration** | Versioning · COPY-ME · backfill هويات/تواريخ | 🔵/🟡 حسب الملف المعلّق |
 
@@ -383,7 +389,7 @@ Search Name        ← للبحث/التطبيع
 | **R-6** | **تغييرات الشجرة → Audit** — كل اعتماد/إصلاح/دمج/نقل يكتب سجلًا قابلًا للمراجعة |
 | **R-7** | **Health Center قراءة فقط** — ممنوع auto-repair من واجهة مركز الصحة |
 | **R-8** | **لا منطق سير/تحقق في الواجهة** — الحالات عبر Workflow · التحقق عبر Validation Engine · الصلاحيات عبر Delegates (ADR-010) |
-| **R-9** | **Single Write Rule** — لا كتابة شجرة مباشرة من UI؛ كل إضافة/تعديل عبر Workflow + Validation |
+| **R-9** | **Single Write Rule** — لا كتابة شجرة مباشرة من UI؛ كل إضافة/تعديل عبر Workflow + Validation ثم **Tree Engine** |
 
 خرق أي قاعدة أعلاه يوقف إغلاق البند حتى التصحيح أو ADR جديد صريح.
 
@@ -628,10 +634,17 @@ Validation (معايير القبول + KPI جزئية)
 
 ## 18) Data Integrity Engine
 
-محرك **دائم** (برنامج أ): أبناء بلا أب، **عمود parent=NULL**، أب مذكور بلا صف في الشجرة، تطابق المسار المستخرج من name مقابل parent، أب بلا فرع، `parent_person_id`، `person_id` مكرر، cycles، زوجة بلا زوج، أبناء خارج الفرع، `approved` بلا أثر، أخبار منتهية ظاهرة. يغذي Health Center (بطاقات سلامة الشجرة + TREE-003).
+محرك **دائم** (برنامج أ): أبناء بلا أب، **عمود parent=NULL**، أب مذكور بلا صف في الشجرة، تطابق المسار المستخرج من name مقابل parent، أب بلا فرع، `parent_person_id`، `person_id` مكرر، cycles، زوجة بلا زوج، أبناء خارج الفرع، `approved` بلا أثر، أخبار منتهية ظاهرة. يغذي Health Center:
 
-**للتخطيط:** مسار Integrity قراءة فقط = 🟢 مغلق كمفهوم. نشر v2 SQL = 🟡. أي إصلاح كتابة لاحق = dry-run + موافقة صريحة (R-3) → مسار Tree Engine v2 / Repair اليدوي فقط.
+| مجموعة | محتوى | شدة |
+|--------|--------|-----|
+| 🔴 **سلامة البيانات** | parent NULL · أب مفقود · تطابق المسار | خطأ هيكلي |
+| 🟡 **الربط الداخلي (UUID)** | TREE-003 / يحتاج ربط UUID — **ليس تافهًا** | تحذير حرج للـ Workflow |
+| **اختبار رحلة الطلب** | وكلاء بيانات + دخان يدوي (ظهور الأبناء · بحث · منع موجود · تكرار · توجيه) | تجربة لا جداول فقط |
 
+كل صف مشكلة يعرض **أثرًا** (لا يظهر في البحث / لا يظهر ضمن أبناء الأب / يسمح بطلبات مكررة / يؤثر على Workflow / يحتاج ربط UUID).
+
+**للتخطيط:** مسار Integrity قراءة فقط = 🟢 مغلق كمفهوم. نشر v2 SQL = 🟡. أي إصلاح كتابة لاحق = dry-run + موافقة صريحة (R-3) → مسار Tree Engine / Repair اليدوي عبر SQL Workspace فقط — **لا auto-run من Health Center**.
 ---
 
 ## 19) Compatibility Matrix
@@ -809,17 +822,20 @@ Roadmap = ماذا نبني · Constitution = كيف نفكر / ما يُمنع 
 
 ### المرحلة — Family Engine Alignment ⚪
 
-**ليست إعادة بناء** — الخدمات موجودة. **Single Write Rule** ساري.
+**ليست إعادة بناء** — الخدمات موجودة. **Single Write Rule** ساري.  
+**إضافة دستورية:** Tree Engine = الكاتب الوحيد لـ `tree_children` ([`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md)).
 
 | هدف | المعنى |
 |-----|--------|
 | توحيد نقطة الدخول | العمليات المعتمدة على طلب تدخل عبر Workflow + Validation |
 | منع الكتابة المباشرة | لا مسارات UI→شجرة لعمليات الفهرس |
+| Tree Engine sole writer | كل كتابة `tree_children` عبر `AlzidanTreeEngine` — إغلاق دين المندوب/الإدارة/الاستيراد |
 | خدمات واضحة | عقود استدعاء؛ الخدمات لا تعرف الواجهة |
 | إزالة التكرار | Zero Duplicate Logic عبر الأدوار الثلاثة |
 
-التفاصيل: [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md).
+**صدق اليوم:** الحارس موجود؛ الفرض الكامل دين — انظر [`PATCH-1-WRITE-PATHS.md`](./PATCH-1-WRITE-PATHS.md).
 
+التفاصيل: [`PLATFORM-PRINCIPLES.md`](./PLATFORM-PRINCIPLES.md).
 ---
 
 ## 23) إعادة بناء تجربة iOS / UX الموبايل — برنامج (ج) ⬛

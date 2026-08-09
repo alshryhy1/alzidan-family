@@ -5,9 +5,10 @@
 **عبارة التجميد:** «ابدا»  
 **Truth Before Speed:** دستوري ساري — لا اعتماد يتخطى فحوصات الصحة  
 **Single Write Rule:** دستوري ساري — لا كتابة شجرة من UI خارج Workflow + Validation  
+**Tree Engine sole writer (إضافة دستورية 2026-08-09):** لا كتابة مباشرة في `tree_children` إلا عبر Tree Engine  
 **قاعدة الطبقة (أ):** دستوري ساري — لا شاشة/ميزة بلا طبقة واضحة  
 **السابق:** بوابة 1 Delegates v2 🟢 (قبول حي)  
-**التاريخ:** 2026-08-08 · **تاريخ التجميد:** 2026-08-09  
+**التاريخ:** 2026-08-08 · **تاريخ التجميد:** 2026-08-09 · **إضافة Tree Engine:** 2026-08-09 (توجيه صاحب المنتج بعد تجميد بوابة 2)  
 **المراجع:** [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) · [`WORKFLOW-SPECIFICATION-v1.md`](./WORKFLOW-SPECIFICATION-v1.md) · [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) · [`ADR.md`](./ADR.md) · قبول المناديب: [`DELEGATES-V2-ACCEPTANCE.md`](./DELEGATES-V2-ACCEPTANCE.md) · الختم: [`PRODUCT-FOUNDATION-FREEZE.md`](./PRODUCT-FOUNDATION-FREEZE.md)
 
 هذه أهم وثيقة طويلة الأمد. كل مطوّر ينضم للمشروع يقرأها أولًا.
@@ -49,12 +50,12 @@
 2. أم **Request Experience**؟
 3. أم **Validation Engine**؟
 4. أم **Workflow**؟
-5. أم **Delegate Workspace**؟
-6. أم **Admin UX**؟
-7. أم **Family Engine**؟
+5. أم **Tree Engine** (كتابة `tree_children` فقط)؟
+6. أم **Delegate Workspace**؟
+7. أم **Admin UX** / **Health Center** / **SQL Workspace**؟
+8. أم **Family Engine** / **Data Integrity**؟
 
 إن تعذّر وضعها في طبقة واحدة واضحة → **لا يبدأ تنفيذها**.
-
 ### قاعدة ب — لغة المستخدم أولًا (تكمّل No Database Thinking)
 
 > كل واجهة تُصمم بلغة المستخدم أولًا، ثم تُربط بالمحرك، ولا تُبنى مباشرة فوق قاعدة البيانات.
@@ -176,16 +177,56 @@ Business Services / Family Engine لا تستورد شكل الشاشة ولا �
 
 الخدمات موجودة؛ المطلوب عقود وحدود — لا مشروع «إعادة بناء الشجرة».
 
+### إضافة دستورية — Tree Engine الكاتب الوحيد لـ `tree_children` (2026-08-09)
+
+> **لا يجوز لأي جزء من النظام أن يكتب مباشرة في `tree_children`.**  
+> أي تعديل: **Validation → Workflow → Tree Engine** فقط.  
+> **Tree Engine = المسؤول الوحيد عن الكتابة.**
+
+هذه إضافة صريحة لـ Single Write Rule (وليست استبدالًا لها). طبقة Family Engine Alignment تُكمّل المواءمة؛ Tree Engine هو منفذ الكتابة الوحيد المسموح لجدول الأبناء.
+
+**خريطة الملكيات (لا «أصلح كل شيء في SQL»):**
+
+| نوع المشكلة | أين تُحل |
+|-------------|---------|
+| بيانات قديمة سيئة (مثل `parent = NULL`) | **Data Integrity** (كشف) + **SQL Workspace** (إصلاح يدوي بعد موافقة · أرشفة بعد الإغلاق) |
+| منع التكرار مستقبلًا | **Validation Engine** + **Workflow** — كل مسار كتابة إلى `tree_children` يرفض `parent=NULL` عبر Tree Engine |
+| منع وصول المستخدم للخطأ | **Request Experience** — لا طلب إن كان الشخص موجودًا / الأب خطأ / البيانات ناقصة |
+| مراقبة مستمرة | **Health Center** (قراءة فقط — R-7) |
+
+**سلسلة الطبقات:**
+
+```
+User → Request Experience → Validation Engine → Workflow Engine
+     → Tree Engine (الكاتب الوحيد لـ tree_children)
+     → Data Integrity (مراقبة)
+     → SQL Workspace (إصلاح legacy فقط · بلا auto-run من Health)
+```
+
+**صدق الحالة اليوم (دين — لا ندّعي اكتمال الفرض):** الوحدة `assets/js/modules/tree-engine.js` (`AlzidanTreeEngine`) موجودة كحارس/مُطبّع صفوف (ترفض `parent=NULL` وتوحّد `parent`/`parent_name`). مسارات متعددة ما زالت تستدعي RPC/استيرادًا مباشرة — **دين مواءمة** تحت Tree Engine، موثّق في [`PATCH-1-WRITE-PATHS.md`](./PATCH-1-WRITE-PATHS.md):
+
+| نقطة كتابة معروفة (دين) | ملاحظة |
+|---------------------------|--------|
+| `delegate.js` → `tree_children_insert_v1` / update / delete | مسار مندوب مباشر — حارس parent مضاف؛ الهدف: تمرير عبر Tree Engine فقط |
+| `admin-family-mgmt.js` / إدارة الشجرة | كتابة إدارية موازية |
+| `request-actions.js` → `admin_tree_children_import_v1` | اعتماد بطاقة — يستدعي `prepareChildWriteRow` قبل RPC |
+| `admin_tree_children_import_v1` / `admin_tree_child_upsert_v1` (SQL) | مسارات خادم — لم تُغلف بالكامل بعد |
+| استيراد جماعي / صيانة SQL Workspace | إصلاح legacy فقط — ليس مسار منتج يومي |
+
+المطلوب لاحقًا (Family Engine Alignment / Tree Engine v2): نقل كل النداءات أعلاه إلى واجهة Tree Engine واحدة؛ Validation ترفض قبل الوصول؛ Workflow لا يطلق كتابة بلا نتيجة تحقق.
+
 ---
 
 ## بوابة سريعة قبل أي تصميم/كود
 
-0. **أي طبقة؟** (قاعدة أ — بما فيها Validation Engine) — إن لم تُجب → لا تنفيذ.  
+0. **أي طبقة؟** (قاعدة أ — بما فيها Validation Engine و**Tree Engine** للكتابة على `tree_children`) — إن لم تُجب → لا تنفيذ.  
 1. هل تخالف Human First أو No Database Thinking أو **قاعدة ب** أو **Truth Before Speed**؟ → أعد الصياغة.  
 2. هل نية جديدة بلا صف في Request Catalog؟ → أضف الصف أولًا.  
 3. هل فحص حقائق/تعارض/اكتمال قبل الشجرة؟ → **Validation Engine** فقط.  
 4. هل تغيّر حالة طلب؟ → Workflow فقط.  
-5. هل صلاحية؟ → Delegates فقط.  
-6. هل تكرر منطقًا موجودًا في صفحة أخرى؟ → انقله للمحرك/الخدمة (Zero Duplicate Logic).  
-7. هل تخزّن حقيقة لها مصدر آخر؟ → SSOT — اقرأ من المصدر.  
-8. هل القفز يتجاوز البوابتين (Delegates قبول · تجميد الدستور الحي) أو سلّم المراحل؟ → راجع [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md).
+5. هل كتابة `tree_children`؟ → **Tree Engine فقط** (بعد Validation + Workflow) — ممنوع INSERT/RPC مباشر من UI.  
+6. هل صلاحية؟ → Delegates فقط.  
+7. هل تكرر منطقًا موجودًا في صفحة أخرى؟ → انقله للمحرك/الخدمة (Zero Duplicate Logic).  
+8. هل تخزّن حقيقة لها مصدر آخر؟ → SSOT — اقرأ من المصدر.  
+9. هل القفز يتجاوز البوابتين (Delegates قبول · تجميد الدستور الحي) أو سلّم المراحل؟ → راجع [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md).  
+10. هل بيانات legacy فاسدة؟ → Health Center للكشف · SQL Workspace للإصلاح اليدوي — **لا** إصلاح تلقائي من الواجهة.
