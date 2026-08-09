@@ -14,6 +14,7 @@
     "integrity:scan": "node scripts/integrity-scan-report.mjs",
     "verify:integrity-v2": "node scripts/verify-integrity-v2.mjs",
     "verify:spelling-dupes": "node scripts/test-spelling-duplicates.js",
+    "verify:repair-pingpong": "node scripts/test-repair-pingpong.js",
     "verify:path-mismatch": "node scripts/test-path-mismatch-normalize.js",
     "repair:dry-run": "node scripts/repair-parent-person-id.mjs --snapshot",
     "repair:ali-dual": "node scripts/repair-ali-dual-children.mjs",

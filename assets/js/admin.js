@@ -2275,6 +2275,14 @@ where c.id = matches.id; commit;
           " · UUID: " +
           String((preview.after && preview.after.parent_person_id) || "—"),
       );
+      if (preview.preview_flags_ar) {
+        lines.push("");
+        lines.push(preview.preview_flags_ar);
+      }
+      if (preview.would_flip_only && preview.block_message_ar) {
+        lines.push("");
+        lines.push("⛔ " + preview.block_message_ar);
+      }
       if (analysis.requires_manual_choice) {
         lines.push("");
         lines.push("يتطلب اختيارًا يدويًا — لا تطبيق تلقائي.");
@@ -2332,7 +2340,8 @@ where c.id = matches.id; commit;
           healthRepairState.stage = "preview";
           const preview2 = healthRepairState.preview;
           if (healthRepairBody) {
-            healthRepairBody.textContent = [
+            const p2 = healthRepairState.preview;
+            const blockLines = [
               "النوع: " + (analysis.category_ar || analysis.category),
               "مرشّح مختار: #" + sug.id + " · " + sug.child_path,
               "قبل ← parent: " +
@@ -2343,13 +2352,25 @@ where c.id = matches.id; commit;
                 String((preview2.after && preview2.after.parent) || "—") +
                 " · UUID: " +
                 String((preview2.after && preview2.after.parent_person_id) || "—"),
-              "",
-              "فعّل خانة الموافقة ثم أرسل إلى SQL Workspace.",
-            ].join("\n");
+            ];
+            if (p2 && p2.preview_flags_ar) {
+              blockLines.push("", p2.preview_flags_ar);
+            }
+            if (p2 && p2.would_flip_only && p2.block_message_ar) {
+              blockLines.push("", "⛔ " + p2.block_message_ar);
+            } else {
+              blockLines.push("", "فعّل خانة الموافقة ثم أرسل إلى SQL Workspace.");
+            }
+            healthRepairBody.textContent = blockLines.join("\n");
           }
           if (healthRepairApprove) healthRepairApprove.checked = false;
           if (healthRepairToSql) healthRepairToSql.disabled = true;
-          setHealthRepairStatus("تم اختيار المرشّح — راجع المعاينة ثم وافق.");
+          setHealthRepairStatus(
+            healthRepairState.preview && healthRepairState.preview.would_flip_only
+              ? healthRepairState.preview.block_message_ar ||
+                  "هذا الإصلاح سينقل الخطأ إلى فئة أخرى — اختر أبًا موجودًا يطابق المسار"
+              : "تم اختيار المرشّح — راجع المعاينة ثم وافق.",
+          );
         });
       });
     }
@@ -2370,9 +2391,12 @@ where c.id = matches.id; commit;
     setHealthRepairStatus(
       analysis.repair_type === "manual_review_no_merge"
         ? "مراجعة فقط — لا دمج تلقائي ولا إرسال SQL."
-        : preview.executable
-          ? "معاينة جاهزة — وافق ثم أرسل أمر صف واحد إلى SQL Workspace."
-          : "تحليل مكتمل — لا تنفيذ تلقائي.",
+        : preview.would_flip_only
+          ? preview.block_message_ar ||
+            "هذا الإصلاح سينقل الخطأ إلى فئة أخرى — اختر أبًا موجودًا يطابق المسار"
+          : preview.executable
+            ? "معاينة جاهزة — وافق ثم أرسل أمر صف واحد إلى SQL Workspace."
+            : "تحليل مكتمل — لا تنفيذ تلقائي.",
     );
     try {
       healthRepairPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });

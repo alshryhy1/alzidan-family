@@ -96,9 +96,10 @@
 
   /**
    * Preview-only: fill parent from name path (Health Center staged repair).
-   * Does NOT write — returns before/after payload for Approve → SQL Workspace.
+   * Resolves to a living father's canonical name when children are provided —
+   * never proposes a free-typed extract that would create missing_father.
    */
-  function previewFillParentFromName(row) {
+  function previewFillParentFromName(row, children) {
     var path = resolveChildPath(row);
     var parts = path.split("/").map(norm).filter(Boolean);
     var extracted =
@@ -115,10 +116,41 @@
       parent_name: norm(row && row.parent_name) || null,
       parent_person_id: (row && row.parent_person_id) || null,
     };
+
+    var canonical = extracted;
+    var parentPersonId = (row && row.parent_person_id) || null;
+    var Struct = global.AlzidanIntegrityTreeStructure;
+    if (Struct && Array.isArray(children)) {
+      var index =
+        typeof Struct.buildNameIndex === "function"
+          ? Struct.buildNameIndex(children)
+          : null;
+      var branch = norm(row && row.branch_key);
+      var father =
+        index && typeof Struct.resolveFatherRow === "function"
+          ? Struct.resolveFatherRow(index, branch, extracted)
+          : null;
+      if (father) {
+        canonical =
+          typeof Struct.childPath === "function"
+            ? Struct.childPath(father)
+            : norm(father.child_name || father.name);
+        if (father.person_id) parentPersonId = String(father.person_id);
+      } else {
+        return {
+          ok: false,
+          code: "TREE-NO-FATHER",
+          message_ar:
+            "هذا الإصلاح سينقل الخطأ إلى فئة أخرى — اختر أبًا موجودًا يطابق المسار",
+          extracted: extracted,
+        };
+      }
+    }
+
     var after = {
-      parent: extracted,
-      parent_name: extracted,
-      parent_person_id: (row && row.parent_person_id) || null,
+      parent: canonical,
+      parent_name: canonical,
+      parent_person_id: parentPersonId,
     };
     return {
       ok: true,
@@ -127,9 +159,13 @@
       after: after,
       decision_logic_ar: [
         "استخراج الأب = إزالة آخر مقطع من مسار الاسم.",
-        "توحيد parent و parent_name لنفس القيمة (ضد الانجراف).",
+        canonical !== extracted
+          ? "الاسم الكانوني من صف الأب الحي: «" + canonical + "» (المستخرج «" + extracted + "»)."
+          : "توحيد parent و parent_name لنفس القيمة (ضد الانجراف).",
       ],
       never_rename: true,
+      clears_missing_father: true,
+      clears_path_mismatch: true,
     };
   }
 

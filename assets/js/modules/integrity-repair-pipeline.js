@@ -161,9 +161,6 @@
     var path = norm(issue && (issue.child_path || issue.name));
     var extracted =
       norm(issue && issue.extracted_parent) || extractParentFromName(path);
-    var stored = norm(
-      (issue && (issue.stored_parent || issue.parent_name || issue.parent)) || "",
-    );
     var branch = norm(issue && issue.branch_key);
     var fatherFromExtract = extracted
       ? resolveFatherRow(children, branch, extracted)
@@ -184,14 +181,6 @@
       );
 
     if (canonicalFromExtract) {
-      var clearsMissing = true;
-      var clearsPath =
-        !stored ||
-        pathsEqual(stored, canonicalFromExtract) ||
-        pathsEqual(stored, extracted) ||
-        stored === canonicalFromExtract;
-      // Setting parent to canonical always aligns path (extract matches via normalize)
-      clearsPath = true;
       return {
         ok: true,
         parent: canonicalFromExtract,
@@ -199,8 +188,8 @@
         parent_person_id: pidFromExtract,
         extracted: extracted,
         spelling_drift: spellingDrift,
-        clears_missing_father: clearsMissing,
-        clears_path_mismatch: clearsPath,
+        clears_missing_father: true,
+        clears_path_mismatch: true,
         would_flip_only: false,
         reason_ar: spellingDrift
           ? "مواءمة parent لاسم الأب الكانوني في الشجرة («" +
