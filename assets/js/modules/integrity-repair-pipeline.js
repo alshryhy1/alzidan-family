@@ -734,28 +734,90 @@
     var b = norm(branch);
     var p = norm(parentPath);
     if (!b || !p) return { person_id: null, candidates: [], canonical_path: null };
-    var exact = [];
-    var folded = [];
-    var pNorm = normalizeArabicForCompare(p);
-    (children || []).forEach(function (c) {
-      if (!c || norm(c.branch_key) !== b) return;
-      var path = norm(c.child_name || c.name);
-      if (!path) return;
-      if (path === p) exact.push(c);
-      else if (normalizeArabicForCompare(path) === pNorm) folded.push(c);
-    });
-    var hits = exact.length ? exact : folded;
-    if (hits.length === 1 && hits[0].person_id) {
+    var father = resolveFatherRow(children, b, p);
+    if (father && father.person_id) {
       return {
-        person_id: String(hits[0].person_id),
-        candidates: hits,
-        canonical_path: norm(hits[0].child_name || hits[0].name) || null,
+        person_id: String(father.person_id),
+        candidates: [father],
+        canonical_path: childPathOf(father) || null,
+        father: father,
       };
+    }
+    // Ambiguous or missing — surface leaf collisions for manual review
+    var candidates = [];
+    if (p.indexOf("/") < 0) {
+      (children || []).forEach(function (c) {
+        if (!c || norm(c.branch_key) !== b) return;
+        var path = childPathOf(c);
+        var leaf =
+          path.indexOf("/") >= 0 ? path.slice(path.lastIndexOf("/") + 1) : path;
+        if (pathsEqual(leaf, p) || leaf === p) candidates.push(c);
+      });
     }
     return {
       person_id: null,
-      candidates: hits,
+      candidates: candidates,
       canonical_path: null,
+      father: null,
+    };
+  }
+
+  /**
+   * Resolve expected father for TREE-003 UUID link across all such rows.
+   * Uses Structure/Tree Engine helpers — path strip preferred over leaf guess.
+   */
+  function resolveUuidLinkFather(issue, children) {
+    var row = {
+      id: issue && issue.id,
+      branch_key: issue && issue.branch_key,
+      child_name: issue && (issue.child_path || issue.child_name || issue.name),
+      name: issue && (issue.child_path || issue.name),
+      parent: issue && (issue.parent || issue.parent_key || issue.stored_parent),
+      parent_name:
+        issue &&
+        (issue.parent_name || issue.parent_key || issue.stored_parent),
+      parent_person_id: issue && issue.parent_person_id,
+      person_id: issue && issue.person_id,
+    };
+    var Struct = global.AlzidanIntegrityTreeStructure;
+    var Engine = global.AlzidanTreeEngine;
+    if (
+      Struct &&
+      typeof Struct.resolveExpectedFatherForUuidLink === "function"
+    ) {
+      return Struct.resolveExpectedFatherForUuidLink(row, children || []);
+    }
+    if (
+      Engine &&
+      typeof Engine.resolveExpectedFatherForUuidLink === "function"
+    ) {
+      return Engine.resolveExpectedFatherForUuidLink(row, children || []);
+    }
+    var path = childPathOf(row);
+    var extracted = extractParentFromName(path);
+    var stored = norm(
+      issue && (issue.stored_parent || issue.parent_name || issue.parent || issue.parent_key),
+    );
+    var branch = norm(issue && issue.branch_key);
+    var father =
+      (extracted && resolveFatherRow(children, branch, extracted)) ||
+      (stored && resolveFatherRow(children, branch, stored)) ||
+      null;
+    if (father && father.person_id) {
+      return {
+        status: "found",
+        father: father,
+        person_id: String(father.person_id),
+        expected_parent_path: childPathOf(father),
+        method: extracted ? "name_path_strip" : "stored_parent",
+      };
+    }
+    return {
+      status: "missing",
+      father: null,
+      person_id: null,
+      expected_parent_path: extracted || stored || "",
+      method: "fallback",
     };
   }
 
@@ -1031,65 +1093,147 @@
       }
     } else if (
       cat === "TREE-003" ||
+      cat === "TREE-003-warn" ||
       /TREE-003/i.test(String((issue && issue.code) || "")) ||
+      (issue &&
+        (issue.issue === "needs_uuid_link" ||
+          issue.issue === "needs_uuid_relink" ||
+          issue.reason === "missing_uuid")) ||
       (issue && issue.severity === "error" && issue.code)
     ) {
       analysis.repair_type = "link_parent_uuid";
       analysis.never_rename = true;
-      var parentKey = stored || norm(issue && issue.parent_key);
-      var link3 = findParentPersonId(children, issue.branch_key, parentKey);
-      var canon3 = link3.canonical_path || parentKey;
-      analysis.can_auto_propose = !!link3.person_id;
-      analysis.requires_manual_choice = !link3.person_id;
-      var linkFailAr = "";
-      if (!link3.person_id) {
-        if (link3.candidates && link3.candidates.length > 1) {
-          linkFailAr =
-            "يوجد أكثر من أب بنفس الاسم «" +
-            (parentKey || "—") +
-            "» — لا يمكن ربط المعرف تلقائيًا.";
-        } else if (!parentKey) {
-          linkFailAr = "لم يتم العثور على معرف الأب — لا مسار أب نصّي.";
-        } else {
-          linkFailAr =
-            "لم يتم العثور على معرف الأب لـ «" +
-            parentKey +
-            "» — يلزم اختيار يدوي أو إصلاح سلامة البيانات أولًا.";
-        }
-      }
-      analysis.decision_logic_ar = [
-        "ربط داخلي: لا إعادة تسمية أبدًا — ربط معرف الأب فقط.",
-        parentKey ? "مسار الأب النصّي: «" + parentKey + "»." : "لا مسار أب نصّي.",
-        link3.person_id
-          ? "وُجد معرف أب وحيد مطابق للمسار → اقتراح ربط بالاسم «" +
-            canon3 +
-            "»."
-          : linkFailAr,
-      ];
-      analysis.root_cause_ar =
-        analysis.root_cause_ar ||
-        "اعتماد/مندوب/استيراد كتب السجل بلا معرف أب صالح، أو المعرف يشير لشخص محذوف.";
-      analysis.write_path_ar =
-        analysis.write_path_ar ||
-        "كيفية الإصلاح: اربط معرف الأب عند وجود أب وحيد في الشجرة.";
-      if (link3.person_id) {
+      analysis.uuid_only = true;
+      var uuidRes = resolveUuidLinkFather(issue, children);
+      var fatherRow = uuidRes.father || null;
+      var fatherPid = uuidRes.person_id || null;
+      var expectedPath =
+        uuidRes.expected_parent_path ||
+        stored ||
+        norm(issue && issue.parent_key) ||
+        "";
+      var currentPid =
+        issue && issue.parent_person_id != null
+          ? String(issue.parent_person_id).trim()
+          : "";
+
+      analysis.expected_father_path = expectedPath || null;
+      analysis.found_father_id = fatherRow && fatherRow.id != null ? fatherRow.id : null;
+      analysis.found_father_path = fatherRow ? childPathOf(fatherRow) : null;
+      analysis.father_person_id_to_link = fatherPid;
+      analysis.current_parent_person_id = currentPid || null;
+      analysis.resolution = uuidRes;
+
+      // Names never change for UUID link
+      var keepParent = stored || parentCol || expectedPath || null;
+      analysis.before.parent = parentCol || keepParent;
+      analysis.before.parent_name =
+        norm(issue && issue.parent_name) || keepParent;
+
+      if (uuidRes.status === "linked" && fatherPid) {
+        analysis.can_auto_propose = false;
+        analysis.requires_manual_choice = false;
+        analysis.proposed = null;
+        analysis.decision_logic_ar = [
+          "العلاقة عبر UUID صحيحة أصلًا — لا حاجة لربط.",
+          "الأب المرتبط: «" + (uuidRes.expected_parent_path || "—") + "».",
+        ];
+        analysis.root_cause_ar =
+          analysis.root_cause_ar || "parent_person_id يشير لأب حي صالح.";
+        analysis.write_path_ar =
+          analysis.write_path_ar || "لا إصلاح — العلاقة سليمة.";
+      } else if (uuidRes.status === "found" && fatherPid) {
+        analysis.can_auto_propose = true;
+        analysis.requires_manual_choice = false;
         analysis.proposed = {
-          parent: canon3 || null,
-          parent_name: canon3 || null,
-          parent_person_id: link3.person_id,
-          reason_ar: "ربط معرف الأب المطابق للمسار — دون تغيير اسم الشخص.",
+          parent: keepParent,
+          parent_name: keepParent,
+          parent_person_id: fatherPid,
+          keep_names: true,
+          uuid_only: true,
+          reason_ar:
+            "ربط parent_person_id فقط بأب المسار «" +
+            (uuidRes.expected_parent_path || expectedPath) +
+            "» — بلا تغيير أسماء.",
         };
-      }
-      if (!link3.person_id && link3.candidates.length) {
-        analysis.suggestions = link3.candidates.map(function (c) {
-          return {
-            id: c.id,
-            person_id: c.person_id || null,
-            child_path: norm(c.child_name || c.name),
-            distance: 0,
-            score_ar: "مطابق للمسار",
-          };
-        });
+        analysis.decision_logic_ar = [
+          "تحديد الأب الحقيقي من مسار/علاقة الشجرة (" +
+            (uuidRes.method || "path") +
+            ").",
+          "سجل الابن: #" +
+            String(issue && issue.id) +
+            " · «" +
+            (path || "—") +
+            "».",
+          "الأب المتوقع: «" + (expectedPath || "—") + "».",
+          "سجل الأب الموجود: #" +
+            String(fatherRow && fatherRow.id) +
+            " · «" +
+            childPathOf(fatherRow) +
+            "».",
+          "parent_person_id الحالي: " + (currentPid || "—"),
+          "person_id للأب للربط: " + fatherPid,
+          "قبل → بعد: " +
+            (currentPid || "null") +
+            " → " +
+            fatherPid,
+          "SQL المقترح يحدّث parent_person_id فقط.",
+        ];
+        analysis.root_cause_ar =
+          analysis.root_cause_ar ||
+          "الأب موجود في الشجرة بمعرف صالح، لكن سجل الابن بلا parent_person_id مطابق.";
+        analysis.write_path_ar =
+          analysis.write_path_ar ||
+          "كيفية الإصلاح: UPDATE parent_person_id فقط بعد تحليل → معاينة → موافقة → مساحة SQL.";
+      } else if (uuidRes.status === "ambiguous") {
+        analysis.can_auto_propose = false;
+        analysis.requires_manual_choice = true;
+        analysis.proposed = null;
+        analysis.decision_logic_ar = [
+          "أب غامض — عدة مرشّحين بنفس ورقة الاسم («" +
+            (expectedPath || "—") +
+            "») — لا تخمين محمد/غيره.",
+          "راجع يدويًا في تسلسل الشجرة ثم اربط المعرف.",
+        ];
+        analysis.root_cause_ar =
+          analysis.root_cause_ar ||
+          "تطابق ورقة اسم غير فريد — لا ربط UUID تلقائي.";
+        analysis.write_path_ar =
+          analysis.write_path_ar ||
+          "كيفية الإصلاح: اختر الأب الصحيح من التسلسل يدويًا ثم اربط المعرف.";
+        var ambLink = findParentPersonId(
+          children,
+          issue.branch_key,
+          expectedPath,
+        );
+        if (ambLink.candidates && ambLink.candidates.length) {
+          analysis.suggestions = ambLink.candidates.map(function (c) {
+            return {
+              id: c.id,
+              person_id: c.person_id || null,
+              child_path: childPathOf(c),
+              distance: 0,
+              score_ar: "مرشّح غامض — تحقق من التسلسل",
+            };
+          });
+        }
+      } else {
+        // Father truly missing — no UUID repair
+        analysis.can_auto_propose = false;
+        analysis.requires_manual_choice = true;
+        analysis.proposed = null;
+        analysis.repair_type = "manual_review";
+        analysis.decision_logic_ar = [
+          "الأب غير موجود في الشجرة — لا اقتراح ربط UUID.",
+          "المسار المتوقع: «" + (expectedPath || "—") + "».",
+          "صنّف للمراجعة: أنشئ الأب أولًا أو صحّح المسار، ثم أعد الفحص.",
+        ];
+        analysis.root_cause_ar =
+          analysis.root_cause_ar ||
+          "لا صف أب حي يطابق مسار الاسم/حقل الأب — ليس مجرد نقص UUID.";
+        analysis.write_path_ar =
+          analysis.write_path_ar ||
+          "كيفية الإصلاح: أضف الأب للشجرة أو صحّح العلاقة نصيًا أولًا — بلا ربط UUID.";
       }
     } else if (cat === "possible_spelling_duplicates" || cat === "TREE-SPELL-DUP") {
       analysis.repair_type = "manual_review_no_merge";
@@ -1264,12 +1408,24 @@
       wouldFlip = false;
     }
 
+    if (a.repair_type === "link_parent_uuid" && a.proposed) {
+      after = Object.assign({}, a.proposed);
+      wouldFlip = false;
+      blockMsg = null;
+      // UUID-only: never treat as name rewrite
+      after.uuid_only = true;
+      after.keep_names = true;
+    }
+
     var nameOnly =
       a.repair_type === "align_name_path_spelling" ||
       a.repair_type === "align_name_to_parent_path" ||
       a.repair_type === "unify_leaf_name" ||
       !!(after && after.keep_parent && (after.child_path || after.child_name));
     var mergePair = a.repair_type === "merge_duplicate_pair";
+    var uuidOnly =
+      a.repair_type === "link_parent_uuid" ||
+      !!(after && (after.uuid_only || after.keep_names));
 
     var executable =
       a.repair_type === "manual_review_no_merge" ||
@@ -1280,13 +1436,15 @@
           ? !!(after && (after.child_path || after.child_name || after.name))
           : mergePair
             ? !!(after && after.survivor_id && after.loser_id)
-            : !wouldFlip &&
-              !!(
-                after &&
-                (after.parent ||
-                  after.parent_person_id ||
-                  after.child_path)
-              );
+            : uuidOnly
+              ? !!(after && after.parent_person_id)
+              : !wouldFlip &&
+                !!(
+                  after &&
+                  (after.parent ||
+                    after.parent_person_id ||
+                    after.child_path)
+                );
 
     var preview = {
       stage: "preview",
@@ -1298,6 +1456,7 @@
       executable: executable,
       requires_approve: true,
       never_rename: !!a.never_rename,
+      uuid_only: uuidOnly,
       never_auto_merge: a.repair_type === "manual_review_no_merge",
       resolved_by_normalize: !!a.resolved_by_normalize,
       resolved_message_ar: a.resolved_message_ar || null,
@@ -1306,13 +1465,30 @@
       clears_path_mismatch: clearsPath,
       would_flip_only: wouldFlip,
       block_message_ar: wouldFlip ? blockMsg || FLIP_BLOCK_AR : null,
+      expected_father_path: a.expected_father_path || null,
+      found_father_id: a.found_father_id || null,
+      found_father_path: a.found_father_path || null,
+      father_person_id_to_link:
+        a.father_person_id_to_link ||
+        (after && after.parent_person_id) ||
+        null,
+      current_parent_person_id:
+        a.current_parent_person_id ||
+        (a.before && a.before.parent_person_id) ||
+        null,
       preview_flags_ar: a.resolved_by_normalize
         ? a.resolved_message_ar ||
           "لا حاجة لإصلاح: الاختلاف إملائي فقط والعلاقة صحيحة"
-        : [
-            "سيمسح «أب غير موجود في الشجرة»؟ " + (clearsMissing ? "نعم" : "لا"),
-            "سيمسح «الاسم مكتوب بطريقة مختلفة»؟ " + (clearsPath ? "نعم" : "لا"),
-          ].join("\n"),
+        : uuidOnly
+          ? [
+              "تحديث parent_person_id فقط — الأسماء بلا تغيير.",
+              "سيمسح «يحتاج ربط UUID»؟ " +
+                (after && after.parent_person_id ? "نعم (بعد إعادة الفحص)" : "لا"),
+            ].join("\n")
+          : [
+              "سيمسح «أب غير موجود في الشجرة»؟ " + (clearsMissing ? "نعم" : "لا"),
+              "سيمسح «الاسم مكتوب بطريقة مختلفة»؟ " + (clearsPath ? "نعم" : "لا"),
+            ].join("\n"),
     };
     if (wouldFlip && preview.block_message_ar) {
       preview.why_ar =
@@ -1347,6 +1523,11 @@
     }
     if (analysis && analysis.never_rename) {
       out.push("قيد صارم: لا إعادة تسمية — ربط المعرف فقط.");
+    }
+    if (analysis && analysis.repair_type === "link_parent_uuid") {
+      out.push(
+        "المنطق: الأب من مسار الشجرة → صف الأب → person_id → تحديث parent_person_id فقط.",
+      );
     }
     if (analysis && analysis.repair_type === "manual_review_no_merge") {
       out.push("قيد صارم: لا دمج تلقائي — الأسماء التي قد تكون مكررة للمراجعة فقط.");
@@ -1450,9 +1631,18 @@
       repairType === "align_name_to_parent_path" ||
       repairType === "unify_leaf_name" ||
       !!after.keep_parent;
-    var nameAndParent = !!(newName && after.parent && !after.keep_parent);
+    var uuidOnly =
+      repairType === "link_parent_uuid" ||
+      !!after.uuid_only ||
+      !!after.keep_names;
+    var nameAndParent = !!(newName && after.parent && !after.keep_parent && !uuidOnly);
 
-    if (nameOnly && newName) {
+    if (uuidOnly && after.parent_person_id) {
+      // TREE-003: names never change — parent_person_id only
+      sets.push(
+        "  parent_person_id = " + sqlLit(after.parent_person_id) + "::uuid",
+      );
+    } else if (nameOnly && newName) {
       sets.push("  child_name = " + sqlLit(newName));
       sets.push("  name = " + sqlLit(newName));
       if (repairType === "unify_leaf_name" && after.old_path && after.affected_rows > 1) {
@@ -1488,16 +1678,32 @@
       "-- مركز الصحة · سجل واحد · بعد موافقة المدير",
       "-- id: " + rowId + " · actor: " + String(actor).replace(/\n/g, " "),
       "-- reason: " + String(reason).replace(/\n/g, " ").slice(0, 200),
-      "-- before.parent: " + String(before.parent == null ? "" : before.parent),
-      "-- after.parent: " +
-        String(
-          nameOnly
-            ? "(بدون تغيير الأب)"
-            : after.parent == null
-              ? ""
-              : after.parent,
-        ),
     ];
+    if (uuidOnly) {
+      sqlParts.push(
+        "-- before.parent_person_id: " +
+          String(before.parent_person_id == null ? "" : before.parent_person_id),
+      );
+      sqlParts.push(
+        "-- after.parent_person_id: " +
+          String(after.parent_person_id == null ? "" : after.parent_person_id),
+      );
+      sqlParts.push("-- names unchanged (UUID link only)");
+    } else {
+      sqlParts.push(
+        "-- before.parent: " + String(before.parent == null ? "" : before.parent),
+      );
+      sqlParts.push(
+        "-- after.parent: " +
+          String(
+            nameOnly
+              ? "(بدون تغيير الأب)"
+              : after.parent == null
+                ? ""
+                : after.parent,
+          ),
+      );
+    }
     if (newName && (nameOnly || nameAndParent)) {
       sqlParts.push("-- after.name: " + newName);
     }
@@ -1572,21 +1778,29 @@
         ? repairType === "align_name_to_parent_path"
           ? "تصحيح مسار الاسم للسجل رقم " + rowId + " (مركز الصحة)"
           : "توحيد إملاء الاسم للسجل رقم " + rowId + " (مركز الصحة)"
-        : "إصلاح السجل رقم " + rowId + " (مركز الصحة)",
+        : uuidOnly
+          ? "ربط UUID للسجل رقم " + rowId + " (parent_person_id فقط)"
+          : "إصلاح السجل رقم " + rowId + " (مركز الصحة)",
       row_id: rowId,
       before: before,
       after: after,
       success_meta: {
         row_id: rowId,
-        father_name: nameOnly
+        father_name: nameOnly || uuidOnly
           ? ""
           : after.parent || after.parent_name || "",
-        after_parent: nameOnly
+        after_parent: nameOnly || uuidOnly
           ? ""
           : after.parent || after.parent_name || "",
         updated_parent:
-          !nameOnly && !!(after.parent != null && after.parent !== ""),
-        updated_uuid: !nameOnly && !!after.parent_person_id,
+          !nameOnly &&
+          !uuidOnly &&
+          !!(after.parent != null && after.parent !== ""),
+        updated_uuid: !!(uuidOnly || (!nameOnly && after.parent_person_id)),
+        uuid_only: !!uuidOnly,
+        expected_father_person_id: uuidOnly
+          ? after.parent_person_id || null
+          : null,
         updated_name: !!(nameOnly || nameAndParent),
         from_leaf: after.from_leaf || null,
         to_leaf: after.to_leaf || null,
@@ -1702,6 +1916,39 @@
           "يُحدَّث الاسم فقط حتى يختفي اختلاف المسار.",
       );
       lines.push("عدد السجلات المتأثرة: " + (after.affected_rows || 1));
+      return lines.join("\n");
+    }
+    if (a.repair_type === "link_parent_uuid") {
+      lines.push("الإصلاح المقترح: ربط UUID فقط (بلا تغيير أسماء)");
+      lines.push(
+        "سجل الابن: #" +
+          String(a.issue_id || "") +
+          " · «" +
+          ((a.before && a.before.child_path) || "—") +
+          "»",
+      );
+      lines.push("الأب المتوقع: «" + (a.expected_father_path || "—") + "»");
+      lines.push(
+        "parent_person_id الحالي: " +
+          String(a.current_parent_person_id || (a.before && a.before.parent_person_id) || "—"),
+      );
+      lines.push(
+        "سجل الأب الموجود: #" +
+          String(a.found_father_id || "—") +
+          " · «" +
+          (a.found_father_path || "—") +
+          "»",
+      );
+      lines.push(
+        "person_id للأب للربط: " +
+          String(a.father_person_id_to_link || (after && after.parent_person_id) || "—"),
+      );
+      lines.push(
+        "قبل → بعد: " +
+          String(a.current_parent_person_id || (a.before && a.before.parent_person_id) || "null") +
+          " → " +
+          String((after && after.parent_person_id) || "—"),
+      );
       return lines.join("\n");
     }
     lines.push(
@@ -1908,6 +2155,7 @@
     buildExecuteSql: buildExecuteSql,
     suggestFatherMatches: suggestFatherMatches,
     findParentPersonId: findParentPersonId,
+    resolveUuidLinkFather: resolveUuidLinkFather,
     resolveUnifiedParentTarget: resolveUnifiedParentTarget,
     evaluateChosenFather: evaluateChosenFather,
     buildAlignNamePathSpelling: buildAlignNamePathSpelling,

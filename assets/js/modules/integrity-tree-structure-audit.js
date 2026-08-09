@@ -422,6 +422,7 @@
   /**
    * Prefer exact path; else unique Arabic-normalized full path; else unique leaf.
    * Returns the living tree_children row — caller must use childPath(row) as canonical parent string.
+   * Ambiguous leaf-only matches (e.g. multiple محمد) return null — never guess.
    */
   function resolveFatherRow(index, branch, parentPath) {
     var p = norm(parentPath);
@@ -443,6 +444,121 @@
       if (leafNormHits.length === 1) return leafNormHits[0];
     }
     return null;
+  }
+
+  /**
+   * True when parentPath is a leaf-only string with multiple living matches in branch.
+   * Used to reject wrong «محمد» candidates for UUID link proposals.
+   */
+  function isAmbiguousLeafFather(index, branch, parentPath) {
+    var p = norm(parentPath);
+    var b = norm(branch);
+    if (!p || !b || !index || p.indexOf("/") >= 0) return false;
+    if (isBranchRootParent(p, b)) return false;
+    var leafHits = index.byBranchLeaf.get(b + "||" + p) || [];
+    if (leafHits.length > 1) return true;
+    var leafNormHits =
+      index.byBranchLeafNorm.get(b + "||" + normalizeArabicForCompare(p)) || [];
+    return leafNormHits.length > 1;
+  }
+
+  /**
+   * Resolve the expected living father for TREE-003 UUID linking (all such rows).
+   * Preference:
+   *  1) valid parent_person_id → living father (already linked)
+   *  2) strip last segment of child name/path → full-path / unique match
+   *  3) stored parent path (parent_name/parent) → same resolver
+   * Never renames. Rejects ambiguous leaf-only matches.
+   *
+   * @returns {{
+   *   status: 'linked'|'found'|'ambiguous'|'missing',
+   *   father: object|null,
+   *   person_id: string|null,
+   *   expected_parent_path: string,
+   *   method: string,
+   *   ambiguous_candidates?: number
+   * }}
+   */
+  function resolveExpectedFatherForUuidLink(row, childrenOrIndex) {
+    var branch = norm(row && row.branch_key);
+    var path = childPath(row);
+    var stored = storedParent(row);
+    var extracted = extractParentFromName(path);
+    var index =
+      childrenOrIndex && childrenOrIndex.byBranchPath
+        ? childrenOrIndex
+        : buildNameIndex(childrenOrIndex || []);
+
+    var uuidFather = resolveFatherByPersonId(index, row && row.parent_person_id);
+    if (uuidFather && uuidFather.person_id) {
+      return {
+        status: "linked",
+        father: uuidFather,
+        person_id: String(uuidFather.person_id),
+        expected_parent_path: childPath(uuidFather),
+        method: "parent_person_id",
+      };
+    }
+
+    function tryPath(candidate, method) {
+      var c = norm(candidate);
+      if (!c || isBranchRootParent(c, branch)) return null;
+      if (isAmbiguousLeafFather(index, branch, c)) {
+        var ambHits =
+          index.byBranchLeafNorm.get(
+            branch + "||" + normalizeArabicForCompare(c),
+          ) ||
+          index.byBranchLeaf.get(branch + "||" + c) ||
+          [];
+        return {
+          status: "ambiguous",
+          father: null,
+          person_id: null,
+          expected_parent_path: c,
+          method: method,
+          ambiguous_candidates: ambHits.length,
+        };
+      }
+      var father = resolveFatherRow(index, branch, c);
+      if (!father) return null;
+      var pid = father.person_id ? String(father.person_id) : null;
+      if (!pid) {
+        return {
+          status: "missing",
+          father: father,
+          person_id: null,
+          expected_parent_path: childPath(father) || c,
+          method: method,
+        };
+      }
+      return {
+        status: "found",
+        father: father,
+        person_id: pid,
+        expected_parent_path: childPath(father),
+        method: method,
+      };
+    }
+
+    // Prefer tree-sequence path (strip last segment) over short stored parent text.
+    var fromExtract = extracted ? tryPath(extracted, "name_path_strip") : null;
+    if (fromExtract && fromExtract.status === "found") return fromExtract;
+    if (fromExtract && fromExtract.status === "ambiguous") return fromExtract;
+
+    var fromStored = stored ? tryPath(stored, "stored_parent") : null;
+    if (fromStored && fromStored.status === "found") return fromStored;
+    if (fromStored && fromStored.status === "ambiguous") return fromStored;
+
+    if (fromExtract && fromExtract.status === "missing") return fromExtract;
+    if (fromStored && fromStored.status === "missing") return fromStored;
+
+    return {
+      status: "missing",
+      father: null,
+      person_id: null,
+      expected_parent_path: extracted || stored || "",
+      method: extracted ? "name_path_strip" : stored ? "stored_parent" : "none",
+    };
   }
 
   /** True when stored parent aligns with name-extracted path (normalize or same canonical father). */
@@ -1092,6 +1208,8 @@
     fatherExists: fatherExists,
     resolveFatherRow: resolveFatherRow,
     resolveFatherByPersonId: resolveFatherByPersonId,
+    isAmbiguousLeafFather: isAmbiguousLeafFather,
+    resolveExpectedFatherForUuidLink: resolveExpectedFatherForUuidLink,
     textAgreesWithUuidFather: textAgreesWithUuidFather,
     relationViaUuidAr: relationViaUuidAr,
     givenName: givenName,

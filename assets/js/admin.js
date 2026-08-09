@@ -2245,9 +2245,14 @@ where c.id = matches.id; commit;
           child_path: hit2.child_path || hit2.child_name,
           stored_parent: hit2.parent_key || hit2.parent_name,
           parent: hit2.parent_key || hit2.parent,
+          parent_name: hit2.parent_key || hit2.parent_name,
           impact_ar: tree003Impact(hit2),
           priority: hit2.severity === "error" ? "critical" : "medium",
           priority_ar: hit2.severity === "error" ? "🔴 حرج" : "🟡 متوسط",
+          expected_father_path: hit2.expected_father_path || null,
+          found_father_id: hit2.found_father_id || null,
+          found_father_path: hit2.found_father_path || null,
+          father_person_id_to_link: hit2.father_person_id_to_link || null,
         });
       }
     }
@@ -2341,6 +2346,89 @@ where c.id = matches.id; commit;
         lines.push(preview.preview_flags_ar);
       }
       (analysis.decision_logic_ar || []).forEach((ln) => lines.push("· " + ln));
+    } else if (analysis.repair_type === "link_parent_uuid") {
+      lines.push("الإصلاح: ربط parent_person_id فقط — الأسماء بلا تغيير.");
+      lines.push(
+        "سجل الابن: #" +
+          String(issue && issue.id) +
+          " · «" +
+          String(
+            (issue && (issue.child_path || issue.name)) ||
+              (preview.before && preview.before.child_path) ||
+              "—",
+          ) +
+          "»",
+      );
+      lines.push(
+        "الأب المتوقع: «" +
+          String(
+            analysis.expected_father_path ||
+              (issue && issue.expected_father_path) ||
+              "—",
+          ) +
+          "»",
+      );
+      lines.push(
+        "parent_person_id الحالي: " +
+          String(
+            analysis.current_parent_person_id ||
+              (preview.before && preview.before.parent_person_id) ||
+              "—",
+          ),
+      );
+      lines.push(
+        "سجل الأب الموجود: #" +
+          String(analysis.found_father_id || "—") +
+          " · «" +
+          String(analysis.found_father_path || "—") +
+          "»",
+      );
+      lines.push(
+        "person_id للأب للربط: " +
+          String(
+            analysis.father_person_id_to_link ||
+              (preview.after && preview.after.parent_person_id) ||
+              "—",
+          ),
+      );
+      lines.push(
+        "قبل → بعد: " +
+          String(
+            analysis.current_parent_person_id ||
+              (preview.before && preview.before.parent_person_id) ||
+              "null",
+          ) +
+          " → " +
+          String((preview.after && preview.after.parent_person_id) || "—"),
+      );
+      if (preview.preview_flags_ar) {
+        lines.push("");
+        lines.push(preview.preview_flags_ar);
+      }
+      (analysis.decision_logic_ar || []).forEach((ln) => lines.push("· " + ln));
+      if (analysis.requires_manual_choice) {
+        lines.push("");
+        lines.push("يتطلب اختيارًا يدويًا — لا تنفيذ تلقائي.");
+        if (analysis.suggestions && analysis.suggestions.length) {
+          lines.push("مرشّحات الأب:");
+          analysis.suggestions.forEach((s, i) => {
+            lines.push(
+              "  " +
+                (i + 1) +
+                ") #" +
+                s.id +
+                " · " +
+                s.child_path +
+                " · " +
+                s.score_ar +
+                (s.person_id ? " · معرف:" + s.person_id : ""),
+            );
+          });
+        }
+      } else if (!preview.executable) {
+        lines.push("");
+        lines.push("غير قابل للتنفيذ — الأب غير موجود أو العلاقة مربوطة أصلًا.");
+      }
     } else if (analysis.repair_type === "manual_review_no_merge") {
       lines.push(
         "الأب: " + String((issue && issue.father_label) || "—"),
@@ -3447,8 +3535,16 @@ where c.id = matches.id; commit;
     if (V2 && typeof V2.classifyAll === "function") {
       const classified = V2.classifyAll(children, parents || []);
       healthy = classified.healthy || [];
-      warnings = classified.warnings || [];
+      // UUID bucket = only rows where father exists and needs parent_person_id link
+      warnings = (classified.warnings || []).filter(
+        (w) =>
+          w &&
+          (w.issue === "needs_uuid_link" ||
+            w.issue === "needs_uuid_relink" ||
+            w.reason === "missing_uuid"),
+      );
       errors = classified.errors || [];
+      // reviews (الأب غير موجود / غامض) stay out of UUID warn count — structure audit covers them
     } else {
       // Fallback if module not loaded: still exclude branch roots.
       children.forEach((c) => {
@@ -4931,13 +5027,25 @@ where c.id = matches.id; commit;
           health_repair: built.success_meta || {
             row_id: built.row_id,
             father_name:
+              (healthRepairState.analysis &&
+                healthRepairState.analysis.found_father_path) ||
               (built.after && (built.after.parent || built.after.parent_name)) ||
               "",
             after_parent:
               (built.after && (built.after.parent || built.after.parent_name)) ||
               "",
-            updated_parent: !!(built.after && built.after.parent),
+            updated_parent: !!(
+              built.after &&
+              built.after.parent &&
+              !(built.after.uuid_only || built.after.keep_names)
+            ),
             updated_uuid: !!(built.after && built.after.parent_person_id),
+            uuid_only: !!(
+              built.after &&
+              (built.after.uuid_only || built.after.keep_names)
+            ),
+            expected_father_person_id:
+              (built.after && built.after.parent_person_id) || null,
           },
         });
       }

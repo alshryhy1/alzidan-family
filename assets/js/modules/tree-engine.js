@@ -170,34 +170,86 @@
   }
 
   /**
-   * Preview-only: link parent_person_id UUID — NEVER renames.
+   * Resolve expected living father for UUID link (TREE-003-warn) via Structure helpers.
+   * Prefer name-path strip, then stored parent; reject ambiguous leaf-only matches.
    */
-  function previewLinkParentUuid(row, parentPersonId) {
-    var pid = norm(parentPersonId);
+  function resolveExpectedFatherForUuidLink(row, children) {
+    var Struct = global.AlzidanIntegrityTreeStructure;
+    if (
+      Struct &&
+      typeof Struct.resolveExpectedFatherForUuidLink === "function"
+    ) {
+      return Struct.resolveExpectedFatherForUuidLink(row, children || []);
+    }
+    return {
+      status: "missing",
+      father: null,
+      person_id: null,
+      expected_parent_path: "",
+      method: "unavailable",
+    };
+  }
+
+  /**
+   * Preview-only: link parent_person_id UUID — NEVER renames.
+   * When children are provided, resolves father via path/Tree Engine helpers.
+   */
+  function previewLinkParentUuid(row, parentPersonId, children) {
+    var resolved =
+      Array.isArray(children) && children.length
+        ? resolveExpectedFatherForUuidLink(row, children)
+        : null;
+    var pid = norm(
+      parentPersonId || (resolved && resolved.person_id) || "",
+    );
     if (!pid) {
+      var missStatus = resolved && resolved.status;
       return {
         ok: false,
-        code: "TREE-NO-UUID",
-        message_ar: "لا UUID أب للربط.",
+        code:
+          missStatus === "ambiguous"
+            ? "TREE-AMBIGUOUS-FATHER"
+            : "TREE-NO-UUID",
+        message_ar:
+          missStatus === "ambiguous"
+            ? "أب غامض (عدة مرشّحين بنفس ورقة الاسم) — لا ربط تلقائي."
+            : missStatus === "missing" || !resolved
+              ? "الأب غير موجود في الشجرة — لا اقتراح ربط UUID."
+              : "لا UUID أب للربط.",
+        resolution: resolved || null,
       };
     }
+    var parentPath = resolveParentPath(row) || null;
     return {
       ok: true,
       repair_type: "link_parent_uuid",
       before: {
-        parent: resolveParentPath(row) || null,
-        parent_name: resolveParentPath(row) || null,
+        parent: parentPath,
+        parent_name: parentPath,
         parent_person_id: (row && row.parent_person_id) || null,
       },
       after: {
-        parent: resolveParentPath(row) || null,
-        parent_name: resolveParentPath(row) || null,
+        parent: parentPath,
+        parent_name: parentPath,
         parent_person_id: pid,
       },
       decision_logic_ar: [
         "TREE-003: ربط parent_person_id فقط — ممنوع إعادة تسمية.",
+        resolved && resolved.expected_parent_path
+          ? "الأب من المسار/العلاقة: «" +
+            resolved.expected_parent_path +
+            "» (" +
+            (resolved.method || "") +
+            ")."
+          : "معرف أب مُمرَّر صراحةً للمعاينة.",
       ],
       never_rename: true,
+      uuid_only: true,
+      resolution: resolved || null,
+      expected_father_path:
+        (resolved && resolved.expected_parent_path) || null,
+      found_father_id: resolved && resolved.father ? resolved.father.id : null,
+      father_person_id_to_link: pid,
     };
   }
 
@@ -330,6 +382,7 @@
     prepareInsert: prepareInsert,
     previewFillParentFromName: previewFillParentFromName,
     previewLinkParentUuid: previewLinkParentUuid,
+    resolveExpectedFatherForUuidLink: resolveExpectedFatherForUuidLink,
     previewAlignNamePathSpelling: previewAlignNamePathSpelling,
     previewUnifyLeafName: previewUnifyLeafName,
   };
