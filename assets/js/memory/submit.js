@@ -243,6 +243,39 @@
       });
     }
 
+    var Create = global.AlzidanHomeRequestCreate;
+    if (Create && typeof Create.create === "function") {
+      var created = await Create.create({
+        type: "memory",
+        payload: {
+          person_id: item.person_id,
+          person_name: item.person_name,
+          title: item.title,
+          memory_kind: item.memory_kind,
+          memory_date: item.memory_date,
+          memory_year: item.memory_year,
+          branch_key: item.branch_key
+        },
+        client: client,
+        mode: "memory",
+        memoryItem: item,
+        memoryMedia: mediaPayload
+      });
+      if (!created.ok) {
+        var gmsg =
+          (created.guard && created.guard.message_ar) ||
+          (created.doubleSubmit
+            ? "طلب مكرر — لن تُنشأ ذكرى ثانية."
+            : "تعذر إرسال الذكرى بسبب تطابق محتمل.");
+        throw new Error(gmsg);
+      }
+      return {
+        id: created.result && created.result.id,
+        requestId: requestId,
+        mediaUrl: mediaUrl
+      };
+    }
+
     var res = await client.rpc("memory_submit_item_v1", {
       p_item: item,
       p_media: mediaPayload

@@ -337,9 +337,61 @@
         }
 
         const row = Object.assign({}, patch, { created_at: new Date().toISOString() });
-        const res = rpcInsertFamilyEventRow ? await rpcInsertFamilyEventRow(sb, row) : { ok: false };
-        if (!res || !res.ok) {
-          return { ok: false, message: mapRpcInsertError((res && res.error) || {}) };
+
+        const Create = window.AlzidanHomeRequestCreate;
+        if (Create && typeof Create.create === "function") {
+          const guardType =
+            category === "death"
+              ? "death"
+              : category === "sick"
+                ? "health"
+                : "event";
+          const details =
+            typeof Events.parseDetailsValue === "function"
+              ? Events.parseDetailsValue(row.details)
+              : {};
+          const guardPayload = {
+            type: row.type || (category === "death" ? "death" : type),
+            person: person,
+            person_id: String(v.person_id || details.person_id || details.personId || "").trim(),
+            date_label: dateLabel,
+            event_date: dateValue,
+            title: person,
+            branch_key: branch,
+            hospital_name: row.hospital_name || details.hospitalName || "",
+            home_city: details.homeCity || v.homeCity || "",
+            home_area: details.homeArea || v.homeArea || "",
+          };
+          const guarded = await Create.create({
+            type: guardType,
+            payload: guardPayload,
+            client: sb,
+            acknowledgeReview: !!v.acknowledge_review,
+            performInsert: async function () {
+              return rpcInsertFamilyEventRow
+                ? await rpcInsertFamilyEventRow(sb, row)
+                : { ok: false };
+            },
+          });
+          if (!guarded.ok) {
+            return {
+              ok: false,
+              message:
+                (guarded.guard && guarded.guard.message_ar) ||
+                (guarded.needsReview
+                  ? "سجل مشابه — راجع قبل الحفظ (لا دمج تلقائي)."
+                  : "تعذر الحفظ بسبب تطابق كيان."),
+            };
+          }
+          const res = guarded.result || {};
+          if (!res || !res.ok) {
+            return { ok: false, message: mapRpcInsertError((res && res.error) || {}) };
+          }
+        } else {
+          const res = rpcInsertFamilyEventRow ? await rpcInsertFamilyEventRow(sb, row) : { ok: false };
+          if (!res || !res.ok) {
+            return { ok: false, message: mapRpcInsertError((res && res.error) || {}) };
+          }
         }
 
         if (maybeOpenEmailDraft) {

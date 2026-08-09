@@ -1648,31 +1648,22 @@
       render();
       return;
     }
+    var Create = window.AlzidanHomeRequestCreate;
+    if (!Create || typeof Create.create !== "function") {
+      setError("حارس الهوية غير محمّل. حدّث الصفحة ثم أعد المحاولة.");
+      render();
+      return;
+    }
     state.busy = true;
     render();
     var f = state.facts;
     var p = state.selectedParent;
 
     try {
-      // Hard gate on complete sibling set from tree_children — before any insert/RPC.
+      // Refresh siblings for catalog — guard decides same vs similar vs new.
       var children = await refreshChildrenUnderParent();
-      var underSameFather = findExistingChildUnderParent(f.personName, p, children);
-      if (underSameFather) {
-        state.busy = false;
-        blockExistingPerson(underSameFather, "submit-under-parent");
-        render();
-        return;
-      }
-
       var collisions = await searchIdentityCollisions(f.personName);
       state.identityCandidates = collisions;
-      if (collisions.length && !state.differentPersonSameName) {
-        state.busy = false;
-        setError("يوجد تطابق بالاسم في الشجرة. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم.");
-        state.view = "identity";
-        render();
-        return;
-      }
     } catch (gateErr) {
       state.busy = false;
       setError("تعذر التحقق قبل الإرسال. حاول مرة أخرى.");
@@ -1720,11 +1711,60 @@
       status: "pending",
       created_at: payload.createdAt,
     };
+    var guardPayload = {
+      person_name: f.personName,
+      parent_person_id: parentPersonId,
+      parent_path: p.path,
+      father: p.leaf,
+      branch_key: p.branch,
+      identity_affirmed_existing: !!state.identityAffirmedExisting,
+      different_person_same_name: !!state.differentPersonSameName,
+    };
+    var catalog = {
+      siblings: state.childrenUnderParent || [],
+      people: (state.identityCandidates || []).concat(state.childrenUnderParent || []),
+    };
     try {
-      var res = await sb.from("approval_requests").insert(row);
-      if (res.error) {
+      var created = await Create.create({
+        type: "add_person",
+        payload: guardPayload,
+        catalog: catalog,
+        client: sb,
+        skipFetch: true,
+        mode: "approval",
+        row: row,
+      });
+      if (!created.ok) {
         state.busy = false;
-        setError("تعذر إرسال الطلب حاليًا، حاول لاحقًا.");
+        if (created.doubleSubmit) {
+          setError(
+            (created.guard && created.guard.message_ar) ||
+              "طلب مكرر — لن يُنشأ طلب ثانٍ."
+          );
+          render();
+          return;
+        }
+        if (created.blocked && created.guard && created.guard.code === "ADD_PERSON_EXISTS") {
+          blockExistingPerson(
+            (created.guard.matches && created.guard.matches[0]) || state.selectedIdentity,
+            "guard-block"
+          );
+          render();
+          return;
+        }
+        if (created.needsReview) {
+          setError(
+            (created.guard && created.guard.message_ar) ||
+              "يوجد تطابق بالاسم في الشجرة. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم."
+          );
+          state.view = "identity";
+          render();
+          return;
+        }
+        setError(
+          (created.guard && created.guard.message_ar) ||
+            "تعذر إرسال الطلب حاليًا، حاول لاحقًا."
+        );
         render();
         return;
       }

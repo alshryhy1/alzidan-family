@@ -215,21 +215,128 @@ const eventRow = typeof Events.buildFamilyEventRow === "function" ? Events.build
 if (secret) { const secretHash = await sha256Hex(secret);
 if (!secretHash) { setEventSubmitAlert("error", "تعذر التحقق من رمز المندوب على هذا الجهاز. جرّب متصفحًا آخر أو حدّث الصفحة.");
 return;
-} const { data, error } = await sb.rpc("family_events_insert_v1", { p_branch_key: branch, p_phone: phone, p_email: email || "", p_secret_hash: secretHash, p_row: eventRow });
-if (error) { setEventSubmitAlert("error", "تعذر النشر المباشر حالياً، حاول لاحقاً.");
-return;
-} if (data === true) { form.reset();
-updateSubmitLinks();
-try { localStorage.setItem("alzidan_events_refresh_v1", String(Date.now())); window.dispatchEvent(new CustomEvent("alzidan-events-refresh")); try { if (typeof BroadcastChannel !== "undefined") { if (!window.__alzidanEventsRefreshBc) window.__alzidanEventsRefreshBc = new BroadcastChannel("alzidan_events_refresh_v1"); window.__alzidanEventsRefreshBc.postMessage({ t: Date.now() }); } } catch (_) {} } catch (e) {} setEventSubmitAlert("success", "تم نشر المناسبة مباشرة في التطبيق.");
-return;
-} setEventSubmitAlert("error", "رمز المندوب غير صحيح أو غير مخول لهذا الفرع.");
+} const Create = window.AlzidanHomeRequestCreate;
+const Guard = window.AlzidanDupIdentityGuard;
+if (!Create || typeof Create.create !== "function") {
+  setEventSubmitAlert("error", "حارس الهوية غير محمّل. حدّث الصفحة ثم أعد المحاولة.");
+  return;
+}
+const guardType =
+  typeof Create.mapTypeFromEventPayload === "function"
+    ? Create.mapTypeFromEventPayload({ type: type })
+    : type === "death"
+      ? "death"
+      : Guard && Guard.isHealthType && Guard.isHealthType(type)
+        ? "health"
+        : "event";
+const createdDirect = await Create.create({
+  type: guardType,
+  payload: {
+    type: type,
+    person: person,
+    person_id: "",
+    date_label: dateLabel,
+    title: person,
+    branch_key: branch,
+  },
+  client: sb,
+  mode: "direct_event",
+  directEventArgs: {
+    p_branch_key: branch,
+    p_phone: phone,
+    p_email: email || "",
+    p_secret_hash: secretHash,
+    p_row: eventRow,
+  },
+});
+if (!createdDirect.ok) {
+  if (createdDirect.doubleSubmit) {
+    setEventSubmitAlert("error", (createdDirect.guard && createdDirect.guard.message_ar) || "طلب مكرر.");
+    return;
+  }
+  if (createdDirect.blocked || createdDirect.needsReview) {
+    setEventSubmitAlert(
+      "error",
+      (createdDirect.guard && createdDirect.guard.message_ar) || "تعذر النشر — تحقق من التكرار."
+    );
+    return;
+  }
+  setEventSubmitAlert("error", "تعذر النشر المباشر حالياً، حاول لاحقاً.");
+  return;
+}
+if (createdDirect.result && createdDirect.result.data === true) {
+  form.reset();
+  updateSubmitLinks();
+  try { localStorage.setItem("alzidan_events_refresh_v1", String(Date.now())); window.dispatchEvent(new CustomEvent("alzidan-events-refresh")); try { if (typeof BroadcastChannel !== "undefined") { if (!window.__alzidanEventsRefreshBc) window.__alzidanEventsRefreshBc = new BroadcastChannel("alzidan_events_refresh_v1"); window.__alzidanEventsRefreshBc.postMessage({ t: Date.now() }); } } catch (_) {} } catch (e) {} setEventSubmitAlert("success", "تم نشر المناسبة مباشرة في التطبيق.");
+  return;
+}
+setEventSubmitAlert("error", "رمز المندوب غير صحيح أو غير مخول لهذا الفرع.");
 return;
 } const message = buildEventRequestMessage(payload);
-const { error } = await sb.from("approval_requests").insert({ request_id: payload.requestId, kind: "event_card", branch_key: branch, name: submitterName, phone, email: email || null, message, status: "pending", created_at: payload.createdAt });
+const Create = window.AlzidanHomeRequestCreate;
+const Guard = window.AlzidanDupIdentityGuard;
+if (!Create || typeof Create.create !== "function") {
+  setEventSubmitAlert("error", "حارس الهوية غير محمّل. حدّث الصفحة ثم أعد المحاولة.");
+  return;
+}
+const guardType =
+  typeof Create.mapTypeFromEventPayload === "function"
+    ? Create.mapTypeFromEventPayload({ type: type })
+    : type === "death"
+      ? "death"
+      : Guard && Guard.isHealthType && Guard.isHealthType(type)
+        ? "health"
+        : "event";
+const row = {
+  request_id: payload.requestId,
+  kind: "event_card",
+  branch_key: branch,
+  name: submitterName,
+  phone,
+  email: email || null,
+  message,
+  status: "pending",
+  created_at: payload.createdAt,
+};
+const created = await Create.create({
+  type: guardType,
+  payload: {
+    type: type,
+    person: person,
+    person_id: "",
+    date_label: dateLabel,
+    event_date: "",
+    title: person,
+    branch_key: branch,
+    text: text,
+    place: place,
+  },
+  client: sb,
+  mode: "approval",
+  row: row,
+});
+if (!created.ok) {
+  if (created.doubleSubmit) {
+    setEventSubmitAlert("error", (created.guard && created.guard.message_ar) || "طلب مكرر — لن يُنشأ طلب ثانٍ.");
+    return;
+  }
+  if (created.blocked) {
+    setEventSubmitAlert("error", (created.guard && created.guard.message_ar) || "مناسبة مطابقة مسجّلة مسبقًا.");
+    return;
+  }
+  if (created.needsReview) {
+    setEventSubmitAlert(
+      "error",
+      (created.guard && created.guard.message_ar) ||
+        "مناسبة مشابهة — راجع الحقول (النوع/الشخص/التاريخ). التشابه وحده لا يكفي؛ أكّد أنها مناسبة جديدة أو عدّل الحقول."
+    );
+    return;
+  }
+  setEventSubmitAlert("error", "تعذر إرسال المناسبة للمراجعة حالياً، حاول لاحقاً.");
+  return;
+}
 await copyText(message);
-if (error) { setEventSubmitAlert("error", "تعذر إرسال المناسبة للمراجعة حالياً، حاول لاحقاً.");
-return;
-} try { await sb.functions.invoke("alzidan-email-notify", { body: { mode: "new_request", record: { request_id: payload.requestId, kind: "event_card", branch_key: branch, name: submitterName, phone, email: email || null, message, status: "pending", created_at: payload.createdAt } } });
+try { await sb.functions.invoke("alzidan-email-notify", { body: { mode: "new_request", record: row } });
 } catch (notifyError) {}
 form.reset();
 updateSubmitLinks();
