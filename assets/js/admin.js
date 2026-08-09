@@ -4282,7 +4282,7 @@ where c.id = matches.id; commit;
       loadHealthCenterReport().catch(() => {}),
     );
   if (healthRepairApprove) {
-    healthRepairApprove.addEventListener("change", () => {
+    const syncHealthRepairApprove = () => {
       const ready =
         !!healthRepairApprove.checked &&
         healthRepairState.preview &&
@@ -4292,11 +4292,16 @@ where c.id = matches.id; commit;
         healthRepairState.stage = "approve";
         setHealthRepairStage("approve");
         setHealthRepairStatus("موافقة مسجّلة لهذا الصف فقط — يمكنك الإرسال إلى SQL Workspace.");
+      } else if (healthRepairApprove.checked && healthRepairState.preview && !healthRepairState.preview.executable) {
+        setHealthRepairStage("preview");
+        setHealthRepairStatus("المعاينة غير قابلة للتنفيذ — اختر مرشّحًا أو راجع يدويًا.");
       } else {
         setHealthRepairStage("preview");
         setHealthRepairStatus("فعّل الموافقة بعد مراجعة المعاينة (صف واحد فقط).");
       }
-    });
+    };
+    healthRepairApprove.addEventListener("change", syncHealthRepairApprove);
+    healthRepairApprove.addEventListener("input", syncHealthRepairApprove);
   }
   if (healthRepairWhy) {
     healthRepairWhy.addEventListener("click", () => {
@@ -4317,13 +4322,17 @@ where c.id = matches.id; commit;
   if (healthRepairToSql) {
     healthRepairToSql.addEventListener("click", () => {
       const Pipe = window.AlzidanIntegrityRepairPipeline;
-      if (!Pipe || !healthRepairState.preview) return;
+      if (!Pipe || !healthRepairState.preview) {
+        setHealthRepairStatus("لا معاينة بعد — اضغط تحليل على صف أولًا.");
+        return;
+      }
       if (!healthRepairApprove || !healthRepairApprove.checked) {
-        setHealthRepairStatus("الموافقة مطلوبة قبل التنفيذ.");
+        setHealthRepairStatus("الموافقة مطلوبة قبل التنفيذ — فعّل خانة الموافقة أولًا.");
+        if (healthRepairToSql) healthRepairToSql.disabled = true;
         return;
       }
       if (!healthRepairState.preview.executable) {
-        setHealthRepairStatus("لا يوجد اقتراح قابل للتنفيذ.");
+        setHealthRepairStatus("لا يوجد اقتراح قابل للتنفيذ لهذا الصف.");
         return;
       }
       const actorEl = document.getElementById("admin-current-user");
@@ -4341,14 +4350,28 @@ where c.id = matches.id; commit;
         return;
       }
       const ws = window.AlzidanSqlWorkspace;
-      if (!ws || typeof ws.loadSql !== "function") {
-        setHealthRepairStatus("مساحة SQL غير متاحة — انسخ الأمر يدويًا من المحرر عند توفره.");
+      let loaded = false;
+      if (ws && typeof ws.loadSql === "function") {
+        loaded = !!ws.loadSql(built.sql, { title: built.title });
+      }
+      if (!loaded) {
+        try {
+          const shell = window.AlzidanAdminShell;
+          if (shell && typeof shell.navigate === "function") {
+            shell.navigate("tools");
+          }
+        } catch (_) {}
         try {
           navigator.clipboard.writeText(built.sql);
-          setHealthRepairStatus("نُسخ SQL للحافظة — الصقه في SQL Workspace وشغّل بعد المراجعة.");
-        } catch (_) {}
-      } else {
-        ws.loadSql(built.sql, { title: built.title });
+          setHealthRepairStatus(
+            "تعذّر تحميل المحرر — نُسخ SQL للحافظة. افتح «أدوات الصيانة» → SQL Workspace والصق الأمر.",
+          );
+        } catch (_) {
+          setHealthRepairStatus(
+            "مساحة SQL غير متاحة. افتح #module=tools والصق أمر الصف يدويًا.",
+          );
+        }
+        return;
       }
       healthRepairState.stage = "execute";
       setHealthRepairStage("execute");
@@ -4366,7 +4389,7 @@ where c.id = matches.id; commit;
         action: "sent_to_sql_workspace",
       });
       setHealthRepairStatus(
-        "أُرسل أمر صف واحد إلى SQL Workspace. بعد التشغيل اضغط «تحديث التقرير» لإعادة التحقق. بلا إصلاح الكل.",
+        "✅ نُقلت إلى أدوات الصيانة · SQL Workspace محمّل بأمر صف واحد. راجع ثم شغّل. بعدها «تحديث التقرير» لإعادة التحقق. بلا إصلاح الكل.",
       );
     });
   }

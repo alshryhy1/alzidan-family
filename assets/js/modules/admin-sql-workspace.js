@@ -2387,6 +2387,20 @@
     /** Load explicit SQL into the editor (Health Center staged repair). */
     loadSql: function (sql, meta) {
       const text = String(sql || "");
+      // Must leave Health (#module=health) — otherwise sql-workspace-section stays admin-module-off.
+      try {
+        const shell = window.AlzidanAdminShell;
+        if (shell && typeof shell.navigate === "function") {
+          shell.navigate("tools");
+        } else {
+          const url = new URL(window.location.href);
+          const params = new URLSearchParams(String(url.hash || "").replace(/^#/, ""));
+          params.set("module", "tools");
+          url.hash = params.toString();
+          history.replaceState(null, "", url.pathname + url.search + url.hash);
+          window.dispatchEvent(new HashChangeEvent("hashchange"));
+        }
+      } catch (_) {}
       if (!els.editor) {
         els.editor = document.getElementById("sql-ws-editor");
       }
@@ -2395,14 +2409,30 @@
       activeEditorPresetId = "";
       setEditorVisible(true);
       const title = (meta && meta.title) || "أمر من مركز الصحة";
-      setStatus("ok", "محمّل للمعاينة: " + title + " — راجع ثم شغّل بعد الموافقة.");
+      setStatus(
+        "ok",
+        "✅ محمّل من مركز الصحة: " + title + " — راجع الأمر ثم شغّل بعد الموافقة (صف واحد).",
+      );
       setError("");
-      try {
-        const section = document.getElementById("sql-workspace-section");
-        if (section && typeof section.scrollIntoView === "function") {
-          section.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      } catch (_) {}
+      const reveal = function () {
+        try {
+          const section = document.getElementById("sql-workspace-section");
+          if (section && typeof section.scrollIntoView === "function") {
+            section.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+          if (els.editor && typeof els.editor.focus === "function") {
+            els.editor.focus();
+          }
+        } catch (_) {}
+      };
+      // After shell navigate + visibility toggle, scroll on next frames.
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(reveal);
+        });
+      } else {
+        setTimeout(reveal, 50);
+      }
       return true;
     },
   };
