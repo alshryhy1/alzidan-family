@@ -798,6 +798,27 @@
         rows: [],
       };
     }
+    // RX / path-stamped payloads: single verified edge under the selected parent.
+    // Avoid inventing ancestor write-edges from display labels.
+    const parentNodeId = normalizeTreeCardText(
+      payload.parent_node_id || payload.father_path || "",
+    );
+    if ((payload.rx || parentNodeId) && fatherPersonId) {
+      const parentPath = parentNodeId || father;
+      const childPath = alignChildPathUnderParent(parentPath, personName);
+      pushEdge(parentPath, childPath, {
+        birth_date_g: personDob || "",
+        city: city || "",
+        area: area || "",
+        parent_person_id: fatherPersonId,
+      });
+      return {
+        ok: true,
+        rows,
+        father_person_id: fatherPersonId,
+        father_path: parentPath,
+      };
+    }
     if (!fatherPersonId) {
       return {
         ok: false,
@@ -1520,6 +1541,95 @@
   }
 
   /**
+   * Stamp missing father person_id for RX / legacy payloads that only stored a path.
+   * Always hits tree_children when resolution is needed (visible Fetch on Accept).
+   */
+  async function stampTreeCardFatherPersonId(sb, reqRow) {
+    const payload = extractTreeCardPayloadFromMessage(
+      reqRow && reqRow.message ? reqRow.message : "",
+    );
+    if (!payload) return { ok: true, row: reqRow, resolved: false };
+    const existing = normalizeTreeCardText(
+      payload.father_person_id ||
+        payload.parent_person_id ||
+        payload.selected_parent_person_id ||
+        "",
+    );
+    if (existing) return { ok: true, row: reqRow, resolved: false, person_id: existing };
+
+    const branchKey = normalizeTreeCardText(
+      payload.branch_key || (reqRow && reqRow.branch_key) || "",
+    );
+    const hints = [
+      payload.parent_node_id,
+      payload.father_path,
+      payload.parent_path,
+      payload.father,
+    ]
+      .map((v) => normalizeTreeCardText(v))
+      .filter(Boolean);
+    if (!sb || !branchKey || !hints.length) {
+      return { ok: true, row: reqRow, resolved: false };
+    }
+
+    console.info("ADMIN_RPC approve resolve-parent start", {
+      request_id: reqRow && reqRow.request_id,
+      branch_key: branchKey,
+      hints: hints.slice(0, 4),
+    });
+    const pathToRow = await loadPathToRowForBranch(sb, branchKey);
+    let personId = "";
+    let fatherPath = "";
+    for (let i = 0; i < hints.length; i += 1) {
+      const hint = hints[i];
+      const direct = pathToRow[hint];
+      if (direct && direct.person_id) {
+        personId = String(direct.person_id);
+        fatherPath = normalizeTreeCardText(direct.db_child_name || hint);
+        break;
+      }
+      const resolved = resolveExistingTreeNode(pathToRow, {
+        path: hint,
+        leaf: relationLeafName(hint),
+      });
+      if (resolved && resolved.ok && resolved.found && resolved.meta && resolved.meta.person_id) {
+        personId = String(resolved.meta.person_id);
+        fatherPath = normalizeTreeCardText(
+          resolved.meta.db_child_name || hint,
+        );
+        break;
+      }
+    }
+    if (!personId) {
+      return { ok: true, row: reqRow, resolved: false };
+    }
+
+    const stamped = Object.assign({}, payload, {
+      father_person_id: personId,
+      parent_person_id: personId,
+      father_path: fatherPath || payload.father_path || payload.parent_node_id || "",
+      parent_node_id:
+        payload.parent_node_id || fatherPath || payload.father_path || "",
+    });
+    const marker = "__JSON__:";
+    const text = String(reqRow.message || "");
+    const idx = text.indexOf(marker);
+    const visible = idx >= 0 ? text.slice(0, idx).trimEnd() : text;
+    const message =
+      visible + "\n\n" + marker + "\n" + JSON.stringify(stamped, null, 2);
+    console.info("ADMIN_RPC approve resolve-parent ok", {
+      request_id: reqRow && reqRow.request_id,
+      person_id: personId,
+    });
+    return {
+      ok: true,
+      row: Object.assign({}, reqRow, { message: message }),
+      resolved: true,
+      person_id: personId,
+    };
+  }
+
+  /**
    * Patch 2+ — Verified apply for tree_card / add-son.
    * If father/ancestors already exist → reuse them; insert only missing children.
    * Never blind-insert the full tree_rows chain (no duplicate fathers).
@@ -1527,7 +1637,9 @@
    */
   async function importTreeCardToTree(sb, token, reqRow) {
     const CP = window.AlzidanCanonicalPerson;
-    const built = buildTreeCardRows(reqRow);
+    const stamped = await stampTreeCardFatherPersonId(sb, reqRow);
+    const workingRow = stamped && stamped.row ? stamped.row : reqRow;
+    const built = buildTreeCardRows(workingRow);
     if (!built.ok) {
       return requestFail(
         built.code || (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",

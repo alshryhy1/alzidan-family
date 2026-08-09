@@ -19,10 +19,6 @@
 
   const Core = window.AlzidanAdminCore || {};
   const {
-    showAlert,
-    hideAlert,
-    getClient,
-    getAdminToken,
     formatDateTimeArSaVerbose,
     coerceRpcId,
     kindLabel,
@@ -30,6 +26,46 @@
     renderEmpty,
     tokenFromRpcResult,
   } = Core;
+
+  function getClient() {
+    const c = window.AlzidanAdminCore || {};
+    return typeof c.getClient === "function" ? c.getClient() : null;
+  }
+
+  function getAdminToken() {
+    const c = window.AlzidanAdminCore || {};
+    if (typeof c.getAdminToken === "function") {
+      return String(c.getAdminToken() || "").trim();
+    }
+    if (
+      window.AlzidanAuth &&
+      typeof window.AlzidanAuth.getAdminToken === "function"
+    ) {
+      return String(window.AlzidanAuth.getAdminToken() || "").trim();
+    }
+    return "";
+  }
+
+  function showAlert(kind, msg) {
+    const c = window.AlzidanAdminCore || {};
+    if (typeof c.showAlert === "function") c.showAlert(kind, msg);
+    const sbStatus = document.getElementById("sb-status");
+    if (sbStatus) {
+      sbStatus.textContent = String(msg || "");
+      sbStatus.style.color = kind === "error" ? "#991b1b" : "#065f46";
+    }
+    const alertEl = document.getElementById("alert");
+    if (alertEl && kind === "error") {
+      try {
+        alertEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (_) {}
+    }
+  }
+
+  function hideAlert() {
+    const c = window.AlzidanAdminCore || {};
+    if (typeof c.hideAlert === "function") c.hideAlert();
+  }
 
   const requestActions = window.AlzidanRequestActions || {};
 
@@ -729,6 +765,13 @@
     });
     approveBtn.addEventListener("click", async () => {
       hideAlert();
+      const rowId = coerceRpcId(row.id != null ? row.id : row.request_id);
+      console.info("ADMIN_RPC approve click", {
+        request_id: row.request_id,
+        id: rowId,
+        kind: row.kind,
+        status: row.status,
+      });
       if (isSecretResetRequest(row)) {
         const sb = getClient();
         if (!sb) {
@@ -839,17 +882,22 @@
       approveBtn.disabled = true;
       let applyInfo = null;
       // ADR-006 / Patch 2: verified apply BEFORE status becomes «قبول»
+      // First network call is intentional (tree resolve/import) — then admin_set_request_status_v2.
       if (row.kind === "tree_card") {
+        console.info("ADMIN_RPC approve tree_card apply start", row.request_id);
         applyInfo = await requestActions.importTreeCardToTree(sb, token, row);
         if (!applyInfo.ok) {
           approveBtn.disabled = false;
-          showAlert(
-            "error",
+          const errMsg =
             (applyInfo.message || "تعذر إضافة البطاقة للشجرة.") +
-              (applyInfo.code ? " [" + applyInfo.code + "]" : ""),
-          );
+            (applyInfo.code ? " [" + applyInfo.code + "]" : "");
+          showAlert("error", errMsg);
+          try {
+            window.alert(errMsg);
+          } catch (_) {}
           return;
         }
+        console.info("ADMIN_RPC approve tree_card apply ok", row.request_id);
       } else if (row.kind === "event_card") {
         const published = await requestActions.publishEventCardRequest(sb, token, row);
         if (!published.ok) {
@@ -859,10 +907,19 @@
           return;
         }
       }
+      console.info("ADMIN_RPC admin_set_request_status_v2 start", {
+        id,
+        status: "approved",
+      });
       const { data, error } = await sb.rpc("admin_set_request_status_v2", {
         p_token: token,
         p_id: id,
         p_status: "approved",
+      });
+      console.info("ADMIN_RPC admin_set_request_status_v2 done", {
+        id,
+        ok: !error && data !== false,
+        error: error ? String(error.message || error) : null,
       });
       if (error) {
         approveBtn.disabled = false;

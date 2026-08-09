@@ -114,6 +114,13 @@
     return STATE_LABELS[k] || k || "—";
   }
 
+  function actionButtonLabel(code) {
+    const k = String(code || "").trim();
+    if (k === "approved") return "قبول";
+    if (k === "rejected") return "رفض";
+    return stateLabel(k);
+  }
+
   function renderStatus(data) {
     const box = document.getElementById("wf-status-box");
     const actions = document.getElementById("wf-next-actions");
@@ -303,7 +310,7 @@
             '<button type="button" class="btn btn-outline btn-sm wf-next-btn" data-to="' +
             code +
             '">' +
-            stateLabel(code) +
+            actionButtonLabel(code) +
             "</button>"
           );
         })
@@ -312,6 +319,10 @@
     actions.querySelectorAll(".wf-next-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const to = btn.getAttribute("data-to");
+        console.info("ADMIN_RPC workflow transition click", {
+          request_id: requestId,
+          to_state: to,
+        });
         transitionTo(requestId, to).catch(() => {});
       });
     });
@@ -334,10 +345,15 @@
     }
 
     if (toState === "assigned") {
+      console.info("ADMIN_RPC admin_workflow_assign_v1 start", requestId);
       const { data, error } = await rpc("admin_workflow_assign_v1", {
         p_token: token,
         p_request_ref: requestId,
         p_delegate_id: null,
+      });
+      console.info("ADMIN_RPC admin_workflow_assign_v1 done", {
+        request_id: requestId,
+        ok: !error && data && data.ok,
       });
       if (error) {
         showAlert("error", "تعذر التعيين. هل يوجد مندوب مفعّل لهذا الفرع؟");
@@ -353,12 +369,22 @@
       return;
     }
 
+    console.info("ADMIN_RPC admin_workflow_transition_v1 start", {
+      request_id: requestId,
+      to_state: toState,
+    });
     const { data, error } = await rpc("admin_workflow_transition_v1", {
       p_token: token,
       p_request_ref: requestId,
       p_to_state: toState,
       p_reason: reason,
       p_owner_delegate_id: null,
+    });
+    console.info("ADMIN_RPC admin_workflow_transition_v1 done", {
+      request_id: requestId,
+      to_state: toState,
+      ok: !error && data && data.ok,
+      code: data && data.code ? data.code : null,
     });
     if (error) {
       showAlert("error", "تعذر تنفيذ الانتقال.");

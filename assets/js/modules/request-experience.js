@@ -853,6 +853,9 @@
           grandfather: ancestors[0] || "",
           ancestors: ancestors,
           father: payload.father,
+          father_path: payload.parentNodeId || payload.parentPath || "",
+          father_person_id: payload.parentPersonId || "",
+          parent_person_id: payload.parentPersonId || "",
           parent_path: payload.parentPath || "",
           parent_node_id: payload.parentNodeId || "",
           name: payload.personName,
@@ -894,6 +897,16 @@
     render();
     var f = state.facts;
     var p = state.selectedParent;
+    var parentPersonId = text(p.personId || "");
+    if (!parentPersonId) {
+      state.busy = false;
+      setError(
+        "تعذر تحديد هوية الأب في الشجرة. أعد اختيار السياق من نتائج البحث ثم أكّد المسار."
+      );
+      state.view = "confirm";
+      render();
+      return;
+    }
     var ancestors = ancestorsFromParent(p);
     var payload = {
       requestId: makeRequestId(),
@@ -902,6 +915,7 @@
       father: p.leaf,
       parentPath: p.path,
       parentNodeId: p.id,
+      parentPersonId: parentPersonId,
       ancestors: ancestors,
       personName: f.personName,
       gender: f.gender,
