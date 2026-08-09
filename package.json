@@ -13,6 +13,7 @@
     "verify:children-isolation": "node scripts/test-children-state-isolation.js",
     "integrity:scan": "node scripts/integrity-scan-report.mjs",
     "verify:integrity-v2": "node scripts/verify-integrity-v2.mjs",
+    "verify:spelling-dupes": "node scripts/test-spelling-duplicates.js",
     "repair:dry-run": "node scripts/repair-parent-person-id.mjs --snapshot",
     "repair:ali-dual": "node scripts/repair-ali-dual-children.mjs",
     "repair:ali-unlink": "node scripts/repair-ali-dual-unlink.mjs"

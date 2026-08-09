@@ -54,10 +54,18 @@
   const escapeHtml = Core.escapeHtml;
 
   function normalizeForCompare(value) {
+    if (typeof Core.normalizeArabicForCompare === "function") {
+      return Core.normalizeArabicForCompare(value);
+    }
     let s = normalizeArabicDigitsToLatin(String(value || ""));
-    s = s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
-    s = s.replace(/[إأآ]/g, "ا");
-    s = s.replace(/[ى]/g, "ي");
+    try {
+      s = s.normalize("NFKD");
+    } catch (_) {}
+    s = s.replace(/[\u0300-\u036f]/g, "");
+    s = s.replace(/[\u064B-\u065F\u0670]/g, "");
+    s = s.replace(/\u0640/g, "");
+    s = s.replace(/[إأآٱ]/g, "ا");
+    s = s.replace(/ى/g, "ي");
     s = s.replace(/ة/g, "ه");
     s = s.replace(/\s+/g, " ").trim();
     return s;

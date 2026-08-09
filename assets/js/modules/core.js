@@ -203,6 +203,25 @@
     return s.replace(/[٠-٩۰-۹]/g, (ch) => map[ch] || ch);
   }
 
+  /**
+   * Fold Arabic orthography for comparison (not display).
+   * Hamza variants أ/إ/آ → ا · ى → ي · ة → ه · strip tashkeel/tatweel.
+   */
+  function normalizeArabicForCompare(value) {
+    let s = normalizeArabicDigitsToLatin(String(value == null ? "" : value));
+    try {
+      s = s.normalize("NFKD");
+    } catch (_) {}
+    s = s.replace(/[\u0300-\u036f]/g, "");
+    s = s.replace(/[\u064B-\u065F\u0670]/g, "");
+    s = s.replace(/\u0640/g, "");
+    s = s.replace(/[إأآٱ]/g, "ا");
+    s = s.replace(/ى/g, "ي");
+    s = s.replace(/ة/g, "ه");
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
+
   function pickRowValue(row, keys) {
     const r = row || {};
     for (let i = 0; i < keys.length; i += 1) {
@@ -399,6 +418,7 @@
     parseCsv,
     coerceBool,
     normalizeArabicDigitsToLatin,
+    normalizeArabicForCompare,
     pickRowValue,
     toIntOrNull,
     toIsoDateOrEmpty,

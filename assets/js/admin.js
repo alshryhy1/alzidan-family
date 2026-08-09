@@ -2251,42 +2251,62 @@ where c.id = matches.id; commit;
       "السبب الجذري: " + (analysis.root_cause_ar || "—"),
       "مسار الكتابة المشتبه: " + (analysis.write_path_ar || "—"),
       "",
-      "قبل ← parent: " +
-        String((preview.before && preview.before.parent) || "NULL") +
-        " · UUID: " +
-        String((preview.before && preview.before.parent_person_id) || "—"),
-      "بعد ← parent: " +
-        String((preview.after && preview.after.parent) || "—") +
-        " · UUID: " +
-        String((preview.after && preview.after.parent_person_id) || "—"),
     ];
-    if (analysis.requires_manual_choice) {
-      lines.push("");
-      lines.push("يتطلب اختيارًا يدويًا — لا تطبيق تلقائي.");
-      if (analysis.suggestions && analysis.suggestions.length) {
-        lines.push("مرشّحات الأب الأقرب:");
-        analysis.suggestions.forEach((s, i) => {
-          lines.push(
-            "  " +
-              (i + 1) +
-              ") #" +
-              s.id +
-              " · " +
-              s.child_path +
-              " · " +
-              s.score_ar +
-              (s.person_id ? " · UUID:" + s.person_id : ""),
-          );
-        });
-        lines.push("اختر رقم المرشّح من الأزرار أدناه إن وُجدت.");
+    if (analysis.repair_type === "manual_review_no_merge") {
+      lines.push(
+        "الأب: " + String((issue && issue.father_label) || "—"),
+        "الاسم الأول: " + String((issue && issue.name_a) || "—"),
+        "الاسم الثاني: " + String((issue && issue.name_b) || "—"),
+        "نسبة التشابه: " +
+          String((issue && (issue.similarity_ar || issue.similarity_pct)) || "100%"),
+        "الحالة: يحتاج مراجعة",
+        "",
+        "لا دمج تلقائي — لا أمر SQL من هذه البطاقة. قرار المشرف لاحقًا بعد التحقق.",
+      );
+      (analysis.decision_logic_ar || []).forEach((ln) => lines.push("· " + ln));
+    } else {
+      lines.push(
+        "قبل ← parent: " +
+          String((preview.before && preview.before.parent) || "NULL") +
+          " · UUID: " +
+          String((preview.before && preview.before.parent_person_id) || "—"),
+        "بعد ← parent: " +
+          String((preview.after && preview.after.parent) || "—") +
+          " · UUID: " +
+          String((preview.after && preview.after.parent_person_id) || "—"),
+      );
+      if (analysis.requires_manual_choice) {
+        lines.push("");
+        lines.push("يتطلب اختيارًا يدويًا — لا تطبيق تلقائي.");
+        if (analysis.suggestions && analysis.suggestions.length) {
+          lines.push("مرشّحات الأب الأقرب:");
+          analysis.suggestions.forEach((s, i) => {
+            lines.push(
+              "  " +
+                (i + 1) +
+                ") #" +
+                s.id +
+                " · " +
+                s.child_path +
+                " · " +
+                s.score_ar +
+                (s.person_id ? " · UUID:" + s.person_id : ""),
+            );
+          });
+          lines.push("اختر رقم المرشّح من الأزرار أدناه إن وُجدت.");
+        }
+      } else if (!preview.executable) {
+        lines.push("");
+        lines.push("لا اقتراح قابل للتنفيذ — راجع يدويًا.");
       }
-    } else if (!preview.executable) {
-      lines.push("");
-      lines.push("لا اقتراح قابل للتنفيذ — راجع يدويًا.");
     }
     if (healthRepairBody) {
       let html = escapeHtml(lines.join("\n"));
-      if (analysis.suggestions && analysis.suggestions.length) {
+      if (
+        analysis.repair_type !== "manual_review_no_merge" &&
+        analysis.suggestions &&
+        analysis.suggestions.length
+      ) {
         html +=
           '<div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">' +
           analysis.suggestions
@@ -2333,10 +2353,26 @@ where c.id = matches.id; commit;
         });
       });
     }
+    if (healthRepairToSql) {
+      healthRepairToSql.disabled = true;
+      if (analysis.repair_type === "manual_review_no_merge") {
+        healthRepairToSql.style.display = "none";
+      } else {
+        healthRepairToSql.style.display = "";
+      }
+    }
+    if (healthRepairApprove && analysis.repair_type === "manual_review_no_merge") {
+      healthRepairApprove.checked = false;
+      healthRepairApprove.disabled = true;
+    } else if (healthRepairApprove) {
+      healthRepairApprove.disabled = false;
+    }
     setHealthRepairStatus(
-      preview.executable
-        ? "معاينة جاهزة — وافق ثم أرسل أمر صف واحد إلى SQL Workspace."
-        : "تحليل مكتمل — لا تنفيذ تلقائي.",
+      analysis.repair_type === "manual_review_no_merge"
+        ? "مراجعة فقط — لا دمج تلقائي ولا إرسال SQL."
+        : preview.executable
+          ? "معاينة جاهزة — وافق ثم أرسل أمر صف واحد إلى SQL Workspace."
+          : "تحليل مكتمل — لا تنفيذ تلقائي.",
     );
     try {
       healthRepairPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -2416,9 +2452,21 @@ where c.id = matches.id; commit;
     }
     if (!healthStructureBody) return;
     const audit = healthStructureAudit;
+    const theadRow =
+      document.querySelector("#health-structure-thead tr") ||
+      (healthStructureBody.closest("table") &&
+        healthStructureBody.closest("table").querySelector("thead tr"));
+    const isSpellDup = healthStructureActiveCat === "possible_spelling_duplicates";
+    if (theadRow) {
+      theadRow.innerHTML = isSpellDup
+        ? "<th>الأب</th><th>الاسم الأول</th><th>الاسم الثاني</th><th>نسبة التشابه</th><th>الحالة</th><th>الأثر</th><th>إجراء</th>"
+        : "<th>id</th><th>الأولوية</th><th>الفرع</th><th>المسار (name)</th><th>parent</th><th>مستخرج</th><th>الأثر</th><th>سبب جذري</th><th>إجراء</th>";
+    }
     if (!audit) {
       healthStructureBody.innerHTML =
-        '<tr><td colspan="9" class="hint">لا تقرير بعد — اضغط تحديث التقرير.</td></tr>';
+        '<tr><td colspan="' +
+        (isSpellDup ? "7" : "9") +
+        '" class="hint">لا تقرير بعد — اضغط تحديث التقرير.</td></tr>';
       if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = "";
       return;
     }
@@ -2437,68 +2485,110 @@ where c.id = matches.id; commit;
         (catMeta && catMeta.label ? catMeta.label : healthStructureActiveCat) +
         " — " +
         String(rows.length) +
-        " صف" +
+        (isSpellDup ? " زوج" : " صف") +
         (catMeta && catMeta.priority_ar ? " · " + catMeta.priority_ar : "") +
-        (catMeta && catMeta.impact_ar ? " · أثر: " + catMeta.impact_ar : "");
+        (catMeta && catMeta.impact_ar ? " · أثر: " + catMeta.impact_ar : "") +
+        (isSpellDup ? " · مراجعة فقط — لا دمج تلقائي" : "");
     }
     if (healthStructureDetailTitle) healthStructureDetailTitle.textContent = title;
+    const emptyCols = isSpellDup ? "7" : "9";
     if (!rows.length) {
       healthStructureBody.innerHTML =
         healthStructureActiveCat === "total" || healthStructureActiveCat === "healthy_relations"
-          ? '<tr><td colspan="9" class="hint">بطاقة ملخص فقط — اختر بطاقة تحذير لعرض الصفوف.</td></tr>'
-          : '<tr><td colspan="9" class="hint">لا صفوف في هذه الفئة.</td></tr>';
+          ? '<tr><td colspan="' +
+            emptyCols +
+            '" class="hint">بطاقة ملخص فقط — اختر بطاقة تحذير لعرض الصفوف.</td></tr>'
+          : '<tr><td colspan="' + emptyCols + '" class="hint">لا صفوف في هذه الفئة.</td></tr>';
       return;
     }
-    healthStructureBody.innerHTML = rows
-      .slice(0, 200)
-      .map((row) => {
-        const id = escapeHtml(row.id != null ? row.id : "");
-        const pri = escapeHtml(row.priority_ar || "—");
-        const branch = escapeHtml(row.branch_key || "");
-        const path = escapeHtml(row.child_path || "");
-        const parent = escapeHtml(
-          row.parent != null && row.parent !== "" ? row.parent : "NULL",
-        );
-        const extracted = escapeHtml(row.extracted_parent || "—");
-        const impact = escapeHtml(
-          row.impact_ar ||
-            (Array.isArray(row.impact) ? row.impact.join(" · ") : "") ||
-            "—",
-        );
-        const root = escapeHtml(row.root_cause_ar || row.reason_ar || "");
-        const cat = escapeHtml(row.category || healthStructureActiveCat);
-        return (
-          "<tr><td>" +
-          id +
-          "</td><td>" +
-          pri +
-          "</td><td>" +
-          branch +
-          "</td><td>" +
-          path +
-          "</td><td>" +
-          parent +
-          "</td><td>" +
-          extracted +
-          "</td><td>" +
-          impact +
-          "</td><td>" +
-          root +
-          '</td><td><div class="health-row-actions">' +
-          '<button type="button" class="btn btn-outline btn-sm" data-health-analyze="' +
-          id +
-          '" data-health-cat="' +
-          cat +
-          '">تحليل</button>' +
-          '<button type="button" class="btn btn-outline btn-sm" data-health-prov="' +
-          id +
-          '" data-health-cat="' +
-          cat +
-          '">اعرض سبب الإدخال</button>' +
-          "</div></td></tr>"
-        );
-      })
-      .join("");
+    if (isSpellDup) {
+      healthStructureBody.innerHTML = rows
+        .slice(0, 200)
+        .map((row) => {
+          const pairId = escapeHtml(row.id != null ? row.id : "");
+          const father = escapeHtml(row.father_label || row.stored_parent || "—");
+          const n1 = escapeHtml(row.name_a || "");
+          const n2 = escapeHtml(row.name_b || "");
+          const sim = escapeHtml(row.similarity_ar || String(row.similarity_pct || 100) + "%");
+          const status = escapeHtml(row.status_ar || "يحتاج مراجعة");
+          const impact = escapeHtml(
+            row.impact_ar ||
+              (Array.isArray(row.impact) ? row.impact.join(" · ") : "") ||
+              "—",
+          );
+          return (
+            "<tr><td>" +
+            father +
+            "</td><td>" +
+            n1 +
+            "</td><td>" +
+            n2 +
+            "</td><td>" +
+            sim +
+            "</td><td>" +
+            status +
+            "</td><td>" +
+            impact +
+            '</td><td><div class="health-row-actions">' +
+            '<button type="button" class="btn btn-outline btn-sm" data-health-analyze="' +
+            pairId +
+            '" data-health-cat="possible_spelling_duplicates">ملاحظات المراجعة</button>' +
+            "</div></td></tr>"
+          );
+        })
+        .join("");
+    } else {
+      healthStructureBody.innerHTML = rows
+        .slice(0, 200)
+        .map((row) => {
+          const id = escapeHtml(row.id != null ? row.id : "");
+          const pri = escapeHtml(row.priority_ar || "—");
+          const branch = escapeHtml(row.branch_key || "");
+          const path = escapeHtml(row.child_path || "");
+          const parent = escapeHtml(
+            row.parent != null && row.parent !== "" ? row.parent : "NULL",
+          );
+          const extracted = escapeHtml(row.extracted_parent || "—");
+          const impact = escapeHtml(
+            row.impact_ar ||
+              (Array.isArray(row.impact) ? row.impact.join(" · ") : "") ||
+              "—",
+          );
+          const root = escapeHtml(row.root_cause_ar || row.reason_ar || "");
+          const cat = escapeHtml(row.category || healthStructureActiveCat);
+          return (
+            "<tr><td>" +
+            id +
+            "</td><td>" +
+            pri +
+            "</td><td>" +
+            branch +
+            "</td><td>" +
+            path +
+            "</td><td>" +
+            parent +
+            "</td><td>" +
+            extracted +
+            "</td><td>" +
+            impact +
+            "</td><td>" +
+            root +
+            '</td><td><div class="health-row-actions">' +
+            '<button type="button" class="btn btn-outline btn-sm" data-health-analyze="' +
+            id +
+            '" data-health-cat="' +
+            cat +
+            '">تحليل</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-health-prov="' +
+            id +
+            '" data-health-cat="' +
+            cat +
+            '">اعرض سبب الإدخال</button>' +
+            "</div></td></tr>"
+          );
+        })
+        .join("");
+    }
     healthStructureBody.querySelectorAll("[data-health-analyze]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const issue = findIssueRow(

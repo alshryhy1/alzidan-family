@@ -7,6 +7,7 @@
  *  - parent_empty: both parent and parent_name empty
  *  - missing_father: parent string set but no matching tree_children.name/child_name
  *  - path_mismatch: parent extracted from name path ≠ stored parent
+ *  - possible_spelling_duplicates: sibling names match after Arabic normalize (review only)
  *  - duplicate_person_id
  *  - spouses_without_husband
  *  - broken_relation: union of structural failures (no healthy father link)
@@ -19,6 +20,7 @@
     PARENT_EMPTY: "parent_empty",
     MISSING_FATHER: "missing_father",
     PATH_MISMATCH: "path_mismatch",
+    POSSIBLE_SPELLING_DUPLICATES: "possible_spelling_duplicates",
     DUPLICATE_PERSON_ID: "duplicate_person_id",
     SPOUSES_WITHOUT_HUSBAND: "spouses_without_husband",
     BROKEN_RELATION: "broken_relation",
@@ -29,6 +31,7 @@
     parent_empty: "parent فارغ",
     missing_father: "الأب غير موجود",
     path_mismatch: "عدم تطابق المسار مع parent",
+    possible_spelling_duplicates: "الأسماء المتشابهة (Possible Duplicates)",
     duplicate_person_id: "person_id مكرر",
     spouses_without_husband: "زوجات بلا زوج صالح",
     broken_relation: "أبناء بدون أب صالح",
@@ -55,6 +58,10 @@
       "لا يظهر ضمن أبناء الأب",
       "لا يظهر في البحث",
       "يؤثر على Workflow",
+    ],
+    possible_spelling_duplicates: [
+      "يسمح بطلبات مكررة",
+      "يُربك بحث الطلبات (RX)",
     ],
     duplicate_person_id: ["يسمح بطلبات مكررة", "يحتاج ربط UUID", "يؤثر على Workflow"],
     spouses_without_husband: ["يؤثر على Workflow", "لا يظهر في البحث"],
@@ -85,6 +92,7 @@
     parent_empty: PRIORITY.CRITICAL,
     missing_father: PRIORITY.CRITICAL,
     path_mismatch: PRIORITY.HIGH,
+    possible_spelling_duplicates: PRIORITY.HIGH,
     broken_relation: PRIORITY.HIGH,
     duplicate_person_id: PRIORITY.MEDIUM,
     spouses_without_husband: PRIORITY.MEDIUM,
@@ -100,6 +108,8 @@
       "قيمة أب لا تطابق صفًا حيًا: خطأ إملائي / متغيرات كتابة / أب لم يُستورد / اعتماد طلب بلا أب صالح.",
     path_mismatch:
       "تعديل المسار (name) دون مزامنة parent، أو استيراد جزئي، أو صيانة يدوية.",
+    possible_spelling_duplicates:
+      "صفّان تحت نفس الأب تطابقا بعد تطبيع العربية (همزة / ى↔ي / ة↔ه / تشكيل) — قد يكونان شخصًا واحدًا أو شخصين مختلفين.",
     duplicate_person_id: "دمج/استيراد مكرر أو نسخ صفوف — يحتاج ربط UUID لا إعادة تسمية.",
     spouses_without_husband: "زوجة رُبطت بزوج غير موجود أو UUID مكسور.",
     broken_relation: "فشل هيكلي مركّب — راجع الفئة الأساسية للصف.",
@@ -114,6 +124,8 @@
       "طلب مندوب / Workflow اعتماد / استيراد — ارفض عند غياب الأب في الشجرة.",
     path_mismatch:
       "أي مسار يحدّث name دون parent (مندوب/إدارة/استيراد) — وحّد عبر Tree Engine.prepareChildWriteRow.",
+    possible_spelling_duplicates:
+      "لا دمج تلقائي — المشرف يقرر يدويًا (مراجعة / دمج لاحقًا). Health Center يعرض الغموض فقط (Truth Before Speed).",
     duplicate_person_id: "استيراد/دمج — Canonical Person + Tree Engine sole writer.",
     spouses_without_husband: "مسار ربط الزوجات (إدارة/مندوب) — حل الزوج بـ person_id.",
     broken_relation: "نفس مسارات سلامة البيانات أعلاه.",
@@ -121,6 +133,36 @@
 
   var GROUP_DATA_INTEGRITY = "data_integrity";
   var GROUP_UUID_LINK = "uuid_link";
+
+  function normalizeArabicDigitsLocal(v) {
+    return String(v == null ? "" : v)
+      .replace(/[٠-٩]/g, function (d) {
+        return String(d.charCodeAt(0) - 1632);
+      })
+      .replace(/[۰-۹]/g, function (d) {
+        return String(d.charCodeAt(0) - 1776);
+      });
+  }
+
+  /** Shared with Core.normalizeArabicForCompare when available. */
+  function normalizeArabicForCompare(value) {
+    var Core = global.AlzidanAdminCore;
+    if (Core && typeof Core.normalizeArabicForCompare === "function") {
+      return Core.normalizeArabicForCompare(value);
+    }
+    var s = normalizeArabicDigitsLocal(value);
+    try {
+      s = s.normalize("NFKD");
+    } catch (_) {}
+    s = s.replace(/[\u0300-\u036f]/g, "");
+    s = s.replace(/[\u064B-\u065F\u0670]/g, "");
+    s = s.replace(/\u0640/g, "");
+    s = s.replace(/[إأآٱ]/g, "ا");
+    s = s.replace(/ى/g, "ي");
+    s = s.replace(/ة/g, "ه");
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
 
   function norm(v) {
     return String(v == null ? "" : v)
@@ -143,6 +185,34 @@
   /** Stored parent used by most queries: parent_name preferred, then parent. */
   function storedParent(row) {
     return parentNameColumn(row) || parentColumn(row);
+  }
+
+  function leafName(path) {
+    var p = norm(path);
+    if (!p) return "";
+    return p.indexOf("/") >= 0 ? norm(p.slice(p.lastIndexOf("/") + 1)) : p;
+  }
+
+  function fatherDisplay(row) {
+    var stored = storedParent(row);
+    if (stored) return leafName(stored) || stored;
+    return "—";
+  }
+
+  /**
+   * Prefer parent_person_id; else branch + normalized parent path.
+   * Empty key → skip spelling-dup grouping (orphan / root without father).
+   */
+  function fatherGroupKey(row) {
+    var ppid = row && row.parent_person_id != null ? String(row.parent_person_id).trim() : "";
+    if (ppid) return "pid:" + ppid;
+    var branch = norm(row && row.branch_key);
+    var parent = storedParent(row);
+    if (!parent) {
+      parent = extractParentFromName(childPath(row));
+    }
+    if (!parent) return "";
+    return "path:" + branch + "||" + normalizeArabicForCompare(parent);
   }
 
   function branchRootName(branchKey) {
@@ -265,6 +335,124 @@
       },
       extra || {},
     );
+  }
+
+  /**
+   * Sibling pairs under same father whose leaf names match after Arabic normalize.
+   * Read-only · no auto-merge (Truth Before Speed).
+   */
+  function findPossibleSpellingDuplicates(children) {
+    var rows = Array.isArray(children) ? children : [];
+    var groups = new Map();
+    rows.forEach(function (c) {
+      if (!c) return;
+      var key = fatherGroupKey(c);
+      if (!key) return;
+      var leaf = leafName(childPath(c));
+      if (!leaf) return;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    });
+
+    var pairs = [];
+    var seenPair = new Set();
+
+    groups.forEach(function (siblings) {
+      if (!siblings || siblings.length < 2) return;
+      var i;
+      var j;
+      for (i = 0; i < siblings.length; i += 1) {
+        for (j = i + 1; j < siblings.length; j += 1) {
+          var a = siblings[i];
+          var b = siblings[j];
+          if (a.id != null && b.id != null && Number(a.id) === Number(b.id)) continue;
+          var leafA = leafName(childPath(a));
+          var leafB = leafName(childPath(b));
+          if (!leafA || !leafB) continue;
+          var normA = normalizeArabicForCompare(leafA);
+          var normB = normalizeArabicForCompare(leafB);
+          if (!normA || !normB || normA !== normB) continue;
+          var idA = a.id != null ? Number(a.id) : 0;
+          var idB = b.id != null ? Number(b.id) : 0;
+          var lo = idA && idB ? Math.min(idA, idB) : idA || idB;
+          var hi = idA && idB ? Math.max(idA, idB) : idA || idB;
+          var pairKey = "dup:" + lo + ":" + hi;
+          if (seenPair.has(pairKey)) continue;
+          seenPair.add(pairKey);
+
+          var first = idA && idB && idA > idB ? b : a;
+          var second = first === a ? b : a;
+          var name1 = leafName(childPath(first));
+          var name2 = leafName(childPath(second));
+          var path1 = childPath(first);
+          var path2 = childPath(second);
+          var fatherLabel = fatherDisplay(first) || fatherDisplay(second);
+          var sameRaw = name1 === name2;
+          pairs.push({
+            id: pairKey,
+            id_a: first.id,
+            id_b: second.id,
+            branch_key: norm(first.branch_key) || norm(second.branch_key),
+            child_path: path1 + " ↔ " + path2,
+            child_path_a: path1,
+            child_path_b: path2,
+            parent: storedParent(first) || storedParent(second) || null,
+            parent_name: parentNameColumn(first) || parentNameColumn(second) || null,
+            stored_parent: storedParent(first) || storedParent(second) || null,
+            extracted_parent: null,
+            person_id: first.person_id || null,
+            person_id_a: first.person_id || null,
+            person_id_b: second.person_id || null,
+            parent_person_id: first.parent_person_id || second.parent_person_id || null,
+            father_label: fatherLabel,
+            name_a: name1,
+            name_b: name2,
+            normalized_name: normA,
+            similarity_pct: 100,
+            similarity_ar: "100%",
+            status_ar: "يحتاج مراجعة",
+            created_at: first.created_at || null,
+            updated_at: first.updated_at || null,
+            category: CAT.POSSIBLE_SPELLING_DUPLICATES,
+            category_ar: CAT_AR.possible_spelling_duplicates,
+            group: GROUP_DATA_INTEGRITY,
+            group_ar: "سلامة البيانات",
+            severity: "warning",
+            priority: PRIORITY.HIGH,
+            priority_ar: PRIORITY_AR.high,
+            impact: impactFor(CAT.POSSIBLE_SPELLING_DUPLICATES),
+            impact_ar: impactLabel(CAT.POSSIBLE_SPELLING_DUPLICATES),
+            root_cause_ar: rootCauseFor(CAT.POSSIBLE_SPELLING_DUPLICATES),
+            write_path_ar: writePathFor(CAT.POSSIBLE_SPELLING_DUPLICATES),
+            code: "TREE-SPELL-DUP",
+            repair_forbidden: true,
+            never_auto_merge: true,
+            reason_ar: sameRaw
+              ? "صفّان بنفس الاسم تحت الأب «" +
+                fatherLabel +
+                "»: «" +
+                name1 +
+                "» — يحتاج قرار المشرف (لا دمج تلقائي)."
+              : "تطابق بعد تطبيع العربية تحت الأب «" +
+                fatherLabel +
+                "»: «" +
+                name1 +
+                "» ↔ «" +
+                name2 +
+                "» — يحتاج قرار المشرف (لا دمج تلقائي).",
+          });
+        }
+      }
+    });
+
+    pairs.sort(function (x, y) {
+      var fa = normalizeArabicForCompare(x.father_label || "");
+      var fb = normalizeArabicForCompare(y.father_label || "");
+      if (fa < fb) return -1;
+      if (fa > fb) return 1;
+      return String(x.id).localeCompare(String(y.id));
+    });
+    return pairs;
   }
 
   /**
@@ -399,6 +587,8 @@
       });
     });
 
+    var spellingDupes = findPossibleSpellingDuplicates(rows);
+
     var spousesBad = [];
     var byId = new Map();
     rows.forEach(function (c) {
@@ -445,19 +635,20 @@
     lists[CAT.PARENT_EMPTY] = parentEmpty;
     lists[CAT.MISSING_FATHER] = missingFather;
     lists[CAT.PATH_MISMATCH] = pathMismatch;
+    lists[CAT.POSSIBLE_SPELLING_DUPLICATES] = spellingDupes;
     lists[CAT.DUPLICATE_PERSON_ID] = duplicatePersonId;
     lists[CAT.SPOUSES_WITHOUT_HUSBAND] = spousesBad;
     lists[CAT.BROKEN_RELATION] = brokenRelation;
 
     var criticalCount =
       parentNull.length + parentEmpty.length + missingFather.length;
-    var highCount = pathMismatch.length;
+    var highCount = pathMismatch.length + spellingDupes.length;
     // broken_relation overlaps — counted in high "needs review" separately via path
     var needsReview = highCount + brokenRelation.length;
 
     return {
       mode: "read_only",
-      schema: "tree_structure_audit_v2",
+      schema: "tree_structure_audit_v3",
       totals: {
         tree_children: rows.length,
         healthy_relations: healthy,
@@ -465,6 +656,7 @@
         parent_empty: parentEmpty.length,
         missing_father: missingFather.length,
         path_mismatch: pathMismatch.length,
+        possible_spelling_duplicates: spellingDupes.length,
         duplicate_person_id: duplicatePersonId.length,
         spouses_without_husband: spousesBad.length,
         broken_relation: brokenRelation.length,
@@ -477,14 +669,15 @@
         needs_review: needsReview,
         uuid_link_needed: duplicatePersonId.length + spousesBad.length,
         healthy: healthy,
+        possible_spelling_duplicates: spellingDupes.length,
         labels: {
           critical: "🔴 حرج (parent=NULL · أب مفقود)",
-          needs_review: "🟠 يحتاج مراجعة (مسار/علاقة)",
+          needs_review: "🟠 يحتاج مراجعة (مسار/علاقة/أسماء متشابهة)",
           uuid_link_needed: "🟡 يحتاج ربط UUID",
           healthy: "🟢 علاقات سليمة",
         },
         note_ar:
-          "أولوية الإصلاح للمدير: حرج → مراجعة → UUID. بلا «إصلاح الكل».",
+          "أولوية الإصلاح للمدير: حرج → مراجعة → UUID. الأسماء المتشابهة للمراجعة فقط — بلا دمج تلقائي.",
       },
       groups: {
         data_integrity: {
@@ -496,6 +689,7 @@
             CAT.PARENT_NULL,
             CAT.MISSING_FATHER,
             CAT.PATH_MISMATCH,
+            CAT.POSSIBLE_SPELLING_DUPLICATES,
             CAT.PARENT_EMPTY,
             CAT.BROKEN_RELATION,
           ],
@@ -562,6 +756,19 @@
           root_cause_ar: rootCauseFor(CAT.PATH_MISMATCH),
         },
         {
+          id: CAT.POSSIBLE_SPELLING_DUPLICATES,
+          label: "🟠 " + CAT_AR.possible_spelling_duplicates,
+          count: spellingDupes.length,
+          ok: spellingDupes.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.possible_spelling_duplicates,
+          priority_ar: PRIORITY_AR.high,
+          impact_ar: impactLabel(CAT.POSSIBLE_SPELLING_DUPLICATES),
+          root_cause_ar: rootCauseFor(CAT.POSSIBLE_SPELLING_DUPLICATES),
+          note_ar: "مراجعة فقط — لا دمج تلقائي.",
+        },
+        {
           id: CAT.PARENT_EMPTY,
           label: "🔴 " + CAT_AR.parent_empty,
           count: parentEmpty.length,
@@ -625,8 +832,11 @@
     CAT_WRITE_PATH: CAT_WRITE_PATH,
     GROUP_DATA_INTEGRITY: GROUP_DATA_INTEGRITY,
     GROUP_UUID_LINK: GROUP_UUID_LINK,
+    normalizeArabicForCompare: normalizeArabicForCompare,
     extractParentFromName: extractParentFromName,
     storedParent: storedParent,
+    fatherGroupKey: fatherGroupKey,
+    findPossibleSpellingDuplicates: findPossibleSpellingDuplicates,
     impactFor: impactFor,
     impactLabel: impactLabel,
     priorityFor: priorityFor,

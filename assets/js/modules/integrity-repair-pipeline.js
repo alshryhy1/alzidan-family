@@ -324,6 +324,31 @@
           };
         });
       }
+    } else if (cat === "possible_spelling_duplicates" || cat === "TREE-SPELL-DUP") {
+      analysis.repair_type = "manual_review_no_merge";
+      analysis.requires_manual_choice = true;
+      analysis.can_auto_propose = false;
+      analysis.proposed = null;
+      analysis.never_rename = true;
+      analysis.decision_logic_ar = [
+        "أسماء متشابهة تحت نفس الأب بعد تطبيع العربية (همزة / ى↔ي / ة↔ه / تشكيل).",
+        "الاسم الأول: «" +
+          norm(issue && issue.name_a) +
+          "» · الاسم الثاني: «" +
+          norm(issue && issue.name_b) +
+          "».",
+        "نسبة التشابه: " +
+          String((issue && (issue.similarity_ar || issue.similarity_pct)) || "100%") +
+          ".",
+        "الحالة: يحتاج مراجعة — لا اقتراح دمج ولا SQL إصلاح من Health Center.",
+        "قرار المشرف لاحقًا: إبقاء صفّين · أو دمج يدوي بعد التحقق — Truth Before Speed.",
+      ];
+      analysis.root_cause_ar =
+        analysis.root_cause_ar ||
+        "متغيرات إملائية عربية أو صفوف مكررة تحت نفس الأب — الغموض مقصود حتى يقرر المشرف.";
+      analysis.write_path_ar =
+        analysis.write_path_ar ||
+        "لا مسار إصلاح تلقائي. أي دمج لاحق يجب أن يكون يدويًا بعد موافقة صريحة خارج هذا المسار.";
     } else {
       analysis.repair_type = "manual_review";
       analysis.requires_manual_choice = true;
@@ -341,7 +366,14 @@
     if (cat === "parent_null" || cat === "parent_empty" || cat === "missing_father") {
       return "critical";
     }
-    if (cat === "path_mismatch" || cat === "broken_relation") return "high";
+    if (
+      cat === "path_mismatch" ||
+      cat === "broken_relation" ||
+      cat === "possible_spelling_duplicates" ||
+      cat === "TREE-SPELL-DUP"
+    ) {
+      return "high";
+    }
     if (
       cat === "duplicate_person_id" ||
       /TREE-003/i.test(String((issue && issue.code) || "")) ||
@@ -382,9 +414,13 @@
       after: after,
       decision_logic_ar: a.decision_logic_ar || [],
       why_ar: explainWhy(a, after),
-      executable: !!(after && (after.parent || after.parent_person_id)),
+      executable:
+        a.repair_type === "manual_review_no_merge" || a.repair_type === "manual_review"
+          ? false
+          : !!(after && (after.parent || after.parent_person_id)),
       requires_approve: true,
       never_rename: !!a.never_rename,
+      never_auto_merge: a.repair_type === "manual_review_no_merge",
     };
   }
 
@@ -397,6 +433,9 @@
     }
     if (analysis && analysis.never_rename) {
       out.push("قيد صارم: لا إعادة تسمية — ربط UUID فقط.");
+    }
+    if (analysis && analysis.repair_type === "manual_review_no_merge") {
+      out.push("قيد صارم: لا دمج تلقائي — الأسماء المتشابهة للمراجعة فقط.");
     }
     if (!out.length) out.push("لا منطق اقتراح موثّق لهذه الحالة.");
     return out.join("\n");
@@ -413,6 +452,16 @@
     var id = p.analysis && p.analysis.issue_id;
     var actor = (meta && meta.actor) || "admin";
     var reason = (meta && meta.reason) || (after && after.reason_ar) || "";
+    if (
+      p.never_auto_merge ||
+      (p.analysis && p.analysis.repair_type === "manual_review_no_merge")
+    ) {
+      return {
+        ok: false,
+        message_ar:
+          "الأسماء المتشابهة للمراجعة فقط — ممنوع توليد SQL دمج من Health Center.",
+      };
+    }
     if (id == null || !after) {
       return {
         ok: false,
