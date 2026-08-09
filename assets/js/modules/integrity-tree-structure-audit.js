@@ -107,7 +107,7 @@
     missing_father:
       "قيمة أب لا تطابق صفًا حيًا: خطأ إملائي / متغيرات كتابة / أب لم يُستورد / اعتماد طلب بلا أب صالح.",
     path_mismatch:
-      "تعديل المسار (name) دون مزامنة parent، أو استيراد جزئي، أو صيانة يدوية.",
+      "تعديل المسار (name) دون مزامنة parent، أو استيراد جزئي، أو صيانة يدوية. اختلاف ى/ي وحده بعد التطبيع لا يُعدّ عدم تطابق هيكلي.",
     possible_spelling_duplicates:
       "صفّان تحت نفس الأب تطابقا بعد تطبيع العربية (همزة / ى↔ي / ة↔ه / تشكيل) — قد يكونان شخصًا واحدًا أو شخصين مختلفين.",
     duplicate_person_id: "دمج/استيراد مكرر أو نسخ صفوف — يحتاج ربط UUID لا إعادة تسمية.",
@@ -168,6 +168,13 @@
     return String(v == null ? "" : v)
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  /** Path equality after Arabic fold (ى↔ي · همزة · ة↔ه · مسافات). */
+  function pathsEqual(a, b) {
+    var na = normalizeArabicForCompare(a);
+    var nb = normalizeArabicForCompare(b);
+    return !!na && !!nb && na === nb;
   }
 
   function childPath(row) {
@@ -239,7 +246,9 @@
 
   function buildNameIndex(children) {
     var byBranchPath = new Set();
+    var byBranchPathNorm = new Map();
     var byBranchLeaf = new Map();
+    var byBranchLeafNorm = new Map();
     var personIdMap = new Map();
     (children || []).forEach(function (c) {
       if (!c) return;
@@ -247,10 +256,16 @@
       var path = childPath(c);
       if (branch && path) {
         byBranchPath.add(branch + "||" + path);
+        var pathNormKey = branch + "||" + normalizeArabicForCompare(path);
+        if (!byBranchPathNorm.has(pathNormKey)) byBranchPathNorm.set(pathNormKey, []);
+        byBranchPathNorm.get(pathNormKey).push(c);
         var leaf = path.indexOf("/") >= 0 ? path.slice(path.lastIndexOf("/") + 1) : path;
         var leafKey = branch + "||" + leaf;
         if (!byBranchLeaf.has(leafKey)) byBranchLeaf.set(leafKey, []);
         byBranchLeaf.get(leafKey).push(c);
+        var leafNormKey = branch + "||" + normalizeArabicForCompare(leaf);
+        if (!byBranchLeafNorm.has(leafNormKey)) byBranchLeafNorm.set(leafNormKey, []);
+        byBranchLeafNorm.get(leafNormKey).push(c);
       }
       if (c.person_id) {
         var pid = String(c.person_id);
@@ -260,7 +275,9 @@
     });
     return {
       byBranchPath: byBranchPath,
+      byBranchPathNorm: byBranchPathNorm,
       byBranchLeaf: byBranchLeaf,
+      byBranchLeafNorm: byBranchLeafNorm,
       personIdMap: personIdMap,
     };
   }
@@ -271,12 +288,58 @@
     if (!p || !b) return false;
     if (isBranchRootParent(p, b)) return true;
     if (index.byBranchPath.has(b + "||" + p)) return true;
+    var pathNormHits = index.byBranchPathNorm.get(b + "||" + normalizeArabicForCompare(p)) || [];
+    if (pathNormHits.length === 1) return true;
     // Leaf-only parent string: unique leaf hit in branch counts as found
     if (p.indexOf("/") < 0) {
       var hits = index.byBranchLeaf.get(b + "||" + p) || [];
-      return hits.length === 1;
+      if (hits.length === 1) return true;
+      var leafNormHits =
+        index.byBranchLeafNorm.get(b + "||" + normalizeArabicForCompare(p)) || [];
+      return leafNormHits.length === 1;
     }
     return false;
+  }
+
+  /**
+   * Prefer exact path; else unique Arabic-normalized full path; else unique leaf.
+   * Returns the living tree_children row — caller must use childPath(row) as canonical parent string.
+   */
+  function resolveFatherRow(index, branch, parentPath) {
+    var p = norm(parentPath);
+    var b = norm(branch);
+    if (!p || !b || !index) return null;
+    if (isBranchRootParent(p, b)) return null;
+    var exact = [];
+    var normHits = index.byBranchPathNorm.get(b + "||" + normalizeArabicForCompare(p)) || [];
+    normHits.forEach(function (c) {
+      if (childPath(c) === p) exact.push(c);
+    });
+    if (exact.length === 1) return exact[0];
+    if (normHits.length === 1) return normHits[0];
+    if (p.indexOf("/") < 0) {
+      var leafHits = index.byBranchLeaf.get(b + "||" + p) || [];
+      if (leafHits.length === 1) return leafHits[0];
+      var leafNormHits =
+        index.byBranchLeafNorm.get(b + "||" + normalizeArabicForCompare(p)) || [];
+      if (leafNormHits.length === 1) return leafNormHits[0];
+    }
+    return null;
+  }
+
+  /** True when stored parent aligns with name-extracted path (normalize or same canonical father). */
+  function parentAlignedWithExtract(index, branch, stored, extracted) {
+    var s = norm(stored);
+    var e = norm(extracted);
+    if (!e) return !s;
+    if (s && pathsEqual(s, e)) return true;
+    if (!s) return false;
+    var fatherE = resolveFatherRow(index, branch, e);
+    if (!fatherE) return false;
+    var canonical = childPath(fatherE);
+    if (s === canonical || pathsEqual(s, canonical)) return true;
+    var fatherS = resolveFatherRow(index, branch, s);
+    return !!(fatherS && childPath(fatherS) === canonical);
   }
 
   function impactFor(category) {
@@ -506,30 +569,46 @@
         );
       }
 
-      // Path-derived parent vs stored parent (and vs parent column)
-      if (extracted) {
-        var compareTarget = stored || "";
-        var colMismatch = !pCol || pCol !== extracted;
-        var storedMismatch = !compareTarget || compareTarget !== extracted;
-        // Also flag when parent_name matches extracted but parent column does not
-        if (colMismatch || storedMismatch) {
-          // Root with empty parent column but extracted is root path is still drift if parent col null
-          if (!(isRoot && !colNull && compareTarget === extracted)) {
-            if (colMismatch || (stored && stored !== extracted) || (!stored && extracted)) {
-              pathMismatch.push(
-                issueRow(c, CAT.PATH_MISMATCH, {
-                  reason_ar:
-                    "المستخرج من الاسم: «" +
-                    extracted +
-                    "» ≠ parent: «" +
-                    (pCol || "NULL") +
-                    "» / parent_name: «" +
-                    (pName || "NULL") +
-                    "»",
-                }),
-              );
-            }
-          }
+      // Path vs stored: Arabic-normalize + same canonical father → leave path_mismatch.
+      // Dual-column parent=NULL alone stays in parent_null (not path_mismatch).
+      if (extracted && !isRoot) {
+        var aligned = parentAlignedWithExtract(index, branch, stored, extracted);
+        var colAligned =
+          !!pCol &&
+          (pathsEqual(pCol, extracted) ||
+            parentAlignedWithExtract(index, branch, pCol, extracted));
+        if (stored && !aligned) {
+          var fatherForExtract = resolveFatherRow(index, branch, extracted);
+          pathMismatch.push(
+            issueRow(c, CAT.PATH_MISMATCH, {
+              reason_ar:
+                "المستخرج من الاسم: «" +
+                extracted +
+                "» ≠ parent: «" +
+                (pCol || "NULL") +
+                "» / parent_name: «" +
+                (pName || "NULL") +
+                "»",
+              canonical_father_path: fatherForExtract
+                ? childPath(fatherForExtract)
+                : null,
+            }),
+          );
+        } else if (
+          stored &&
+          aligned &&
+          pCol &&
+          !colAligned &&
+          !pathsEqual(pCol, stored)
+        ) {
+          pathMismatch.push(
+            issueRow(c, CAT.PATH_MISMATCH, {
+              reason_ar:
+                "عمود parent «" +
+                pCol +
+                "» لا يطابق parent_name/المستخرج بعد التطبيع",
+            }),
+          );
         }
       }
 
@@ -548,7 +627,7 @@
         (isRoot ||
           (stored &&
             fatherExists(index, branch, stored) &&
-            (!extracted || extracted === stored || extracted === pName)));
+            (!extracted || parentAlignedWithExtract(index, branch, stored, extracted))));
       // Dual-column: parent col should match when path has parent
       if (extracted && colNull) structurallyOk = false;
       if (stored && !isRoot && !fatherExists(index, branch, stored)) {
@@ -833,9 +912,15 @@
     GROUP_DATA_INTEGRITY: GROUP_DATA_INTEGRITY,
     GROUP_UUID_LINK: GROUP_UUID_LINK,
     normalizeArabicForCompare: normalizeArabicForCompare,
+    pathsEqual: pathsEqual,
     extractParentFromName: extractParentFromName,
     storedParent: storedParent,
     fatherGroupKey: fatherGroupKey,
+    fatherExists: fatherExists,
+    resolveFatherRow: resolveFatherRow,
+    parentAlignedWithExtract: parentAlignedWithExtract,
+    childPath: childPath,
+    buildNameIndex: buildNameIndex,
     findPossibleSpellingDuplicates: findPossibleSpellingDuplicates,
     impactFor: impactFor,
     impactLabel: impactLabel,
