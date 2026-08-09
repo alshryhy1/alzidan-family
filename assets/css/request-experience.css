@@ -212,6 +212,34 @@
   color: #991b1b;
   font-weight: 800;
 }
+.rx-children-under {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(16, 185, 129, 0.35);
+}
+.rx-children-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rx-children-list li {
+  margin: 0;
+}
+.rx-child-pick {
+  border: 1px solid rgba(15, 118, 110, 0.25);
+  background: #f0fdf4;
+  color: #065f46;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.rx-child-pick:hover {
+  background: #dcfce7;
+}
 .rx-actions-stack {
   flex-direction: column;
   align-items: stretch;

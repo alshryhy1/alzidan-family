@@ -1,6 +1,7 @@
 /**
  * Request Experience (RX) — visitor intent-first entry.
  * Slice RX-1: hub + أضف فردًا end-to-end → approval_requests (no tree_* writes).
+ * P0: tree index must match the public tree (groupChildrenRows) — completeness before gates.
  * P0 gate: affirming an existing person identity never creates tree_card add.
  * Spec: docs/REQUEST-EXPERIENCE-UX-v1.md (adopted 2026-08-09).
  */
@@ -8,8 +9,14 @@
   "use strict";
 
   var BRANCHES = ["زيدان", "مزيد", "زايد", "لاحم", "ملحم"];
+  /** Same key as app.js so RX reuses warm cache; must honor TTL (app writes {ts,rows}). */
   var CACHE_PREFIX = "alzidan_tree_children_cache_v1:";
+  var CACHE_TTL_MS = 5 * 60 * 1000;
+  var PAGE_SIZE = 1000;
   var TRACK_KEY = "alzidan_rx_my_requests_v1";
+  var EXISTING_PERSON_MSG =
+    "هذا الشخص موجود مسبقًا في الشجرة. إذا أردت تعديل بياناته فاستخدم (تصحيح بيانات شخص).";
+  /** Retest note: father خميس must list حسن، حسين، عبدالعزيز، منصور، مزيد — same count as tree. */
 
   var INTENTS = [
     {
@@ -85,6 +92,8 @@
     parentCandidates: [],
     selectedParent: null,
     parentConfirmed: false,
+    /** Direct children under selectedParent — must match tree 100%. */
+    childrenUnderParent: [],
     /** Matches for the person being added (identity), not father/context. */
     identityCandidates: [],
     selectedIdentity: null,
@@ -97,6 +106,9 @@
     busy: false,
     error: "",
   };
+
+  /** In-memory full person index per branch (no search limit). */
+  var branchIndexCache = Object.create(null);
 
   function text(v) {
     return String(v == null ? "" : v).replace(/\s+/g, " ").trim();
@@ -206,67 +218,205 @@
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.rows)) return null;
+      var ts = typeof parsed.ts === "number" ? parsed.ts : 0;
+      if (!ts || Date.now() - ts > CACHE_TTL_MS) return null;
       return parsed.rows;
     } catch (e) {
       return null;
     }
   }
 
+  function writeBranchCache(branchKey, rows) {
+    try {
+      localStorage.setItem(
+        CACHE_PREFIX + normalizePersonName(branchKey),
+        JSON.stringify({ ts: Date.now(), rows: Array.isArray(rows) ? rows : [] })
+      );
+    } catch (e) {}
+  }
+
+  /**
+   * Build the same person index the public tree search uses:
+   * resolve leaf parents to full paths (branchRoot/leaf) so children under خميس
+   * are not collapsed to bare leaf ids (which hid حسين / عبدالعزيز / منصور).
+   * Mirrors app.js groupChildrenRows + collectSearchItemsForBranch intent.
+   */
   function collectItemsForBranch(branchKey, rows) {
     var key = normalizePersonName(branchKey);
     var rootName = getBranchRootName(key);
     var byId = new Map();
-    (Array.isArray(rows) ? rows : []).forEach(function (r) {
-      var child =
-        normalizePersonName(r.child_name || r.name || "") ||
-        normalizePersonName(r.person_id || "");
-      var parent = normalizePersonName(r.parent_name || r.parent || "");
-      if (!child) return;
-      var id = child.indexOf("/") >= 0 ? child : parent && parent.indexOf("/") >= 0 ? parent + "/" + child : child;
-      if (!id || id === rootName) return;
-      if (byId.has(id)) return;
-      var leaf = getDisplayNameForNodeId(id, rootName);
-      var path = pathLabelFromNodeId(id, rootName);
-      byId.set(id, {
+    var idsByLeaf = new Map();
+
+    function indexLeaf(id) {
+      var nid = normalizePersonName(id || "");
+      if (!nid) return;
+      var leaf = getDisplayNameForNodeId(nid, rootName);
+      if (!leaf) return;
+      var set = idsByLeaf.get(leaf);
+      if (!set) {
+        set = new Set();
+        idsByLeaf.set(leaf, set);
+      }
+      set.add(nid);
+    }
+
+    function upsert(id, meta) {
+      var nid = normalizePersonName(id || "");
+      if (!nid || nid === rootName) return null;
+      indexLeaf(nid);
+      var prev = byId.get(nid);
+      if (prev) {
+        if (meta && meta.personId && !prev.personId) prev.personId = meta.personId;
+        if (meta && meta.parentPersonId && !prev.parentPersonId) {
+          prev.parentPersonId = meta.parentPersonId;
+        }
+        if (meta && meta.parentId && !prev.parentId) prev.parentId = meta.parentId;
+        return prev;
+      }
+      var leaf = getDisplayNameForNodeId(nid, rootName);
+      var path = pathLabelFromNodeId(nid, rootName);
+      var item = {
         branch: key,
-        id: id,
+        id: nid,
         leaf: leaf,
         path: path,
-        personId: normalizePersonName(r.person_id || ""),
-        searchText: normalizeSearchText([leaf, path, id, key].join(" ")),
-      });
-      if (parent && parent.indexOf("/") >= 0 && !byId.has(parent) && parent !== rootName) {
-        var pLeaf = getDisplayNameForNodeId(parent, rootName);
-        var pPath = pathLabelFromNodeId(parent, rootName);
-        byId.set(parent, {
-          branch: key,
-          id: parent,
-          leaf: pLeaf,
-          path: pPath,
+        personId: normalizePersonName((meta && meta.personId) || ""),
+        parentPersonId: normalizePersonName((meta && meta.parentPersonId) || ""),
+        parentId: normalizePersonName((meta && meta.parentId) || ""),
+        searchText: normalizeSearchText([leaf, path, nid, key].join(" ")),
+      };
+      byId.set(nid, item);
+      return item;
+    }
+
+    function ensureParentId(rawParent, childRaw) {
+      var raw = normalizePersonName(rawParent || "");
+      if (!raw) return rootName || "";
+      if (raw.indexOf("/") >= 0) return raw;
+      if (rootName && (raw === rootName || raw === key)) return rootName;
+      var childFull = normalizePersonName(childRaw || "");
+      if (childFull.indexOf("/") >= 0) {
+        var parts = childFull.split("/").map(normalizePersonName).filter(Boolean);
+        if (parts.length >= 2) {
+          var derivedParent = parts.slice(0, -1).join("/");
+          var derivedLeaf = parts[parts.length - 2] || "";
+          if (
+            derivedLeaf === raw ||
+            getDisplayNameForNodeId(derivedParent, rootName) === raw ||
+            derivedParent.lastIndexOf("/" + raw) === derivedParent.length - (raw.length + 1)
+          ) {
+            return derivedParent;
+          }
+        }
+      }
+      var candidates = idsByLeaf.get(raw);
+      if (candidates && candidates.size === 1) return Array.from(candidates)[0];
+      if (candidates && candidates.size > 1) return raw;
+      if (rootName) {
+        var underRoot = rootName + "/" + raw;
+        upsert(underRoot, { parentId: rootName });
+        return underRoot;
+      }
+      return raw;
+    }
+
+    var list = Array.isArray(rows) ? rows : [];
+    // Pass 1: index rows that already carry full path ids so leaf-parent resolution can uniquify.
+    list.forEach(function (r) {
+      var childRaw = normalizePersonName(r.child_name || r.name || "");
+      var parentRaw = normalizePersonName(r.parent_name || r.parent || "");
+      if (childRaw.indexOf("/") >= 0) indexLeaf(childRaw);
+      if (parentRaw.indexOf("/") >= 0) indexLeaf(parentRaw);
+    });
+
+    list.forEach(function (r) {
+      var childRaw = normalizePersonName(r.child_name || r.name || "");
+      var parentRaw = normalizePersonName(r.parent_name || r.parent || "");
+      if (!childRaw) return;
+      var parentId = ensureParentId(parentRaw, childRaw);
+      if (!parentId) return;
+      if (parentId !== rootName) {
+        upsert(parentId, {
           personId: normalizePersonName(r.parent_person_id || ""),
-          searchText: normalizeSearchText([pLeaf, pPath, parent, key].join(" ")),
         });
       }
+      var childId;
+      if (childRaw.indexOf("/") >= 0) {
+        childId = childRaw;
+        if (
+          parentId &&
+          childId !== parentId &&
+          childId.indexOf(parentId + "/") !== 0 &&
+          !(rootName && (childId === rootName || childId.indexOf(rootName + "/") === 0))
+        ) {
+          var base = parentId.split("/").map(normalizePersonName).filter(Boolean).slice(-1)[0] || "";
+          if (base && childId.indexOf(base + "/") === 0) {
+            childId = parentId + "/" + childId.slice((base + "/").length);
+          }
+        }
+      } else {
+        childId = parentId + "/" + childRaw;
+      }
+      upsert(childId, {
+        personId: normalizePersonName(r.person_id || ""),
+        parentPersonId: normalizePersonName(r.parent_person_id || ""),
+        parentId: parentId,
+      });
     });
+
     return Array.from(byId.values());
+  }
+
+  async function fetchAllBranchRows(branchKey) {
+    var sb = getClient();
+    if (!sb) return [];
+    var all = [];
+    var from = 0;
+    try {
+      for (;;) {
+        var res = await sb
+          .from("tree_children")
+          .select("person_id,parent_person_id,parent_name,parent,child_name,name")
+          .eq("branch_key", branchKey)
+          .range(from, from + PAGE_SIZE - 1);
+        if (res.error) {
+          if (!all.length) return [];
+          break;
+        }
+        var chunk = Array.isArray(res.data) ? res.data : [];
+        all = all.concat(chunk);
+        if (chunk.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+    } catch (e) {
+      return all.length ? all : [];
+    }
+    return all;
   }
 
   async function loadBranchRows(branchKey) {
     var cached = readBranchCache(branchKey);
     if (cached && cached.length) return cached;
-    var sb = getClient();
-    if (!sb) return [];
-    try {
-      var res = await sb
-        .from("tree_children")
-        .select("person_id,parent_person_id,parent_name,parent,child_name,name")
-        .eq("branch_key", branchKey)
-        .limit(2000);
-      if (res.error) return [];
-      return Array.isArray(res.data) ? res.data : [];
-    } catch (e) {
-      return [];
+    var rows = await fetchAllBranchRows(branchKey);
+    if (rows.length) writeBranchCache(branchKey, rows);
+    return rows;
+  }
+
+  async function getBranchItems(branchKey) {
+    var key = normalizePersonName(branchKey);
+    if (branchIndexCache[key] && branchIndexCache[key].length) return branchIndexCache[key];
+    var rows = await loadBranchRows(key);
+    var items = collectItemsForBranch(key, rows);
+    branchIndexCache[key] = items;
+    return items;
+  }
+
+  async function getAllPeopleItems() {
+    var all = [];
+    for (var i = 0; i < BRANCHES.length; i++) {
+      all = all.concat(await getBranchItems(BRANCHES[i]));
     }
+    return all;
   }
 
   async function searchPeople(query, opts) {
@@ -275,11 +425,7 @@
     if (q.length < 2) return [];
     var leafOnly = !!opts.leafOnly;
     var exactLeafOnly = !!opts.exactLeafOnly;
-    var all = [];
-    for (var i = 0; i < BRANCHES.length; i++) {
-      var rows = await loadBranchRows(BRANCHES[i]);
-      all = all.concat(collectItemsForBranch(BRANCHES[i], rows));
-    }
+    var all = await getAllPeopleItems();
     var scored = all
       .map(function (item) {
         var leaf = normalizeSearchText(item.leaf);
@@ -297,47 +443,204 @@
       })
       .sort(function (a, b) {
         return b.score - a.score || a.item.leaf.localeCompare(b.item.leaf, "ar");
-      })
-      .slice(0, opts.limit || 12)
-      .map(function (x) {
-        return x.item;
       });
-    return scored;
+    if (opts.limit != null && opts.limit > 0) {
+      scored = scored.slice(0, opts.limit);
+    }
+    return scored.map(function (x) {
+      return x.item;
+    });
   }
 
-  /** Father / context search (path-aware). */
+  /**
+   * Father / context search: leaf matches first (no descendant LIMIT flood).
+   * Children-under-father are loaded separately via parent_person_id — never via this cap.
+   */
   async function searchParents(query) {
-    return searchPeople(query, { limit: 12 });
+    var leafHits = await searchPeople(query, { leafOnly: true, limit: 0 });
+    if (leafHits.length) return leafHits;
+    return searchPeople(query, { limit: 40 });
   }
 
   /**
    * Soft identity collision for the person being added.
-   * Prefer exact leaf matches; fall back to strong leaf prefix when rare.
+   * Prefer exact leaf matches; no hard cap that can drop the child under the chosen father.
    */
   async function searchIdentityCollisions(personName) {
-    var exact = await searchPeople(personName, { exactLeafOnly: true, limit: 12 });
+    var exact = await searchPeople(personName, { exactLeafOnly: true, limit: 0 });
     if (exact.length) return exact;
-    return searchPeople(personName, { leafOnly: true, limit: 12 }).filter(function (item) {
+    return searchPeople(personName, { leafOnly: true, limit: 0 }).filter(function (item) {
       var leaf = normalizeSearchText(item.leaf);
       var q = normalizeSearchText(personName);
       return leaf === q || leaf.indexOf(q) === 0;
     });
   }
 
-  /** True if a child with this leaf name already sits under the chosen parent path. */
-  function isAlreadyChildUnderParent(personName, parent, candidates) {
-    if (!parent || !personName) return false;
-    var leafQ = normalizeSearchText(personName);
+  /**
+   * Load ALL direct children for a selected father from tree_children.
+   * No localStorage cache, no silent LIMIT, no virtual list — same rows SQL proves.
+   * Prefer parent_person_id (canonical); fall back to branch rows matched by parent leaf/path.
+   */
+  async function fetchChildrenRowsForParent(parent) {
+    if (!parent) return [];
+    var sb = getClient();
+    if (!sb) return [];
+    var parentPid = text(parent.personId || "");
+    var branch = normalizePersonName(parent.branch || "");
+    var parentLeaf = normalizeSearchText(parent.leaf || "");
     var parentId = normalizePersonName(parent.id || "");
-    var parentPath = normalizeSearchText(parent.path || "");
-    return (candidates || []).some(function (item) {
-      if (normalizeSearchText(item.leaf) !== leafQ) return false;
-      var id = normalizePersonName(item.id || "");
-      if (parentId && id.indexOf(parentId + "/") === 0) return true;
-      var path = normalizeSearchText(item.path || "");
-      if (parentPath && path.indexOf(parentPath) === 0 && path !== parentPath) return true;
-      return false;
+    var all = [];
+
+    async function pageQuery(build) {
+      var from = 0;
+      var out = [];
+      for (;;) {
+        var q = build(sb.from("tree_children").select(
+          "person_id,parent_person_id,parent_name,parent,child_name,name"
+        ));
+        var res = await q.range(from, from + PAGE_SIZE - 1);
+        if (res.error) break;
+        var chunk = Array.isArray(res.data) ? res.data : [];
+        out = out.concat(chunk);
+        if (chunk.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return out;
+    }
+
+    try {
+      if (parentPid) {
+        all = await pageQuery(function (q) {
+          return q.eq("parent_person_id", parentPid);
+        });
+      }
+      // Fallback / supplement: name-path match within branch (never cached for this field).
+      if ((!all.length || !parentPid) && branch) {
+        var byBranch = await pageQuery(function (q) {
+          return q.eq("branch_key", branch);
+        });
+        var matched = byBranch.filter(function (r) {
+          var pRaw = normalizePersonName(r.parent_name || r.parent || "");
+          if (!pRaw) return false;
+          if (parentId && (pRaw === parentId || pRaw.indexOf(parentId) === 0)) return true;
+          var pLeaf = normalizeSearchText(getDisplayNameForNodeId(pRaw, getBranchRootName(branch)));
+          return parentLeaf && pLeaf === parentLeaf;
+        });
+        if (!all.length) {
+          all = matched;
+        } else {
+          var seenPid = new Set(
+            all.map(function (r) {
+              return normalizePersonName(r.person_id || "");
+            }).filter(Boolean)
+          );
+          matched.forEach(function (r) {
+            var pid = normalizePersonName(r.person_id || "");
+            if (pid && seenPid.has(pid)) return;
+            if (pid) seenPid.add(pid);
+            all.push(r);
+          });
+        }
+      }
+    } catch (e) {
+      return [];
+    }
+    return all;
+  }
+
+  function rowsToSiblingItems(parent, rows) {
+    var key = normalizePersonName(parent.branch || "");
+    var rootName = getBranchRootName(key);
+    var parentId = normalizePersonName(parent.id || "");
+    var out = [];
+    var seen = new Set();
+    (Array.isArray(rows) ? rows : []).forEach(function (r) {
+      var childRaw = normalizePersonName(r.child_name || r.name || "");
+      if (!childRaw) return;
+      var leaf = getDisplayNameForNodeId(childRaw, rootName);
+      if (!leaf) return;
+      var personId = normalizePersonName(r.person_id || "");
+      var dedupe = personId || normalizeSearchText(leaf) + "|" + normalizePersonName(r.parent_person_id || "");
+      if (seen.has(dedupe)) return;
+      seen.add(dedupe);
+      var id =
+        childRaw.indexOf("/") >= 0
+          ? childRaw
+          : parentId
+            ? parentId + "/" + leaf
+            : leaf;
+      out.push({
+        branch: key,
+        id: id,
+        leaf: leaf,
+        path: pathLabelFromNodeId(id, rootName),
+        personId: personId,
+        parentPersonId: normalizePersonName(r.parent_person_id || parent.personId || ""),
+        parentId: parentId,
+        searchText: normalizeSearchText([leaf, id, key].join(" ")),
+      });
     });
+    out.sort(function (a, b) {
+      return String(a.leaf || "").localeCompare(String(b.leaf || ""), "ar");
+    });
+    return out;
+  }
+
+  /** Filter full sibling set by typed text — never shrinks the source list. */
+  function filterChildrenByQuery(children, query) {
+    var q = normalizeSearchText(query || "");
+    if (!q) return children.slice();
+    return (children || []).filter(function (c) {
+      return (
+        normalizeSearchText(c.leaf).indexOf(q) === 0 ||
+        normalizeSearchText(c.leaf).indexOf(q) >= 0 ||
+        (c.searchText && c.searchText.indexOf(q) >= 0)
+      );
+    });
+  }
+
+  async function refreshChildrenUnderParent() {
+    state.childrenUnderParent = [];
+    if (!state.selectedParent) return [];
+    // Live tree_children fetch — do not use branch localStorage cache for siblings.
+    var rows = await fetchChildrenRowsForParent(state.selectedParent);
+    state.childrenUnderParent = rowsToSiblingItems(state.selectedParent, rows);
+    try {
+      console.info(
+        "RX children-under-parent",
+        state.selectedParent.leaf,
+        state.childrenUnderParent.map(function (c) {
+          return c.leaf;
+        })
+      );
+    } catch (e) {}
+    return state.childrenUnderParent;
+  }
+
+  /** True if a child with this leaf name already sits under the chosen parent. */
+  function findExistingChildUnderParent(personName, parent, children) {
+    if (!parent || !personName) return null;
+    var leafQ = normalizeSearchText(personName);
+    var list = children || [];
+    for (var i = 0; i < list.length; i++) {
+      if (normalizeSearchText(list[i].leaf) === leafQ) return list[i];
+    }
+    return null;
+  }
+
+  function isAlreadyChildUnderParent(personName, parent, candidates) {
+    return !!findExistingChildUnderParent(personName, parent, candidates);
+  }
+
+  function blockExistingPerson(match, reason) {
+    state.selectedIdentity = match || state.selectedIdentity || null;
+    state.identityAffirmedExisting = true;
+    state.differentPersonSameName = false;
+    state.view = "exists";
+    setError(EXISTING_PERSON_MSG);
+    try {
+      console.info("RX identity-gate blocked submit", reason || "existing-under-parent");
+    } catch (e) {}
   }
 
   function resetIdentityGate() {
@@ -420,6 +723,7 @@
     state.selectedParent = null;
     state.parentConfirmed = false;
     state.parentCandidates = [];
+    state.childrenUnderParent = [];
     resetIdentityGate();
     state.error = "";
     render();
@@ -655,13 +959,52 @@
             .join("") +
           "</ul>";
 
+    var siblingFilter = filterChildrenByQuery(state.childrenUnderParent, f.personName);
+    var childrenList =
+      state.selectedParent && state.childrenUnderParent.length
+        ? '<div class="rx-children-under" data-rx-children-panel>' +
+          "<strong>الأبناء الموجودون تحت هذا السياق (" +
+          state.childrenUnderParent.length +
+          "):</strong>" +
+          (f.personName
+            ? '<p class="rx-muted">تصفية حسب اسم الشخص: ' +
+              siblingFilter.length +
+              " من " +
+              state.childrenUnderParent.length +
+              "</p>"
+            : '<p class="rx-muted">القائمة كاملة من tree_children — بلا حد عرض.</p>') +
+          '<ul class="rx-children-list">' +
+          siblingFilter
+            .map(function (c) {
+              return (
+                '<li><button type="button" class="rx-child-pick" data-rx-child-name="' +
+                escapeHtml(c.leaf) +
+                '">' +
+                escapeHtml(c.leaf) +
+                "</button></li>"
+              );
+            })
+            .join("") +
+          "</ul>" +
+          (siblingFilter.length === 0
+            ? '<p class="rx-muted">لا تطابق لاسم الشخص ضمن الأبناء — القائمة المصدرية ما زالت ' +
+              state.childrenUnderParent.length +
+              ".</p>"
+            : "") +
+          "</div>"
+        : state.selectedParent
+          ? '<p class="rx-muted">لا أبناء مسجّلين تحت هذا السياق في الشجرة حاليًا.</p>'
+          : "";
+
     var selected = state.selectedParent
       ? '<div class="rx-selected">' +
         "<strong>السياق المختار:</strong> " +
         escapeHtml(state.selectedParent.leaf) +
         '<div class="rx-path">' +
         escapeHtml(state.selectedParent.path) +
-        "</div></div>"
+        "</div>" +
+        childrenList +
+        "</div>"
       : "";
 
     shell(
@@ -714,7 +1057,7 @@
         '<button type="submit" class="btn btn-primary">متابعة</button>' +
         "</div>" +
         "</form>",
-      { sub: "أقل حقول لازمة — فحص الاسم الموجود ثم تأكيد سياق الأب." }
+      { sub: "قائمة الأبناء تحت الأب من نفس مصدر الشجرة — ثم فحص التكرار." }
     );
 
     var form = root.querySelector("[data-rx-facts-form]");
@@ -749,20 +1092,94 @@
         state.parentCandidates = await searchParents(state.facts.parentQuery);
         state.selectedParent = null;
         state.parentConfirmed = false;
+        state.childrenUnderParent = [];
       } finally {
         render();
       }
     });
 
     root.querySelectorAll("[data-rx-pick]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", async function () {
         var idx = Number(btn.getAttribute("data-rx-pick"));
         state.selectedParent = state.parentCandidates[idx] || null;
         state.parentConfirmed = false;
+        state.childrenUnderParent = [];
+        clearError();
+        render();
+        if (state.selectedParent) {
+          try {
+            await refreshChildrenUnderParent();
+            render();
+          } catch (err) {
+            setError("تعذر تحميل أبناء السياق من الشجرة.");
+            render();
+          }
+        }
+      });
+    });
+
+    root.querySelectorAll("[data-rx-child-pick]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var name = text(btn.getAttribute("data-rx-child-name"));
+        if (!name) return;
+        state.facts.personName = name;
+        var match = findExistingChildUnderParent(name, state.selectedParent, state.childrenUnderParent);
+        if (match) {
+          blockExistingPerson(match, "picked-existing-sibling");
+          render();
+          return;
+        }
         clearError();
         render();
       });
     });
+
+    var personNameInput = form.querySelector('input[name="personName"]');
+    if (personNameInput && state.selectedParent) {
+      personNameInput.addEventListener("input", function () {
+        state.facts.personName = text(personNameInput.value);
+        var panel = root.querySelector("[data-rx-children-panel]");
+        if (!panel || !state.childrenUnderParent.length) return;
+        var filtered = filterChildrenByQuery(state.childrenUnderParent, state.facts.personName);
+        var ul = panel.querySelector(".rx-children-list");
+        var countMuted = panel.querySelectorAll(".rx-muted")[0];
+        if (countMuted) {
+          countMuted.textContent = state.facts.personName
+            ? "تصفية حسب اسم الشخص: " + filtered.length + " من " + state.childrenUnderParent.length
+            : "القائمة كاملة من tree_children — بلا حد عرض.";
+        }
+        if (ul) {
+          ul.innerHTML = filtered
+            .map(function (c) {
+              return (
+                '<li><button type="button" class="rx-child-pick" data-rx-child-name="' +
+                escapeHtml(c.leaf) +
+                '">' +
+                escapeHtml(c.leaf) +
+                "</button></li>"
+              );
+            })
+            .join("");
+          ul.querySelectorAll("[data-rx-child-pick]").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              var name = text(btn.getAttribute("data-rx-child-name"));
+              if (!name) return;
+              state.facts.personName = name;
+              personNameInput.value = name;
+              var match = findExistingChildUnderParent(
+                name,
+                state.selectedParent,
+                state.childrenUnderParent
+              );
+              if (match) {
+                blockExistingPerson(match, "picked-existing-sibling");
+                render();
+              }
+            });
+          });
+        }
+      });
+    }
 
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
@@ -796,20 +1213,19 @@
       }
 
       try {
-        state.identityCandidates = await searchIdentityCollisions(state.facts.personName);
-
-        if (isAlreadyChildUnderParent(state.facts.personName, state.selectedParent, state.identityCandidates)) {
-          var underMatch =
-            state.identityCandidates.find(function (item) {
-              return isAlreadyChildUnderParent(state.facts.personName, state.selectedParent, [item]);
-            }) || state.identityCandidates[0] || null;
-          state.selectedIdentity = underMatch;
-          state.identityAffirmedExisting = true;
-          state.view = "exists";
-          setError("لا يمكن إضافة شخص موجود مسبقًا تحت نفس السياق.");
+        var children = await refreshChildrenUnderParent();
+        var underSameFather = findExistingChildUnderParent(
+          state.facts.personName,
+          state.selectedParent,
+          children
+        );
+        if (underSameFather) {
+          blockExistingPerson(underSameFather, "facts-submit-under-parent");
           render();
           return;
         }
+
+        state.identityCandidates = await searchIdentityCollisions(state.facts.personName);
 
         if (state.identityCandidates.length && !state.differentPersonSameName) {
           state.selectedIdentity = null;
@@ -882,7 +1298,24 @@
         render();
       });
     });
-    root.querySelector("[data-rx-different-name]").addEventListener("click", function () {
+    root.querySelector("[data-rx-different-name]").addEventListener("click", async function () {
+      try {
+        var children = await refreshChildrenUnderParent();
+        var under = findExistingChildUnderParent(
+          state.facts.personName,
+          state.selectedParent,
+          children
+        );
+        if (under) {
+          blockExistingPerson(under, "different-name-same-father");
+          render();
+          return;
+        }
+      } catch (err) {
+        setError("تعذر التحقق قبل المتابعة. حاول مرة أخرى.");
+        render();
+        return;
+      }
       state.differentPersonSameName = true;
       state.selectedIdentity = null;
       state.identityAffirmedExisting = false;
@@ -958,8 +1391,10 @@
     shell(
       "الشخص موجود مسبقًا",
       '<div class="rx-confirm-card rx-exists-gate">' +
-        '<p class="rx-lead">هذا الشخص موجود مسبقًا في الشجرة.</p>' +
-        '<p class="rx-note"><strong>لا يمكن إضافة شخص موجود مسبقًا.</strong> لن يُرسل طلب «إضافة فرد».</p>' +
+        '<p class="rx-lead">' +
+        escapeHtml(EXISTING_PERSON_MSG) +
+        "</p>" +
+        '<p class="rx-note"><strong>لن يُنشأ طلب إضافة</strong> ولن يظهر شيء في الإدارة أو Workflow.</p>' +
         personBlock +
         "<p>ماذا تريد؟</p>" +
         '<div class="rx-actions rx-actions-stack">' +
@@ -969,7 +1404,7 @@
         '<button type="button" class="btn btn-outline" data-rx-diff-anyway>شخص آخر بنفس الاسم (سياق مختلف)</button>' +
         "</div>" +
         "</div>",
-      { sub: "Truth Before Speed — لا تكرار بعد تأكيد الوجود." }
+      { sub: "Truth Before Speed — منع الإنشاء قبل أي API." }
     );
     root.querySelector("[data-rx-to-edit]").addEventListener("click", function () {
       clearError();
@@ -984,7 +1419,24 @@
       state.view = "facts";
       render();
     });
-    root.querySelector("[data-rx-diff-anyway]").addEventListener("click", function () {
+    root.querySelector("[data-rx-diff-anyway]").addEventListener("click", async function () {
+      try {
+        var children = await refreshChildrenUnderParent();
+        var under = findExistingChildUnderParent(
+          state.facts.personName,
+          state.selectedParent,
+          children
+        );
+        if (under) {
+          blockExistingPerson(under, "diff-anyway-same-father");
+          render();
+          return;
+        }
+      } catch (err) {
+        setError("تعذر التحقق قبل المتابعة. حاول مرة أخرى.");
+        render();
+        return;
+      }
       state.differentPersonSameName = true;
       state.identityAffirmedExisting = false;
       state.selectedIdentity = null;
@@ -1047,6 +1499,7 @@
     root.querySelector("[data-rx-confirm-other]").addEventListener("click", function () {
       state.selectedParent = null;
       state.parentConfirmed = false;
+      state.childrenUnderParent = [];
       state.view = "facts";
       clearError();
       render();
@@ -1179,8 +1632,7 @@
     if (state.busy) return;
     clearError();
     if (state.identityAffirmedExisting) {
-      setError("لا يمكن إضافة شخص موجود مسبقًا.");
-      state.view = "exists";
+      blockExistingPerson(state.selectedIdentity, "submit-affirmed");
       render();
       return;
     }
@@ -1202,20 +1654,18 @@
     var p = state.selectedParent;
 
     try {
-      var collisions = await searchIdentityCollisions(f.personName);
-      state.identityCandidates = collisions;
-      if (isAlreadyChildUnderParent(f.personName, p, collisions)) {
+      // Hard gate on complete sibling set from tree_children — before any insert/RPC.
+      var children = await refreshChildrenUnderParent();
+      var underSameFather = findExistingChildUnderParent(f.personName, p, children);
+      if (underSameFather) {
         state.busy = false;
-        state.selectedIdentity =
-          collisions.find(function (item) {
-            return isAlreadyChildUnderParent(f.personName, p, [item]);
-          }) || collisions[0] || null;
-        state.identityAffirmedExisting = true;
-        setError("هذا الشخص موجود مسبقًا تحت نفس السياق — لا يُنشأ طلب إضافة.");
-        state.view = "exists";
+        blockExistingPerson(underSameFather, "submit-under-parent");
         render();
         return;
       }
+
+      var collisions = await searchIdentityCollisions(f.personName);
+      state.identityCandidates = collisions;
       if (collisions.length && !state.differentPersonSameName) {
         state.busy = false;
         setError("يوجد تطابق بالاسم في الشجرة. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم.");
