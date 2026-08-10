@@ -337,57 +337,93 @@
     host.appendChild(section);
   }
 
+  /** Prevent MutationObserver re-entry: applyVisibility mutates body.class → body observer → sync → loop. */
+  let bodyClassObserver = null;
+  let visibilityDepth = 0;
+  let syncDepth = 0;
+  let lastSeenBodyClass = "";
+
+  function pauseBodyClassObserver() {
+    if (bodyClassObserver) bodyClassObserver.disconnect();
+  }
+
+  function resumeBodyClassObserver() {
+    if (!bodyClassObserver || !document.body) return;
+    lastSeenBodyClass = String(document.body.className || "");
+    bodyClassObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  }
+
+  /** Strip shell-owned classes; auth (and other external) class changes still sync. */
+  function bodyClassWithoutShellNoise(className) {
+    return String(className || "")
+      .replace(/\badmin-shell-ready\b/g, "")
+      .replace(/\badmin-shell-nav-open\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function applyVisibility() {
-    ensureSectionTags();
-    const authed = isAuthed();
-    document.body.classList.toggle("admin-shell-ready", true);
+    if (visibilityDepth > 0) return;
+    visibilityDepth += 1;
+    pauseBodyClassObserver();
+    try {
+      ensureSectionTags();
+      const authed = isAuthed();
+      document.body.classList.toggle("admin-shell-ready", true);
 
-    if (!authed) {
-      document.querySelectorAll("section[data-admin-module]").forEach((sec) => {
-        sec.classList.remove("admin-module-off");
-      });
-      document.body.classList.remove("admin-shell-nav-open");
-      return;
-    }
-
-    const mod = MODULES.find((m) => m.id === currentModule) || MODULES[0];
-    const activeIds = new Set(mod.sections || []);
-
-    document.querySelectorAll("section[data-admin-module]").forEach((sec) => {
-      const mid = sec.getAttribute("data-admin-module");
-      const on = mid === mod.id || activeIds.has(sec.id);
-      sec.classList.toggle("admin-module-off", !on);
-    });
-
-    // Untagged sections inside protected area: hide when shell routing
-    document
-      .querySelectorAll("#admin-protected-sections > section:not([data-admin-module])")
-      .forEach((sec) => {
-        // keep dialogs alone; hide unknown sprawl into tools if maintenance
-        if (sec.hasAttribute("data-maintenance") || sec.classList.contains("extra-tools-section")) {
-          sec.classList.toggle("admin-module-off", mod.id !== "tools");
-          sec.setAttribute("data-admin-module", "tools");
-        } else {
-          sec.classList.add("admin-module-off");
-        }
-      });
-
-    // Reveal maintenance blocks only inside Tools module
-    document.querySelectorAll("section[data-admin-module=\"tools\"]").forEach((sec) => {
-      if (mod.id === "tools") {
-        if (sec.style && sec.style.getPropertyValue("display") === "none") {
-          sec.dataset.shellPrevDisplay = "none";
-          sec.style.removeProperty("display");
-        }
-        sec.classList.remove("admin-module-off");
-      } else if (sec.dataset.shellPrevDisplay === "none") {
-        sec.style.setProperty("display", "none", "important");
+      if (!authed) {
+        document.querySelectorAll("section[data-admin-module]").forEach((sec) => {
+          sec.classList.remove("admin-module-off");
+        });
+        document.body.classList.remove("admin-shell-nav-open");
+        return;
       }
-    });
 
-    document.querySelectorAll(".admin-shell-nav-btn").forEach((btn) => {
-      btn.classList.toggle("is-active", btn.dataset.module === mod.id);
-    });
+      const mod = MODULES.find((m) => m.id === currentModule) || MODULES[0];
+      const activeIds = new Set(mod.sections || []);
+
+      document.querySelectorAll("section[data-admin-module]").forEach((sec) => {
+        const mid = sec.getAttribute("data-admin-module");
+        const on = mid === mod.id || activeIds.has(sec.id);
+        sec.classList.toggle("admin-module-off", !on);
+      });
+
+      // Untagged sections inside protected area: hide when shell routing
+      document
+        .querySelectorAll("#admin-protected-sections > section:not([data-admin-module])")
+        .forEach((sec) => {
+          // keep dialogs alone; hide unknown sprawl into tools if maintenance
+          if (sec.hasAttribute("data-maintenance") || sec.classList.contains("extra-tools-section")) {
+            sec.classList.toggle("admin-module-off", mod.id !== "tools");
+            sec.setAttribute("data-admin-module", "tools");
+          } else {
+            sec.classList.add("admin-module-off");
+          }
+        });
+
+      // Reveal maintenance blocks only inside Tools module
+      document.querySelectorAll("section[data-admin-module=\"tools\"]").forEach((sec) => {
+        if (mod.id === "tools") {
+          if (sec.style && sec.style.getPropertyValue("display") === "none") {
+            sec.dataset.shellPrevDisplay = "none";
+            sec.style.removeProperty("display");
+          }
+          sec.classList.remove("admin-module-off");
+        } else if (sec.dataset.shellPrevDisplay === "none") {
+          sec.style.setProperty("display", "none", "important");
+        }
+      });
+
+      document.querySelectorAll(".admin-shell-nav-btn").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.module === mod.id);
+      });
+    } finally {
+      resumeBodyClassObserver();
+      visibilityDepth -= 1;
+    }
   }
 
   function navigate(moduleId, opts) {
@@ -407,7 +443,12 @@
       } catch (_) {}
     }
     applyVisibility();
-    document.body.classList.remove("admin-shell-nav-open");
+    pauseBodyClassObserver();
+    try {
+      document.body.classList.remove("admin-shell-nav-open");
+    } finally {
+      resumeBodyClassObserver();
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
     document.dispatchEvent(
       new CustomEvent("alzidan:admin-module", { detail: { id: currentModule } }),
@@ -437,12 +478,18 @@
   }
 
   function syncFromAuth() {
-    buildSidebar();
-    if (isAuthed()) {
-      const fromHash = moduleFromHash();
-      currentModule = fromHash || readStoredModule() || "hub";
+    if (syncDepth > 0 || visibilityDepth > 0) return;
+    syncDepth += 1;
+    try {
+      buildSidebar();
+      if (isAuthed()) {
+        const fromHash = moduleFromHash();
+        currentModule = fromHash || readStoredModule() || "hub";
+      }
+      applyVisibility();
+    } finally {
+      syncDepth -= 1;
     }
-    applyVisibility();
   }
 
   function boot() {
@@ -450,8 +497,21 @@
     currentModule = moduleFromHash() || readStoredModule() || "hub";
     syncFromAuth();
 
-    const obs = new MutationObserver(() => syncFromAuth());
-    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    lastSeenBodyClass = String(document.body.className || "");
+    bodyClassObserver = new MutationObserver(() => {
+      if (syncDepth > 0 || visibilityDepth > 0) return;
+      const now = String(document.body.className || "");
+      if (now === lastSeenBodyClass) return;
+      const prev = lastSeenBodyClass;
+      lastSeenBodyClass = now;
+      // Shell toggles ready/nav-open itself — those must not re-enter syncFromAuth.
+      if (bodyClassWithoutShellNoise(prev) === bodyClassWithoutShellNoise(now)) return;
+      syncFromAuth();
+    });
+    bodyClassObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
 
     window.addEventListener("hashchange", () => {
       const id = moduleFromHash();
@@ -462,6 +522,7 @@
     const protectedHost = document.getElementById("admin-protected-sections");
     if (protectedHost) {
       const childObs = new MutationObserver(() => {
+        if (syncDepth > 0 || visibilityDepth > 0) return;
         ensureSectionTags();
         applyVisibility();
       });
