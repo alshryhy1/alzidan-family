@@ -76,39 +76,94 @@
     }
     el.innerHTML = html;
   }
+  // On-demand only — no auto-load on script parse. Cap rows; aggregate client-side (no new RPC).
+  const STATS_ROW_LIMIT = 1000;
+  let statsLoadInFlight = null;
+
   async function loadRequestsStats() {
-    const sb = getClient();
-    if (!sb) {
-      renderRequestsStatsError("الخدمة غير جاهزة حالياً.");
-      return;
-    }
-    const token = getAdminToken();
-    if (!token) {
-      renderRequestsStatsError("سجل الدخول للإدارة لعرض الإحصاء.");
-      return;
-    }
-    const limit = 5000;
-    renderRequestsStatsLoading();
-    const { data, error } = await sb.rpc("admin_list_requests", {
-      p_token: token,
-      p_status: null,
-      p_kind: null,
-      p_limit: limit,
+    if (statsLoadInFlight) return statsLoadInFlight;
+    statsLoadInFlight = (async () => {
+      const sb = getClient();
+      if (!sb) {
+        renderRequestsStatsError("الخدمة غير جاهزة حالياً.");
+        return;
+      }
+      const token = getAdminToken();
+      if (!token) {
+        renderRequestsStatsError("سجل الدخول للإدارة لعرض الإحصاء.");
+        return;
+      }
+      const limit = STATS_ROW_LIMIT;
+      renderRequestsStatsLoading();
+      const { data, error } = await sb.rpc("admin_list_requests", {
+        p_token: token,
+        p_status: null,
+        p_kind: null,
+        p_limit: limit,
+      });
+      if (error) {
+        renderRequestsStatsError(
+          "تعذر تحميل الإحصاء، حاول لاحقاً أو تواصل مع الإدارة.",
+        );
+        return;
+      }
+      const list = Array.isArray(data) ? data : [];
+      renderRequestsStats(list, limit);
+    })().finally(() => {
+      statsLoadInFlight = null;
     });
-    if (error) {
-      renderRequestsStatsError(
-        "تعذر تحميل الإحصاء، حاول لاحقاً أو تواصل مع الإدارة.",
-      );
-      return;
-    }
-    const list = Array.isArray(data) ? data : [];
-    renderRequestsStats(list, limit);
+    return statsLoadInFlight;
   }
 
+  function isRequestsStatsSectionActive() {
+    const section = document.getElementById("requests-stats-section");
+    if (!section) return false;
+    if (section.classList.contains("admin-module-off")) return false;
+    if (section.hasAttribute("hidden")) return false;
+    const style = window.getComputedStyle
+      ? window.getComputedStyle(section)
+      : null;
+    if (style && (style.display === "none" || style.visibility === "hidden")) {
+      return false;
+    }
+    return true;
+  }
+
+  function loadRequestsStatsIfSectionOpen() {
+    if (!isRequestsStatsSectionActive()) return;
+    loadRequestsStats().catch(() => {});
+  }
+
+  function bindRequestsStatsTriggers() {
+    if (bindRequestsStatsTriggers.didBind) return;
+    bindRequestsStatsTriggers.didBind = true;
+
+    const refreshBtn = document.getElementById("refresh-requests-stats");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => {
+        loadRequestsStats().catch(() => {});
+      });
+    }
+
+    const section = document.getElementById("requests-stats-section");
+    if (section && String(section.tagName || "").toLowerCase() === "details") {
+      section.addEventListener("toggle", () => {
+        if (section.open) loadRequestsStats().catch(() => {});
+      });
+    }
+
+    // Stats section lives under the "requests" admin shell module.
+    document.addEventListener("alzidan:admin-module", (ev) => {
+      const id = ev && ev.detail ? String(ev.detail.id || "") : "";
+      if (id !== "requests") return;
+      loadRequestsStatsIfSectionOpen();
+    });
+  }
 
   window.AlzidanRequestsStats = {
     loadRequestsStats,
+    bindRequestsStatsTriggers,
   };
 
-  loadRequestsStats().catch(() => {});
+  bindRequestsStatsTriggers();
 })();

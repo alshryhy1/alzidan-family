@@ -85,6 +85,39 @@ const forB = FM.childrenForSelectedParent(childrenMap, B, {
 });
 assert(forB.list.length === 0, "father B does not inherit A's children array");
 
+// Spelling-variant parent_name under the same father UUID must all surface
+const salemYeh = "مزيد بن مطلق بن زيدان/صلف/دوخي/سالم";
+const salemMaqsura = "مزيد بن مطلق بن زيدان/صلف/دوخى/سالم";
+const salemPid = "51af1e12-40fb-40ff-96bf-e411b85138be";
+const salemMap = {
+  [salemYeh]: [
+    { name: salemYeh + "/زيد", personId: "p-zayd", parentPersonId: salemPid },
+    { name: salemYeh + "/مبارك", personId: "p-mubarak", parentPersonId: salemPid },
+    { name: salemYeh + "/دوخي", personId: "p-dokhi", parentPersonId: salemPid },
+    { name: salemYeh + "/عبدالله", personId: "p-abdullah", parentPersonId: salemPid },
+  ],
+  [salemMaqsura]: [
+    { name: salemMaqsura + "/عبيد", personId: "p-ubaid", parentPersonId: salemPid },
+    { name: salemMaqsura + "/حضيري", personId: "p-hudayri", parentPersonId: salemPid },
+  ],
+};
+const forSalem = FM.childrenForSelectedParent(salemMap, salemYeh, {
+  normalizePersonName: norm,
+  parentPersonId: salemPid,
+});
+assert(forSalem.list.length === 6, "Salem UUID-union shows 6 children (not path-key 4)");
+const salemLeaves = forSalem.list.map((c) =>
+  String(c.name || "")
+    .split("/")
+    .pop(),
+);
+assert(
+  ["زيد", "مبارك", "دوخي", "عبدالله", "عبيد", "حضيري"].every((n) =>
+    salemLeaves.includes(n),
+  ),
+  "Salem list includes عبيد and حضيري",
+);
+
 // Shared array reference must be broken by isolateChildrenMapArrays
 const shared = [{ name: "x" }];
 const leaky = { [A]: shared, [B]: shared };

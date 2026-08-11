@@ -19,9 +19,25 @@
     "verify:uuid-primary-father": "node scripts/test-uuid-primary-father.js",
     "verify:uuid-link-diagnosis": "node scripts/test-uuid-link-diagnosis.js",
     "verify:dup-identity": "node scripts/test-dup-identity-guard.js",
+    "verify:dup-create-paths": "node scripts/test-dup-identity-create-paths.js",
+    "verify:occasion-dup": "node scripts/test-occasion-dup-guard.js",
+    "verify:occasion-track": "node scripts/test-occasion-dup-guard.js",
+    "verify:patient-dup": "node scripts/test-patient-dup-guard.js",
+    "verify:patient-track": "node scripts/test-patient-dup-guard.js",
+    "verify:death-dup": "node scripts/test-death-dup-guard.js",
+    "verify:death-track": "node scripts/test-death-dup-guard.js",
+    "verify:unpublish-on-delete": "node scripts/test-unpublish-event-on-request-delete.js",
+    "verify:unpublish-on-reject": "node scripts/test-unpublish-event-on-request-reject.js",
+    "verify:unpublish-on-reject-live": "supabase db query --linked --agent=no --yes -f scripts/verify-unpublish-on-reject-live.sql",
     "verify:hasan-khamis": "node scripts/test-hasan-khamis-add-person.js",
+    "verify:under-father": "node scripts/test-hasan-khamis-add-person.js",
     "repair:dry-run": "node scripts/repair-parent-person-id.mjs --snapshot",
     "repair:ali-dual": "node scripts/repair-ali-dual-children.mjs",
-    "repair:ali-unlink": "node scripts/repair-ali-dual-unlink.mjs"
+    "repair:ali-unlink": "node scripts/repair-ali-dual-unlink.mjs",
+    "verify:event-branch": "node scripts/test-event-branch-routing.js",
+    "verify:delegate-digits": "node scripts/test-delegate-arabic-digits.js",
+    "verify:delegate-workspace": "node scripts/test-delegate-workspace-reorder.js",
+    "verify:empty-video": "node scripts/test-empty-video-gate.js",
+    "prove:empty-video": "node scripts/prove-empty-video-render.mjs"
   }
 }

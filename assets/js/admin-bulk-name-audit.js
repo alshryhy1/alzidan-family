@@ -146,6 +146,11 @@
   }
 
   async function loadTreeRows() {
+    const token = getAdminToken();
+    if (!token) {
+      setStatus("سجل الدخول أولًا لتحميل الشجرة.");
+      return [];
+    }
     const sb = getClient();
     if (!sb) {
       setStatus("تعذر الاتصال بقاعدة البيانات.");
@@ -560,7 +565,7 @@
   async function init() {
     if (!auditSection) return;
     attachEvents();
-    await loadTreeRows();
+    // No auto tree load on DOMContentLoaded — load on analyze/save after admin login.
     renderResults();
     updateSaveButton();
     setStatus("خطوتان: ① الصق الأسماء واضغط «تحليل الأسماء» ② ثم «إضافة غير الموجود فقط» للحفظ.");

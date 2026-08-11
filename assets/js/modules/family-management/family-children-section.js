@@ -36,7 +36,7 @@
         ? api.normalizePersonName
         : function (v) { return String(v || "").trim(); };
       // Descendants of a child may use map-key resolve (same person path variants).
-      // Selected-father display uses childrenForSelectedParent (exact isolation).
+      // Selected-father display uses childrenForSelectedParent (parent_person_id union).
       var mapKey = typeof PersonCore.resolveChildrenMapKey === "function"
         ? PersonCore.resolveChildrenMapKey(childId, childrenMap, norm)
         : norm(childId || "");
@@ -309,11 +309,33 @@
         return;
       }
 
+      var branchKey = typeof api.getBranchKey === "function" ? api.getBranchKey() : "";
+      var norm =
+        typeof api.normalizePersonName === "function"
+          ? api.normalizePersonName
+          : function (v) { return String(v || "").trim(); };
+      var originLockMsg =
+        (PersonCore && PersonCore.ORIGIN_LOCK_MSG) ||
+        "هذا من الأصول — لا يمكن تعديله أو حذفه.";
+
       list.forEach(function (child) {
         var info = childDisplayParts(child, key);
         var editId = key + "::" + info.childId;
+        var isOrigin = false;
+        if (typeof api.isOriginPerson === "function") {
+          isOrigin = !!api.isOriginPerson(info.childId, {
+            parentId: key,
+            personId: child && child.personId ? child.personId : "",
+          });
+        } else if (PersonCore && typeof PersonCore.isOriginPerson === "function") {
+          isOrigin = !!PersonCore.isOriginPerson(info.childId, branchKey, {
+            parentId: key,
+            personId: child && child.personId ? child.personId : "",
+            normalizePersonName: norm,
+          });
+        }
         var row = document.createElement("div");
-        row.className = "fm-row";
+        row.className = "fm-row" + (isOrigin ? " fm-origin-locked" : "");
         row.style.flexDirection = "column";
         row.style.alignItems = "stretch";
 
@@ -322,36 +344,46 @@
         header.style.justifyContent = "space-between";
         header.style.gap = "8px";
         header.style.flexWrap = "wrap";
+        var actionsHtml = isOrigin
+          ? '<button type="button" class="btn btn-secondary btn-small" data-fm-add-under-child>إضافة أبناء</button>' +
+            '<div class="hint fm-origin-lock-hint" style="flex-basis:100%;margin:4px 0 0;">' +
+            escapeHtml(originLockMsg) +
+            "</div>"
+          : '<button type="button" class="btn btn-secondary btn-small" data-fm-edit-child>تعديل</button>' +
+            '<button type="button" class="btn btn-secondary btn-small" data-fm-add-under-child>إضافة أبناء</button>' +
+            '<button type="button" class="btn btn-secondary btn-small" data-fm-delete-child>حذف</button>';
         header.innerHTML =
           '<div class="fm-row-main">' + escapeHtml(info.parts.join(" – ")) + "</div>" +
-          '<div class="fm-row-actions">' +
-          '<button type="button" class="btn btn-secondary btn-small" data-fm-edit-child>تعديل</button>' +
-          '<button type="button" class="btn btn-secondary btn-small" data-fm-add-under-child>إضافة أبناء</button>' +
-          '<button type="button" class="btn btn-secondary btn-small" data-fm-delete-child>حذف</button>' +
-          "</div>";
+          '<div class="fm-row-actions">' + actionsHtml + "</div>";
         row.appendChild(header);
 
-        header.querySelector("[data-fm-edit-child]").addEventListener("click", function () {
-          editingKey = editingKey === editId ? "" : editId;
-          refresh();
-        });
+        var editBtn = header.querySelector("[data-fm-edit-child]");
+        if (editBtn) {
+          editBtn.addEventListener("click", function () {
+            editingKey = editingKey === editId ? "" : editId;
+            refresh();
+          });
+        }
         header.querySelector("[data-fm-add-under-child]").addEventListener("click", function () {
           onSelectPerson(info.childId);
         });
-        header.querySelector("[data-fm-delete-child]").addEventListener("click", async function () {
-          if (typeof api.deleteChild !== "function") return;
-          var res = await api.deleteChild({ parentId: key, childId: info.childId, child: child });
-          if (!res || !res.ok) {
-            setAlert(alertEl, "error", (res && res.message) || "تعذر الحذف.");
-            return;
-          }
-          setAlert(alertEl, "success", res.message || "تم حذف الاسم.");
-          editingKey = "";
-          await refresh();
-          if (typeof opts.onDataChanged === "function") opts.onDataChanged();
-        });
+        var deleteBtn = header.querySelector("[data-fm-delete-child]");
+        if (deleteBtn) {
+          deleteBtn.addEventListener("click", async function () {
+            if (typeof api.deleteChild !== "function") return;
+            var res = await api.deleteChild({ parentId: key, childId: info.childId, child: child });
+            if (!res || !res.ok) {
+              setAlert(alertEl, "error", (res && res.message) || "تعذر الحذف.");
+              return;
+            }
+            setAlert(alertEl, "success", res.message || "تم حذف الاسم.");
+            editingKey = "";
+            await refresh();
+            if (typeof opts.onDataChanged === "function") opts.onDataChanged();
+          });
+        }
 
-        if (editingKey === editId) {
+        if (!isOrigin && editingKey === editId) {
           row.appendChild(buildInlineEdit(key, child));
         }
         listEl.appendChild(row);

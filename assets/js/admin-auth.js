@@ -41,7 +41,13 @@
   let lastEmailedAuditKey = "";
   let didInitialPendingSync = false;
   let didInitialAuditSync = false;
-  let pendingPollTimer = null;
+
+  function getPendingPollState() {
+    if (!window.__alzidanAdminPendingPoll) {
+      window.__alzidanAdminPendingPoll = { timer: null };
+    }
+    return window.__alzidanAdminPendingPoll;
+  }
 
   function showAlert(type, text) {
     if (!alertEl) return;
@@ -325,18 +331,25 @@
   }
 
   function startPendingPolling() {
-    if (pendingPollTimer) return;
-    pendingPollTimer = setInterval(() => {
+    const pollState = getPendingPollState();
+    if (pollState.timer) return;
+    if (!getAdminToken()) return;
+    pollState.timer = setInterval(() => {
       if (document.visibilityState !== "visible") return;
+      if (!getAdminToken()) {
+        stopPendingPolling();
+        return;
+      }
       pollPendingRequestsForNotifications().catch(() => {});
       pollAuditForEmailNotifications().catch(() => {});
     }, 20000);
   }
 
   function stopPendingPolling() {
-    if (!pendingPollTimer) return;
-    clearInterval(pendingPollTimer);
-    pendingPollTimer = null;
+    const pollState = getPendingPollState();
+    if (!pollState.timer) return;
+    clearInterval(pollState.timer);
+    pollState.timer = null;
   }
 
   function attachAuthEventHandlers() {
@@ -391,12 +404,7 @@
           console.error("[AdminFamilyMgmt] mount on init failed:", err);
         }
       });
-        if (
-          window.AlzidanRequestsStats &&
-          typeof window.AlzidanRequestsStats.loadRequestsStats === "function"
-        ) {
-          window.AlzidanRequestsStats.loadRequestsStats().catch(() => {});
-        }
+        // Request stats load only when opening stats section / refresh button.
         if (
           window.AlzidanAdminViews &&
           typeof window.AlzidanAdminViews.loadViewsStats === "function"
@@ -519,12 +527,7 @@
     }
     updateNotifsButtonText();
     if (getAdminToken()) {
-      if (
-        window.AlzidanRequestsStats &&
-        typeof window.AlzidanRequestsStats.loadRequestsStats === "function"
-      ) {
-        window.AlzidanRequestsStats.loadRequestsStats().catch(() => {});
-      }
+      // Request stats: on-demand only (section open / refresh) — not on auth init.
       if (
         window.AlzidanAdminViews &&
         typeof window.AlzidanAdminViews.loadViewsStats === "function"

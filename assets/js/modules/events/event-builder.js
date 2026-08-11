@@ -38,7 +38,26 @@
       const event = envelope.event;
       let details = E.parseDetailsValue ? E.parseDetailsValue(event.details) : {};
       details.requestId = requestId;
-      return {
+      const Vis = root.AlzidanEventVisibility || {};
+      const schedule =
+        typeof Vis.buildScheduleFields === "function"
+          ? Vis.buildScheduleFields({
+              event_date: normalizeText(event.event_date || event.date_label || ""),
+              show_before_days:
+                event.show_before_days != null
+                  ? event.show_before_days
+                  : details.show_before_days != null
+                    ? details.show_before_days
+                    : 3,
+              show_at: event.show_at || details.show_at || "",
+              end_at: event.end_at || details.end_at || "",
+            })
+          : { show_before_days: 3 };
+      details =
+        typeof Vis.mergeScheduleIntoDetails === "function"
+          ? Vis.mergeScheduleIntoDetails(details, schedule)
+          : Object.assign({}, details, schedule);
+      const out = {
         branch_key: normalizeText(row.branch_key || event.branch_key || ""),
         type: normalizeText(event.type || "gathering"),
         person: normalizeText(event.person || row.name || ""),
@@ -57,6 +76,10 @@
           event.created_at || row.created_at || new Date().toISOString(),
         ),
       };
+      if (schedule.show_before_days != null) out.show_before_days = schedule.show_before_days;
+      if (schedule.show_at) out.show_at = schedule.show_at;
+      if (schedule.end_at) out.end_at = schedule.end_at;
+      return out;
     }
 
     const media = E.extractEventMediaLinks ? E.extractEventMediaLinks(msg) : { image: "", video: "" };
@@ -94,26 +117,128 @@
 
   function buildFromPublicForm(input) {
     const requestId = normalizeText(input.requestId);
+    const type = normalizeText(input.type);
+    const isHealth =
+      type === "sick" || type === "operation" || type === "discharge";
+    const isDeath = type === "death";
+    const hospitalName = normalizeText(
+      input.hospitalName || input.hospital_name || (isHealth ? input.place : ""),
+    );
+    const hospitalDept = normalizeText(
+      input.hospitalDept || input.hospital_dept || "",
+    );
+    const notes = normalizeText(input.text || input.notes || "");
+    const place = normalizeText(input.place || "");
+    const personId = normalizeText(input.person_id || input.personId || "");
+
+    if (isDeath) {
+      const details = {
+        v: 1,
+        kind: "death_notice",
+        requestId,
+        notes,
+        condolencePlace: place,
+        prayerPlace: normalizeText(input.prayerPlace || ""),
+        burialPlace: normalizeText(input.burialPlace || ""),
+        phones: normalizeText(input.phone || input.contactPhone || "")
+          ? [normalizeText(input.phone || input.contactPhone || "")]
+          : [],
+        showDays: 7,
+      };
+      if (personId) {
+        details.person_id = personId;
+        details.personId = personId;
+      }
+      return {
+        branch_key: normalizeText(input.branch),
+        type: "death",
+        person: normalizeText(input.person),
+        date_label: normalizeText(input.dateLabel),
+        event_date: normalizeText(input.eventDate || input.dateLabel || ""),
+        details: stringifyDetails(details),
+        ...emptyRowFields(),
+        contact_phone: normalizeText(input.phone || input.contactPhone || ""),
+        created_at: normalizeText(input.createdAt || new Date().toISOString()),
+      };
+    }
+
+    if (isHealth) {
+      const placeKind =
+        normalizeText(input.placeKind) === "home"
+          ? "home"
+          : hospitalName || hospitalDept
+            ? "hospital"
+            : "hospital";
+      const details = {
+        v: 1,
+        kind: "health_notice",
+        requestId,
+        place: placeKind,
+        notes,
+        hospitalName,
+        hospitalDept,
+        homeCity: normalizeText(input.homeCity || input.home_city || ""),
+        homeArea: normalizeText(input.homeArea || input.home_area || ""),
+        showDays: 7,
+      };
+      return {
+        branch_key: normalizeText(input.branch),
+        type: type || "sick",
+        person: normalizeText(input.person),
+        date_label: normalizeText(input.dateLabel),
+        event_date: normalizeText(input.eventDate || ""),
+        details: stringifyDetails(details),
+        ...emptyRowFields(),
+        hospital_name: hospitalName || null,
+        hospital_dept: hospitalDept || null,
+        contact_phone: normalizeText(input.phone || input.contactPhone || ""),
+        created_at: normalizeText(input.createdAt || new Date().toISOString()),
+      };
+    }
+
     const details = {
       v: 1,
       kind: "happy_notice",
       requestId,
-      text: normalizeText(input.text),
-      extra: normalizeText(input.place),
+      text: notes,
+      extra: place,
       imageUrl: normalizeText(input.imageUrl),
       videoUrl: normalizeText(input.videoUrl),
       showDays: 7,
     };
-    return {
+    const Vis = root.AlzidanEventVisibility || {};
+    const schedule =
+      typeof Vis.buildScheduleFields === "function"
+        ? Vis.buildScheduleFields({
+            event_date: normalizeText(input.eventDate || input.dateLabel || ""),
+            show_before_days:
+              input.showBeforeDays != null
+                ? input.showBeforeDays
+                : input.show_before_days != null
+                  ? input.show_before_days
+                  : 3,
+            show_at: input.showAt || input.show_at || "",
+            end_at: input.endAt || input.end_at || "",
+          })
+        : { show_before_days: 3 };
+    const merged =
+      typeof Vis.mergeScheduleIntoDetails === "function"
+        ? Vis.mergeScheduleIntoDetails(details, schedule)
+        : Object.assign({}, details, schedule);
+    const row = {
       branch_key: normalizeText(input.branch),
-      type: normalizeText(input.type),
+      type,
       person: normalizeText(input.person),
       date_label: normalizeText(input.dateLabel),
       event_date: normalizeText(input.eventDate || ""),
-      details: stringifyDetails(details),
+      details: stringifyDetails(merged),
       ...emptyRowFields(),
       created_at: normalizeText(input.createdAt || new Date().toISOString()),
     };
+    if (schedule.show_before_days != null) row.show_before_days = schedule.show_before_days;
+    if (schedule.show_at) row.show_at = schedule.show_at;
+    if (schedule.end_at) row.end_at = schedule.end_at;
+    return row;
   }
 
   function buildFromDelegateForm(input) {
@@ -125,6 +250,43 @@
     const eventDate = normalizeText(input.eventDate);
     const showDays = Number(input.showDays) > 0 ? Number(input.showDays) : 7;
     const createdAt = normalizeText(input.createdAt || new Date().toISOString());
+    const Vis = root.AlzidanEventVisibility || {};
+    const schedule =
+      typeof Vis.buildScheduleFields === "function"
+        ? Vis.buildScheduleFields({
+            event_date: eventDate || dateLabel,
+            show_before_days:
+              input.showBeforeDays != null
+                ? input.showBeforeDays
+                : input.show_before_days != null
+                  ? input.show_before_days
+                  : 3,
+            show_at: input.showAt || input.show_at || "",
+            end_at: input.endAt || input.end_at || "",
+            manual_hidden: input.manualHidden || input.manual_hidden || false,
+          })
+        : {
+            show_before_days: 3,
+            show_at: null,
+            end_at: null,
+            manual_hidden: false,
+          };
+
+    function applySchedule(detailsObj, rowOut) {
+      const merged =
+        typeof Vis.mergeScheduleIntoDetails === "function"
+          ? Vis.mergeScheduleIntoDetails(detailsObj, schedule)
+          : Object.assign({}, detailsObj, schedule);
+      if (rowOut) {
+        if (schedule.show_before_days != null) {
+          rowOut.show_before_days = schedule.show_before_days;
+        }
+        if (schedule.show_at) rowOut.show_at = schedule.show_at;
+        if (schedule.end_at) rowOut.end_at = schedule.end_at;
+        if (schedule.manual_hidden) rowOut.manual_hidden = true;
+      }
+      return merged;
+    }
 
     if (category === "death") {
       const details = {
@@ -193,7 +355,7 @@
       videoUrl: normalizeText(input.videoUrl),
       showDays,
     };
-    return {
+    const row = {
       branch_key: branch,
       type,
       person,
@@ -203,6 +365,8 @@
       ...emptyRowFields(),
       created_at: createdAt,
     };
+    row.details = stringifyDetails(applySchedule(details, row));
+    return row;
   }
 
   function buildFromAdminCms(input) {
@@ -289,14 +453,15 @@
       date_label: normalizeText(input.dateLabel),
       event_date: normalizeText(input.eventDate),
       details: stringifyDetails(details),
-      hospital_name: isHealth ? hospitalName || null : null,
-      hospital_dept: isHealth ? hospitalDept || null : null,
-      contact_method: isHealth ? contactMethod || null : null,
-      contact_phone: isHealth ? contactPhone || null : null,
-      visit_date_from: isHealth ? visitDateFrom || null : null,
-      visit_date_to: isHealth ? visitDateTo || null : null,
-      visit_time_from: isHealth ? visitTimeFrom || null : null,
-      visit_time_to: isHealth ? visitTimeTo || null : null,
+      // Non-health empties stay "" (golden + emptyRowFields). Health may use null.
+      hospital_name: isHealth ? hospitalName || null : "",
+      hospital_dept: isHealth ? hospitalDept || null : "",
+      contact_method: isHealth ? contactMethod || null : "",
+      contact_phone: isHealth ? contactPhone || null : "",
+      visit_date_from: isHealth ? visitDateFrom || null : "",
+      visit_date_to: isHealth ? visitDateTo || null : "",
+      visit_time_from: isHealth ? visitTimeFrom || null : "",
+      visit_time_to: isHealth ? visitTimeTo || null : "",
     };
     if (input.id != null && Number(input.id) > 0) row.id = Number(input.id);
     return row;

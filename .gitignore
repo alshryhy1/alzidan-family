@@ -3,6 +3,8 @@
 *backup*
 *.old
 *.sql
+!supabase/sql/
+!supabase/sql/**/*.sql
 *.txt
 *.md
 !docs/

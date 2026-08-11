@@ -151,10 +151,30 @@
     var parentNorm = norm(parentPath || "");
     var db = norm(dbParent || "");
     if (!parentNorm || !db) return true;
+    if (db === parentNorm) return true;
     var parentLeaf = leafFn(parentNorm);
-    if (db === parentNorm || db === parentLeaf) return true;
-    if (parentNorm.endsWith("/" + db) || db.endsWith("/" + parentLeaf)) return true;
-    if (parentNorm.endsWith("/" + leafFn(db))) return true;
+    var dbLeaf = leafFn(db);
+    var parentIsPath = parentNorm.indexOf("/") >= 0;
+    var dbIsPath = db.indexOf("/") >= 0;
+    // Two full paths: exact or one is a path-suffix of the other — never leaf-only
+    // (…/هاجس/محمد vs …/آخر/محمد must NOT match).
+    if (parentIsPath && dbIsPath) {
+      return (
+        parentNorm.endsWith("/" + db) ||
+        db.endsWith("/" + parentNorm)
+      );
+    }
+    // Leaf vs path: allow matching the other side's leaf / trailing segment.
+    if (!parentIsPath) {
+      return db === parentNorm || dbLeaf === parentNorm || db.endsWith("/" + parentNorm);
+    }
+    if (!dbIsPath) {
+      return (
+        parentNorm === db ||
+        parentLeaf === db ||
+        parentNorm.endsWith("/" + db)
+      );
+    }
     return false;
   }
 

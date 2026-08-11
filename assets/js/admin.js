@@ -76,7 +76,13 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   let lastEmailedAuditKey = "";
   let didInitialPendingSync = false;
   let didInitialAuditSync = false;
-  let pendingPollTimer = null;
+
+  function getPendingPollState() {
+    if (!window.__alzidanAdminPendingPoll) {
+      window.__alzidanAdminPendingPoll = { timer: null };
+    }
+    return window.__alzidanAdminPendingPoll;
+  }
   const copyTreeSqlBtn = document.getElementById("copy-tree-sql");
   const treeSqlEl = document.getElementById("tree-sql");
   const refreshDelegateAuditBtn = document.getElementById(
@@ -164,6 +170,12 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const bannerMessagesText = document.getElementById("banner-messages-text");
   const bannerMessagesStartDate = document.getElementById(
     "banner-messages-start-date",
+  );
+  const bannerMessagesEndDate = document.getElementById(
+    "banner-messages-end-date",
+  );
+  const bannerMessagesPermanent = document.getElementById(
+    "banner-messages-permanent",
   );
   const bannerMessagesDelete = document.getElementById(
     "banner-messages-delete",
@@ -438,7 +450,7 @@ security definer
 set search_path = public
 as $$
 declare v_id bigint; v_person_id uuid; v_parent_person_id uuid; v_child_base text; v_deceased boolean; v_birth_order int;
-begin if not public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then return false; end if; v_deceased := case when p_row ? 'is_deceased' then (p_row->>'is_deceased')::boolean when p_row ? 'deceased' then (p_row->>'deceased')::boolean else null end; v_birth_order := nullif(p_row->>'birth_order', '')::int; v_person_id := nullif(p_row->>'person_id', '')::uuid; v_parent_person_id := nullif(p_row->>'parent_person_id', '')::uuid; v_child_base := nullif(btrim(regexp_replace(coalesce(p_child_name, ''), '^.*/', '')), ''); if v_birth_order is not null and v_birth_order< 1 then raise exception 'birth_order_invalid'; end if; if v_parent_person_id is null then select min(c.person_id::text)::uuid into v_parent_person_id from public.tree_children c where c.branch_key = p_branch_key and coalesce(c.child_name, c.name) = p_parent_name having count(distinct c.person_id) = 1; end if; select c.id into v_id from public.tree_children c where c.branch_key = p_branch_key and ( (v_person_id is not null and c.person_id = v_person_id) or ( v_person_id is null and (c.parent_name = p_parent_name or c.parent = p_parent_name) and (c.name = p_child_name or c.child_name = p_child_name) ) ) order by c.id desc limit 1; if v_person_id is null and exists ( select 1 from public.tree_children c where c.branch_key = p_branch_key and ( ( v_parent_person_id is not null and c.parent_person_id = v_parent_person_id ) or ( v_parent_person_id is null and coalesce(c.parent_name, c.parent) = p_parent_name ) ) and btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', '')) = v_child_base ) then raise exception 'child_already_exists'; end if; if v_birth_order is not null and exists ( select 1 from public.tree_children c where c.branch_key = p_branch_key and c.parent_name = p_parent_name and c.birth_order = v_birth_order and (v_id is null or c.id<>v_id) ) then raise exception 'birth_order_conflict'; end if; if v_id is not null then update public.tree_children c set person_id = coalesce(c.person_id, v_person_id, gen_random_uuid()), parent_person_id = coalesce(v_parent_person_id, c.parent_person_id), birth_date_g = nullif(p_row->>'birth_date_g', '')::date, birth_date_h = nullif(p_row->>'birth_date_h', ''), birth_year = nullif(p_row->>'birth_year', '')::int, birth_order = v_birth_order, city = nullif(p_row->>'city', ''), area = nullif(p_row->>'area', ''), is_deceased = coalesce(v_deceased, c.is_deceased), deceased = coalesce(v_deceased, c.deceased) where c.id = v_id; perform public.tree_audit_log_v1( p_branch_key, p_phone, p_email, p_secret_hash, jsonb_build_object( 'v', 1, 'kind', 'tree_audit', 'op', 'upsert_update', 'branch_key', p_branch_key, 'parent_name', p_parent_name, 'child_name', p_child_name, 'row', coalesce(p_row, '{}'::jsonb), 'at', now()::timestamptz ) ); return true; end if; insert into public.tree_children ( branch_key, parent_name, parent, name, child_name, person_id, parent_person_id, birth_date_g, birth_date_h, birth_year, birth_order, city, area, is_deceased, deceased, created_at ) values ( p_branch_key, p_parent_name, p_parent_name, p_child_name, p_child_name, coalesce(v_person_id, gen_random_uuid()), v_parent_person_id, nullif(p_row->>'birth_date_g', '')::date, nullif(p_row->>'birth_date_h', ''), nullif(p_row->>'birth_year', '')::int, v_birth_order, nullif(p_row->>'city', ''), nullif(p_row->>'area', ''), coalesce(v_deceased, false), coalesce(v_deceased, false), coalesce(nullif(p_row->>'created_at', '')::timestamptz, now()) ); perform public.tree_audit_log_v1( p_branch_key, p_phone, p_email, p_secret_hash, jsonb_build_object( 'v', 1, 'kind', 'tree_audit', 'op', 'insert', 'branch_key', p_branch_key, 'parent_name', p_parent_name, 'child_name', p_child_name, 'row', coalesce(p_row, '{}'::jsonb), 'at', now()::timestamptz ) ); return true;
+begin if not public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then return false; end if; v_deceased := case when p_row ? 'is_deceased' then (p_row->>'is_deceased')::boolean when p_row ? 'deceased' then (p_row->>'deceased')::boolean else null end; v_birth_order := nullif(p_row->>'birth_order', '')::int; v_person_id := nullif(p_row->>'person_id', '')::uuid; v_parent_person_id := nullif(p_row->>'parent_person_id', '')::uuid; v_child_base := nullif(btrim(regexp_replace(coalesce(p_child_name, ''), '^.*/', '')), ''); if v_birth_order is not null and v_birth_order< 1 then raise exception 'birth_order_invalid'; end if; if v_parent_person_id is null then select min(c.person_id::text)::uuid into v_parent_person_id from public.tree_children c where c.branch_key = p_branch_key and coalesce(c.child_name, c.name) = p_parent_name having count(distinct c.person_id) = 1; end if; select c.id into v_id from public.tree_children c where c.branch_key = p_branch_key and ( (v_person_id is not null and c.person_id = v_person_id) or ( v_person_id is null and (c.parent_name = p_parent_name or c.parent = p_parent_name) and (c.name = p_child_name or c.child_name = p_child_name) ) ) order by c.id desc limit 1; if exists ( select 1 from public.tree_children c where c.branch_key = p_branch_key and ( ( v_parent_person_id is not null and c.parent_person_id = v_parent_person_id ) or ( v_parent_person_id is null and coalesce(c.parent_name, c.parent) = p_parent_name ) ) and btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', '')) = v_child_base and (v_id is null or c.id <> v_id) and (v_person_id is null or c.person_id is distinct from v_person_id) ) then raise exception 'child_already_exists'; end if; if v_birth_order is not null and exists ( select 1 from public.tree_children c where c.branch_key = p_branch_key and c.parent_name = p_parent_name and c.birth_order = v_birth_order and (v_id is null or c.id<>v_id) ) then raise exception 'birth_order_conflict'; end if; if v_id is not null then update public.tree_children c set person_id = coalesce(c.person_id, v_person_id, gen_random_uuid()), parent_person_id = coalesce(v_parent_person_id, c.parent_person_id), birth_date_g = nullif(p_row->>'birth_date_g', '')::date, birth_date_h = nullif(p_row->>'birth_date_h', ''), birth_year = nullif(p_row->>'birth_year', '')::int, birth_order = v_birth_order, city = nullif(p_row->>'city', ''), area = nullif(p_row->>'area', ''), is_deceased = coalesce(v_deceased, c.is_deceased), deceased = coalesce(v_deceased, c.deceased) where c.id = v_id; perform public.tree_audit_log_v1( p_branch_key, p_phone, p_email, p_secret_hash, jsonb_build_object( 'v', 1, 'kind', 'tree_audit', 'op', 'upsert_update', 'branch_key', p_branch_key, 'parent_name', p_parent_name, 'child_name', p_child_name, 'row', coalesce(p_row, '{}'::jsonb), 'at', now()::timestamptz ) ); return true; end if; insert into public.tree_children ( branch_key, parent_name, parent, name, child_name, person_id, parent_person_id, birth_date_g, birth_date_h, birth_year, birth_order, city, area, is_deceased, deceased, created_at ) values ( p_branch_key, p_parent_name, p_parent_name, p_child_name, p_child_name, coalesce(v_person_id, gen_random_uuid()), v_parent_person_id, nullif(p_row->>'birth_date_g', '')::date, nullif(p_row->>'birth_date_h', ''), nullif(p_row->>'birth_year', '')::int, v_birth_order, nullif(p_row->>'city', ''), nullif(p_row->>'area', ''), coalesce(v_deceased, false), coalesce(v_deceased, false), coalesce(nullif(p_row->>'created_at', '')::timestamptz, now()) ); perform public.tree_audit_log_v1( p_branch_key, p_phone, p_email, p_secret_hash, jsonb_build_object( 'v', 1, 'kind', 'tree_audit', 'op', 'insert', 'branch_key', p_branch_key, 'parent_name', p_parent_name, 'child_name', p_child_name, 'row', coalesce(p_row, '{}'::jsonb), 'at', now()::timestamptz ) ); return true;
 end;
 $$; create or replace function public.tree_children_update_v1( p_branch_key text, p_parent_name text, p_child_name text, p_phone text, p_email text, p_secret_hash text, p_patch jsonb
 ) returns boolean
@@ -736,18 +748,7 @@ grant execute on function public.delegate_set_approval_request_status_v1(text, b
 grant execute on function public.admin_token_ok_v1(text) to anon, authenticated;
 grant execute on function public.admin_create_delegate_request_v1(text, text, text, text, text, text, text) to anon, authenticated;
 grant execute on function public.admin_delete_delegate_v1(text, text, text, text) to anon, authenticated; -- حذف طلب إداري : للإدارة فقط عبر التوكن
-create or replace function public.admin_delete_request_v1( p_token text, p_id text
-)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare v_id bigint;
-begin if not public.admin_token_ok_v1(p_token) then return false; end if; v_id := nullif(regexp_replace(coalesce(p_id, ''), '\D', '', 'g'), '')::bigint; if v_id is null then return false; end if; delete from public.approval_requests where id = v_id; return found;
-exception when others then return false;
-end;
-$$; grant execute on function public.admin_delete_request_v1(text, text) to anon, authenticated; grant execute on function public.admin_tree_children_import_v1(text, jsonb) to anon, authenticated;
+create or replace function public.admin_delete_request_v1( p_token text, p_id text ) returns boolean language plpgsql security definer set search_path = public as $$ declare v_raw text := nullif(btrim(coalesce(p_id, '')), ''); v_id bigint := null; v_kind text := null; v_request_id text := null; begin if not public.admin_token_ok_v1(p_token) then return false; end if; if v_raw is null then return false; end if; if v_raw ~ '^[0-9]+$' then v_id := v_raw::bigint; select r.kind, r.request_id into v_kind, v_request_id from public.approval_requests r where r.id = v_id limit 1; else select r.id, r.kind, r.request_id into v_id, v_kind, v_request_id from public.approval_requests r where r.request_id = v_raw limit 1; end if; if v_id is null then return false; end if; if v_kind in ('event_card', 'family_event', 'event_request') and nullif(btrim(coalesce(v_request_id, '')), '') is not null then delete from public.family_events e where coalesce(e.details, '') like '%' || v_request_id || '%'; end if; delete from public.approval_requests where id = v_id; return found; end; $$; grant execute on function public.admin_delete_request_v1(text, text) to anon, authenticated; create or replace function public.trg_approval_request_reject_unpublish_event() returns trigger language plpgsql security definer set search_path = public as $$ begin if NEW.status = 'rejected' and NEW.kind in ('event_card', 'family_event', 'event_request') and nullif(btrim(coalesce(NEW.request_id, '')), '') is not null and (TG_OP = 'INSERT' or OLD.status is distinct from NEW.status) then delete from public.family_events e where coalesce(e.details, '') like '%' || NEW.request_id || '%'; end if; return NEW; end; $$; drop trigger if exists trg_approval_request_reject_unpublish_event on public.approval_requests; create trigger trg_approval_request_reject_unpublish_event after insert or update of status on public.approval_requests for each row execute function public.trg_approval_request_reject_unpublish_event(); grant execute on function public.admin_tree_children_import_v1(text, jsonb) to anon, authenticated;
 grant execute on function public.admin_tree_child_upsert_v1(text, jsonb) to anon, authenticated;
 grant execute on function public.admin_tree_child_delete_subtree_v1(text, text, bigint) to anon, authenticated; drop function if exists public.admin_publish_event_card_v1(text, text, jsonb);
 create or replace function public.admin_publish_event_card_v1( p_token text, p_request_id text, p_row jsonb
@@ -1503,6 +1504,79 @@ where c.id = matches.id; commit;
       appreciation: "شكر وتقدير",
     };
     return map[type] || type || "بطاقة";
+  }
+
+  function defaultSpecialCardTitle(type) {
+    const map = {
+      graduation: "مبروك التخرج",
+      wedding: "مبروك الزواج",
+      birth: "مبروك المولود",
+      promotion: "مبروك الترقية",
+      new_house: "مبروك المنزل الجديد",
+      honor: "تهنئة بالتكريم",
+      announcement: "إعلان",
+      engagement: "مبروك الخطوبة",
+      excellence: "مبروك الإنجاز",
+      retirement: "مبروك التقاعد",
+      appreciation: "شكر وتقدير",
+    };
+    return map[type] || "بطاقة تهنئة";
+  }
+
+  /**
+   * Prefill CMS form from a home special_card approval request (no DB write).
+   * Image URL comes from message envelope / رابط الصورة line.
+   */
+  function fillSpecialCardFromHomeRequest(payload) {
+    const p = payload && typeof payload === "object" ? payload : {};
+    const type = String(p.card_type || p.cardType || p.type || "graduation").trim() || "graduation";
+    const person = String(p.person_name || p.personName || p.person || "").trim();
+    const imageUrl = String(p.imageUrl || p.image_url || "").trim();
+    const notes = String(p.notes || p.message || "").trim();
+    const typeLabel = String(p.card_type_label || p.cardTypeLabel || specialCardTypeLabel(type)).trim();
+
+    resetSpecialCardsForm();
+    if (specialCardsType) {
+      const hasOpt = Array.from(specialCardsType.options || []).some(
+        (o) => String(o.value) === type,
+      );
+      specialCardsType.value = hasOpt ? type : "graduation";
+    }
+    if (specialCardsPerson) specialCardsPerson.value = person;
+    if (specialCardsTitle) {
+      specialCardsTitle.value = defaultSpecialCardTitle(
+        specialCardsType ? specialCardsType.value : type,
+      );
+    }
+    if (specialCardsSubtitle && typeLabel) {
+      specialCardsSubtitle.value = typeLabel;
+    }
+    if (specialCardsImageUrl) specialCardsImageUrl.value = imageUrl;
+    if (specialCardsMessage) specialCardsMessage.value = notes;
+    if (specialCardsImageFile) specialCardsImageFile.value = "";
+    updateSpecialCardPreview();
+    setSpecialCardsStatus(
+      "تم تعبئة النموذج من طلب البطاقة" +
+        (person ? " — " + person : "") +
+        (imageUrl ? " (مع الصورة)" : "") +
+        ". راجع ثم احفظ البطاقة.",
+    );
+    try {
+      if (window.AlzidanAdminShell && typeof window.AlzidanAdminShell.navigate === "function") {
+        window.AlzidanAdminShell.navigate("special-cards");
+      } else {
+        const section = document.getElementById("special-cards-manager");
+        if (section && typeof section.scrollIntoView === "function") {
+          section.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+    } catch (navErr) {}
+    return {
+      ok: true,
+      type: specialCardsType ? specialCardsType.value : type,
+      person: person,
+      imageUrl: imageUrl,
+    };
   }
 
 
@@ -4075,8 +4149,10 @@ where c.id = matches.id; commit;
     if (bannerMessagesBranch) bannerMessagesBranch.value = "زيدان";
     if (bannerMessagesShowDays) bannerMessagesShowDays.value = "7";
     if (bannerMessagesActive) bannerMessagesActive.checked = true;
+    if (bannerMessagesPermanent) bannerMessagesPermanent.checked = false;
     if (bannerMessagesText) bannerMessagesText.value = "";
     if (bannerMessagesStartDate) bannerMessagesStartDate.value = todayDateValue();
+    if (bannerMessagesEndDate) bannerMessagesEndDate.value = "";
     setBannerMessagesStatus("");
   }
   function renderBannerMessagesList() {
@@ -4124,11 +4200,27 @@ where c.id = matches.id; commit;
     setBannerMessagesStatus("جاري تحميل الأخبار العامة...");
     const { data, error } = await sb
       .from("banner_messages")
-      .select("id,branch_key,message,show_days,is_active,created_by,created_at")
+      .select("id,branch_key,message,show_days,is_active,created_by,created_at,show_start,show_end,is_permanent")
       .order("created_at", { ascending: false })
       .limit(300);
     if (error) {
-      setBannerMessagesStatus("تعذر التحميل، حاول لاحقاً أو تواصل مع الإدارة.");
+      // Columns may be missing until COPY-ME SQL is applied.
+      const legacy = await sb
+        .from("banner_messages")
+        .select("id,branch_key,message,show_days,is_active,created_by,created_at")
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (legacy.error) {
+        setBannerMessagesStatus("تعذر التحميل، حاول لاحقاً أو تواصل مع الإدارة.");
+        return;
+      }
+      bannerMessagesRows = Array.isArray(legacy.data) ? legacy.data : [];
+      renderBannerMessagesList();
+      setBannerMessagesStatus(
+        "تم تحميل " +
+          bannerMessagesRows.length +
+          " خبر عام (بدون أعمدة الجدولة — شغّل COPY-ME-event-schedule-visibility.sql).",
+      );
       return;
     }
     bannerMessagesRows = Array.isArray(data) ? data : [];
@@ -4149,7 +4241,11 @@ where c.id = matches.id; commit;
     if (bannerMessagesText) bannerMessagesText.value = row.message || "";
     if (bannerMessagesStartDate)
       bannerMessagesStartDate.value =
-        bannerStartDateValue(row.created_at) || todayDateValue();
+        bannerStartDateValue(row.show_start || row.created_at) || todayDateValue();
+    if (bannerMessagesEndDate)
+      bannerMessagesEndDate.value = bannerStartDateValue(row.show_end) || "";
+    if (bannerMessagesPermanent)
+      bannerMessagesPermanent.checked = row.is_permanent === true;
     setBannerMessagesStatus("تعديل الخبر العام رقم #" + (row.id || ""));
   }
   async function saveBannerMessageRow(event) {
@@ -4181,9 +4277,16 @@ where c.id = matches.id; commit;
       bannerMessagesStartDate && bannerMessagesStartDate.value
         ? String(bannerMessagesStartDate.value).trim()
         : todayDateValue();
+    const endDate =
+      bannerMessagesEndDate && bannerMessagesEndDate.value
+        ? String(bannerMessagesEndDate.value).trim()
+        : "";
+    const isPermanent = bannerMessagesPermanent
+      ? !!bannerMessagesPermanent.checked
+      : false;
     const existing = bannerMessagesRows.find((row) => Number(row.id) === id);
     const existingDate = existing
-      ? bannerStartDateValue(existing.created_at)
+      ? bannerStartDateValue(existing.show_start || existing.created_at)
       : "";
     const dateChanged = Boolean(id && startDate && startDate !== existingDate);
     setBannerMessagesStatus(id ? "جاري حفظ الخبر العام..." : "جاري إنشاء الخبر العام...");
@@ -4198,12 +4301,16 @@ where c.id = matches.id; commit;
         p_show_days: showDays,
         p_is_active: isActive,
         p_created_at: startDate ? startDate + "T12:00:00+03:00" : null,
+        p_show_start: startDate ? startDate + "T00:00:00+03:00" : null,
+        p_show_end:
+          isPermanent || !endDate ? null : endDate + "T23:59:59+03:00",
+        p_is_permanent: isPermanent,
       };
       let res = await sb.rpc("admin_banner_message_update_v1", updatePayload);
       error = res.error;
       if (
         error &&
-        /p_created_at|created_at|Could not find the function|unexpected|function/i.test(
+        /p_show_start|p_show_end|p_is_permanent|p_created_at|created_at|Could not find the function|unexpected|function/i.test(
           String(error.message || error.details || ""),
         )
       ) {
@@ -4214,47 +4321,9 @@ where c.id = matches.id; commit;
           p_message: text,
           p_show_days: showDays,
           p_is_active: isActive,
+          p_created_at: startDate ? startDate + "T12:00:00+03:00" : null,
         });
         error = res.error;
-        if (!error && dateChanged) {
-          const del = await sb.rpc("admin_banner_message_delete_v1", {
-            p_token: token,
-            p_id: id,
-          });
-          if (del.error) {
-            error = del.error;
-          } else {
-            const created = await sb.rpc("admin_banner_message_create_v1", {
-              p_token: token,
-              p_branch_key: branch,
-              p_message: text,
-              p_show_days: showDays,
-            });
-            error = created.error;
-            if (!error && !isActive) {
-              const verify = await sb
-                .from("banner_messages")
-                .select("id")
-                .eq("message", text)
-                .order("created_at", { ascending: false })
-                .limit(1);
-              const newId =
-                verify && verify.data && verify.data[0]
-                  ? Number(verify.data[0].id)
-                  : 0;
-              if (newId) {
-                await sb.rpc("admin_banner_message_update_v1", {
-                  p_token: token,
-                  p_id: newId,
-                  p_branch_key: branch,
-                  p_message: text,
-                  p_show_days: showDays,
-                  p_is_active: false,
-                });
-              }
-            }
-          }
-        }
       }
     } else {
       const created = await sb.rpc("admin_banner_message_create_v1", {
@@ -4609,21 +4678,95 @@ where c.id = matches.id; commit;
       oldDetails,
     });
   }
+  function formatPushNotifyAdminMessage(pushResult) {
+    const Actions = window.AlzidanRequestActions || {};
+    if (typeof Actions.formatPushNotifyAdminMessage === "function") {
+      return Actions.formatPushNotifyAdminMessage(pushResult);
+    }
+    if (pushResult && pushResult.ok) return "تم استدعاء إشعار التطبيق بنجاح.";
+    return "إشعار التطبيق لم يكتمل — راجع Console: PUSH_NOTIFY_*.";
+  }
+
   async function notifyFamilyEventPushClient(sb, eventRow) {
+    const Actions = window.AlzidanRequestActions || {};
+    if (typeof Actions.notifyFamilyEventPush === "function") {
+      return Actions.notifyFamilyEventPush(sb, eventRow);
+    }
     if (!sb || !eventRow) return { ok: false, reason: "missing_client_or_row" };
-    const { data, error } = await sb.functions.invoke("alzidan-push-notify", {
-      body: {
-        type: eventRow.type || "",
-        person: eventRow.person || "",
-        branch_key: eventRow.branch_key || "",
-        details: eventRow.details || "",
-      },
-    });
-    if (error) {
+    let data = null;
+    let error = null;
+    try {
+      const res = await sb.functions.invoke("alzidan-push-notify", {
+        body: {
+          type: eventRow.type || "",
+          person: eventRow.person || "",
+          branch_key: eventRow.branch_key || "",
+          details: eventRow.details || "",
+        },
+      });
+      data = res.data;
+      error = res.error;
+    } catch (invokeErr) {
       try {
-        console.error("PUSH_NOTIFY_INVOKE_ERROR", error);
+        console.error("PUSH_NOTIFY_INVOKE_ERROR", invokeErr);
       } catch (_) {}
-      return { ok: false, reason: "invoke_error", error };
+      return {
+        ok: false,
+        reason: "invoke_exception",
+        error: invokeErr,
+        bodySnippet: String(
+          (invokeErr && (invokeErr.message || invokeErr)) || "",
+        ).slice(0, 240),
+      };
+    }
+    if (error) {
+      let httpStatus = null;
+      let bodySnippet = "";
+      let body = data;
+      try {
+        const ctx = error.context;
+        if (ctx && typeof ctx.status === "number") httpStatus = ctx.status;
+        if (ctx && typeof ctx.clone === "function") {
+          const text = await ctx.clone().text();
+          bodySnippet = String(text || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 240);
+          try {
+            body = JSON.parse(text);
+          } catch (_) {}
+        } else if (ctx && typeof ctx.json === "function") {
+          body = await ctx.json();
+          bodySnippet = JSON.stringify(body).slice(0, 240);
+        }
+      } catch (_) {}
+      try {
+        console.error("PUSH_NOTIFY_INVOKE_ERROR", {
+          message: error && error.message,
+          httpStatus,
+          bodySnippet,
+          body: body || null,
+          error,
+        });
+      } catch (_) {}
+      if (body && body.skipped) {
+        return {
+          ok: false,
+          skipped: body.skipped,
+          data: body,
+          error,
+          httpStatus,
+          bodySnippet,
+        };
+      }
+      return {
+        ok: false,
+        reason: "invoke_error",
+        error,
+        data: body,
+        httpStatus,
+        bodySnippet,
+      };
     }
     if (data && data.skipped) {
       try {
@@ -4710,7 +4853,10 @@ where c.id = matches.id; commit;
       );
       const isNewEvent = !(payload && Number(payload.id || 0) > 0);
       if (isNewEvent) {
-        await notifyFamilyEventPushClient(sb, payload);
+        const push = await notifyFamilyEventPushClient(sb, payload);
+        setEventsSourceStatus(
+          "تم حفظ الخبر/المناسبة. " + formatPushNotifyAdminMessage(push),
+        );
       }
     } catch (e) {
       setEventsSourceStatus("تم حفظ الخبر/المناسبة.");
@@ -4738,7 +4884,7 @@ where c.id = matches.id; commit;
     if (!sb || !token) return setEventsSourceStatus("سجل الدخول أولاً.");
     if (!id) return setEventsSourceStatus("اختر خبراً أو مناسبة أولاً.");
     const ok = window.confirm(
-      "سيتم حذف هذا الخبر/المناسبة نهائياً . هل أنت متأكد؟",
+      "سيتم حذف هذا الخبر/المناسبة نهائياً من الرئيسية وطلبات المندوب. هل أنت متأكد؟",
     );
     if (!ok) return;
     setEventsSourceStatus("جاري الحذف...");
@@ -4747,27 +4893,58 @@ where c.id = matches.id; commit;
       p_id: id,
     });
     if (error) {
-      const msg = formatRpcError(error);
-      setEventsSourceStatus("تعذر الحذف، حاول لاحقاً أو تواصل مع الإدارة.");
+      setEventsSourceStatus(formatDeleteEventError(error));
+      return;
+    }
+    if (data !== true) {
+      setEventsSourceStatus(
+        "لم يُحذف الخبر/المناسبة. انتهت الجلسة أو لا توجد صلاحية، أو الصف غير موجود.",
+      );
       return;
     }
     if (eventsSourceId) eventsSourceId.value = "";
-    setEventsSourceStatus("تم حذف الخبر/المناسبة .");
+    setEventsSourceStatus("تم حذف الخبر/المناسبة من الرئيسية وطلبات المندوب.");
     touchEventsRefresh();
     await loadEventsSourceRows();
+  }
+  function formatDeleteEventError(error) {
+    if (!error) return "تعذر الحذف، حاول لاحقاً أو تواصل مع الإدارة.";
+    console.warn("Admin delete event error:", error);
+    const code = String(error.code || "").trim();
+    const msg = String(error.message || error.details || error.hint || "").trim();
+    const low = msg.toLowerCase();
+    if (
+      code === "42883" ||
+      /Could not find the function|function .* does not exist|PGRST202|schema cache/i.test(
+        msg,
+      )
+    ) {
+      return "دالة الحذف غير محدّثة في القاعدة. من أدوات الصيانة شغّل أمر «حذف المناسبة يلغي طلب المندوب».";
+    }
+    if (/not allowed|permission|jwt|unauthorized|auth/i.test(low)) {
+      return "انتهت جلسة الإدارة أو لا توجد صلاحية للحذف. سجّل الدخول ثم أعد المحاولة.";
+    }
+    if (/foreign key|violates|constraint/i.test(low)) {
+      return "تعذر الحذف بسبب ارتباط في القاعدة. حاول حذف الطلب من قائمة الطلبات أو تواصل مع الإدارة.";
+    }
+    return "تعذر الحذف، حاول لاحقاً أو تواصل مع الإدارة.";
   }
   function formatRpcError(error) {
     if (!error) return "تعذر تنفيذ العملية، حاول لاحقاً أو تواصل مع الإدارة.";
     console.warn("Admin operation error:", error);
     const code = String(error.code || "").trim();
     const msg = String(error.message || error.details || error.hint || "").trim();
+    const low = msg.toLowerCase();
     if (
       code === "42883" ||
       /Could not find the function|function .* does not exist/i.test(msg)
     ) {
       return "دالة الحفظ غير منشورة في القاعدة. نفّذ ملف supabase/sql/admin_family_events_rpc.sql في Supabase.";
     }
-    if (msg) return msg.length > 160 ? msg.slice(0, 160) + "…" : msg;
+    if (/not allowed|permission|jwt|unauthorized|auth/i.test(low)) {
+      return "انتهت جلسة الإدارة أو لا توجد صلاحية. سجّل الدخول ثم أعد المحاولة.";
+    }
+    // Never surface raw English/Postgres text to the admin UI.
     return "تعذر تنفيذ العملية، حاول لاحقاً أو تواصل مع الإدارة.";
   }
 
@@ -4867,17 +5044,24 @@ where c.id = matches.id; commit;
     } catch (e) {}
   }
   function startPendingPolling() {
-    if (pendingPollTimer) return;
-    pendingPollTimer = setInterval(() => {
+    const pollState = getPendingPollState();
+    if (pollState.timer) return;
+    if (!getAdminToken()) return;
+    pollState.timer = setInterval(() => {
       if (document.visibilityState !== "visible") return;
+      if (!getAdminToken()) {
+        stopPendingPolling();
+        return;
+      }
       pollPendingRequestsForNotifications().catch(() => {});
       pollAuditForEmailNotifications().catch(() => {});
     }, 20000);
   }
   function stopPendingPolling() {
-    if (!pendingPollTimer) return;
-    clearInterval(pendingPollTimer);
-    pendingPollTimer = null;
+    const pollState = getPendingPollState();
+    if (!pollState.timer) return;
+    clearInterval(pollState.timer);
+    pollState.timer = null;
   }
   function renderEmpty(text) {
     if (!requestsBody) return;
@@ -4892,36 +5076,7 @@ where c.id = matches.id; commit;
   }
 
 
-  if (filterKind)
-    filterKind.addEventListener("change", () => {
-      requestsCurrentPage = 1;
-      reloadAdminRequestsSafe();
-    });
-  if (filterStatus)
-    filterStatus.addEventListener("change", () => {
-      requestsCurrentPage = 1;
-      reloadAdminRequestsSafe();
-    });
-  if (requestSearchInput)
-    requestSearchInput.addEventListener("input", () => {
-      requestsCurrentPage = 1;
-      renderRequestsPage();
-    });
-  if (requestsPageSizeSelect)
-    requestsPageSizeSelect.addEventListener("change", () => {
-      requestsCurrentPage = 1;
-      renderRequestsPage();
-    });
-  if (requestsPrevPageBtn)
-    requestsPrevPageBtn.addEventListener("click", () => {
-      requestsCurrentPage -= 1;
-      renderRequestsPage();
-    });
-  if (requestsNextPageBtn)
-    requestsNextPageBtn.addEventListener("click", () => {
-      requestsCurrentPage += 1;
-      renderRequestsPage();
-    });
+  // Filter/search/pager listeners live in modules/requests.js only (single loadRequests source).
   if (eventsSourceLoad)
     eventsSourceLoad.addEventListener("click", () =>
       loadEventsSourceRows().catch(() => {}),
@@ -5203,6 +5358,7 @@ where c.id = matches.id; commit;
     truncateText,
     takeLines,
     chunkArray,
+    fillSpecialCardFromHomeRequest,
   });
 
   if (window.AlzidanRequestActions && typeof window.AlzidanRequestActions.setReloadRequests === "function") {
@@ -5212,56 +5368,58 @@ where c.id = matches.id; commit;
   window.loadTickerSpeedSetting = loadTickerSpeedSetting;
 
   (async function init() {
-    try {
-      adminToken = String(
-        sessionStorage.getItem(ADMIN_TOKEN_SESSION_KEY) ||
-          localStorage.getItem(ADMIN_TOKEN_KEY) ||
-          "",
-      ).trim();
-    } catch (e) {
-      adminToken = "";
-    }
-    try {
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-    } catch (e) {}
-    if (adminUsername && !String(adminUsername.value || "").trim()) {
-      adminUsername.value = "alshryhy";
-    }
-    await refreshAuthStatus();
-    if (
-      window.AlzidanAdminRequests &&
-      typeof window.AlzidanAdminRequests.loadRequests === "function"
-    ) {
+    // When AlzidanAuth is present it owns: token restore, refreshAuthStatus,
+    // loadRequests, pending poll, and family mount. Skip that path here.
+    const authOwnsStartup = !!(window.AlzidanAuth);
+
+    if (!authOwnsStartup) {
+      try {
+        adminToken = String(
+          sessionStorage.getItem(ADMIN_TOKEN_SESSION_KEY) ||
+            localStorage.getItem(ADMIN_TOKEN_KEY) ||
+            "",
+        ).trim();
+      } catch (e) {
+        adminToken = "";
+      }
+      try {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+      } catch (e) {}
+      if (adminUsername && !String(adminUsername.value || "").trim()) {
+        adminUsername.value = "alshryhy";
+      }
+      await refreshAuthStatus();
       if (
         window.AlzidanAdminRequests &&
         typeof window.AlzidanAdminRequests.loadRequests === "function"
       ) {
         await window.AlzidanAdminRequests.loadRequests();
       }
+      updateNotifsButtonText();
     }
-    updateNotifsButtonText();
-    if (adminToken) {
-      if (
-        window.AlzidanRequestsStats &&
-        typeof window.AlzidanRequestsStats.loadRequestsStats === "function"
-      ) {
-        window.AlzidanRequestsStats.loadRequestsStats().catch(() => {});
-      }
+
+    const tokenNow = getAdminToken();
+    if (tokenNow) {
+      // Request stats: on-demand only (section open / refresh) — not on admin.js init.
       if (
         window.AlzidanAdminViews &&
         typeof window.AlzidanAdminViews.loadViewsStats === "function"
-      )
+      ) {
         window.AlzidanAdminViews.loadViewsStats().catch(() => {});
+      }
       if (
         window.AlzidanAdminPolls &&
         typeof window.AlzidanAdminPolls.loadPollsRows === "function"
-      )
-        window.AlzidanAdminPolls.loadPollsRows().catch(() => {});
-      if (
-        window.AdminFamilyMgmt &&
-        typeof window.AdminFamilyMgmt.mountAdminFamilyManagement === "function"
       ) {
-        window.AdminFamilyMgmt.mountAdminFamilyManagement();
+        window.AlzidanAdminPolls.loadPollsRows().catch(() => {});
+      }
+      if (!authOwnsStartup) {
+        if (
+          window.AdminFamilyMgmt &&
+          typeof window.AdminFamilyMgmt.mountAdminFamilyManagement === "function"
+        ) {
+          window.AdminFamilyMgmt.mountAdminFamilyManagement();
+        }
       }
       if (delegateAuditDetails && delegateAuditDetails.open && window.AlzidanDelegateAudit) {
         window.AlzidanDelegateAudit.loadDelegateAudit().catch(() => {});
@@ -5272,14 +5430,13 @@ where c.id = matches.id; commit;
       ) {
         window.AlzidanAdminMemoryQueueModule.loadMemoryQueue().catch(() => {});
       }
-      pollPendingRequestsForNotifications().catch(() => {});
-      startPendingPolling();
+      if (!authOwnsStartup) {
+        pollPendingRequestsForNotifications().catch(() => {});
+        startPendingPolling();
+      }
     }
   })();
-  if (refreshRequestsStatsBtn)
-    refreshRequestsStatsBtn.addEventListener("click", () =>
-      window.AlzidanRequestsStats.loadRequestsStats().catch(() => {}),
-    );
+  // refresh-requests-stats click is bound in admin-requests-stats.js (single owner).
   if (refreshDelegateAuditBtn)
     refreshDelegateAuditBtn.addEventListener("click", () =>
       window.AlzidanDelegateAudit.loadDelegateAudit().catch(() => {}),
@@ -5311,16 +5468,19 @@ where c.id = matches.id; commit;
       }
     });
   }
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      if (getAdminToken()) {
-        pollPendingRequestsForNotifications().catch(() => {});
-        startPendingPolling();
+  // Pending poll visibility lifecycle is owned by admin-auth.js when AlzidanAuth exists.
+  if (!window.AlzidanAuth) {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        if (getAdminToken()) {
+          pollPendingRequestsForNotifications().catch(() => {});
+          startPendingPolling();
+        }
+      } else {
+        stopPendingPolling();
       }
-    } else {
-      stopPendingPolling();
-    }
-  });
+    });
+  }
 })();
 window.addEventListener("load", () => {
   try {

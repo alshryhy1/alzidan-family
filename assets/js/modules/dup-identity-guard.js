@@ -39,16 +39,17 @@
       "هذا الشخص موجود مسبقًا في الشجرة تحت نفس السياق. لا يُنشأ معرّف جديد — استخدم تصحيح البيانات إن لزم.",
     ADD_PERSON_SIMILAR:
       "يوجد أشخاص بنفس الاسم أو مشابهون. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم — التشابه وحده لا يكفي للحظر.",
-    EVENT_SAME: "مناسبة مطابقة مسجّلة مسبقًا (النوع + الشخص/المعرّف + التاريخ).",
+    EVENT_SAME: "هذه المناسبة مسجلة مسبقًا.",
     EVENT_SIMILAR:
       "مناسبة مشابهة بالعنوان/الاسم دون إثبات كامل للهوية. راجع قبل الإرسال — لا دمج تلقائي.",
-    HEALTH_SAME: "حالة صحية مطابقة لنفس الشخص ونوع الحالة والحقول المعرّفة مسجّلة مسبقًا.",
+    HEALTH_SAME: "هذه الحالة مسجلة مسبقًا.",
     HEALTH_SIMILAR:
       "حالة صحية مشابهة لنفس الشخص دون اكتمال الحقول المعرّفة. راجع يدويًا.",
-    DEATH_SAME: "وفاة مسجّلة مسبقًا لنفس person_id — لا يُقبل إعلان ثانٍ.",
+    DEATH_SAME: "هذه الوفاة مسجلة مسبقًا.",
     DEATH_SIMILAR:
-      "يوجد سجل وفاة باسم مشابه بلا person_id مؤكد. التشابه بالاسم غير كافٍ للحظر النهائي — راجع.",
-    MEMORY_SAME: "ذكرى مطابقة مسجّلة مسبقًا (الشخص + العنوان + التاريخ/النوع).",
+      "يوجد سجل وفاة باسم مشابه بلا تطابق كامل للشخص. التشابه بالاسم وحده غير كافٍ — راجع.",
+    MEMORY_SAME:
+      "موجود مسبقًا: ذكرى مطابقة (الشخص + العنوان + التاريخ/النوع).",
     MEMORY_SIMILAR:
       "ذكرى مشابهة لنفس الشخص دون تطابق كامل للحقول. راجع قبل الإرسال.",
     DOUBLE_SUBMIT: "طلب مكرر: جارٍ إرسال بنفس البصمة أو أُرسل للتو — لن يُنشأ طلب ثانٍ.",
@@ -158,11 +159,10 @@
       parts.push(normalizeArabic(p.person_name || p.name || ""));
       parts.push(normalizeArabic(p.branch_key || p.branch || ""));
     } else if (t === TYPE.EVENT) {
+      // Same-record core: type + person + date (phone is verification, not fork key)
       parts.push(normalizeArabic(p.type || ""));
       parts.push(pid(p.person_id) || normalizeArabic(p.person || p.person_name || ""));
       parts.push(normalizeDateKey(p.event_date || p.date_label || p.dateLabel || ""));
-      parts.push(normalizeArabic(p.title || p.person || ""));
-      parts.push(normalizeArabic(p.branch_key || p.branch || ""));
     } else if (t === TYPE.HEALTH) {
       parts.push(healthCaseType(p.type || p.case_type || "sick"));
       parts.push(pid(p.person_id) || normalizeArabic(p.person || p.person_name || ""));
@@ -329,22 +329,42 @@
     return result(VERDICT.ALLOW, "NEW", MSG.NEW);
   }
 
+  function normalizePhoneKey(v) {
+    return text(v)
+      .replace(/[٠-٩]/g, function (d) {
+        return String(d.charCodeAt(0) - 1632);
+      })
+      .replace(/[۰-۹]/g, function (d) {
+        return String(d.charCodeAt(0) - 1776);
+      })
+      .replace(/[^\d+]/g, "")
+      .trim();
+  }
+
   function eventIdentityKey(row) {
     var type = normalizeArabic(row.type || "");
     var personKey = pid(row.person_id) || "";
     var dateKey = normalizeDateKey(row.event_date || row.date_label || row.dateLabel || "");
     var title = normalizeArabic(row.title || "");
     var personName = normalizeArabic(row.person || row.person_name || "");
+    var phone = normalizePhoneKey(
+      row.phone || row.submitter_phone || row.contact_phone || ""
+    );
     return {
       type: type,
       personKey: personKey,
       dateKey: dateKey,
       title: title,
       personName: personName,
-      branch: normalizeArabic(row.branch_key || row.branch || ""),
+      phone: phone,
     };
   }
 
+  /**
+   * Occasions same-record: type + (person_id | person name) + date.
+   * Phone is a secondary verification layer (does not fork a new record).
+   * Title/text wording must NOT create a second copy.
+   */
   function evaluateEvent(payload, catalog) {
     var p = payload || {};
     var events = Array.isArray((catalog || {}).events) ? catalog.events : [];
@@ -359,32 +379,38 @@
       if (!row) return;
       var got = eventIdentityKey(row);
       if (want.type && got.type && want.type !== got.type) return;
-      var samePersonId = want.personKey && got.personKey && want.personKey === got.personKey;
+      var samePersonId =
+        want.personKey && got.personKey && want.personKey === got.personKey;
       var sameDate = want.dateKey && got.dateKey && want.dateKey === got.dateKey;
+      var samePersonName =
+        want.personName && got.personName && want.personName === got.personName;
       var sameTitle =
-        (want.title && got.title && want.title === got.title) ||
-        (want.personName && got.personName && want.personName === got.personName);
-      var sameBranch = !want.branch || !got.branch || want.branch === got.branch;
+        (want.title && got.title && want.title === got.title) || samePersonName;
 
-      if (samePersonId && sameDate && sameBranch && (sameTitle || !want.title)) {
+      // Core: type + person_id + date
+      if (samePersonId && sameDate && want.type === got.type) {
         matches.push(Object.assign({ _source: source }, row));
         return;
       }
-      // Title + related person id + date (no reliance on name alone)
-      if (samePersonId && sameDate && sameTitle && sameBranch) {
-        matches.push(Object.assign({ _source: source }, row));
-        return;
-      }
-      // Without person_id: require type + title + date + branch (still not name alone)
+      // Without person_id: type + person/title + date
+      // Phone on payload is reporter verification for the form — it must not
+      // fork a second copy of the same person+type+date occasion.
       if (
         !want.personKey &&
         !got.personKey &&
         sameDate &&
-        want.title &&
-        got.title &&
-        want.title === got.title &&
-        sameBranch &&
-        want.type === got.type
+        want.type === got.type &&
+        (samePersonName || (want.title && got.title && want.title === got.title))
+      ) {
+        matches.push(Object.assign({ _source: source }, row));
+        return;
+      }
+      // person_id on one side only: name+date+type still blocks when names align
+      if (
+        sameDate &&
+        want.type === got.type &&
+        samePersonName &&
+        (!want.personKey || !got.personKey)
       ) {
         matches.push(Object.assign({ _source: source }, row));
         return;
@@ -392,7 +418,6 @@
       if (
         sameTitle &&
         want.type === got.type &&
-        sameBranch &&
         (!want.personKey || !got.personKey || want.personKey === got.personKey)
       ) {
         similar.push(Object.assign({ _source: source }, row));
@@ -447,10 +472,10 @@
       var got = healthIdentFields(row);
       if (want.type !== got.type) return;
 
-      var samePerson =
-        (want.personKey && got.personKey && want.personKey === got.personKey) ||
-        false;
-      // Name alone never proves same person for BLOCK
+      var samePersonId =
+        want.personKey && got.personKey && want.personKey === got.personKey;
+      var samePersonName =
+        want.personName && got.personName && want.personName === got.personName;
       var samePlace =
         (want.hospital && got.hospital && want.hospital === got.hospital) ||
         (want.homeCity &&
@@ -459,26 +484,39 @@
           want.homeArea === got.homeArea);
       var sameDate = want.dateKey && got.dateKey && want.dateKey === got.dateKey;
       var sameBranch = !want.branch || !got.branch || want.branch === got.branch;
+      var sameCore = samePlace || sameDate;
 
-      if (samePerson && sameBranch && (samePlace || sameDate)) {
+      // Core: type + person_id + (place|date)
+      if (samePersonId && sameBranch && sameCore) {
         matches.push(Object.assign({ _source: source }, row));
         return;
       }
-      if (samePerson && sameBranch) {
-        similar.push(Object.assign({ _source: source }, row));
-        return;
-      }
+      // Public form path (no person_id): type + person name + (place|date)
       if (
         !want.personKey &&
         !got.personKey &&
-        want.personName &&
-        got.personName &&
-        want.personName === got.personName &&
-        samePlace &&
-        sameDate &&
-        sameBranch
+        samePersonName &&
+        sameBranch &&
+        sameCore
       ) {
-        // Both sides lack id but place+date+name+type align → still REVIEW (not proven id)
+        matches.push(Object.assign({ _source: source }, row));
+        return;
+      }
+      // person_id on one side only: name + type + (place|date) still blocks
+      if (
+        samePersonName &&
+        sameBranch &&
+        sameCore &&
+        (!want.personKey || !got.personKey)
+      ) {
+        matches.push(Object.assign({ _source: source }, row));
+        return;
+      }
+      if (samePersonId && sameBranch) {
+        similar.push(Object.assign({ _source: source }, row));
+        return;
+      }
+      if (samePersonName && sameBranch && want.type === got.type) {
         similar.push(Object.assign({ _source: source }, row));
       }
     }
@@ -509,18 +547,30 @@
     var pending = Array.isArray(cat.pending_requests) ? cat.pending_requests : [];
     var wantPid = pid(p.person_id);
     var wantName = normalizeArabic(p.person || p.person_name || "");
+    var wantBranch = normalizeArabic(p.branch_key || p.branch || "");
     var matches = [];
     var similar = [];
+
+    function isDeadFlag(row) {
+      return (
+        row.is_deceased === true ||
+        row.deceased === true ||
+        text(row.is_deceased) === "true" ||
+        text(row.deceased) === "true"
+      );
+    }
+
+    function sameBranch(row) {
+      var b = normalizeArabic(row.branch_key || row.branch || "");
+      return !wantBranch || !b || wantBranch === b;
+    }
 
     if (wantPid) {
       people.forEach(function (row) {
         if (pid(row.person_id) !== wantPid) return;
-        var dead =
-          row.is_deceased === true ||
-          row.deceased === true ||
-          text(row.is_deceased) === "true" ||
-          text(row.deceased) === "true";
-        if (dead) matches.push(Object.assign({ _source: "tree_children" }, row));
+        if (isDeadFlag(row)) {
+          matches.push(Object.assign({ _source: "tree_children" }, row));
+        }
       });
       events.forEach(function (row) {
         if (normalizeArabic(row.type) !== "death") return;
@@ -536,26 +586,51 @@
       });
     }
 
+    // Same death event by person name + branch (when row has no person_id)
+    if (wantName) {
+      events.forEach(function (row) {
+        if (normalizeArabic(row.type) !== "death") return;
+        if (!sameBranch(row)) return;
+        var rowPid = pid(row.person_id);
+        if (wantPid && rowPid && wantPid === rowPid) {
+          matches.push(Object.assign({ _source: "family_events" }, row));
+          return;
+        }
+        if (
+          !wantPid &&
+          !rowPid &&
+          normalizeArabic(row.person || row.person_name || "") === wantName
+        ) {
+          matches.push(Object.assign({ _source: "family_events" }, row));
+        }
+      });
+      pending.forEach(function (row) {
+        if (normalizeArabic(row.type || "") !== "death") return;
+        if (!sameBranch(row)) return;
+        var rowPid = pid(row.person_id);
+        if (wantPid && rowPid && wantPid === rowPid) {
+          matches.push(Object.assign({ _source: "pending_request" }, row));
+          return;
+        }
+        if (
+          !wantPid &&
+          !rowPid &&
+          normalizeArabic(row.person || row.person_name || "") === wantName
+        ) {
+          matches.push(Object.assign({ _source: "pending_request" }, row));
+        }
+      });
+    }
+
     if (matches.length) {
       return result(VERDICT.BLOCK, "DEATH_SAME", MSG.DEATH_SAME, { matches: matches });
     }
 
-    // Name-only hits → review, never block
-    if (wantName) {
-      events.forEach(function (row) {
-        if (normalizeArabic(row.type) !== "death") return;
-        if (pid(row.person_id)) return;
-        if (normalizeArabic(row.person || row.person_name || "") === wantName) {
-          similar.push(Object.assign({ _source: "family_events" }, row));
-        }
-      });
+    // Ambiguous name hits on tree without a death event row → review
+    if (wantName && !wantPid) {
       people.forEach(function (row) {
         var leaf = normalizeArabic(row.leaf || leafOf(row.child_name || row.name || ""));
-        var dead =
-          row.is_deceased === true ||
-          row.deceased === true ||
-          text(row.is_deceased) === "true";
-        if (dead && leaf === wantName && !wantPid) {
+        if (isDeadFlag(row) && leaf === wantName) {
           similar.push(Object.assign({ _source: "tree_children" }, row));
         }
       });
@@ -669,6 +744,7 @@
     text: text,
     normalizeArabic: normalizeArabic,
     normalizeDateKey: normalizeDateKey,
+    normalizePhoneKey: normalizePhoneKey,
     fingerprint: fingerprint,
     evaluate: evaluate,
     isHealthType: isHealthType,

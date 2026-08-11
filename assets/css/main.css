@@ -1984,6 +1984,32 @@ details.toggle-card[open] > .toggle-summary::after {
   background-color: rgba(255, 237, 213, 0.55);
   border-top: 1px solid rgba(251, 146, 60, 0.12);
 }
+#events details.occasion-add-card {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: linear-gradient(160deg, rgba(236, 253, 245, 0.95), #ffffff);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+#events details.occasion-add-card::before {
+  background: rgba(16, 185, 129, 0.35);
+}
+#events details.occasion-add-card .toggle-icon {
+  background: linear-gradient(135deg, #d1fae5, #ecfdf5);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+#events details.occasion-add-card .toggle-title {
+  font-weight: 900;
+  color: #064e3b;
+}
+#events .occasion-simple-form .field-optional,
+.rx-occasion-panel .occasion-simple-form .field-optional {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.85em;
+}
+#events .occasion-simple-form .founder-grid,
+.rx-occasion-panel .occasion-simple-form .founder-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
 #events details.toggle-card[data-event-kind="sick"] {
   --kind-ring: rgba(226, 232, 240, 0.16);
   background: linear-gradient(135deg, #111827, #1f2937);

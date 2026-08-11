@@ -17,15 +17,18 @@
   };
 
   const USER_LABELS = {
-    submitted: "تم الإرسال",
-    assigned: "وصل للمندوب",
-    in_review: "تحت المراجعة",
-    needs_changes: "نحتاج معلومة إضافية",
-    approved: "تم قبول طلبك",
-    applied: "تمت إضافة البيانات",
-    done: "اكتمل",
-    rejected: "لم يُقبل",
+    submitted: "طلبك بانتظار المراجعة.",
+    assigned: "طلبك بانتظار المراجعة.",
+    in_review: "طلبك بانتظار المراجعة.",
+    needs_changes: "نحتاج معلومة إضافية منك",
+    approved: "تمت الموافقة على طلبك.",
+    applied: "تمت الموافقة على طلبك.",
+    done: "تمت الموافقة على طلبك.",
+    rejected: "تم رفض طلبك.",
   };
+
+  /** Last successful admin_workflow_get_v1 payload (for reject → unpublish). */
+  let lastWorkflowRow = null;
 
   function core() {
     return window.AlzidanAdminCore || {};
@@ -46,6 +49,39 @@
   function showAlert(kind, msg) {
     const c = core();
     if (typeof c.showAlert === "function") c.showAlert(kind, msg);
+  }
+
+  /**
+   * event_card / family_event / event_request: clear published family_events
+   * before wf reject (محرك السير was missing this — only requests.js Reject had it).
+   */
+  async function unpublishPublishedEventForWorkflowReject(requestId, meta) {
+    const Actions = window.AlzidanRequestActions || {};
+    if (typeof Actions.unpublishPublishedEventForRequest !== "function") {
+      return { ok: true, skipped: true, deleted: 0 };
+    }
+    const sb = getClient();
+    const token = getToken();
+    if (!sb || !token) {
+      return { ok: false, deleted: 0, message: "بيانات الجلسة ناقصة." };
+    }
+    const kind = String(
+      (meta && (meta.kind || meta.request_type)) || "",
+    ).trim();
+    // Known non-event kinds: skip. Unknown kind: still try by request_id (safe).
+    if (
+      kind &&
+      typeof Actions.isEventPublishRequestKind === "function" &&
+      !Actions.isEventPublishRequestKind(kind)
+    ) {
+      return { ok: true, skipped: true, deleted: 0 };
+    }
+    const row = {
+      kind: kind || "event_card",
+      request_id: String(requestId || (meta && meta.request_id) || "").trim(),
+      name: String((meta && meta.name) || "").trim(),
+    };
+    return Actions.unpublishPublishedEventForRequest(sb, token, row);
   }
 
   function requestRefFromHash() {
@@ -264,6 +300,7 @@
     }
 
     const row = data && typeof data === "object" ? data : { ok: false };
+    lastWorkflowRow = row && row.ok ? row : null;
     renderStatus(row);
     if (row.ok && row.request_id) {
       setHashRequest(row.request_id);
@@ -369,6 +406,28 @@
       return;
     }
 
+    let unpublishedCount = 0;
+    if (toState === "rejected") {
+      const meta =
+        lastWorkflowRow &&
+        String(lastWorkflowRow.request_id || "") === String(requestId)
+          ? lastWorkflowRow
+          : { request_id: requestId, kind: "", name: "" };
+      const unpub = await unpublishPublishedEventForWorkflowReject(
+        requestId,
+        meta,
+      );
+      if (unpub && unpub.ok === false) {
+        showAlert(
+          "error",
+          unpub.message ||
+            "تعذر إزالة المناسبة المنشورة من الشريط. لم يُرفض الطلب.",
+        );
+        return;
+      }
+      unpublishedCount = Number(unpub && unpub.deleted) || 0;
+    }
+
     console.info("ADMIN_RPC admin_workflow_transition_v1 start", {
       request_id: requestId,
       to_state: toState,
@@ -387,16 +446,72 @@
       code: data && data.code ? data.code : null,
     });
     if (error) {
-      showAlert("error", "تعذر تنفيذ الانتقال.");
+      showAlert(
+        "error",
+        unpublishedCount > 0
+          ? "أُزيلت المناسبة من الشريط لكن تعذر ضبط حالة السير على «رفض»."
+          : "تعذر تنفيذ الانتقال.",
+      );
       return;
     }
     if (!data || !data.ok) {
       const code = data && data.code ? data.code : "WF";
-      showAlert("error", "رُفض الانتقال (" + code + ").");
+      showAlert(
+        "error",
+        unpublishedCount > 0
+          ? "أُزيلت المناسبة من الشريط لكن رُفض انتقال السير (" + code + ")."
+          : "رُفض الانتقال (" + code + ").",
+      );
       await loadRequest(requestId);
       return;
     }
-    showAlert("success", "تم الانتقال إلى: " + stateLabel(toState));
+    if (toState === "rejected") {
+      const metaKind = String(
+        (lastWorkflowRow && lastWorkflowRow.kind) ||
+          (lastWorkflowRow && lastWorkflowRow.request_type) ||
+          "",
+      ).trim();
+      const Actions = window.AlzidanRequestActions || {};
+      const isEvent =
+        !metaKind ||
+        (typeof Actions.isEventPublishRequestKind === "function"
+          ? Actions.isEventPublishRequestKind(metaKind)
+          : metaKind === "event_card" ||
+            metaKind === "family_event" ||
+            metaKind === "event_request");
+      let stillPublic = 0;
+      if (isEvent && String(requestId || "").trim()) {
+        try {
+          const sb = getClient();
+          if (sb) {
+            const check = await sb
+              .from("family_events")
+              .select("id")
+              .like("details", "%" + String(requestId).trim() + "%")
+              .limit(5);
+            stillPublic = Array.isArray(check.data) ? check.data.length : 0;
+          }
+        } catch (_) {}
+      }
+      if (isEvent && stillPublic > 0) {
+        showAlert(
+          "error",
+          "تم الرفض، لكن ما زال " +
+            stillPublic +
+            " صف في family_events. احذفه من إدارة المناسبات (نفس مسار الحذف) أو شغّل SQL إلغاء النشر من أدوات الصيانة.",
+        );
+      } else if (isEvent && (unpublishedCount > 0 || stillPublic === 0)) {
+        showAlert(
+          "success",
+          "تم الرفض وإزالة المناسبة من الشريط/المناسبات: " +
+            stateLabel(toState),
+        );
+      } else {
+        showAlert("success", "تم الانتقال إلى: " + stateLabel(toState));
+      }
+    } else {
+      showAlert("success", "تم الانتقال إلى: " + stateLabel(toState));
+    }
     await loadRequest(requestId);
   }
 

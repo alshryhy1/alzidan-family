@@ -104,7 +104,11 @@
           "</select></div>" +
           '<div class="field"><label>اسم الشخص</label><input data-em-person type="text" placeholder="الاسم الكامل" /></div>' +
           '<div class="field"><label>تاريخ المناسبة</label><input data-em-date type="text" dir="ltr" placeholder="1448-01-11 أو 2026-06-24" /></div>' +
-          '<div class="field"><label>مدة العرض</label><select data-em-show-days>' +
+          '<div class="field"><label>الظهور قبل الموعد</label><select data-em-show-before>' +
+          optionsHtml(FormCore.SHOW_BEFORE_OPTIONS || [{ value: "3", label: "قبل 3 أيام" }], "3") +
+          "</select></div>" +
+          '<div class="field"><label>وقت ظهور محدد (اختياري)</label><input data-em-show-at type="datetime-local" dir="ltr" /></div>' +
+          '<div class="field"><label>مدة العرض القديمة</label><select data-em-show-days>' +
           optionsHtml(vis, "7") +
           "</select></div></div>" +
           '<div class="field"><label>تفاصيل (اختياري)</label><textarea data-em-text rows="2"></textarea></div>' +
@@ -179,6 +183,10 @@
         dateLabel: q("[data-em-date]") ? q("[data-em-date]").value : "",
         eventDate: "",
         showDays: q("[data-em-show-days]") ? q("[data-em-show-days]").value : "7",
+        showBeforeDays: q("[data-em-show-before]")
+          ? q("[data-em-show-before]").value
+          : "3",
+        showAt: q("[data-em-show-at]") ? q("[data-em-show-at]").value : "",
       };
       if (category === "happy") {
         values.text = q("[data-em-text]") ? q("[data-em-text]").value : "";

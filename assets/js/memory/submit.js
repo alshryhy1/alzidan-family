@@ -151,7 +151,14 @@
       contentType: contentType,
       upsert: false
     });
-    if (res.error) throw new Error("تعذر رفع الملف: " + (res.error.message || "تحقق من صلاحيات التخزين على Supabase."));
+    if (res.error) {
+      var UUp = global.AlzidanUserFacingRequestMessages;
+      throw new Error(
+        (UUp && typeof UUp.mapTechnicalErrorToArabic === "function"
+          ? UUp.mapTechnicalErrorToArabic(res.error, "تعذر رفع الملف.")
+          : null) || "تعذر رفع الملف."
+      );
+    }
     return publicStorageUrl(path);
   }
 
@@ -244,52 +251,40 @@
     }
 
     var Create = global.AlzidanHomeRequestCreate;
-    if (Create && typeof Create.create === "function") {
-      var created = await Create.create({
-        type: "memory",
-        payload: {
-          person_id: item.person_id,
-          person_name: item.person_name,
-          title: item.title,
-          memory_kind: item.memory_kind,
-          memory_date: item.memory_date,
-          memory_year: item.memory_year,
-          branch_key: item.branch_key
-        },
-        client: client,
-        mode: "memory",
-        memoryItem: item,
-        memoryMedia: mediaPayload
-      });
-      if (!created.ok) {
-        var gmsg =
-          (created.guard && created.guard.message_ar) ||
-          (created.doubleSubmit
-            ? "طلب مكرر — لن تُنشأ ذكرى ثانية."
-            : "تعذر إرسال الذكرى بسبب تطابق محتمل.");
-        throw new Error(gmsg);
-      }
-      return {
-        id: created.result && created.result.id,
-        requestId: requestId,
-        mediaUrl: mediaUrl
-      };
+    if (!Create || typeof Create.create !== "function") {
+      throw new Error("حارس الهوية غير محمّل. حدّث الصفحة ثم أعد المحاولة.");
     }
-
-    var res = await client.rpc("memory_submit_item_v1", {
-      p_item: item,
-      p_media: mediaPayload
+    var created = await Create.create({
+      type: "memory",
+      payload: {
+        person_id: item.person_id,
+        person_name: item.person_name,
+        title: item.title,
+        memory_kind: item.memory_kind,
+        memory_date: item.memory_date,
+        memory_year: item.memory_year,
+        branch_key: item.branch_key
+      },
+      client: client,
+      mode: "memory",
+      memoryItem: item,
+      memoryMedia: mediaPayload
     });
-
-    if (res.error) {
-      var msg = res.error.message || "";
-      if (res.error.code === "PGRST202" || msg.indexOf("memory_submit_item_v1") >= 0 || res.error.status === 404) {
-        throw new Error("نفّذ family_memory_delegate_fix.sql على Supabase ثم أعد المحاولة.");
-      }
-      throw new Error(msg || "تعذر إرسال الذكرى.");
+    if (!created.ok) {
+      var gmsg =
+        (created.guard && created.guard.message_ar) ||
+        (created.doubleSubmit
+          ? "طلب مكرر — لن تُنشأ ذكرى ثانية."
+          : "موجود مسبقًا — تعذر إرسال الذكرى.");
+      throw new Error(gmsg);
     }
-
-    return { ok: true, id: res.data };
+    return {
+      id: created.result && created.result.id,
+      requestId: requestId,
+      mediaUrl: mediaUrl,
+      title: payload.title,
+      person_name: payload.person_name
+    };
   }
 
   async function submitAdminMemory(raw, file) {
@@ -608,7 +603,7 @@
     var subtitles = {
       admin: "نفس نموذج المندوب — يُحفظ معتمداً. التوقيع: تم الإرسال من الإدارة.",
       delegate: "نفس نموذج الإرسال — التوقيع: اسم المندوب + جواله. تُراجع قبل النشر.",
-      public: "ارفع صورة أو فيديو أو صوت — يُراجع قبل النشر في «من الذاكرة»."
+      public: "عنوان ونص ووسائط اختيارية — تُراجع قبل الظهور في «من الذاكرة»."
     };
     var notes = {
       admin: "✍️ التوقيع تلقائي: تم الإرسال من الإدارة",
@@ -785,12 +780,16 @@
           var result =
             mode === "admin" ? await submitAdminMemory(raw, pickedFile) : await submitMemory(raw, pickedFile);
 
+          var UMem = global.AlzidanUserFacingRequestMessages;
           var successMsg =
             mode === "admin"
               ? "✓ تم الحفظ — التوقيع: تم الإرسال من الإدارة."
               : mode === "delegate"
                 ? "✓ تم الإرسال — التوقيع: اسم المندوب + جواله. ستُراجع من الإدارة."
-                : "تم رفع الذكرى بنجاح. ستُراجع من الإدارة قبل النشر.";
+                : (UMem &&
+                    typeof UMem.userFacingRequestMessage === "function" &&
+                    UMem.userFacingRequestMessage("memory_card", "submit_success")) ||
+                  "تم إرسال طلبك بنجاح، وهو الآن قيد المراجعة.";
 
           setAlert(root, "success", successMsg);
 
@@ -813,7 +812,14 @@
 
           if (callbacks.onSaved) callbacks.onSaved(result);
         } catch (err) {
-          setAlert(root, "error", err && err.message ? err.message : "تعذر الإرسال.");
+          var UErr = global.AlzidanUserFacingRequestMessages;
+          setAlert(
+            root,
+            "error",
+            (UErr && typeof UErr.mapTechnicalErrorToArabic === "function"
+              ? UErr.mapTechnicalErrorToArabic(err, "تعذر الإرسال.")
+              : "تعذر الإرسال.")
+          );
         } finally {
           btn.disabled = false;
           btn.textContent = btnLabels[mode];

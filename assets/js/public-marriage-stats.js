@@ -122,37 +122,74 @@
     setStatus("تم التحديث الآن.");
   }
 
+  let publicAffinityInFlight = null;
+  let publicAffinityLoaded = false;
+
   async function loadPublicAffinityStats() {
+    if (publicAffinityInFlight) return publicAffinityInFlight;
+    publicAffinityInFlight = (async () => {
+      const { root } = getEls();
+      if (!root) return;
+
+      const sb = getClient();
+      if (!sb) {
+        setStatus("الخدمة غير جاهزة.");
+        setEmpty("تعذر الوصول لخدمة البيانات حالياً.");
+        return;
+      }
+
+      setStatus("جاري تحميل نسب المصاهرة...");
+
+      const { data, error } = await sb
+        .from("tree_spouse_summary")
+        .select("wife_is_family_member,wife_branch_key,status")
+        .limit(5000);
+
+      if (error) {
+        setStatus("تعذر تحميل النسب.");
+        setEmpty("تعذر تحميل نسب المصاهرة: " + (error.message || "خطأ"));
+        return;
+      }
+
+      render(data || []);
+      publicAffinityLoaded = true;
+    })().finally(() => {
+      publicAffinityInFlight = null;
+    });
+    return publicAffinityInFlight;
+  }
+
+  function schedulePublicAffinityLazyLoad() {
     const { root } = getEls();
     if (!root) return;
 
-    const sb = getClient();
-    if (!sb) {
-      setStatus("الخدمة غير جاهزة.");
-      setEmpty("تعذر الوصول لخدمة البيانات حالياً.");
+    const run = () => {
+      if (publicAffinityLoaded || publicAffinityInFlight) return;
+      loadPublicAffinityStats().catch(() => {});
+    };
+
+    // Lazy: load when affinity section approaches viewport (not on every home open immediately).
+    if (typeof IntersectionObserver === "function") {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const hit = (entries || []).some((e) => e && e.isIntersecting);
+          if (!hit) return;
+          observer.disconnect();
+          run();
+        },
+        { root: null, rootMargin: "200px 0px", threshold: 0.01 },
+      );
+      observer.observe(root);
       return;
     }
 
-    setStatus("جاري تحميل نسب المصاهرة...");
-
-    const { data, error } = await sb
-      .from("tree_spouse_summary")
-      .select("wife_is_family_member,wife_branch_key,status")
-      .limit(5000);
-
-    if (error) {
-      setStatus("تعذر تحميل النسب.");
-      setEmpty("تعذر تحميل نسب المصاهرة: " + (error.message || "خطأ"));
-      return;
-    }
-
-    render(data || []);
+    run();
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => loadPublicAffinityStats().catch(() => {}));
+    document.addEventListener("DOMContentLoaded", schedulePublicAffinityLazyLoad);
   } else {
-    loadPublicAffinityStats().catch(() => {});
+    schedulePublicAffinityLazyLoad();
   }
 
   window.AlzidanPublicMarriageStats = { load: loadPublicAffinityStats };

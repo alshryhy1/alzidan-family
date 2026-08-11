@@ -23,10 +23,11 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23065f46' d='M32 6c-10.6 0-19.2 7.3-19.2 16.3 0 7 5 13 12.2 15.4-1.7 1.1-2.8 2.6-3.5 4.3h21c-.7-1.7-1.8-3.2-3.5-4.3 7.2-2.4 12.2-8.4 12.2-15.4C51.2 13.3 42.6 6 32 6z'/%3E%3Cpath fill='%23065f46' d='M30 34h4v24h-4z'/%3E%3Cpath fill='%23065f46' d='M22 58h20v-4H22z'/%3E%3C/svg%3E"
     />
 
-    <link rel="stylesheet" href="../assets/css/main.css?v=20260808ux" />
+    <link rel="stylesheet" href="../assets/css/main.css?v=20260810home2" />
     <link rel="stylesheet" href="../assets/css/person-card.css?v=1782540603" />
     <link rel="stylesheet" href="../assets/css/legal.css?v=2026071207" />
-    <link rel="stylesheet" href="../assets/css/request-experience.css?v=20260809sib2" />
+    <link rel="stylesheet" href="../assets/css/request-experience.css?v=20260812myreq6" />
+    <link rel="stylesheet" href="../assets/css/memory-submit.css?v=20260810home2" />
 </head>
   <body>
     <div class="page">
@@ -364,12 +365,663 @@
           <div>
             <div class="section-title">قدّم طلبًا</div>
             <div class="section-sub">
-              تجربة الطلب (RX-1): نية أولًا · ابدأ الآن للدخول فقط · أرسل الطلب
-              للمراجعة في النهاية — بلا حفظ مباشر في الشجرة.
+              اختر ما تريد · أرسل للمراجعة · يظهر في طلباتي — بدون حفظ مباشر في
+              الشجرة.
             </div>
           </div>
         </div>
         <div data-rx-root></div>
+        <div data-rx-occasion-park hidden>
+          <div
+            id="send-event"
+            class="rx-occasion-panel"
+            data-rx-occasion-panel
+          >
+            <div class="rx-occasion-heading">+ إضافة مناسبة</div>
+            <form class="founder-form occasion-simple-form" data-event-submit-form>
+              <div class="founder-grid">
+                <div class="founder-field">
+                  <label for="event-submit-person">اسم صاحب المناسبة</label
+                  ><input
+                    id="event-submit-person"
+                    name="person"
+                    type="text"
+                    autocomplete="off"
+                    required
+                    placeholder="الاسم الكامل أو اختر من الشجرة"
+                    data-event-person
+                  />
+                  <div
+                    class="rx-person-suggest"
+                    data-event-person-suggest
+                    hidden
+                  ></div>
+                  <input
+                    type="hidden"
+                    name="personId"
+                    value=""
+                    data-event-person-id
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="event-submit-branch">الفرع</label
+                  ><select
+                    id="event-submit-branch"
+                    name="branch"
+                    required
+                    data-event-branch
+                  >
+                    <option value="">اختر الفرع</option>
+                    <option value="زيدان">زيدان</option>
+                    <option value="زايد">زايد</option>
+                    <option value="مزيد">مزيد</option>
+                    <option value="لاحم">لاحم</option>
+                    <option value="ملحم">ملحم</option>
+                  </select>
+                  <p class="rx-field-hint" data-event-branch-hint hidden>
+                    تم تحديد الفرع من اختيار الشخص في الشجرة — يمكنك تغييره إن لزم.
+                  </p>
+                </div>
+                <div class="founder-field">
+                  <label for="event-submit-phone">رقم الجوال</label
+                  ><input
+                    id="event-submit-phone"
+                    name="phone"
+                    type="tel"
+                    inputmode="tel"
+                    placeholder="05xxxxxxxx"
+                    autocomplete="tel"
+                    required
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="event-submit-type">نوع المناسبة</label
+                  ><select id="event-submit-type" name="type" required>
+                    <option value="">اختر النوع</option>
+                    <option value="birth">مولود جديد</option>
+                    <option value="contract">عقد قران</option>
+                    <option value="marriage">زواج</option>
+                    <option value="graduation">تخرج</option>
+                    <option value="success">نجاح / تفوق</option>
+                    <option value="promotion">ترقية / وظيفة</option>
+                    <option value="new_house">منزل جديد</option>
+                    <option value="travel">سفر</option>
+                    <option value="gathering">اجتماع عائلي</option>
+                  </select>
+                </div>
+                <div class="founder-field">
+                  <label for="event-submit-date-label">التاريخ</label
+                  ><input
+                    id="event-submit-date-label"
+                    name="dateLabel"
+                    type="text"
+                    inputmode="text"
+                    required
+                    placeholder="مثال: 1448/01/10 أو 2026-08-09"
+                  />
+                </div>
+                <div class="founder-field" style="grid-column: 1 / -1">
+                  <label for="event-submit-text"
+                    >نص المناسبة <span class="field-optional">(اختياري)</span></label
+                  ><textarea
+                    id="event-submit-text"
+                    name="text"
+                    placeholder="اكتب نص التهنئة أو الخبر إن رغبت"
+                  ></textarea>
+                </div>
+                <div class="founder-field">
+                  <label for="event-submit-place"
+                    >المكان <span class="field-optional">(اختياري)</span></label
+                  ><input
+                    id="event-submit-place"
+                    name="place"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="المدينة أو القاعة"
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="event-submit-image-file"
+                    >صورة <span class="field-optional">(اختياري)</span></label
+                  ><input
+                    id="event-submit-image-file"
+                    name="imageFile"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="event-submit-video-file"
+                    >فيديو <span class="field-optional">(اختياري)</span></label
+                  ><input
+                    id="event-submit-video-file"
+                    name="videoFile"
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/webm"
+                  />
+                </div>
+              </div>
+              <div class="info-actions">
+                <button class="btn btn-primary" type="submit">إرسال</button
+                ><button class="btn btn-outline" type="reset">مسح</button>
+              </div>
+              <div class="note">
+                بعد الإرسال تُراجع المناسبة ثم تظهر للعائلة بعد الاعتماد.
+              </div>
+              <div class="founder-alert" data-event-submit-alert></div>
+            </form>
+          </div>
+        </div>
+        <div data-rx-patient-park hidden>
+          <div
+            id="send-patient"
+            class="rx-patient-panel"
+            data-rx-patient-panel
+          >
+            <div class="rx-patient-heading">+ حالة صحية</div>
+            <form class="founder-form patient-simple-form" data-patient-submit-form>
+              <div class="founder-grid">
+                <div class="founder-field">
+                  <label for="patient-submit-person">اسم المريض</label
+                  ><input
+                    id="patient-submit-person"
+                    name="person"
+                    type="text"
+                    autocomplete="off"
+                    required
+                    placeholder="الاسم الكامل أو اختر من الشجرة"
+                    data-event-person
+                  />
+                  <div
+                    class="rx-person-suggest"
+                    data-event-person-suggest
+                    hidden
+                  ></div>
+                  <input
+                    type="hidden"
+                    name="personId"
+                    value=""
+                    data-event-person-id
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="patient-submit-branch">الفرع</label
+                  ><select
+                    id="patient-submit-branch"
+                    name="branch"
+                    required
+                    data-event-branch
+                  >
+                    <option value="">اختر الفرع</option>
+                    <option value="زيدان">زيدان</option>
+                    <option value="زايد">زايد</option>
+                    <option value="مزيد">مزيد</option>
+                    <option value="لاحم">لاحم</option>
+                    <option value="ملحم">ملحم</option>
+                  </select>
+                  <p class="rx-field-hint" data-event-branch-hint hidden>
+                    تم تحديد الفرع من اختيار الشخص في الشجرة — يمكنك تغييره إن لزم.
+                  </p>
+                </div>
+                <div class="founder-field">
+                  <label for="patient-submit-phone">رقم الجوال</label
+                  ><input
+                    id="patient-submit-phone"
+                    name="phone"
+                    type="tel"
+                    inputmode="tel"
+                    placeholder="05xxxxxxxx"
+                    autocomplete="tel"
+                    required
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="patient-submit-type">نوع الحالة</label
+                  ><select id="patient-submit-type" name="type" required>
+                    <option value="">اختر النوع</option>
+                    <option value="sick">مريض</option>
+                    <option value="operation">عملية</option>
+                    <option value="discharge">خروج من المستشفى</option>
+                  </select>
+                </div>
+                <div class="founder-field">
+                  <label for="patient-submit-date-label"
+                    >التاريخ <span class="field-optional">(اختياري)</span></label
+                  ><input
+                    id="patient-submit-date-label"
+                    name="dateLabel"
+                    type="text"
+                    inputmode="text"
+                    placeholder="مثال: 1448/01/10 أو 2026-08-09"
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="patient-submit-place"
+                    >المستشفى / المكان <span class="field-optional">(اختياري)</span></label
+                  ><input
+                    id="patient-submit-place"
+                    name="place"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="اسم المستشفى أو المدينة"
+                  />
+                </div>
+                <div class="founder-field" style="grid-column: 1 / -1">
+                  <label for="patient-submit-text"
+                    >ملاحظات <span class="field-optional">(اختياري)</span></label
+                  ><textarea
+                    id="patient-submit-text"
+                    name="text"
+                    placeholder="تفاصيل إضافية إن رغبت"
+                  ></textarea>
+                </div>
+              </div>
+              <div class="info-actions">
+                <button class="btn btn-primary" type="submit">إرسال</button
+                ><button class="btn btn-outline" type="reset">مسح</button>
+              </div>
+              <div class="note">
+                بعد الإرسال تُراجع الحالة ثم تظهر في قسم المرضى والشريط بعد الاعتماد.
+              </div>
+              <div class="founder-alert" data-patient-submit-alert></div>
+            </form>
+          </div>
+        </div>
+        <div data-rx-death-park hidden>
+          <div
+            id="send-death"
+            class="rx-death-panel"
+            data-rx-death-panel
+          >
+            <div class="rx-death-heading">+ إعلان وفاة</div>
+            <form class="founder-form death-simple-form" data-death-submit-form>
+              <div class="founder-grid">
+                <div class="founder-field">
+                  <label for="death-submit-person">اسم المتوفى</label
+                  ><input
+                    id="death-submit-person"
+                    name="person"
+                    type="text"
+                    autocomplete="off"
+                    required
+                    placeholder="الاسم الكامل أو اختر من الشجرة"
+                    data-event-person
+                  />
+                  <div
+                    class="rx-person-suggest"
+                    data-event-person-suggest
+                    hidden
+                  ></div>
+                  <input
+                    type="hidden"
+                    name="personId"
+                    value=""
+                    data-event-person-id
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="death-submit-branch">الفرع</label
+                  ><select
+                    id="death-submit-branch"
+                    name="branch"
+                    required
+                    data-event-branch
+                  >
+                    <option value="">اختر الفرع</option>
+                    <option value="زيدان">زيدان</option>
+                    <option value="زايد">زايد</option>
+                    <option value="مزيد">مزيد</option>
+                    <option value="لاحم">لاحم</option>
+                    <option value="ملحم">ملحم</option>
+                  </select>
+                  <p class="rx-field-hint" data-event-branch-hint hidden>
+                    تم تحديد الفرع من اختيار الشخص في الشجرة — يمكنك تغييره إن لزم.
+                  </p>
+                </div>
+                <div class="founder-field">
+                  <label for="death-submit-phone">رقم الجوال</label
+                  ><input
+                    id="death-submit-phone"
+                    name="phone"
+                    type="tel"
+                    inputmode="tel"
+                    placeholder="05xxxxxxxx"
+                    autocomplete="tel"
+                    required
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="death-submit-date-label">التاريخ</label
+                  ><input
+                    id="death-submit-date-label"
+                    name="dateLabel"
+                    type="text"
+                    inputmode="text"
+                    required
+                    placeholder="مثال: 1448/01/10 أو 2026-08-09"
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="death-submit-place"
+                    >المكان <span class="field-optional">(اختياري)</span></label
+                  ><input
+                    id="death-submit-place"
+                    name="place"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="مكان العزاء أو المدينة"
+                  />
+                </div>
+                <div class="founder-field" style="grid-column: 1 / -1">
+                  <label for="death-submit-text"
+                    >ملاحظات <span class="field-optional">(اختياري)</span></label
+                  ><textarea
+                    id="death-submit-text"
+                    name="text"
+                    placeholder="تفاصيل إضافية إن رغبت"
+                  ></textarea>
+                </div>
+              </div>
+              <div class="info-actions">
+                <button class="btn btn-primary" type="submit">إرسال</button
+                ><button class="btn btn-outline" type="reset">مسح</button>
+              </div>
+              <div class="note">
+                بعد الإرسال تُراجع الوفاة ثم تظهر في قسم الوفيات والشريط بعد الاعتماد.
+              </div>
+              <div class="founder-alert" data-death-submit-alert></div>
+            </form>
+          </div>
+        </div>
+        <div data-rx-tree-edit-park hidden>
+          <div
+            id="send-tree-edit"
+            class="rx-tree-edit-panel"
+            data-rx-tree-edit-panel
+          >
+            <div class="rx-tree-edit-heading">+ صحح بيانات شخص</div>
+            <form class="founder-form tree-edit-simple-form" data-tree-edit-submit-form>
+              <div class="founder-grid">
+                <div class="founder-field">
+                  <label for="tree-edit-person">اسم الشخص</label
+                  ><input
+                    id="tree-edit-person"
+                    name="person"
+                    type="text"
+                    autocomplete="off"
+                    required
+                    placeholder="ابحث أو اكتب الاسم"
+                    data-event-person
+                  />
+                  <div
+                    class="rx-person-suggest"
+                    data-event-person-suggest
+                    hidden
+                  ></div>
+                  <input
+                    type="hidden"
+                    name="personId"
+                    value=""
+                    data-event-person-id
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="tree-edit-branch">الفرع</label
+                  ><select
+                    id="tree-edit-branch"
+                    name="branch"
+                    required
+                    data-event-branch
+                  >
+                    <option value="">اختر الفرع</option>
+                    <option value="زيدان">زيدان</option>
+                    <option value="زايد">زايد</option>
+                    <option value="مزيد">مزيد</option>
+                    <option value="لاحم">لاحم</option>
+                    <option value="ملحم">ملحم</option>
+                  </select>
+                  <p class="rx-field-hint" data-event-branch-hint hidden>
+                    تم تحديد الفرع من اختيار الشخص — يمكنك تغييره إن لزم.
+                  </p>
+                </div>
+                <div class="founder-field">
+                  <label for="tree-edit-submitter">اسم المرسل</label
+                  ><input
+                    id="tree-edit-submitter"
+                    name="submitterName"
+                    type="text"
+                    autocomplete="name"
+                    required
+                    placeholder="اسمك"
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="tree-edit-phone">رقم الجوال</label
+                  ><input
+                    id="tree-edit-phone"
+                    name="phone"
+                    type="tel"
+                    inputmode="tel"
+                    placeholder="05xxxxxxxx"
+                    autocomplete="tel"
+                    required
+                  />
+                </div>
+                <div class="founder-field" style="grid-column: 1 / -1">
+                  <label>ما الذي تريد تصحيحه؟</label>
+                  <div class="rx-edit-fields">
+                    <div class="rx-edit-field-row">
+                      <label class="rx-edit-check"
+                        ><input type="checkbox" data-edit-field="name" /> الاسم</label
+                      >
+                      <div data-edit-value-wrap="name" hidden>
+                        <input
+                          name="edit_name"
+                          type="text"
+                          placeholder="الاسم الصحيح"
+                        />
+                      </div>
+                    </div>
+                    <div class="rx-edit-field-row">
+                      <label class="rx-edit-check"
+                        ><input type="checkbox" data-edit-field="gender" /> الجنس</label
+                      >
+                      <div data-edit-value-wrap="gender" hidden>
+                        <select name="edit_gender">
+                          <option value="">اختر</option>
+                          <option value="male">ذكر</option>
+                          <option value="female">أنثى</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="rx-edit-field-row">
+                      <label class="rx-edit-check"
+                        ><input type="checkbox" data-edit-field="birth_date" /> تاريخ
+                        الميلاد</label
+                      >
+                      <div data-edit-value-wrap="birth_date" hidden>
+                        <input
+                          name="edit_birth_date"
+                          type="text"
+                          placeholder="مثال: 1390 أو 1970-01-01"
+                        />
+                      </div>
+                    </div>
+                    <div class="rx-edit-field-row">
+                      <label class="rx-edit-check"
+                        ><input type="checkbox" data-edit-field="other" /> أخرى</label
+                      >
+                      <div data-edit-value-wrap="other" hidden>
+                        <input
+                          name="edit_other"
+                          type="text"
+                          placeholder="اكتب التصحيح المطلوب"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="founder-field" style="grid-column: 1 / -1">
+                  <label for="tree-edit-notes"
+                    >ملاحظات <span class="field-optional">(اختياري)</span></label
+                  ><textarea
+                    id="tree-edit-notes"
+                    name="notes"
+                    placeholder="تفاصيل إضافية تساعد المراجعة"
+                  ></textarea>
+                </div>
+              </div>
+              <div class="info-actions">
+                <button class="btn btn-primary" type="submit">إرسال</button
+                ><button class="btn btn-outline" type="reset">مسح</button>
+              </div>
+              <div class="note">
+                بعد الإرسال يظهر الطلب في طلباتي ويُراجع قبل أي تعديل في الشجرة.
+              </div>
+              <div class="founder-alert" data-tree-edit-submit-alert></div>
+            </form>
+          </div>
+        </div>
+        <div data-rx-memory-park hidden>
+          <div
+            id="send-memory"
+            class="rx-memory-panel"
+            data-rx-memory-panel
+          >
+            <div class="rx-memory-heading">+ شارك ذكرى</div>
+            <div data-rx-memory-submit-root></div>
+          </div>
+        </div>
+        <div data-rx-special-card-park hidden>
+          <div
+            id="send-special-card"
+            class="rx-special-card-panel"
+            data-rx-special-card-panel
+          >
+            <div class="rx-special-card-heading">+ اطلب بطاقة</div>
+            <form
+              class="founder-form special-card-simple-form"
+              data-special-card-submit-form
+            >
+              <div class="founder-grid">
+                <div class="founder-field">
+                  <label for="special-card-type">نوع البطاقة</label
+                  ><select id="special-card-type" name="cardType" required>
+                    <option value="">اختر النوع</option>
+                    <option value="graduation">تخرج</option>
+                    <option value="wedding">زواج</option>
+                    <option value="birth">مولود</option>
+                    <option value="promotion">ترقية</option>
+                    <option value="new_house">منزل جديد</option>
+                    <option value="honor">تكريم</option>
+                    <option value="announcement">إعلان</option>
+                    <option value="engagement">خطوبة</option>
+                    <option value="excellence">إنجاز</option>
+                    <option value="retirement">تقاعد</option>
+                    <option value="appreciation">شكر وتقدير</option>
+                  </select>
+                </div>
+                <div class="founder-field">
+                  <label for="special-card-person">اسم الشخص</label
+                  ><input
+                    id="special-card-person"
+                    name="person"
+                    type="text"
+                    autocomplete="off"
+                    required
+                    placeholder="ابحث أو اكتب الاسم"
+                    data-event-person
+                  />
+                  <div
+                    class="rx-person-suggest"
+                    data-event-person-suggest
+                    hidden
+                  ></div>
+                  <input
+                    type="hidden"
+                    name="personId"
+                    value=""
+                    data-event-person-id
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="special-card-branch">الفرع</label
+                  ><select
+                    id="special-card-branch"
+                    name="branch"
+                    required
+                    data-event-branch
+                  >
+                    <option value="">اختر الفرع</option>
+                    <option value="زيدان">زيدان</option>
+                    <option value="زايد">زايد</option>
+                    <option value="مزيد">مزيد</option>
+                    <option value="لاحم">لاحم</option>
+                    <option value="ملحم">ملحم</option>
+                  </select>
+                  <p class="rx-field-hint" data-event-branch-hint hidden>
+                    تم تحديد الفرع من اختيار الشخص — يمكنك تغييره إن لزم.
+                  </p>
+                </div>
+                <div class="founder-field">
+                  <label for="special-card-submitter">اسم المرسل</label
+                  ><input
+                    id="special-card-submitter"
+                    name="submitterName"
+                    type="text"
+                    autocomplete="name"
+                    required
+                    placeholder="اسمك"
+                  />
+                </div>
+                <div class="founder-field">
+                  <label for="special-card-phone">رقم الجوال</label
+                  ><input
+                    id="special-card-phone"
+                    name="phone"
+                    type="tel"
+                    inputmode="tel"
+                    placeholder="05xxxxxxxx"
+                    autocomplete="tel"
+                    required
+                  />
+                </div>
+                <div class="founder-field" style="grid-column: 1 / -1">
+                  <label for="special-card-image"
+                    >صورة البطاقة
+                    <span class="field-optional">(اختياري)</span></label
+                  ><input
+                    id="special-card-image"
+                    name="cardImage"
+                    type="file"
+                    accept="image/*"
+                    data-special-card-image
+                  />
+                  <p class="rx-field-hint">
+                    صورة اختيارية تُرفق مع الطلب لمعاينة الإدارة عند إنشاء البطاقة.
+                  </p>
+                </div>
+                <div class="founder-field" style="grid-column: 1 / -1">
+                  <label for="special-card-notes"
+                    >ملاحظات <span class="field-optional">(اختياري)</span></label
+                  ><textarea
+                    id="special-card-notes"
+                    name="notes"
+                    placeholder="تفاصيل إضافية إن رغبت"
+                  ></textarea>
+                </div>
+              </div>
+              <div class="info-actions">
+                <button class="btn btn-primary" type="submit">إرسال</button
+                ><button class="btn btn-outline" type="reset">مسح</button>
+              </div>
+              <div class="note">
+                بعد الإرسال يظهر الطلب في طلباتي ويُراجع قبل إنشاء البطاقة.
+              </div>
+              <div class="founder-alert" data-special-card-submit-alert></div>
+            </form>
+          </div>
+        </div>
       </section>
       <section id="tree" class="section">
         <div class="section-header">
@@ -816,7 +1468,8 @@
           <div>
             <div class="section-title">المناسبات العائلية</div>
             <div class="section-sub">
-              أخبار مختصرة عن مناسبات العائلة المختلفة.
+              المناسبات المنشورة للعائلة. لإضافة مناسبة جديدة استخدم «قدّم
+              طلبًا».
             </div>
           </div>
           <div style="display: flex; gap: 10px; flex-wrap: wrap">
@@ -825,212 +1478,15 @@
               class="btn btn-outline btn-sm"
               type="button"
             >
-              تفعيل إشعارات المناسبات</button
+              تفعيل إشعارات المتصفح</button
             ><a
               id="events-submit-link-btn"
-              class="btn btn-primary btn-sm"
+              class="btn btn-outline btn-sm"
               href="#send-event"
-              >إرسال مناسبة</a
+              >+ إضافة مناسبة</a
             >
           </div>
         </div>
-        <details
-          id="send-event"
-          class="toggle-card"
-          data-accordion="events-submit"
-          style="margin-bottom: 12px"
-        >
-          <summary class="toggle-summary">
-            <span class="toggle-icon" aria-hidden="true"
-              ><svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#047857"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 5v14"></path>
-                <path d="M5 12h14"></path></svg></span
-            ><span class="toggle-text"
-              ><span class="toggle-title">إضافة مناسبة</span
-              ><span class="toggle-sub"
-                >أرسل المناسبة للإدارة والمناديب للمراجعة، ثم تظهر في التطبيق
-                بعد الاعتماد.</span
-              ></span
-            ><span class="badge badge-ok toggle-badge">مراجعة</span>
-          </summary>
-          <div class="toggle-body">
-            <form class="founder-form" data-event-submit-form>
-              <div class="founder-grid">
-                <div class="founder-field">
-                  <label for="event-submit-branch">الفرع</label
-                  ><select id="event-submit-branch" name="branch" required>
-                    <option value="">اختر الفرع</option>
-                    <option value="زيدان">زيدان</option>
-                    <option value="مزيد">مزيد</option>
-                    <option value="زايد">زايد</option>
-                    <option value="لاحم">لاحم</option>
-                    <option value="ملحم">ملحم</option>
-                  </select>
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-type">نوع المناسبة</label
-                  ><select id="event-submit-type" name="type" required>
-                    <option value="">اختر النوع</option>
-                    <option value="marriage">زواج</option>
-                    <option value="graduation">تخرج</option>
-                    <option value="promotion">ترقية / وظيفة</option>
-                    <option value="birth">مولود</option>
-                    <option value="engagement">خطوبة</option>
-                    <option value="contract">عقد قران</option>
-                    <option value="success">نجاح / تفوق</option>
-                    <option value="new_house">منزل جديد</option>
-                    <option value="gathering">اجتماع عائلي</option>
-                  </select>
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-person">اسم صاحب المناسبة</label
-                  ><input
-                    id="event-submit-person"
-                    name="person"
-                    type="text"
-                    autocomplete="off"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-date-label"
-                    >التاريخ الهجري/النص</label
-                  ><input
-                    id="event-submit-date-label"
-                    name="dateLabel"
-                    type="text"
-                    inputmode="text"
-                    placeholder="مثال: 1448/01/10"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-place">المكان (اختياري)</label
-                  ><input
-                    id="event-submit-place"
-                    name="place"
-                    type="text"
-                    autocomplete="off"
-                    placeholder="المدينة أو القاعة أو الجهة"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-image-url">رابط صورة (اختياري)</label
-                  ><input
-                    id="event-submit-image-url"
-                    name="imageUrl"
-                    type="url"
-                    inputmode="url"
-                    placeholder="https://..."
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-image-file">رفع صورة (اختياري)</label
-                  ><input
-                    id="event-submit-image-file"
-                    name="imageFile"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-video-url"
-                    >رابط فيديو (اختياري)</label
-                  ><input
-                    id="event-submit-video-url"
-                    name="videoUrl"
-                    type="url"
-                    inputmode="url"
-                    placeholder="https://..."
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-video-file"
-                    >رفع فيديو (اختياري)</label
-                  ><input
-                    id="event-submit-video-file"
-                    name="videoFile"
-                    type="file"
-                    accept="video/mp4,video/quicktime,video/webm"
-                  />
-                </div>
-                <div class="founder-field" style="grid-column: 1 / -1">
-                  <label for="event-submit-text">نص المناسبة</label
-                  ><textarea
-                    id="event-submit-text"
-                    name="text"
-                    placeholder="اكتب نص التهنئة أو الخبر"
-                    required
-                  ></textarea>
-                </div>
-                <div class="founder-field" style="grid-column: 1 / -1">
-                  <div class="note" style="margin: 0">
-                    بيانات المرسل ورمز المندوب
-                  </div>
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-name">اسم المرسل</label
-                  ><input
-                    id="event-submit-name"
-                    name="submitterName"
-                    type="text"
-                    autocomplete="name"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-phone">رقم الجوال</label
-                  ><input
-                    id="event-submit-phone"
-                    name="phone"
-                    type="tel"
-                    inputmode="tel"
-                    placeholder="05xxxxxxxx"
-                    autocomplete="tel"
-                    required
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-email">البريد (اختياري)</label
-                  ><input
-                    id="event-submit-email"
-                    name="email"
-                    type="email"
-                    inputmode="email"
-                    autocomplete="email"
-                  />
-                </div>
-                <div class="founder-field">
-                  <label for="event-submit-secret"
-                    >رمز مندوب المناسبات (للنشر المباشر)</label
-                  ><input
-                    id="event-submit-secret"
-                    name="secret"
-                    type="password"
-                    autocomplete="off"
-                    placeholder="اتركه فارغًا للإرسال للمراجعة"
-                  />
-                </div>
-              </div>
-              <div class="info-actions">
-                <button class="btn btn-primary" type="submit">
-                  إرسال المناسبة</button
-                ><button class="btn btn-outline" type="reset">مسح</button>
-              </div>
-              <div class="note">
-                بدون رمز المندوب تُرسل المناسبة للمراجعة. إذا أرفقت صورة أو
-                فيديو فسيتم رفعها قبل الإرسال.
-              </div>
-              <div class="founder-alert" data-event-submit-alert></div>
-            </form>
-          </div>
-        </details>
         <div style="display: grid; gap: 12px">
           <details
             class="toggle-card"
@@ -1062,7 +1518,7 @@
               ><span class="toggle-text"
                 ><span class="toggle-title">الأفراح</span
                 ><span class="toggle-sub"
-                  >مناسبات سعيدة مثل: مولود، خطوبة، زواج، تخرّج…</span
+                  >مناسبات سعيدة مثل: مولود، زواج، تخرّج، سفر…</span
                 ></span
               >
             </summary>
@@ -1187,18 +1643,23 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4"></script>
     <script src="../assets/js/config.js"></script>
 
-    <script src="../assets/js/modules/events/event-types.js?v=2026071215"></script>
-    <script src="../assets/js/modules/events/event-media.js?v=2026071117"></script>
-    <script src="../assets/js/modules/events/event-parser.js?v=2026071117"></script>
-    <script src="../assets/js/modules/events/event-builder.js?v=202607181730"></script>
+    <script src="../assets/js/modules/events/event-types.js?v=20260811noeng1"></script>
+    <script src="../assets/js/modules/events/event-media.js?v=20260810home2"></script>
+    <script src="../assets/js/modules/events/event-parser.js?v=20260810home2"></script>
+    <script src="../assets/js/modules/events/event-builder.js?v=20260811sched1"></script>
     <script src="../assets/js/modules/events/index.js?v=2026071117"></script>
-    <script src="../assets/js/modules/events/event-visibility.js?v=2026080720"></script>
-    <script src="../assets/js/modules/dup-identity-guard.js?v=20260809hasan2"></script>
-    <script src="../assets/js/modules/home-request-create.js?v=20260809hasan2"></script>
-    <script src="../assets/js/event-submit.js?v=20260809dig1"></script>
-    <script src="../assets/js/app.js?v=20260809hasan2"></script>
-    <script src="../assets/js/modules/request-experience.js?v=20260809hasan2"></script>
-    <script src="../assets/js/public-marriage-stats.js?v=20260702"></script>
+    <script src="../assets/js/modules/events/event-visibility.js?v=20260812del1"></script>
+    <script src="../assets/js/modules/events/event-form-core.js?v=20260811sched1"></script>
+    <script src="../assets/js/modules/dup-identity-guard.js?v=20260810home2"></script>
+    <script src="../assets/js/modules/safe-request-notify.js?v=20260812safe2"></script>
+    <script src="../assets/js/modules/user-facing-request-messages.js?v=20260812safe2"></script>
+    <script src="../assets/js/modules/home-request-create.js?v=20260812safe2"></script>
+    <script src="../assets/js/modules/my-requests-track.js?v=20260810home2"></script>
+    <script src="../assets/js/event-submit.js?v=20260812safe2"></script>
+    <script src="../assets/js/app.js?v=20260812safe2"></script>
+    <script src="../assets/js/memory/submit.js?v=20260812safe2"></script>
+    <script src="../assets/js/modules/request-experience.js?v=20260812safe2"></script>
+    <script src="../assets/js/public-marriage-stats.js?v=20260810p3"></script>
     <script src="../assets/js/modules/date-engine.js?v=20260808de"></script>
     <script src="../assets/js/poll.js?v=20260808ux"></script>
   </body>

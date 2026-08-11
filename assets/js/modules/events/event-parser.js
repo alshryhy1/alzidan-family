@@ -104,10 +104,8 @@
       };
     }
 
-    const getLabel = (label) => {
-      const m = raw.match(new RegExp(label + "\\s*:\\s*([^|\\n]+)", "i"));
-      return m ? normalizeText(m[1]) : "";
-    };
+    // Line-based only — never use /\s*/ across newlines (that captured "النص:" as videoUrl).
+    const getLabel = (label) => readMessageLine(raw, label);
 
     const envelope = parseJsonEnvelopeFromMessage(raw);
     const j = envelope && typeof envelope === "object" ? envelope : {};
@@ -115,6 +113,7 @@
     const submitter = j.submitter && typeof j.submitter === "object" ? j.submitter : {};
     const media = j.media && typeof j.media === "object" ? j.media : {};
     const mediaLinks = E.extractEventMediaLinks ? E.extractEventMediaLinks(raw) : { image: "", video: "" };
+    const detailsObj = parseDetailsValue(event.details);
 
     const type = normalizeText(
       event.type || event.typeLabel || getLabel("نوع المناسبة") || getLabel("النوع") || j.type || "",
@@ -132,26 +131,60 @@
     );
     const eventDate = normalizeText(event.eventDate || event.event_date || j.eventDate || "");
 
-    const imageUrl = normalizeText(
-      media.imageUrl ||
-        media.image_url ||
-        event.imageUrl ||
-        getLabel("الصورة") ||
-        getLabel("رابط الصورة") ||
-        mediaLinks.image ||
-        "",
+    const pickImage = (...cands) => {
+      for (let i = 0; i < cands.length; i++) {
+        const v = normalizeText(cands[i]);
+        if (!v) continue;
+        // Hard gate — never accept labels/junk; no https fail-open without validator.
+        if (typeof E.resolveValidImageUrl === "function") {
+          const ok = E.resolveValidImageUrl(v);
+          if (ok) return ok;
+          continue;
+        }
+        if (typeof E.isValidImageUrl === "function") {
+          if (E.isValidImageUrl(v)) return v;
+          continue;
+        }
+      }
+      return "";
+    };
+    const pickVideo = (...cands) => {
+      for (let i = 0; i < cands.length; i++) {
+        const v = normalizeText(cands[i]);
+        if (!v) continue;
+        // Hard gate — empty "رابط الفيديو:" / "النص:" must never become videoUrl.
+        if (typeof E.resolveValidVideoUrl === "function") {
+          const ok = E.resolveValidVideoUrl(v);
+          if (ok) return ok;
+          continue;
+        }
+        if (typeof E.isValidVideoUrl === "function") {
+          if (E.isValidVideoUrl(v)) return v;
+          continue;
+        }
+      }
+      return "";
+    };
+
+    const imageUrl = pickImage(
+      media.imageUrl,
+      media.image_url,
+      event.imageUrl,
+      detailsObj.imageUrl,
+      detailsObj.image_url,
+      getLabel("رابط الصورة"),
+      mediaLinks.image,
     );
-    const videoUrl = normalizeText(
-      media.videoUrl ||
-        media.video_url ||
-        event.videoUrl ||
-        getLabel("رابط الفيديو") ||
-        getLabel("الفيديو") ||
-        mediaLinks.video ||
-        "",
+    const videoUrl = pickVideo(
+      media.videoUrl,
+      media.video_url,
+      event.videoUrl,
+      detailsObj.videoUrl,
+      detailsObj.video_url,
+      getLabel("رابط الفيديو"),
+      mediaLinks.video,
     );
 
-    const detailsObj = parseDetailsValue(event.details);
     const text = normalizeText(
       detailsObj.text || detailsObj.extra || detailsObj.notes || getLabel("النص") || "",
     );

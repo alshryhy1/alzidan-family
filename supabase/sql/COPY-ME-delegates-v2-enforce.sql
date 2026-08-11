@@ -739,7 +739,7 @@ begin
 end;
 $$;
 
--- List event requests: require events.read (or legacy)
+-- List branch requests for delegate queue (events + tree/correction/memory; not special_card)
 create or replace function public.delegate_list_event_requests_v1(
   p_branch_key text,
   p_phone text,
@@ -754,6 +754,8 @@ as $$
 begin
   if not public.events_delegate_can_read_v1(
     p_branch_key, p_phone, p_email, p_secret_hash
+  ) and not public.tree_delegate_can_read_v1(
+    p_branch_key, p_phone, p_email, p_secret_hash
   ) then
     return;
   end if;
@@ -762,7 +764,10 @@ begin
     select r.*
     from public.approval_requests r
     where r.status = 'pending'
-      and r.kind in ('event_card', 'family_event', 'event_request')
+      and r.kind in (
+        'event_card', 'family_event', 'event_request',
+        'tree_card', 'tree_edit', 'memory_card'
+      )
       and public.delegates_v2_norm_branch(r.branch_key)
         = public.delegates_v2_norm_branch(p_branch_key)
     order by r.created_at desc
@@ -770,7 +775,7 @@ begin
 end;
 $$;
 
--- Approve/reject incoming event requests: require events.write
+-- Approve/reject incoming branch requests (not special_card)
 create or replace function public.delegate_set_approval_request_status_v1(
   p_branch_key text,
   p_request_id bigint,
@@ -787,15 +792,9 @@ as $$
 declare
   v_row public.approval_requests%rowtype;
   v_status text;
+  v_kind text;
+  v_auth_ok boolean := false;
 begin
-  if p_phone is not null or p_email is not null or p_secret_hash is not null then
-    if not public.events_delegate_allowed_v1(
-      p_branch_key, p_phone, p_email, p_secret_hash
-    ) then
-      return false;
-    end if;
-  end if;
-
   v_status := case
     when lower(btrim(coalesce(p_status, ''))) = 'approved' then 'approved'
     when lower(btrim(coalesce(p_status, ''))) = 'rejected' then 'rejected'
@@ -809,13 +808,36 @@ begin
   from public.approval_requests r
   where r.id = p_request_id
     and r.status = 'pending'
-    and r.kind in ('event_card', 'family_event', 'event_request')
+    and r.kind in (
+      'event_card', 'family_event', 'event_request',
+      'tree_card', 'tree_edit', 'memory_card'
+    )
     and public.delegates_v2_norm_branch(r.branch_key)
       = public.delegates_v2_norm_branch(p_branch_key)
   limit 1;
 
   if v_row.id is null then
     return false;
+  end if;
+
+  v_kind := coalesce(v_row.kind, '');
+
+  if p_phone is not null or p_email is not null or p_secret_hash is not null then
+    if v_kind in ('event_card', 'family_event', 'event_request') then
+      if not public.events_delegate_allowed_v1(
+        p_branch_key, p_phone, p_email, p_secret_hash
+      ) then
+        return false;
+      end if;
+    elsif v_kind in ('tree_card', 'tree_edit', 'memory_card') then
+      if not public.tree_delegate_allowed_v1(
+        p_branch_key, p_phone, p_email, p_secret_hash
+      ) then
+        return false;
+      end if;
+    else
+      return false;
+    end if;
   end if;
 
   update public.approval_requests

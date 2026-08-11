@@ -28,6 +28,7 @@ const sandbox = {
 };
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
+sandbox.global = sandbox;
 
 loadIife(
   path.join(__dirname, "..", "assets", "js", "modules", "canonical-person.js"),
@@ -171,8 +172,167 @@ assert(
 
 assert(CP.ERROR.TREE_001 === "TREE-001", "TREE-001 code still present");
 
-if (failed) {
-  console.error("\nTree import reuse smoke FAILED:", failed);
-  process.exit(1);
-}
-console.log("\nTree import reuse smoke PASSED");
+// --- TREE-003: auto-resolve father UUID from ancestors + father leaf ---
+assert(
+  typeof RA.buildTreeCardFatherResolveHints === "function",
+  "buildTreeCardFatherResolveHints exported",
+);
+assert(
+  typeof RA.stampTreeCardFatherPersonId === "function",
+  "stampTreeCardFatherPersonId exported",
+);
+
+const mohammedPid = "55555555-5555-5555-5555-555555555555";
+const mohammedPath =
+  "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/هاجس/محمد";
+const otherMohammedPid = "66666666-6666-6666-6666-666666666666";
+const zidanIndex = Object.assign({}, pathToRow);
+zidanIndex[mohammedPath] = {
+  id: 50,
+  person_id: mohammedPid,
+  parent_person_id: "77777777-7777-7777-7777-777777777777",
+  db_parent_name: "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/هاجس",
+  db_child_name: mohammedPath,
+};
+zidanIndex["pid:" + mohammedPid] = zidanIndex[mohammedPath];
+zidanIndex["زيدان بن مطلق بن زيدان/آخر/محمد"] = {
+  id: 51,
+  person_id: otherMohammedPid,
+  parent_person_id: "",
+  db_parent_name: "زيدان بن مطلق بن زيدان/آخر",
+  db_child_name: "زيدان بن مطلق بن زيدان/آخر/محمد",
+};
+zidanIndex["pid:" + otherMohammedPid] =
+  zidanIndex["زيدان بن مطلق بن زيدان/آخر/محمد"];
+
+const fatherHints = RA.buildTreeCardFatherResolveHints(
+  {
+    father: "محمد",
+    ancestors: ["هاجس", "غازي", "نزال", "فايز"],
+  },
+  "زيدان",
+);
+assert(
+  fatherHints.hints.some(
+    (h) => h.path === mohammedPath || h.path.indexOf("فايز/نزال/غازي/هاجس/محمد") >= 0,
+  ),
+  "hints include reconstructed ancestor path for محمد",
+);
+assert(
+  fatherHints.hints.some((h) => h.path === "محمد" && h.parentPath === "هاجس"),
+  "hints include محمد under closest grandfather هاجس",
+);
+
+// Leaf-only محمد is ambiguous; ancestors+path must win
+const ambMohammed = RA.resolveExistingTreeNode(zidanIndex, {
+  path: "محمد",
+  leaf: "محمد",
+});
+assert(!ambMohammed.ok && ambMohammed.code === "TREE-001", "bare محمد ambiguous");
+
+const byAncestors = RA.resolveExistingTreeNode(zidanIndex, {
+  path: mohammedPath,
+  leaf: "محمد",
+});
+assert(
+  byAncestors.ok && byAncestors.found && byAncestors.meta.person_id === mohammedPid,
+  "full ancestor path uniquely resolves محمد",
+);
+
+const byGrandfather = RA.resolveExistingTreeNode(zidanIndex, {
+  path: "محمد",
+  leaf: "محمد",
+  parentPath: "هاجس",
+});
+assert(
+  byGrandfather.ok &&
+    byGrandfather.found &&
+    byGrandfather.meta.person_id === mohammedPid,
+  "محمد under هاجس uniquely resolves",
+);
+
+const stampPayloadMsg =
+  "طلب: أضف فردًا\n\n__JSON__:\n" +
+  JSON.stringify(
+    {
+      v: 1,
+      kind: "tree_card",
+      branch_key: "زيدان",
+      father: "محمد",
+      ancestors: ["هاجس", "غازي", "نزال", "فايز"],
+      name: "عبدالمجيد",
+      birth_date_g: "1435/8/16",
+    },
+    null,
+    2,
+  );
+
+const fakeSb = {
+  from() {
+    return {
+      select() {
+        return {
+          eq() {
+            return {
+              limit() {
+                return Promise.resolve({
+                  data: [
+                    {
+                      id: 50,
+                      person_id: mohammedPid,
+                      parent_person_id: "77777777-7777-7777-7777-777777777777",
+                      parent_name: "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/هاجس",
+                      parent: "زيدان بن مطلق بن زيدان/فايز/نزال/غازي/هاجس",
+                      child_name: mohammedPath,
+                      name: mohammedPath,
+                      branch_key: "زيدان",
+                    },
+                    {
+                      id: 51,
+                      person_id: otherMohammedPid,
+                      parent_person_id: "",
+                      parent_name: "زيدان بن مطلق بن زيدان/آخر",
+                      parent: "زيدان بن مطلق بن زيدان/آخر",
+                      child_name: "زيدان بن مطلق بن زيدان/آخر/محمد",
+                      name: "زيدان بن مطلق بن زيدان/آخر/محمد",
+                      branch_key: "زيدان",
+                    },
+                  ],
+                  error: null,
+                });
+              },
+            };
+          },
+        };
+      },
+    };
+  },
+};
+
+RA.stampTreeCardFatherPersonId(fakeSb, {
+  request_id: "REQ-7UAI-YGQI",
+  branch_key: "زيدان",
+  message: stampPayloadMsg,
+})
+  .then((stamped) => {
+    assert(stamped.ok && stamped.resolved, "stamp resolves father via ancestors");
+    assert(stamped.person_id === mohammedPid, "stamped UUID is target محمد");
+    const rebuilt = RA.buildTreeCardRows(stamped.row);
+    assert(rebuilt.ok, "buildTreeCardRows ok after stamp");
+    assert(
+      rebuilt.father_person_id === mohammedPid ||
+        (rebuilt.rows &&
+          rebuilt.rows.some((r) => r.parent_person_id === mohammedPid)),
+      "built rows carry parent_person_id",
+    );
+
+    if (failed) {
+      console.error("\nTree import reuse smoke FAILED:", failed);
+      process.exit(1);
+    }
+    console.log("\nTree import reuse smoke PASSED");
+  })
+  .catch((err) => {
+    console.error("stamp async failed", err);
+    process.exit(1);
+  });

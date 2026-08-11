@@ -1,17 +1,25 @@
 (() => {
   "use strict";
 
-  function requestStatusLabel(status) {
+  function requestStatusLabel(status, row) {
+    const Vis = window.AlzidanEventVisibility || null;
+    if (row && Vis && typeof Vis.deriveReviewerRequestStatus === "function") {
+      const derived = Vis.deriveReviewerRequestStatus(row, null);
+      if (derived && derived.label) return derived.label;
+    }
     const value = String(status || "").trim();
-    if (value === "pending") return "انتظار";
-    if (value === "approved") return "قبول";
-    if (value === "rejected") return "رفض";
+    if (value === "pending") return "بانتظار الإجراء";
+    if (value === "approved") return "تم القبول";
+    if (value === "rejected") return "تم الرفض";
     if (value === "submitted") return "مُقدَّم";
     if (value === "assigned") return "مُعيَّن";
     if (value === "in_review") return "قيد المراجعة";
     if (value === "needs_changes") return "يحتاج تعديل";
     if (value === "applied") return "مُطبَّق";
     if (value === "done") return "مكتمل";
+    if (value === "scheduled") return "مقبول — مجدول للظهور";
+    if (value === "visible") return "مقبول — منشور / ظاهر الآن";
+    if (value === "ended") return "مقبول — منتهٍ";
     return value || "-";
   }
 
@@ -46,7 +54,27 @@
     return "";
   }
 
-  function showAlert(kind, msg) {
+  
+  function scrubAdminUserError(err, fallback) {
+    var U =
+      (typeof window !== "undefined" && window.AlzidanUserFacingRequestMessages) ||
+      null;
+    if (U && typeof U.mapTechnicalErrorToArabic === "function") {
+      return U.mapTechnicalErrorToArabic(err, fallback || "تعذر إكمال العملية.");
+    }
+    var fb = String(fallback || "تعذر إكمال العملية.");
+    var msg = "";
+    if (typeof err === "string") msg = err;
+    else if (err && typeof err === "object")
+      msg = String(err.message || err.details || err.error || "");
+    if (!msg) return fb;
+    if (/Failed to|Edge Function|not allowed|PGRST|permission denied|JWT|schema cache|row-level|Supabase|__JSON__/i.test(msg))
+      return fb;
+    if (/[A-Za-z]{8,}/.test(msg) && !/[؀-ۿ]/.test(msg)) return fb;
+    return msg;
+  }
+
+function showAlert(kind, msg) {
     const c = window.AlzidanAdminCore || {};
     if (typeof c.showAlert === "function") c.showAlert(kind, msg);
     const sbStatus = document.getElementById("sb-status");
@@ -67,7 +95,90 @@
     if (typeof c.hideAlert === "function") c.hideAlert();
   }
 
-  const requestActions = window.AlzidanRequestActions || {};
+  /** Soft end-user notify after decision — SUBMITTER only via scrubbed structured fields. */
+  async function notifyRequesterStatusChanged(sb, row, status, reason) {
+    if (!sb || !row) return;
+    const Safe =
+      (typeof window !== "undefined" && window.AlzidanSafeRequestNotify) || null;
+    const kind = String(row.kind || "").trim().toLowerCase();
+    const st = String(status || "").trim().toLowerCase();
+
+    let rec;
+    if (Safe && typeof Safe.scrubRecordForNotify === "function") {
+      rec = Safe.scrubRecordForNotify(
+        Object.assign({}, row, {
+          status: st,
+          reject_reason: reason || row.reject_reason || null,
+        }),
+      );
+    } else {
+      if (
+        kind === "events_audit" ||
+        kind === "tree_audit" ||
+        kind.endsWith("_audit")
+      ) {
+        return;
+      }
+      rec = {
+        request_id: row.request_id || null,
+        kind: row.kind || "",
+        branch_key: row.branch_key || "",
+        status: st,
+        email: String(row.email || "").trim() || null,
+        phone: String(row.phone || "").trim() || null,
+        reject_reason: reason || row.reject_reason || null,
+        name: row.name || null,
+        person: row.name || null,
+      };
+    }
+
+    if (Safe && typeof Safe.safeRenderOutbound === "function") {
+      const preview = Safe.safeRenderOutbound({
+        mode: "status_changed",
+        kind: rec.kind,
+        status: rec.status,
+        branch_key: rec.branch_key,
+        person: rec.person || rec.name,
+        reject_reason: rec.reject_reason,
+        audience: "submitter",
+      });
+      if (!preview) {
+        try {
+          console.warn("[status_changed] safe_render_blocked", rec.kind, rec.status);
+        } catch (_) {}
+        return;
+      }
+    }
+
+    if (st !== "approved" && st !== "rejected" && st !== "deferred") return;
+
+    try {
+      if (String(rec.email || "").trim()) {
+        await sb.functions.invoke("alzidan-email-notify", {
+          body: { mode: "status_changed", record: rec },
+        });
+      }
+    } catch (e) {
+      try {
+        console.warn("[status_changed email]", e);
+      } catch (_) {}
+    }
+    try {
+      if (String(rec.phone || "").trim()) {
+        await sb.functions.invoke("alzidan-push-notify", {
+          body: { mode: "status_changed", record: rec },
+        });
+      }
+    } catch (e) {
+      try {
+        console.warn("[status_changed push]", e);
+      } catch (_) {}
+    }
+  }
+
+  function requestActions() {
+    return window.AlzidanRequestActions || {};
+  }
 
   const requestsBody = document.getElementById("requests-body");
   const filterStatus = document.getElementById("filter-status");
@@ -87,6 +198,199 @@
     const kind = String((row && row.kind) || "").trim();
     const rtype = String((row && row.request_type) || "").trim();
     return kind === "delegate_secret_reset" || rtype === "delegate_secret_reset";
+  }
+
+  function isDelegateAccessKind(kind) {
+    const k = String(kind || "").trim();
+    return k === "tree_delegate" || k === "events_delegate";
+  }
+
+  function delegateRequestBaseId(requestId) {
+    return String(requestId || "")
+      .trim()
+      .replace(/-TREE$/i, "")
+      .replace(/-EVENTS$/i, "");
+  }
+
+  function parseDelegateRolesFromRow(row) {
+    const env = parseRequestEnvelopeState(row && row.message);
+    const roles = [];
+    if (env && env.valid && env.parsed && Array.isArray(env.parsed.delegate_roles)) {
+      env.parsed.delegate_roles.forEach((r) => {
+        const k = String(r || "").trim();
+        if ((k === "tree_delegate" || k === "events_delegate") && !roles.includes(k)) {
+          roles.push(k);
+        }
+      });
+    }
+    const kind = String(row && row.kind ? row.kind : "").trim();
+    if ((kind === "tree_delegate" || kind === "events_delegate") && !roles.includes(kind)) {
+      roles.push(kind);
+    }
+    return roles;
+  }
+
+  async function approveDelegateSiblingRequests(sb, token, row) {
+    const kind = String(row && row.kind ? row.kind : "").trim();
+    if (kind !== "tree_delegate" && kind !== "events_delegate") {
+      return { approvedIds: [], activateId: null };
+    }
+    const phone = String(row.phone || "").trim();
+    const branch = String(row.branch_key || "").trim();
+    const baseId = delegateRequestBaseId(row.request_id);
+    const siblingKind = kind === "tree_delegate" ? "events_delegate" : "tree_delegate";
+    const roles = parseDelegateRolesFromRow(row);
+    const wantsSibling =
+      roles.includes(siblingKind) || /-(TREE|EVENTS)$/i.test(String(row.request_id || ""));
+    if (!wantsSibling || !phone || !branch || !baseId) {
+      return { approvedIds: [], activateId: null };
+    }
+
+    let siblings = [];
+    try {
+      const { data, error } = await sb.rpc("admin_list_requests", {
+        p_token: token,
+        p_status: "pending",
+        p_kind: siblingKind,
+        p_limit: 200,
+      });
+      if (!error && Array.isArray(data)) siblings = data;
+    } catch (_) {}
+
+    const matched = siblings.filter((s) => {
+      if (String(s.branch_key || "").trim() !== branch) return false;
+      if (String(s.phone || "").trim() !== phone) return false;
+      const sid = String(s.request_id || "");
+      return (
+        delegateRequestBaseId(sid) === baseId ||
+        sid === baseId + (siblingKind === "tree_delegate" ? "-TREE" : "-EVENTS")
+      );
+    });
+
+    const approvedIds = [];
+    for (const sib of matched) {
+      const sibId = coerceRpcId(sib.id != null ? sib.id : sib.request_id);
+      if (!sibId) continue;
+      try {
+        const { data, error } = await sb.rpc("admin_set_request_status_v2", {
+          p_token: token,
+          p_id: sibId,
+          p_status: "approved",
+        });
+        if (!error && data !== false) approvedIds.push(String(sibId));
+      } catch (_) {}
+    }
+    return {
+      approvedIds,
+      activateId: approvedIds.length ? approvedIds[approvedIds.length - 1] : null,
+    };
+  }
+
+  function normalizeAdminRequestEmail(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function isLikelyAdminRequestEmail(value) {
+    const s = normalizeAdminRequestEmail(value);
+    if (window.AlzidanAdminCore && typeof window.AlzidanAdminCore.isLikelyEmail === "function") {
+      return !!window.AlzidanAdminCore.isLikelyEmail(s);
+    }
+    return !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
+  }
+
+  function updateEmailInRequestMessage(message, email) {
+    const em = normalizeAdminRequestEmail(email);
+    const text = String(message || "");
+    const marker = "__JSON__:";
+    const idx = text.indexOf(marker);
+    let visible = idx >= 0 ? text.slice(0, idx).trimEnd() : text;
+    const jsonRaw = idx >= 0 ? text.slice(idx + marker.length).trim() : "";
+
+    if (/^البريد الإلكتروني:\s*.*$/m.test(visible)) {
+      visible = visible.replace(/^البريد الإلكتروني:\s*.*$/m, "البريد الإلكتروني: " + em);
+    } else if (/^البريد:\s*.*$/m.test(visible)) {
+      visible = visible.replace(/^البريد:\s*.*$/m, "البريد: " + em);
+    } else if (/^الايميل:\s*.*$/m.test(visible)) {
+      visible = visible.replace(/^الايميل:\s*.*$/m, "الايميل: " + em);
+    } else if (em && /^الجوال:\s*.*$/m.test(visible)) {
+      visible = visible.replace(/^(الجوال:\s*.*)$/m, "$1\nالبريد: " + em);
+    } else if (em) {
+      visible = (visible ? visible + "\n" : "") + "البريد: " + em;
+    }
+
+    if (jsonRaw) {
+      try {
+        const payload = JSON.parse(jsonRaw);
+        if (payload && typeof payload === "object") {
+          payload.email = em;
+          return (
+            visible +
+            "\n\n" +
+            marker +
+            "\n" +
+            JSON.stringify(payload, null, 2)
+          );
+        }
+      } catch (_) {}
+    }
+    return visible;
+  }
+
+  async function persistDelegateRequestEmail(row, email) {
+    const em = normalizeAdminRequestEmail(email);
+    if (!isLikelyAdminRequestEmail(em)) {
+      return { ok: false, message: "البريد الإلكتروني غير صحيح." };
+    }
+    const sb = getClient();
+    if (!sb) return { ok: false, message: "تعذر الاتصال." };
+    const token = getAdminToken();
+    if (!token) return { ok: false, message: "يلزم تسجيل الدخول أولاً." };
+    const id = coerceRpcId(row && (row.id != null ? row.id : row.request_id));
+    if (!id) return { ok: false, message: "بيانات الطلب ناقصة." };
+    const branchKey =
+      typeof normalizeTreeCardText === "function"
+        ? normalizeTreeCardText(row.branch_key || "")
+        : String(row.branch_key || "").trim();
+    if (!branchKey) {
+      return { ok: false, message: "الفرع مطلوب قبل حفظ بريد المندوب." };
+    }
+    const message = updateEmailInRequestMessage(row.message, em);
+    const { data, error } = await sb.rpc("admin_update_request_branch_v1", {
+      p_token: token,
+      p_id: String(id),
+      p_old_branch_key: branchKey,
+      p_branch_key: branchKey,
+      p_name: row.name || null,
+      p_phone: row.phone || null,
+      p_email: em,
+      p_message: message || null,
+      p_old_tree_rows: [],
+      p_new_tree_rows: [],
+    });
+    if (error) {
+      return {
+        ok: false,
+        message: "تعذر حفظ البريد حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
+      };
+    }
+    if (data !== true) {
+      return {
+        ok: false,
+        message: "لم يتم حفظ البريد. يمكن تعديل الطلبات المنتظرة أو المقبولة فقط.",
+      };
+    }
+    row.email = em;
+    row.message = message;
+    // Sync email onto delegates_v2 when the request is already approved.
+    if (String(row.status || "") === "approved") {
+      try {
+        await sb.rpc("admin_delegates_v2_activate_from_request_v1", {
+          p_token: token,
+          p_id: String(id),
+        });
+      } catch (_) {}
+    }
+    return { ok: true, email: em };
   }
 
   function normalizeRequestDigits(value) {
@@ -167,8 +471,8 @@
   }
 
   function buildRequestDetailsText(row) {
-    const rawMessage = requestActions.requestMessageWithoutMediaLinks
-      ? requestActions.requestMessageWithoutMediaLinks(row.message || "")
+    const rawMessage = requestActions().requestMessageWithoutMediaLinks
+      ? requestActions().requestMessageWithoutMediaLinks(row.message || "")
       : String(row.message || "");
     const jsonMarker = "__JSON__:";
     const markerIndex = rawMessage.indexOf(jsonMarker);
@@ -237,6 +541,51 @@
       image: parsed.imageUrl,
       video: parsed.videoUrl,
     };
+  }
+  function parseSpecialCardPayloadFromRow(row) {
+    const env = parseRequestEnvelopeState(row && row.message);
+    const parsed =
+      env && env.valid && env.parsed && typeof env.parsed === "object"
+        ? env.parsed
+        : {};
+    const media =
+      requestActions && typeof requestActions().extractRequestMediaLinks === "function"
+        ? requestActions().extractRequestMediaLinks(row && row.message)
+        : { image: "", video: "" };
+    const cardType =
+      String(parsed.card_type || "").trim() ||
+      readRequestLineValue(row && row.message, ["نوع البطاقة"]);
+    const person =
+      String(parsed.person_name || "").trim() ||
+      readRequestLineValue(row && row.message, ["الشخص"]);
+    const imageUrl =
+      String(parsed.imageUrl || parsed.image_url || "").trim() ||
+      String(media.image || "").trim();
+    return {
+      card_type: String(parsed.card_type || "").trim(),
+      card_type_label:
+        String(parsed.card_type_label || "").trim() || cardType,
+      person_name: person,
+      person_id: String(parsed.person_id || "").trim(),
+      imageUrl: imageUrl,
+      notes: String(parsed.notes || "").trim(),
+      branch_key:
+        String(parsed.branch_key || (row && row.branch_key) || "").trim(),
+    };
+  }
+  function openSpecialCardCmsFromRequest(row) {
+    const payload = parseSpecialCardPayloadFromRow(row);
+    const filler =
+      (window.AlzidanAdminCore &&
+        window.AlzidanAdminCore.fillSpecialCardFromHomeRequest) ||
+      null;
+    if (typeof filler !== "function") {
+      return {
+        ok: false,
+        message: "نموذج البطاقات الخاصة غير جاهز. حدّث الصفحة ثم أعد المحاولة.",
+      };
+    }
+    return filler(payload) || { ok: true };
   }
   function normalizeQualityKeyText(value) {
     return String(value || "")
@@ -423,17 +772,40 @@
     const summaryPanel = document.createElement("div");
     summaryPanel.style.lineHeight = "1.65";
 
+    const kindKey = String(row && row.kind ? row.kind : "");
+    const isDelegateReq = isDelegateAccessKind(kindKey);
+    const emailDisplay = String(row && row.email ? row.email : "").trim();
     const summaryData = [
       ["رقم الطلب", String(row && row.request_id ? row.request_id : "")],
-      ["نوع الطلب", kindLabel(row && row.kind ? row.kind : "")],
+      ["نوع الطلب", kindLabel(kindKey)],
       ["الفرع", String(row && row.branch_key ? row.branch_key : "")],
       ["الاسم", String(row && row.name ? row.name : "")],
       ["الجوال", String(row && row.phone ? row.phone : "")],
-      ["البريد", String(row && row.email ? row.email : "")],
+      [
+        "البريد الإلكتروني",
+        emailDisplay || (isDelegateReq ? "لم يُسجّل — لن تصله إشعارات طلبات الفرع" : ""),
+      ],
       ["التاريخ", row && row.created_at ? formatDateTimeArSaVerbose(row.created_at) : ""],
     ];
+    if (isDelegateReq) {
+      const roles = parseDelegateRolesFromRow(row);
+      if (roles.length) {
+        summaryData.push([
+          "الصلاحيات المطلوبة",
+          roles
+            .map((r) =>
+              r === "tree_delegate"
+                ? "مندوب الشجرة"
+                : r === "events_delegate"
+                  ? "مندوب المناسبات"
+                  : r,
+            )
+            .join(" + "),
+        ]);
+      }
+    }
     const eventData = parseEventPayloadFromRow(row);
-    if (String(row && row.kind ? row.kind : "") === "event_card") {
+    if (kindKey === "event_card") {
       summaryData.push(["نوع المناسبة", eventData.type || "غير محدد"]);
       summaryData.push(["صاحب المناسبة", eventData.person || "غير محدد"]);
       summaryData.push(["تاريخ المناسبة", eventData.date || "غير محدد"]);
@@ -447,9 +819,26 @@
           : "لا يوجد",
       ]);
     }
+    if (kindKey === "special_card") {
+      const cardData = parseSpecialCardPayloadFromRow(row);
+      summaryData.push([
+        "نوع البطاقة",
+        cardData.card_type_label || cardData.card_type || "غير محدد",
+      ]);
+      summaryData.push(["الشخص", cardData.person_name || "غير محدد"]);
+      if (cardData.notes) summaryData.push(["ملاحظات", cardData.notes]);
+      summaryData.push([
+        "المرفقات",
+        cardData.imageUrl ? "صورة" : "لا يوجد",
+      ]);
+    }
 
     summaryData
-      .filter((item) => String(item[1] || "").trim())
+      .filter((item) => {
+        const key = String(item[0] || "");
+        if (isDelegateReq && key === "البريد الإلكتروني") return true;
+        return String(item[1] || "").trim();
+      })
       .forEach((item) => {
         const rowEl = document.createElement("div");
         rowEl.style.marginBottom = "4px";
@@ -461,6 +850,52 @@
         rowEl.appendChild(value);
         summaryPanel.appendChild(rowEl);
       });
+
+    if (isDelegateReq) {
+      const emailEdit = document.createElement("div");
+      emailEdit.className = "delegate-admin-email-edit";
+      emailEdit.style.cssText =
+        "margin-top:10px;padding:10px;border:1px solid rgba(4,120,87,0.18);border-radius:10px;background:#f8faf8;";
+      const emailLabel = document.createElement("label");
+      emailLabel.textContent = "البريد الإلكتروني (للإشعارات)";
+      emailLabel.style.cssText = "display:block;font-size:12px;font-weight:700;margin-bottom:4px;color:#065f46;";
+      const emailInput = document.createElement("input");
+      emailInput.type = "email";
+      emailInput.inputMode = "email";
+      emailInput.autocomplete = "email";
+      emailInput.dir = "ltr";
+      emailInput.placeholder = "name@example.com";
+      emailInput.value = emailDisplay;
+      emailInput.dataset.delegateEmailInput = "1";
+      emailInput.style.cssText = "width:100%;padding:8px 10px;border-radius:8px;border:1px solid #d1d5db;box-sizing:border-box;";
+      const emailHint = document.createElement("div");
+      emailHint.className = "hint";
+      emailHint.style.marginTop = "4px";
+      emailHint.textContent =
+        "أدخِل أو عدّل البريد قبل القبول — يُحفظ في الطلب ويُزامن لحساب المندوب عند الاعتماد.";
+      const emailSave = document.createElement("button");
+      emailSave.type = "button";
+      emailSave.className = "btn btn-outline btn-sm";
+      emailSave.style.marginTop = "8px";
+      emailSave.textContent = "حفظ البريد";
+      emailSave.addEventListener("click", async () => {
+        hideAlert();
+        emailSave.disabled = true;
+        const res = await persistDelegateRequestEmail(row, emailInput.value);
+        emailSave.disabled = false;
+        if (!res.ok) {
+          showAlert("error", res.message || "تعذر حفظ البريد.");
+          return;
+        }
+        showAlert("success", "تم حفظ بريد المندوب: " + res.email);
+        await loadRequests();
+      });
+      emailEdit.appendChild(emailLabel);
+      emailEdit.appendChild(emailInput);
+      emailEdit.appendChild(emailHint);
+      emailEdit.appendChild(emailSave);
+      summaryPanel.appendChild(emailEdit);
+    }
 
     if (!summaryPanel.childElementCount) {
       summaryPanel.style.whiteSpace = "pre-wrap";
@@ -491,7 +926,7 @@
     wrap.appendChild(tabs);
     wrap.appendChild(summaryPanel);
     wrap.appendChild(sourcePanel);
-    requestActions.appendRequestMediaPreview(summaryPanel, row.message || "");
+    requestActions().appendRequestMediaPreview(summaryPanel, row.message || "");
     setView("summary");
     return wrap;
   }
@@ -527,7 +962,12 @@
     tr.appendChild(tdText(row.branch_key || ""));
     tr.appendChild(tdText(row.name || ""));
     tr.appendChild(tdText(row.phone || ""));
-    tr.appendChild(tdText(row.email || ""));
+    tr.appendChild(
+      tdText(
+        row.email ||
+          (isDelegateAccessKind(row.kind) ? "لم يُسجّل" : ""),
+      ),
+    );
     const tdStatus = document.createElement("td");
     const pill = document.createElement("span");
     const displayStatus = String(row.wf_state || row.status || "").trim();
@@ -539,8 +979,21 @@
         : legacy === "rejected" || displayStatus === "rejected"
           ? "status-rejected"
           : "status-pending");
-    pill.textContent = requestStatusLabel(displayStatus || legacy);
+    pill.textContent = requestStatusLabel(displayStatus || legacy, row);
     if (row.wf_state) pill.title = "Workflow: " + String(row.wf_state);
+    const Vis = window.AlzidanEventVisibility || null;
+    if (
+      Vis &&
+      typeof Vis.deriveReviewerRequestStatus === "function" &&
+      (legacy === "approved" || displayStatus === "approved")
+    ) {
+      const derived = Vis.deriveReviewerRequestStatus(row, null);
+      const visKey = String((derived && derived.key) || "").toLowerCase();
+      if (visKey === "scheduled") pill.className = "status-pill status-scheduled";
+      else if (visKey === "visible") pill.className = "status-pill status-approved";
+      else if (visKey === "ended") pill.className = "status-pill status-ended";
+      if (derived && derived.label) pill.textContent = derived.label;
+    }
     tdStatus.appendChild(pill);
     tr.appendChild(tdStatus);
     const tdDate = document.createElement("td");
@@ -576,6 +1029,12 @@
     publishEventBtn.className = "btn btn-primary btn-sm";
     publishEventBtn.textContent = "نشر";
     publishEventBtn.title = "نشر المناسبة في الويب والتطبيق";
+    const fillSpecialCardBtn = document.createElement("button");
+    fillSpecialCardBtn.type = "button";
+    fillSpecialCardBtn.className = "btn btn-outline btn-sm";
+    fillSpecialCardBtn.textContent = "تعبئة البطاقة";
+    fillSpecialCardBtn.title =
+      "تعبئة نموذج البطاقات الخاصة من هذا الطلب (مع الصورة إن وُجدت)";
     const rejectBtn = document.createElement("button");
     rejectBtn.type = "button";
     rejectBtn.className = "btn btn-outline btn-sm";
@@ -607,10 +1066,57 @@
     if (isSecretResetRequest(row)) {
       renderSecretResetCard(actions, row, approveBtn, rejectBtn);
     } else {
+      if (isDelegateAccessKind(row.kind)) {
+        const emailBox = document.createElement("div");
+        emailBox.className = "delegate-admin-email";
+        emailBox.style.cssText =
+          "display:flex;flex-direction:column;gap:4px;min-width:190px;margin-bottom:8px;padding:8px;border:1px solid rgba(4,120,87,0.16);border-radius:10px;background:#f8faf8;";
+        const emailLbl = document.createElement("label");
+        emailLbl.textContent = "البريد الإلكتروني";
+        emailLbl.style.cssText = "font-size:12px;font-weight:700;color:#065f46;";
+        const emailInput = document.createElement("input");
+        emailInput.type = "email";
+        emailInput.inputMode = "email";
+        emailInput.autocomplete = "email";
+        emailInput.dir = "ltr";
+        emailInput.placeholder = "name@example.com";
+        emailInput.value = String(row.email || "");
+        emailInput.dataset.delegateEmailInput = "1";
+        emailInput.style.cssText =
+          "width:100%;padding:7px 9px;border-radius:8px;border:1px solid #d1d5db;box-sizing:border-box;font-size:13px;";
+        const emailSaveBtn = document.createElement("button");
+        emailSaveBtn.type = "button";
+        emailSaveBtn.className = "btn btn-outline btn-sm";
+        emailSaveBtn.textContent = "حفظ البريد";
+        emailSaveBtn.addEventListener("click", async () => {
+          hideAlert();
+          emailSaveBtn.disabled = true;
+          const res = await persistDelegateRequestEmail(row, emailInput.value);
+          emailSaveBtn.disabled = false;
+          if (!res.ok) {
+            showAlert("error", res.message || "تعذر حفظ البريد.");
+            return;
+          }
+          showAlert("success", "تم حفظ بريد المندوب: " + res.email);
+          await loadRequests();
+        });
+        emailBox.appendChild(emailLbl);
+        emailBox.appendChild(emailInput);
+        emailBox.appendChild(emailSaveBtn);
+        actions.appendChild(emailBox);
+      }
       actions.appendChild(approveBtn);
       actions.appendChild(rejectBtn);
       if (row.kind === "tree_card") actions.appendChild(reapplyBtn);
-      if (row.kind === "event_card") actions.appendChild(publishEventBtn);
+      if (row.kind === "event_card") {
+        publishEventBtn.disabled = row.status === "rejected";
+        publishEventBtn.title =
+          row.status === "rejected"
+            ? "الطلب مرفوض — احذفه أو أعد قبوله قبل النشر"
+            : "نشر المناسبة في الويب والتطبيق";
+        actions.appendChild(publishEventBtn);
+      }
+      if (row.kind === "special_card") actions.appendChild(fillSpecialCardBtn);
       actions.appendChild(editBranchBtn);
       actions.appendChild(deleteBtn);
     }
@@ -619,7 +1125,26 @@
     editBranchBtn.addEventListener("click", async () => {
       hideAlert();
       if (row.kind === "tree_card") {
-        requestActions.openTreeCardEditor(row);
+        try {
+          if (
+            !requestActions ||
+            typeof requestActions().openTreeCardEditor !== "function"
+          ) {
+            showAlert(
+              "error",
+              "وحدة التعديل غير محمّلة. حدّث الصفحة بقوة (Cmd+Shift+R).",
+            );
+            return;
+          }
+          requestActions().openTreeCardEditor(row);
+        } catch (err) {
+          console.error("تعديل كامل", err);
+          showAlert(
+            "error",
+            "تعذر فتح التعديل الكامل: " +
+              String((err && err.message) || err || ""),
+          );
+        }
         return;
       }
       const branches = ["زيدان", "مزيد", "زايد", "لاحم", "ملحم"];
@@ -653,7 +1178,7 @@
         showAlert("error", "بيانات الطلب ناقصة.");
         return;
       }
-      const message = requestActions.updateBranchInRequestMessage(
+      const message = requestActions().updateBranchInRequestMessage(
         row.message,
         branchKey,
         row.kind,
@@ -661,8 +1186,8 @@
       let treeRows = [];
       if (row.status === "approved" && row.kind === "tree_card") {
         const built =
-          typeof requestActions.buildTreeCardRows === "function"
-            ? requestActions.buildTreeCardRows(row, currentBranch)
+          typeof requestActions().buildTreeCardRows === "function"
+            ? requestActions().buildTreeCardRows(row, currentBranch)
             : { ok: false, message: "تعذر قراءة بيانات بطاقة الشجرة." };
         if (!built.ok) {
           showAlert(
@@ -743,9 +1268,9 @@
       if (row.kind !== "tree_card") return;
       reapplyBtn.disabled = true;
       const applied =
-        typeof requestActions.reapplyApprovedTreeCard === "function"
-          ? await requestActions.reapplyApprovedTreeCard(sb, token, row)
-          : await requestActions.importTreeCardToTree(sb, token, row);
+        typeof requestActions().reapplyApprovedTreeCard === "function"
+          ? await requestActions().reapplyApprovedTreeCard(sb, token, row)
+          : await requestActions().importTreeCardToTree(sb, token, row);
       reapplyBtn.disabled = !canReapply;
       if (!applied.ok) {
         showAlert(
@@ -880,17 +1405,69 @@
         return;
       }
       approveBtn.disabled = true;
+      try {
+      // Delegate access: require/persist notify email before approve so it syncs to delegates_v2.
+      if (isDelegateAccessKind(row.kind)) {
+        const emailInputs = tr.querySelectorAll("[data-delegate-email-input]");
+        let emailToUse = "";
+        emailInputs.forEach((el) => {
+          const v = normalizeAdminRequestEmail(el && el.value);
+          if (v) emailToUse = v;
+        });
+        if (!emailToUse) emailToUse = normalizeAdminRequestEmail(row.email);
+        if (!isLikelyAdminRequestEmail(emailToUse)) {
+          const entered = window.prompt(
+            "البريد الإلكتروني إلزامي لإشعارات طلبات الفرع.\nأدخله قبل قبول طلب المندوب:",
+            String(row.email || ""),
+          );
+          if (entered == null) {
+            approveBtn.disabled = false;
+            return;
+          }
+          emailToUse = normalizeAdminRequestEmail(entered);
+        }
+        if (!isLikelyAdminRequestEmail(emailToUse)) {
+          approveBtn.disabled = false;
+          showAlert("error", "البريد الإلكتروني غير صحيح. لم يتم قبول الطلب.");
+          return;
+        }
+        if (emailToUse !== normalizeAdminRequestEmail(row.email)) {
+          const saved = await persistDelegateRequestEmail(row, emailToUse);
+          if (!saved.ok) {
+            approveBtn.disabled = false;
+            showAlert("error", saved.message || "تعذر حفظ البريد قبل القبول.");
+            return;
+          }
+        } else {
+          row.email = emailToUse;
+        }
+        emailInputs.forEach((el) => {
+          if (el) el.value = emailToUse;
+        });
+      }
       let applyInfo = null;
+      let publishedEvent = null;
       // ADR-006 / Patch 2: verified apply BEFORE status becomes «قبول»
       // First network call is intentional (tree resolve/import) — then admin_set_request_status_v2.
       if (row.kind === "tree_card") {
-        console.info("ADMIN_RPC approve tree_card apply start", row.request_id);
-        applyInfo = await requestActions.importTreeCardToTree(sb, token, row);
-        if (!applyInfo.ok) {
+        const actions = requestActions();
+        if (!actions || typeof actions.importTreeCardToTree !== "function") {
           approveBtn.disabled = false;
           const errMsg =
-            (applyInfo.message || "تعذر إضافة البطاقة للشجرة.") +
-            (applyInfo.code ? " [" + applyInfo.code + "]" : "");
+            "وحدة تطبيق بطاقة الشجرة غير محمّلة. حدّث الصفحة بقوة ثم أعد القبول.";
+          showAlert("error", errMsg);
+          try {
+            window.alert(errMsg);
+          } catch (_) {}
+          return;
+        }
+        console.info("ADMIN_RPC approve tree_card apply start", row.request_id);
+        applyInfo = await actions.importTreeCardToTree(sb, token, row);
+        if (!applyInfo || !applyInfo.ok) {
+          approveBtn.disabled = false;
+          const errMsg =
+            ((applyInfo && applyInfo.message) || "تعذر إضافة البطاقة للشجرة.") +
+            (applyInfo && applyInfo.code ? " [" + applyInfo.code + "]" : "");
           showAlert("error", errMsg);
           try {
             window.alert(errMsg);
@@ -899,11 +1476,15 @@
         }
         console.info("ADMIN_RPC approve tree_card apply ok", row.request_id);
       } else if (row.kind === "event_card") {
-        const published = await requestActions.publishEventCardRequest(sb, token, row);
-        if (!published.ok) {
+        publishedEvent = await requestActions().publishEventCardRequest(
+          sb,
+          token,
+          row,
+        );
+        if (!publishedEvent.ok) {
           approveBtn.disabled = false;
-          showAlert("error", published.message || "تعذر نشر المناسبة.");
-          window.alert(published.message || "تعذر نشر المناسبة.");
+          showAlert("error", publishedEvent.message || "تعذر نشر المناسبة.");
+          window.alert(publishedEvent.message || "تعذر نشر المناسبة.");
           return;
         }
       }
@@ -941,16 +1522,27 @@
       }
       // Activate Delegates v2 login credentials from the same approved row
       // (SSOT for portal login after «قبول» — also mirrored by DB trigger when SQL applied).
+      // Dual tree+events: also approve pending sibling -TREE/-EVENTS row, then activate
+      // (activate merges both kinds → full_delegate when both approved / dual message).
       if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
         try {
+          const sibling = await approveDelegateSiblingRequests(sb, token, row);
           const act = await sb.rpc("admin_delegates_v2_activate_from_request_v1", {
             p_token: token,
             p_id: String(id),
           });
+          if (sibling.activateId && String(sibling.activateId) !== String(id)) {
+            try {
+              await sb.rpc("admin_delegates_v2_activate_from_request_v1", {
+                p_token: token,
+                p_id: String(sibling.activateId),
+              });
+            } catch (_) {}
+          }
           if (act.error && !/could not find the function|PGRST202/i.test(String(act.error.message || ""))) {
             showAlert(
               "error",
-              "تم قبول الطلب لكن تعذر تفعيل دخول المندوب. طبّق COPY-ME-fix-delegate-portal-path.sql ثم أعد القبول أو المزامنة.",
+              "تم قبول الطلب لكن تعذر تفعيل دخول المندوب. طبّق COPY-ME-delegates-v2-dual-role-activate.sql ثم أعد القبول أو المزامنة.",
             );
             approveBtn.disabled = false;
             await loadRequests();
@@ -967,6 +1559,19 @@
             await loadRequests();
             return;
           }
+          const roleKey = act.data && act.data.role_key ? String(act.data.role_key) : "";
+          const dualOk = roleKey === "full_delegate" || (sibling.approvedIds && sibling.approvedIds.length);
+          if (dualOk) {
+            showAlert(
+              "success",
+              `تم قبول الطلب وتفعيل دخول المندوب` +
+                (roleKey === "full_delegate" ? " (شجرة + مناسبات)" : "") +
+                `: ${row.request_id}`,
+            );
+            approveBtn.disabled = false;
+            await loadRequests();
+            return;
+          }
         } catch (activateErr) {}
       }
       if (row.kind === "tree_card") {
@@ -976,19 +1581,81 @@
           `تم قبول الطلب بعد تطبيق متحقَّق في الشجرة: ${row.request_id}` + extra,
         );
       } else if (row.kind === "event_card") {
-        showAlert(
-          "success",
-          `تم قبول الطلب ونشر المناسبة في الويب والتطبيق: ${row.request_id}`,
-        );
+        const pushOk = publishedEvent && publishedEvent.push && publishedEvent.push.ok;
+        const pushMsg =
+          (publishedEvent && publishedEvent.pushMessage) ||
+          (typeof requestActions().formatPushNotifyAdminMessage === "function"
+            ? requestActions().formatPushNotifyAdminMessage(
+                publishedEvent && publishedEvent.push,
+              )
+            : "");
+        if (pushOk) {
+          showAlert(
+            "success",
+            `تم قبول الطلب ونشر المناسبة: ${row.request_id}. ${pushMsg}`,
+          );
+        } else {
+          showAlert(
+            "error",
+            `تم قبول الطلب ونشر المناسبة في الويب/القائمة: ${row.request_id}. ${pushMsg || "إشعار التطبيق لم يُرسل — راجع Console: PUSH_NOTIFY_*."}`,
+          );
+        }
       } else if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
         showAlert(
           "success",
           `تم قبول الطلب وتفعيل دخول المندوب: ${row.request_id}`,
         );
+      } else if (row.kind === "special_card") {
+        const filled = openSpecialCardCmsFromRequest(row);
+        if (filled && filled.ok) {
+          showAlert(
+            "success",
+            `تم قبول طلب البطاقة: ${row.request_id}. تم تعبئة نموذج البطاقة الخاصة — راجع ثم احفظ.`,
+          );
+        } else {
+          showAlert(
+            "success",
+            `تم قبول طلب البطاقة: ${row.request_id}. ${(filled && filled.message) || "افتح وحدة البطاقات الخاصة يدوياً."}`,
+          );
+        }
       } else {
         showAlert("success", `تم قبول الطلب: ${row.request_id}`);
       }
+      await notifyRequesterStatusChanged(sb, row, "approved");
       await loadRequests();
+      } catch (approveErr) {
+        approveBtn.disabled = false;
+        try {
+          console.error("ADMIN_RPC approve failed", approveErr);
+        } catch (_) {}
+        const errMsg =
+          "تعذر قبول الطلب: " +
+          String(
+            (approveErr && approveErr.message) || approveErr || "خطأ غير متوقع",
+          );
+        showAlert("error", errMsg);
+        try {
+          window.alert(errMsg);
+        } catch (_) {}
+      }
+    });
+    fillSpecialCardBtn.addEventListener("click", () => {
+      hideAlert();
+      const filled = openSpecialCardCmsFromRequest(row);
+      if (!filled || !filled.ok) {
+        showAlert(
+          "error",
+          (filled && filled.message) || "تعذر تعبئة نموذج البطاقة.",
+        );
+        return;
+      }
+      showAlert(
+        "success",
+        "تم تعبئة نموذج البطاقة الخاصة من الطلب" +
+          (filled.person ? " — " + filled.person : "") +
+          (filled.imageUrl ? " (مع الصورة)" : "") +
+          ".",
+      );
     });
     publishEventBtn.addEventListener("click", async () => {
       hideAlert();
@@ -1003,23 +1670,45 @@
         return;
       }
       publishEventBtn.disabled = true;
-      const published = await requestActions.publishEventCardRequest(sb, token, row);
+      const published = await requestActions().publishEventCardRequest(sb, token, row);
       publishEventBtn.disabled = false;
       if (!published.ok) {
         showAlert("error", published.message || "تعذر نشر المناسبة.");
         window.alert(published.message || "تعذر نشر المناسبة.");
         return;
       }
-      showAlert(
-        "success",
-        `تم نشر المناسبة في الويب والتطبيق: ${row.request_id}`,
-      );
-      window.alert("تم نشر المناسبة في الويب والتطبيق.");
+      const pushOk = published.push && published.push.ok;
+      const pushMsg =
+        published.pushMessage ||
+        (typeof requestActions().formatPushNotifyAdminMessage === "function"
+          ? requestActions().formatPushNotifyAdminMessage(published.push)
+          : "");
+      if (pushOk) {
+        showAlert(
+          "success",
+          `تم نشر المناسبة: ${row.request_id}. ${pushMsg}`,
+        );
+        window.alert("تم نشر المناسبة. " + pushMsg);
+      } else {
+        showAlert(
+          "error",
+          `تم نشر المناسبة في الويب/القائمة: ${row.request_id}. ${pushMsg || "إشعار التطبيق لم يُرسل — راجع Console: PUSH_NOTIFY_*."}`,
+        );
+        window.alert(
+          pushMsg ||
+            "نُشرت المناسبة لكن إشعار التطبيق لم يُرسل. راجع Console: PUSH_NOTIFY_*.",
+        );
+      }
       await loadRequests();
     });
     deleteBtn.addEventListener("click", async () => {
       hideAlert();
-      const id = coerceRpcId(row.id != null ? row.id : row.request_id);
+      // Prefer numeric row.id; request_id (EVN-*) is resolved server-side too.
+      const id = coerceRpcId(
+        row.id != null && String(row.id).trim() !== ""
+          ? row.id
+          : row.request_id,
+      );
       if (!id) {
         showAlert("error", "بيانات الطلب ناقصة.");
         return;
@@ -1039,22 +1728,94 @@
         return;
       }
       deleteBtn.disabled = true;
-      const { data, error } = await sb.rpc("admin_delete_request_v1", {
-        p_token: token,
-        p_id: String(id),
-      });
-      deleteBtn.disabled = false;
-      if (error) {
-        showAlert("error", "تعذر حذف الطلب، حاول لاحقاً أو تواصل مع الإدارة.");
-        return;
+      let unpubWarn = "";
+      try {
+        // Best-effort unpublish first. Do NOT abort delete on failure —
+        // admin_delete_request_v1 also removes family_events. Blocking here
+        // left rejected EVN-* rows undeletable when unpublish RPC/date cast failed.
+        if (
+          requestActions &&
+          typeof requestActions().unpublishPublishedEventForRequest ===
+            "function"
+        ) {
+          try {
+            const unpub =
+              await requestActions().unpublishPublishedEventForRequest(
+                sb,
+                token,
+                row,
+              );
+            if (unpub && unpub.ok === false) {
+              unpubWarn =
+                unpub.message ||
+                "تعذر إلغاء النشر مسبقاً؛ سيُحذف الطلب عبر دالة الحذف.";
+              try {
+                console.warn("UNPUBLISH_BEFORE_DELETE soft-fail", unpub);
+              } catch (_) {}
+            }
+          } catch (unpubErr) {
+            unpubWarn =
+              "تعذر إلغاء النشر مسبقاً؛ سيُحذف الطلب عبر دالة الحذف.";
+            try {
+              console.warn("UNPUBLISH_BEFORE_DELETE threw", unpubErr);
+            } catch (_) {}
+          }
+        }
+        const { data, error } = await sb.rpc("admin_delete_request_v1", {
+          p_token: token,
+          p_id: String(id),
+        });
+        if (error) {
+          const raw = String(
+            error.message || error.details || "",
+          ).toLowerCase();
+          if (/not allowed|permission|jwt|auth/i.test(raw)) {
+            showAlert(
+              "error",
+              "انتهت جلسة الإدارة أو لا توجد صلاحية لحذف الطلب. سجّل الدخول ثم أعد المحاولة.",
+            );
+          } else if (
+            /could not find|schema cache|PGRST202|function .* does not exist/i.test(
+              raw,
+            )
+          ) {
+            showAlert(
+              "error",
+              "دالة الحذف غير محدّثة في القاعدة. من أدوات الصيانة شغّل أمر «حذف الطلب يلغي نشر المناسبة» ثم Hard Refresh.",
+            );
+          } else if (/foreign key|violates|constraint/i.test(raw)) {
+            showAlert(
+              "error",
+              "تعذر حذف الطلب بسبب ارتباط في القاعدة. أزل المناسبة المنشورة أولاً أو تواصل مع الإدارة.",
+            );
+          } else {
+            showAlert("error", scrubAdminUserError(error, "تعذر حذف الطلب حالياً."));
+          }
+          return;
+        }
+        if (data !== true) {
+          showAlert(
+            "error",
+            "لم يتم حذف الطلب. انتهت الجلسة أو لا توجد صلاحية، أو الطلب غير موجود. إن استمرت المشكلة: من أدوات الصيانة شغّل «حذف الطلب يلغي نشر المناسبة» (أو تنظيف EVN-LK9X-RQUI) ثم Hard Refresh.",
+          );
+          return;
+        }
+        showAlert(
+          "success",
+          "تم حذف الطلب : " +
+            String(row.request_id || id) +
+            (unpubWarn ? " — تنبيه: " + unpubWarn : ""),
+        );
+        await loadRequests();
+        window.AlzidanRequestsStats.loadRequestsStats().catch(() => {});
+      } catch (err) {
+        showAlert(
+          "error",
+          scrubAdminUserError(err, "تعذر حذف الطلب حالياً."),
+        );
+      } finally {
+        deleteBtn.disabled = false;
       }
-      if (data !== true) {
-        showAlert("error", "لم يتم حذف الطلب. انتهت الجلسة أو لا توجد صلاحية.");
-        return;
-      }
-      showAlert("success", "تم حذف الطلب : " + String(row.request_id || id));
-      await loadRequests();
-      window.AlzidanRequestsStats.loadRequestsStats().catch(() => {});
     });
     rejectBtn.addEventListener("click", async () => {
       hideAlert();
@@ -1115,23 +1876,96 @@
         showAlert("error", "بيانات الطلب ناقصة.");
         return;
       }
+      rejectBtn.disabled = true;
+      // Best-effort unpublish. Reject trigger also removes family_events —
+      // do not abort reject when pre-unpublish fails (same bug as Delete).
+      let unpublishedCount = 0;
+      let unpubWarn = "";
+      if (
+        requestActions &&
+        typeof requestActions().unpublishPublishedEventForRequest === "function"
+      ) {
+        try {
+          const unpub = await requestActions().unpublishPublishedEventForRequest(
+            sb,
+            token,
+            row,
+          );
+          if (unpub && unpub.ok === false) {
+            unpubWarn =
+              unpub.message ||
+              "تعذر إلغاء النشر مسبقاً؛ سيُرفض الطلب عبر مسار الحالة.";
+            try {
+              console.warn("UNPUBLISH_BEFORE_REJECT soft-fail", unpub);
+            } catch (_) {}
+          } else {
+            unpublishedCount = Number(unpub && unpub.deleted) || 0;
+          }
+        } catch (unpubErr) {
+          unpubWarn =
+            "تعذر إلغاء النشر مسبقاً؛ سيُرفض الطلب عبر مسار الحالة.";
+          try {
+            console.warn("UNPUBLISH_BEFORE_REJECT threw", unpubErr);
+          } catch (_) {}
+        }
+      }
       const { data, error } = await sb.rpc("admin_set_request_status_v2", {
         p_token: token,
         p_id: id,
         p_status: "rejected",
       });
+      const isEventKind =
+        requestActions &&
+        typeof requestActions().isEventPublishRequestKind === "function"
+          ? requestActions().isEventPublishRequestKind(row.kind)
+          : row.kind === "event_card" ||
+            row.kind === "family_event" ||
+            row.kind === "event_request";
+      // After status=rejected the DB trigger may have removed rows JS missed.
+      let stillPublic = 0;
+      if (isEventKind && String(row.request_id || "").trim()) {
+        try {
+          const check = await sb
+            .from("family_events")
+            .select("id")
+            .like("details", "%" + String(row.request_id).trim() + "%")
+            .limit(5);
+          stillPublic = Array.isArray(check.data) ? check.data.length : 0;
+        } catch (_) {}
+      }
+      rejectBtn.disabled = false;
       if (error) {
         showAlert(
           "error",
-          "تعذر رفض الطلب حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
+          unpublishedCount > 0
+            ? "أُزيلت المناسبة من الشريط لكن تعذر ضبط حالة الطلب على «رفض». حدّث الصفحة أو أعد المحاولة."
+            : "تعذر رفض الطلب حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
         );
         return;
       }
       if (data === false) {
-        showAlert("error", "تعذر رفض الطلب. انتهت الجلسة أو لا توجد صلاحية.");
+        showAlert(
+          "error",
+          unpublishedCount > 0
+            ? "أُزيلت المناسبة من الشريط لكن تعذر رفض الطلب (جلسة/صلاحية)."
+            : "تعذر رفض الطلب. انتهت الجلسة أو لا توجد صلاحية.",
+        );
         return;
       }
-      showAlert("success", `تم رفض الطلب: ${row.request_id}`);
+      if (isEventKind && stillPublic > 0) {
+        showAlert(
+          "error",
+          `تم رفض الطلب: ${row.request_id} — لكن ما زال ${stillPublic} صف في family_events ظاهرًا. احذفه من إدارة المناسبات (نفس مسار الحذف) أو شغّل SQL إلغاء النشر من أدوات الصيانة.`,
+        );
+      } else if (isEventKind && (unpublishedCount > 0 || stillPublic === 0)) {
+        showAlert(
+          "success",
+          `تم رفض الطلب وإزالة المناسبة من الشريط/المناسبات: ${row.request_id}`,
+        );
+      } else {
+        showAlert("success", `تم رفض الطلب: ${row.request_id}`);
+      }
+      await notifyRequesterStatusChanged(sb, row, "rejected");
       await loadRequests();
     });
     requestsBody.appendChild(tr);
@@ -1215,7 +2049,7 @@
       p_token: token,
       p_status: statusValue === "all" ? null : statusValue,
       p_kind: kindValue === "all" ? null : kindValue,
-      p_limit: 5000,
+      p_limit: 50,
     });
     if (error) {
       renderEmpty("تعذر جلب الطلبات حالياً، حاول لاحقاً أو تواصل مع الإدارة.");
@@ -1264,8 +2098,8 @@
   function bootstrap() {
     if (bootstrap.didRun) return;
     bootstrap.didRun = true;
+    // Bind filters/pager only. Auth (AlzidanAuth) owns the initial loadRequests().
     init();
-    loadRequests().catch(() => {});
   }
 
   window.AlzidanAdminRequestsModule = Object.assign(

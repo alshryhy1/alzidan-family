@@ -1,8 +1,7 @@
 /**
- * Request Experience (RX) — visitor intent-first entry.
- * Slice RX-1: hub + أضف فردًا end-to-end → approval_requests (no tree_* writes).
- * P0: tree index must match the public tree (groupChildrenRows) — completeness before gates.
- * P0 gate: affirming an existing person identity never creates tree_card add.
+ * Home request hub — visitor intent-first entry.
+ * Paths: أضف فردًا · صحح بيانات · مناسبة · ذكرى · بطاقة · حالة صحية · وفاة.
+ * No direct tree writes from these screens — requests go to review / طلباتي.
  * Spec: docs/REQUEST-EXPERIENCE-UX-v1.md (adopted 2026-08-09).
  */
 (function () {
@@ -13,7 +12,11 @@
   var CACHE_PREFIX = "alzidan_tree_children_cache_v1:";
   var CACHE_TTL_MS = 5 * 60 * 1000;
   var PAGE_SIZE = 1000;
-  var TRACK_KEY = "alzidan_rx_my_requests_v1";
+  var TrackStore = window.AlzidanRxMyRequests || null;
+  var TRACK_KEY =
+    (TrackStore && TrackStore.TRACK_KEY) || "alzidan_rx_my_requests_v1";
+  /** Home «طلباتي» display cap — UI only; does not delete DB/local history. */
+  var TRACK_DEFAULT_LIMIT = 10;
   var EXISTING_PERSON_MSG =
     "هذا الشخص موجود مسبقًا في الشجرة. إذا أردت تعديل بياناته فاستخدم (تصحيح بيانات شخص).";
   /** Retest note: father خميس must list حسن، حسين، عبدالعزيز، منصور، مزيد — same count as tree. */
@@ -22,57 +25,80 @@
     {
       id: "tree_card",
       label: "أضف فردًا للعائلة",
-      blurb: "أرسل بيانات شخص جديد للمراجعة — دون حفظ في الشجرة الآن.",
+      blurb: "أرسل بيانات شخص جديد للمراجعة — بدون حفظ مباشر في الشجرة.",
       implemented: true,
     },
     {
       id: "tree_edit",
       label: "صحح بيانات شخص",
-      blurb: "اختيار شخص موجود وتصحيح حقول محددة.",
-      implemented: false,
-      slice: "RX-2",
+      blurb: "اختر شخصًا موجودًا وحدد ما تريد تصحيحه ثم أرسل للمراجعة.",
+      implemented: true,
     },
     {
-      id: "event_death",
-      label: "أعلن وفاة",
-      blurb: "إعلان وفاة مع تأكيد الشخص والتاريخ.",
-      implemented: false,
-      slice: "RX-3",
-    },
-    {
-      id: "event_marriage",
-      label: "أعلن زواج",
-      blurb: "إعلان زواج بين طرفين مع التاريخ.",
-      implemented: false,
-      slice: "RX-4",
+      id: "occasion",
+      label: "إضافة مناسبة",
+      blurb: "زواج، تخرج، مولود وغيرها — إرسال للمراجعة.",
+      implemented: true,
     },
     {
       id: "memory_card",
       label: "شارك ذكرى",
-      blurb: "نص أو وسائط لذكرى عائلية.",
-      implemented: false,
-      slice: "RX-5",
+      blurb: "عنوان ونص ووسائط اختيارية — تظهر في طلباتي بعد الإرسال.",
+      implemented: true,
     },
     {
       id: "special_card",
       label: "اطلب بطاقة",
-      blurb: "طلب بطاقة خاصة حسب النوع المعتمد.",
-      implemented: false,
-      slice: "RX-6",
+      blurb: "اختر نوع البطاقة والشخص ثم أرسل للمراجعة.",
+      implemented: true,
+    },
+    {
+      id: "patient",
+      label: "حالة صحية",
+      blurb: "مريض، عملية، أو خروج — إرسال للمراجعة.",
+      implemented: true,
+    },
+    {
+      id: "event_death",
+      label: "إعلان وفاة",
+      blurb: "إعلان وفاة مع اسم المتوفى والتاريخ.",
+      implemented: true,
     },
   ];
 
-  var STATUS_VISITOR = {
-    pending: "تم الإرسال",
-    submitted: "تم الإرسال",
-    assigned: "وصل للمندوب",
-    in_review: "تحت المراجعة",
-    needs_changes: "نحتاج معلومة إضافية منك",
-    approved: "تم قبول طلبك",
-    applied: "تمت إضافة البيانات",
-    done: "اكتمل",
-    rejected: "لم يُقبل",
-  };
+  function uf() {
+    return window.AlzidanUserFacingRequestMessages || null;
+  }
+
+  function STATUS_VISITOR() {
+    var U = uf();
+    var pending =
+      (U && U.MESSAGES && U.MESSAGES.CHIP_PENDING) ||
+      (U && U.MESSAGES && U.MESSAGES.PENDING) ||
+      "بانتظار المراجعة";
+    var approved =
+      (U && U.MESSAGES && U.MESSAGES.CHIP_APPROVED) ||
+      (U && U.MESSAGES && U.MESSAGES.APPROVED) ||
+      "تمت الموافقة";
+    var rejected =
+      (U && U.MESSAGES && U.MESSAGES.CHIP_REJECTED) ||
+      (U && U.MESSAGES && U.MESSAGES.REJECTED) ||
+      "مرفوض";
+    return {
+      pending: pending,
+      submitted: pending,
+      assigned: pending,
+      in_review: pending,
+      needs_changes: pending,
+      approved: approved,
+      applied: approved,
+      done: approved,
+      scheduled: (U && U.MESSAGES && U.MESSAGES.CHIP_SCHEDULED) || "مجدول للظهور",
+      visible: (U && U.MESSAGES && U.MESSAGES.CHIP_VISIBLE) || "ظاهر الآن",
+      ended: (U && U.MESSAGES && U.MESSAGES.CHIP_ENDED) || "منتهٍ",
+      rejected: rejected,
+    };
+  }
 
   var root = document.querySelector("[data-rx-root]");
   if (!root) return;
@@ -105,6 +131,10 @@
     lastStatusLabel: "",
     busy: false,
     error: "",
+    /** UI-only: expand «طلباتي» beyond default cap. */
+    trackShowAll: false,
+    /** UI-only: keep «طلباتي» <details> open across re-renders. */
+    trackDetailsOpen: false,
   };
 
   /** In-memory full person index per branch (no search limit). */
@@ -150,16 +180,35 @@
       .toLowerCase();
   }
 
+  function normalizeArabicDigitsToLatin(v) {
+    return String(v == null ? "" : v).replace(/[٠-٩۰-۹０-９]/g, function (ch) {
+      var code = ch.charCodeAt(0);
+      if (code >= 0x0660 && code <= 0x0669) return String(code - 0x0660);
+      if (code >= 0x06F0 && code <= 0x06F9) return String(code - 0x06F0);
+      if (code >= 0xFF10 && code <= 0xFF19) return String(code - 0xFF10);
+      return ch;
+    });
+  }
+
   function normalizePhone(v) {
-    return String(v || "")
-      .replace(/[٠-٩]/g, function (d) {
-        return String(d.charCodeAt(0) - 1632);
-      })
-      .replace(/[۰-۹]/g, function (d) {
-        return String(d.charCodeAt(0) - 1776);
-      })
-      .replace(/[^\d+]/g, "")
+    var digits = normalizeArabicDigitsToLatin(String(v || ""))
+      .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+      .replace(/[^0-9]/g, "")
       .trim();
+    if (!digits) return "";
+    if (digits.indexOf("00966") === 0 && digits.length === 14 && digits.charAt(5) === "5") {
+      return "0" + digits.slice(5);
+    }
+    if (digits.indexOf("966") === 0 && digits.length === 12 && digits.charAt(3) === "5") {
+      return "0" + digits.slice(3);
+    }
+    if (digits.charAt(0) === "5" && digits.length === 9) return "0" + digits;
+    if (digits.indexOf("05") === 0 && digits.length === 10) return digits;
+    return digits;
+  }
+
+  function isValidSaudiMobile(v) {
+    return /^05[0-9]{8}$/.test(normalizePhone(v));
   }
 
   function normalizeEmail(v) {
@@ -182,6 +231,76 @@
       return window.__alzidanConfig.getClient();
     }
     return window.__alzidanSupabaseClient || window.__alzidanالخدمةClient || null;
+  }
+
+  var SPECIAL_CARD_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+  var SPECIAL_CARD_IMAGE_MIME = {
+    "image/jpeg": 1,
+    "image/png": 1,
+    "image/webp": 1,
+    "image/gif": 1,
+    "image/heic": 1,
+    "image/heif": 1,
+  };
+  var SPECIAL_CARD_IMAGE_EXT = {
+    jpg: 1,
+    jpeg: 1,
+    png: 1,
+    webp: 1,
+    gif: 1,
+    heic: 1,
+    heif: 1,
+  };
+
+  function specialCardFileExt(name, fallback) {
+    var base = String(name || "").split("?")[0].trim();
+    var m = /\.([a-z0-9]{1,8})$/i.exec(base);
+    return (m ? m[1] : fallback || "jpg").toLowerCase();
+  }
+
+  function specialCardPublicStorageUrl(path) {
+    var cfg = window.__alzidanConfig || {};
+    return (
+      String(cfg.SUPABASE_URL || "").replace(/\/+$/, "") +
+      "/storage/v1/object/public/event-media/" +
+      String(path || "")
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")
+    );
+  }
+
+  function isAllowedSpecialCardImage(file) {
+    if (!file) return false;
+    var type = String(file.type || "").trim().toLowerCase();
+    var ext = specialCardFileExt(file.name, "").toLowerCase();
+    return !!(SPECIAL_CARD_IMAGE_MIME[type] || SPECIAL_CARD_IMAGE_EXT[ext]);
+  }
+
+  /** Reuse event-media bucket (same as memory/event public uploads). */
+  async function uploadSpecialCardImage(sb, requestId, file) {
+    if (!file) return "";
+    if (file.size > SPECIAL_CARD_IMAGE_MAX_BYTES) {
+      throw new Error("حجم الصورة أكبر من 10MB.");
+    }
+    if (!isAllowedSpecialCardImage(file)) {
+      throw new Error("نوع الصورة غير مدعوم.");
+    }
+    var path =
+      "special-card-pending/" +
+      String(requestId || makeRequestId().replace("REQ", "CRD")) +
+      "/image-" +
+      Date.now() +
+      "." +
+      specialCardFileExt(file.name, "jpg");
+    var res = await sb.storage.from("event-media").upload(path, file, {
+      contentType: file.type || "image/jpeg",
+      upsert: false,
+    });
+    if (res.error) {
+      throw new Error("تعذر رفع الصورة.");
+    }
+    return specialCardPublicStorageUrl(path);
   }
 
   function getBranchRootName(branchKey) {
@@ -663,33 +782,138 @@
     var leafQ = normalizeSearchText(personName || "");
     if (!pid || !leafQ) return null;
     var sb = getClient();
-    if (!sb) return null;
-    try {
-      var res = await sb
-        .from("tree_children")
-        .select("person_id,parent_person_id,parent_name,child_name,name")
-        .eq("parent_person_id", pid)
-        .limit(1000);
-      if (res.error) return null;
-      var rows = Array.isArray(res.data) ? res.data : [];
-      for (var i = 0; i < rows.length; i++) {
-        var raw = normalizePersonName(rows[i].child_name || rows[i].name || "");
-        var leaf = raw.indexOf("/") >= 0
-          ? getDisplayNameForNodeId(raw, "")
-          : raw;
-        if (normalizeSearchText(leaf) === leafQ) {
-          return {
-            leaf: leaf,
-            personId: normalizePersonName(rows[i].person_id || ""),
-            parentPersonId: pid,
-            path: normalizePersonName(rows[i].parent_name || ""),
-          };
-        }
+    if (!sb) {
+      var e0 = new Error("LIVE_CHILD_CHECK_NO_CLIENT");
+      e0.code = "LIVE_CHILD_CHECK_FAILED";
+      throw e0;
+    }
+    var Create = window.AlzidanHomeRequestCreate;
+    if (Create && typeof Create.findExistingChildLive === "function") {
+      var live = await Create.findExistingChildLive(sb, {
+        person_name: personName,
+        parent_person_id: pid,
+      });
+      if (!live) return null;
+      return {
+        leaf: live.leaf || personName,
+        personId: normalizePersonName(live.person_id || ""),
+        person_id: normalizePersonName(live.person_id || ""),
+        parentPersonId: pid,
+        parent_person_id: pid,
+        path: normalizePersonName(live.parent_path || ""),
+        branch: (state.selectedParent && state.selectedParent.branch) || "",
+        reason: live.reason || "live_db_same_parent",
+      };
+    }
+    var res = await sb
+      .from("tree_children")
+      .select("person_id,parent_person_id,parent_name,child_name,name")
+      .eq("parent_person_id", pid)
+      .limit(1000);
+    if (res.error) {
+      var e1 = new Error(
+        (res.error && res.error.message) || "LIVE_CHILD_CHECK_QUERY_FAILED"
+      );
+      e1.code = "LIVE_CHILD_CHECK_FAILED";
+      throw e1;
+    }
+    var rows = Array.isArray(res.data) ? res.data : [];
+    for (var i = 0; i < rows.length; i++) {
+      var raw = normalizePersonName(rows[i].child_name || rows[i].name || "");
+      var leaf =
+        raw.indexOf("/") >= 0 ? getDisplayNameForNodeId(raw, "") : raw;
+      if (normalizeSearchText(leaf) === leafQ) {
+        return {
+          leaf: leaf,
+          personId: normalizePersonName(rows[i].person_id || ""),
+          person_id: normalizePersonName(rows[i].person_id || ""),
+          parentPersonId: pid,
+          parent_person_id: pid,
+          path: normalizePersonName(rows[i].parent_name || ""),
+          branch: (state.selectedParent && state.selectedParent.branch) || "",
+          reason: "live_db_same_parent_normalized_name",
+        };
       }
-    } catch (e) {
-      return null;
     }
     return null;
+  }
+
+  /**
+   * Same-father existence must BLOCK before any «شخص آخر بنفس الاسم» identity UI.
+   * Uses parent_person_id live lookup — must NOT depend on sibling-list success.
+   */
+  async function blockIfExistsUnderSelectedFather(reason) {
+    var parent = state.selectedParent;
+    var name = text((state.facts && state.facts.personName) || "");
+    if (!parent || !name) return false;
+    var parentPid = text(parent.personId || "");
+    if (!parentPid) return false;
+
+    var listHit = findExistingChildUnderParent(
+      name,
+      parent,
+      state.childrenUnderParent
+    );
+    if (listHit) {
+      blockExistingPerson(listHit, reason || "siblings-under-parent");
+      return true;
+    }
+
+    var liveHit = await liveChildExistsUnderParentPid(parentPid, name);
+    if (liveHit) {
+      blockExistingPerson(liveHit, reason || "live-parent-person-id");
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Partition identity collisions: same-father hits → exists/block; never identity-review.
+   * Only other-context same-name candidates may reach view:"identity".
+   */
+  function partitionIdentityCollisions(candidates) {
+    var parent = state.selectedParent;
+    var parentPid = text((parent && parent.personId) || "");
+    var parentNodeId = normalizePersonName((parent && parent.id) || "");
+    var sameFather = [];
+    var others = [];
+    (Array.isArray(candidates) ? candidates : []).forEach(function (c) {
+      if (!c) return;
+      var cParentPid = text(c.parentPersonId || c.parent_person_id || "");
+      var cId = normalizePersonName(c.id || "");
+      var leaf = normalizePersonName(c.leaf || "");
+      // Direct child only: parent_person_id match, or exact parentNodeId/leaf (not deeper descendants).
+      var underSamePid = !!(parentPid && cParentPid && parentPid === cParentPid);
+      var underSamePath = !!(
+        parentNodeId &&
+        leaf &&
+        cId === parentNodeId + "/" + leaf
+      );
+      if (underSamePid || underSamePath) sameFather.push(c);
+      else others.push(c);
+    });
+    return { sameFather: sameFather, others: others };
+  }
+
+  /**
+   * Before showing identity-review: live same-father gate, then only non-father collisions.
+   * Returns "exists" | "identity" | "confirm".
+   */
+  async function decideAfterNameCheck() {
+    if (await blockIfExistsUnderSelectedFather("before-identity-same-father")) {
+      return "exists";
+    }
+    var collisions = await searchIdentityCollisions(state.facts.personName);
+    var parts = partitionIdentityCollisions(collisions);
+    if (parts.sameFather.length) {
+      blockExistingPerson(parts.sameFather[0], "identity-hit-same-father");
+      return "exists";
+    }
+    state.identityCandidates = parts.others;
+    if (parts.others.length && !state.differentPersonSameName) {
+      return "identity";
+    }
+    return "confirm";
   }
 
   function isAlreadyChildUnderParent(personName, parent, candidates) {
@@ -745,6 +969,9 @@
   }
 
   function readTracked() {
+    if (TrackStore && typeof TrackStore.read === "function") {
+      return TrackStore.read();
+    }
     try {
       var raw = localStorage.getItem(TRACK_KEY);
       var list = raw ? JSON.parse(raw) : [];
@@ -755,12 +982,20 @@
   }
 
   function writeTracked(list) {
+    if (TrackStore && typeof TrackStore.write === "function") {
+      TrackStore.write(list);
+      return;
+    }
     try {
       localStorage.setItem(TRACK_KEY, JSON.stringify((list || []).slice(0, 20)));
     } catch (e) {}
   }
 
   function trackLocal(entry) {
+    if (TrackStore && typeof TrackStore.append === "function") {
+      TrackStore.append(entry);
+      return;
+    }
     var list = readTracked().filter(function (x) {
       return x && x.requestId !== entry.requestId;
     });
@@ -768,9 +1003,584 @@
     writeTracked(list);
   }
 
-  function statusLabel(status) {
+  /**
+   * Admin hard-deletes via admin_delete_request_v1 (DELETE row).
+   * Home «طلباتي» is a localStorage mirror — sync live status from DB.
+   * anon cannot SELECT approval_requests under RLS (empty/error) → use
+   * public_my_request_statuses_v1 (SECURITY DEFINER) when available.
+   * On network/RPC failure: keep local list (do not purge blindly).
+   * @returns {Promise<boolean>} true if local list changed
+   */
+  function trackIdKey(raw) {
+    return text(raw).toUpperCase();
+  }
+
+  async function fetchLiveRequestStatuses(ids) {
+    var sb = getClient();
+    if (!sb || !ids || !ids.length) {
+      return { ok: false, via: "", rows: [], error: "no_client" };
+    }
+    var cleanIds = [];
+    var seenIds = Object.create(null);
+    for (var i = 0; i < ids.length; i++) {
+      var id = text(ids[i]);
+      var key = trackIdKey(id);
+      if (!id || seenIds[key]) continue;
+      seenIds[key] = true;
+      cleanIds.push(id);
+    }
+    if (!cleanIds.length) {
+      return { ok: false, via: "", rows: [], error: "no_ids" };
+    }
+
+    // Prefer SECURITY DEFINER RPC — required because RLS hides approval_requests.
+    var rpcAttempts = [
+      { p_ids: cleanIds },
+      { p_ids: cleanIds.map(trackIdKey) },
+    ];
+    for (var a = 0; a < rpcAttempts.length; a++) {
+      try {
+        var rpc = await sb.rpc("public_my_request_statuses_v1", rpcAttempts[a]);
+        if (!rpc.error && Array.isArray(rpc.data)) {
+          return { ok: true, via: "rpc", rows: rpc.data, error: "" };
+        }
+        // Missing function / schema cache → keep trying fallbacks once.
+        if (
+          rpc &&
+          rpc.error &&
+          /PGRST202|Could not find the function|schema cache/i.test(
+            String(rpc.error.message || rpc.error.code || "")
+          )
+        ) {
+          return {
+            ok: false,
+            via: "rpc_missing",
+            rows: [],
+            error: String(rpc.error.message || "rpc_missing"),
+          };
+        }
+      } catch (eRpc) {}
+    }
+
+    // Fallback direct select (works only if RLS allows). No reject_reason column.
+    try {
+      var res = await sb
+        .from("approval_requests")
+        .select("request_id,status,message")
+        .in("request_id", cleanIds);
+      if (res && res.error) {
+        return {
+          ok: false,
+          via: "select",
+          rows: [],
+          error: String((res.error && res.error.message) || "select_error"),
+        };
+      }
+      var rows = Array.isArray(res && res.data) ? res.data : [];
+      // RLS often returns [] with HTTP 200 — not authoritative.
+      if (!rows.length) {
+        return { ok: false, via: "select_empty", rows: [], error: "rls_empty" };
+      }
+      return { ok: true, via: "select", rows: rows, error: "" };
+    } catch (eSel) {
+      return { ok: false, via: "select", rows: [], error: "select_exception" };
+    }
+  }
+
+  function liveRejectReasonFromRow(db) {
+    var direct = text(db && (db.reject_reason || db.rejection_reason));
+    if (direct) return direct;
+    var Vis =
+      typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+    if (Vis && typeof Vis.extractRejectReasonForUi === "function") {
+      return text(Vis.extractRejectReasonForUi(db)) || "";
+    }
+    var U = uf();
+    if (U && typeof U.safeRejectionReason === "function") {
+      var msg = text(db && db.message);
+      var jsonIdx = msg.indexOf("__JSON__");
+      if (jsonIdx >= 0) msg = msg.slice(0, jsonIdx);
+      var lines = msg.split(/\n/g);
+      for (var i = 0; i < lines.length; i++) {
+        var line = text(lines[i]);
+        if (/^سبب الرفض\s*:|^السبب\s*:|^سبب\s*:/.test(line)) {
+          return U.safeRejectionReason(
+            line.replace(/^سبب الرفض\s*:\s*|^السبب\s*:\s*|^سبب\s*:\s*/, "")
+          );
+        }
+      }
+    }
+    return "";
+  }
+
+  async function reconcileTrackedWithDb() {
+    var list = readTracked();
+    if (!list.length) return false;
+    var ids = [];
+    var seen = Object.create(null);
+    for (var i = 0; i < list.length; i++) {
+      var rid = text(list[i] && list[i].requestId);
+      var key = trackIdKey(rid);
+      if (!rid || seen[key]) continue;
+      seen[key] = true;
+      ids.push(rid);
+    }
+    if (!ids.length) return false;
+
+    var fetched = await fetchLiveRequestStatuses(ids);
+    if (!fetched.ok) return false;
+
+    var live = fetched.rows || [];
+    var byId = Object.create(null);
+    for (var j = 0; j < live.length; j++) {
+      var liveId = trackIdKey(live[j] && live[j].request_id);
+      if (liveId) byId[liveId] = live[j];
+    }
+
+    var next = [];
+    var changed = false;
+    var canPurgeMissing = fetched.via === "rpc";
+    for (var k = 0; k < list.length; k++) {
+      var row = list[k];
+      var id = text(row && row.requestId);
+      if (!id) {
+        changed = true;
+        continue;
+      }
+      var db = byId[trackIdKey(id)];
+      if (!db) {
+        if (canPurgeMissing) {
+          // RPC authoritative: row gone (admin hard-delete).
+          changed = true;
+          continue;
+        }
+        next.push(row);
+        continue;
+      }
+      var liveStatus = normalizeTrackStatus(db.status);
+      var liveReason = liveRejectReasonFromRow(db);
+      var prevStatus = normalizeTrackStatus(row.status);
+      var prevReason = text(row.rejectReason || row.reject_reason);
+      var patch = null;
+      if (liveStatus && liveStatus !== prevStatus) {
+        patch = Object.assign({}, row, { status: liveStatus });
+      }
+      if (liveReason !== prevReason) {
+        patch = Object.assign({}, patch || row, {
+          rejectReason: liveReason,
+          reject_reason: liveReason,
+        });
+      }
+      if (patch) {
+        changed = true;
+        next.push(patch);
+      } else {
+        next.push(row);
+      }
+    }
+    if (changed) writeTracked(next);
+    return changed;
+  }
+
+  var trackReconcileInFlight = null;
+  var trackLastReconcileAt = 0;
+  var TRACK_RECONCILE_TTL_MS = 8000;
+  var trackFocusBound = false;
+
+  /** Re-fetch live rows and re-render home track when local list was purged/updated. */
+  function scheduleTrackReconcile(force) {
+    if (!force && Date.now() - trackLastReconcileAt < TRACK_RECONCILE_TTL_MS) {
+      return trackReconcileInFlight;
+    }
+    if (trackReconcileInFlight) {
+      if (!force) return trackReconcileInFlight;
+      // Force: chain another pass after the in-flight one finishes.
+      return trackReconcileInFlight.then(function () {
+        trackLastReconcileAt = 0;
+        return scheduleTrackReconcile(true);
+      });
+    }
+    trackLastReconcileAt = Date.now();
+    trackReconcileInFlight = reconcileTrackedWithDb()
+      .then(function (changed) {
+        trackReconcileInFlight = null;
+        if (changed && state.view === "home") render();
+        return changed;
+      })
+      .catch(function () {
+        trackReconcileInFlight = null;
+        return false;
+      });
+    return trackReconcileInFlight;
+  }
+
+  function bindTrackRefreshHooks() {
+    if (trackFocusBound) return;
+    trackFocusBound = true;
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && state.view === "home") {
+        scheduleTrackReconcile(true);
+      }
+    });
+    window.addEventListener("focus", function () {
+      if (state.view === "home") scheduleTrackReconcile(true);
+    });
+  }
+
+  function statusLabel(status, row) {
+    var U = uf();
+    var Vis =
+      typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+    if (Vis && typeof Vis.deriveSubmitterRequestStatus === "function" && row) {
+      var derived = Vis.deriveSubmitterRequestStatus(row, null);
+      if (derived && derived.label) return derived.label;
+    }
+    if (U && typeof U.statusChipLabel === "function") {
+      return U.statusChipLabel(status, row && row.kind);
+    }
     var s = text(status).toLowerCase();
-    return STATUS_VISITOR[s] || "تم الإرسال";
+    var map = STATUS_VISITOR();
+    return map[s] || map.pending;
+  }
+
+  function submitSuccessCopy(kind, notifyFailed) {
+    var U = uf();
+    if (U && typeof U.composeSubmitSuccess === "function") {
+      return U.composeSubmitSuccess({
+        kind: kind,
+        notifyFailed: !!notifyFailed,
+      });
+    }
+    var primary = "تم إرسال طلبك بنجاح، وهو الآن قيد المراجعة.";
+    var notifyNote = notifyFailed
+      ? "تم حفظ طلبك بنجاح، لكن تعذر إرسال إشعار البريد الإلكتروني حاليًا. لا حاجة لإعادة إرسال الطلب."
+      : "";
+    return {
+      primary: primary,
+      notifyNote: notifyNote,
+      full: notifyNote ? primary + " " + notifyNote : primary,
+    };
+  }
+
+  function scrubUserError(err, fallback) {
+    var U = uf();
+    if (U && typeof U.mapTechnicalErrorToArabic === "function") {
+      return U.mapTechnicalErrorToArabic(err, fallback);
+    }
+    return text(fallback) || "تعذر إرسال الطلب حاليًا. حاول مرة أخرى لاحقًا.";
+  }
+
+  /** Newest first for home «طلباتي» display. */
+  function sortedTracked() {
+    var list = readTracked().slice();
+    list.sort(function (a, b) {
+      var at = String((a && a.createdAt) || "");
+      var bt = String((b && b.createdAt) || "");
+      if (bt > at) return 1;
+      if (bt < at) return -1;
+      return 0;
+    });
+    return list;
+  }
+
+  /** Submitter homepage buckets — keep accepted/rejected visible after decision. */
+  var TRACK_BUCKETS = {
+    pending: { key: "pending", label: "بانتظار الإجراء", emoji: "🟠" },
+    approved: { key: "approved", label: "تم القبول", emoji: "🟢" },
+    rejected: { key: "rejected", label: "تم الرفض", emoji: "🔴" },
+  };
+
+  /** Normalize DB / local / Arabic status tokens to pending|approved|rejected. */
+  function normalizeTrackStatus(raw) {
+    var s = text(raw).toLowerCase();
+    if (!s) return "pending";
+    if (
+      s === "rejected" ||
+      s === "denied" ||
+      s.indexOf("رفض") >= 0 ||
+      s.indexOf("مرفوض") >= 0
+    ) {
+      return "rejected";
+    }
+    if (
+      s === "approved" ||
+      s === "applied" ||
+      s === "done" ||
+      s === "accepted" ||
+      s === "scheduled" ||
+      s === "visible" ||
+      s === "ended" ||
+      s === "deferred" ||
+      s.indexOf("قبول") >= 0 ||
+      s.indexOf("موافق") >= 0 ||
+      s.indexOf("معتمد") >= 0
+    ) {
+      return "approved";
+    }
+    if (
+      s === "pending" ||
+      s === "submitted" ||
+      s === "assigned" ||
+      s === "in_review" ||
+      s === "needs_changes" ||
+      s.indexOf("انتظار") >= 0 ||
+      s.indexOf("مراجعة") >= 0
+    ) {
+      return "pending";
+    }
+    return "pending";
+  }
+
+  function trackBucketKey(row) {
+    return normalizeTrackStatus(row && row.status);
+  }
+
+  function trackBucketLabel(key) {
+    var b = TRACK_BUCKETS[key] || TRACK_BUCKETS.pending;
+    return b.label;
+  }
+
+  function trackTypeLabel(row) {
+    var label = text(row && row.intentLabel);
+    if (label && /[\u0600-\u06FF]/.test(label)) return label;
+    var U = uf();
+    if (U && typeof U.kindLabelAr === "function") {
+      return U.kindLabelAr(row && row.kind) || "طلب";
+    }
+    return label || "طلب";
+  }
+
+  function formatTrackDate(raw) {
+    var s = text(raw);
+    if (!s) return "—";
+    if (s.indexOf("T") < 0 && s.length <= 20) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) {
+      return s.length > 16 ? s.slice(0, 16) : s;
+    }
+    try {
+      return d.toLocaleDateString("ar-SA", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch (e) {
+      return d.toISOString().slice(0, 10);
+    }
+  }
+
+  /** تاريخ الطلب = وقت الإرسال؛ إن غاب فالـ dateLabel كاحتياط. */
+  function trackDateLabel(row) {
+    var sent = text(row && row.createdAt);
+    if (sent) return formatTrackDate(sent);
+    return formatTrackDate(row && row.dateLabel);
+  }
+
+  function trackRejectReason(row) {
+    var raw = text(
+      row && (row.rejectReason || row.reject_reason || row.reason)
+    );
+    var U = uf();
+    if (U && typeof U.safeRejectionReason === "function") {
+      return U.safeRejectionReason(raw);
+    }
+    var Vis =
+      typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+    if (Vis && typeof Vis.extractRejectReasonForUi === "function") {
+      return text(Vis.extractRejectReasonForUi(row)) || "";
+    }
+    if (!raw || /[{}\[\]<>]|__JSON__|https?:\/\//i.test(raw)) return "";
+    if (!/[\u0600-\u06FF]/.test(raw)) return "";
+    return raw.slice(0, 280);
+  }
+
+  function buildCompactTrackRowHtml(row) {
+    var bucket = trackBucketKey(row);
+    var statusText = trackBucketLabel(bucket);
+    var reason = bucket === "rejected" ? trackRejectReason(row) : "";
+    return (
+      '<li class="rx-track-item rx-track-item--' +
+      bucket +
+      '">' +
+      '<div class="rx-track-row">' +
+      '<div class="rx-track-field">' +
+      '<span class="rx-track-k">نوع الطلب</span>' +
+      '<span class="rx-track-type">' +
+      escapeHtml(trackTypeLabel(row)) +
+      "</span></div>" +
+      '<div class="rx-track-field">' +
+      '<span class="rx-track-k">تاريخ الطلب</span>' +
+      '<span class="rx-track-date">' +
+      escapeHtml(trackDateLabel(row)) +
+      "</span></div>" +
+      '<div class="rx-track-field">' +
+      '<span class="rx-track-k">الحالة الحالية</span>' +
+      '<span class="rx-track-status rx-track-status--' +
+      bucket +
+      '">' +
+      escapeHtml(statusText) +
+      "</span></div>" +
+      (reason
+        ? '<div class="rx-track-field rx-track-field--reason">' +
+          '<span class="rx-track-k">سبب الرفض</span>' +
+          '<span class="rx-track-reason">' +
+          escapeHtml(reason) +
+          "</span></div>"
+        : "") +
+      "</div></li>"
+    );
+  }
+
+  function buildTrackBucketListHtml(rows) {
+    if (!rows.length) {
+      return '<p class="rx-track-empty">لا طلبات في هذه الحالة.</p>';
+    }
+    return (
+      '<ul class="rx-track-list">' +
+      rows.map(buildCompactTrackRowHtml).join("") +
+      "</ul>"
+    );
+  }
+
+  /** Collapsed-by-default «طلباتي» for the submitter who created the requests. */
+  function buildTrackHtml() {
+    var tracked = sortedTracked();
+    var limit = state.trackShowAll ? tracked.length : TRACK_DEFAULT_LIMIT;
+    var visible = tracked.slice(0, limit);
+    var buckets = {
+      pending: [],
+      approved: [],
+      rejected: [],
+    };
+    for (var i = 0; i < visible.length; i++) {
+      var key = trackBucketKey(visible[i]);
+      if (!buckets[key]) key = "pending";
+      buckets[key].push(visible[i]);
+    }
+
+    var pendingCount = buckets.pending.length;
+    var approvedCount = buckets.approved.length;
+    var rejectedCount = buckets.rejected.length;
+
+    var summaryCounts =
+      '<div class="rx-track-summary-counts" aria-label="ملخص حالات طلباتي">' +
+      '<span class="rx-track-count rx-track-count--pending">' +
+      TRACK_BUCKETS.pending.emoji +
+      " " +
+      escapeHtml(TRACK_BUCKETS.pending.label) +
+      ' <b>' +
+      pendingCount +
+      "</b></span>" +
+      '<span class="rx-track-count rx-track-count--approved">' +
+      TRACK_BUCKETS.approved.emoji +
+      " " +
+      escapeHtml(TRACK_BUCKETS.approved.label) +
+      ' <b>' +
+      approvedCount +
+      "</b></span>" +
+      '<span class="rx-track-count rx-track-count--rejected">' +
+      TRACK_BUCKETS.rejected.emoji +
+      " " +
+      escapeHtml(TRACK_BUCKETS.rejected.label) +
+      ' <b>' +
+      rejectedCount +
+      "</b></span>" +
+      "</div>";
+
+    var bodyInner = "";
+    if (tracked.length === 0) {
+      bodyInner =
+        '<p class="rx-muted">لا طلبات بعد. بعد الإرسال تظهر هنا بحالتها.</p>';
+    } else {
+      bodyInner =
+        summaryCounts +
+        '<div class="rx-track-box" role="region" aria-label="قائمة طلباتي">' +
+        '<section class="rx-track-bucket rx-track-bucket--pending">' +
+        "<h4>" +
+        TRACK_BUCKETS.pending.emoji +
+        " " +
+        escapeHtml(TRACK_BUCKETS.pending.label) +
+        " (" +
+        pendingCount +
+        ")</h4>" +
+        buildTrackBucketListHtml(buckets.pending) +
+        "</section>" +
+        '<section class="rx-track-bucket rx-track-bucket--approved">' +
+        "<h4>" +
+        TRACK_BUCKETS.approved.emoji +
+        " " +
+        escapeHtml(TRACK_BUCKETS.approved.label) +
+        " (" +
+        approvedCount +
+        ")</h4>" +
+        buildTrackBucketListHtml(buckets.approved) +
+        "</section>" +
+        '<section class="rx-track-bucket rx-track-bucket--rejected">' +
+        "<h4>" +
+        TRACK_BUCKETS.rejected.emoji +
+        " " +
+        escapeHtml(TRACK_BUCKETS.rejected.label) +
+        " (" +
+        rejectedCount +
+        ")</h4>" +
+        buildTrackBucketListHtml(buckets.rejected) +
+        "</section>" +
+        "</div>";
+    }
+
+    var moreBtn = "";
+    if (!state.trackShowAll && tracked.length > TRACK_DEFAULT_LIMIT) {
+      moreBtn =
+        '<button type="button" class="btn btn-outline btn-sm rx-track-more" data-rx-track-more>' +
+        "عرض كل طلباتي (" +
+        tracked.length +
+        ")</button>";
+    } else if (state.trackShowAll && tracked.length > TRACK_DEFAULT_LIMIT) {
+      moreBtn =
+        '<button type="button" class="btn btn-outline btn-sm rx-track-more" data-rx-track-less>' +
+        "عرض آخر " +
+        TRACK_DEFAULT_LIMIT +
+        "</button>";
+    }
+
+    return (
+      '<details class="rx-track" data-rx-track-details' +
+      (state.trackDetailsOpen ? " open" : "") +
+      ">" +
+      '<summary class="rx-track-summary">طلباتي</summary>' +
+      '<div class="rx-track-body">' +
+      '<p class="rx-muted">طلباتك التي أرسلتها للمراجعة — الحالة الحالية بعد القرار.</p>' +
+      bodyInner +
+      moreBtn +
+      "</div>" +
+      "</details>"
+    );
+  }
+
+  function bindTrackUi() {
+    var det = root.querySelector("[data-rx-track-details]");
+    if (det) {
+      det.addEventListener("toggle", function () {
+        state.trackDetailsOpen = !!det.open;
+        if (det.open) scheduleTrackReconcile(true);
+      });
+    }
+    var more = root.querySelector("[data-rx-track-more]");
+    if (more) {
+      more.addEventListener("click", function () {
+        state.trackShowAll = true;
+        state.trackDetailsOpen = true;
+        render();
+      });
+    }
+    var less = root.querySelector("[data-rx-track-less]");
+    if (less) {
+      less.addEventListener("click", function () {
+        state.trackShowAll = false;
+        state.trackDetailsOpen = true;
+        render();
+      });
+    }
   }
 
   function setError(msg) {
@@ -781,7 +1591,934 @@
     state.error = "";
   }
 
+  function parkOccasionForm() {
+    var park = document.querySelector("[data-rx-occasion-park]");
+    var panel = document.querySelector("[data-rx-occasion-panel]");
+    if (!park || !panel) return;
+    if (panel.parentNode !== park) park.appendChild(panel);
+  }
+
+  function mountOccasionForm() {
+    var mount = root.querySelector("[data-rx-occasion-mount]");
+    var panel = document.querySelector("[data-rx-occasion-panel]");
+    if (!mount || !panel) return;
+    mount.appendChild(panel);
+  }
+
+  function parkPatientForm() {
+    var park = document.querySelector("[data-rx-patient-park]");
+    var panel = document.querySelector("[data-rx-patient-panel]");
+    if (!park || !panel) return;
+    if (panel.parentNode !== park) park.appendChild(panel);
+  }
+
+  function mountPatientForm() {
+    var mount = root.querySelector("[data-rx-patient-mount]");
+    var panel = document.querySelector("[data-rx-patient-panel]");
+    if (!mount || !panel) return;
+    mount.appendChild(panel);
+  }
+
+  function parkDeathForm() {
+    var park = document.querySelector("[data-rx-death-park]");
+    var panel = document.querySelector("[data-rx-death-panel]");
+    if (!park || !panel) return;
+    if (panel.parentNode !== park) park.appendChild(panel);
+  }
+
+  function mountDeathForm() {
+    var mount = root.querySelector("[data-rx-death-mount]");
+    var panel = document.querySelector("[data-rx-death-panel]");
+    if (!mount || !panel) return;
+    mount.appendChild(panel);
+  }
+
+
+  function parkTreeEditForm() {
+    var park = document.querySelector("[data-rx-tree-edit-park]");
+    var panel = document.querySelector("[data-rx-tree-edit-panel]");
+    if (!park || !panel) return;
+    if (panel.parentNode !== park) park.appendChild(panel);
+  }
+
+  function mountTreeEditForm() {
+    var mount = root.querySelector("[data-rx-tree-edit-mount]");
+    var panel = document.querySelector("[data-rx-tree-edit-panel]");
+    if (!mount || !panel) return;
+    mount.appendChild(panel);
+    bindSimplePersonSuggest(panel);
+    bindTreeEditSubmit(panel);
+  }
+
+  function parkMemoryForm() {
+    var park = document.querySelector("[data-rx-memory-park]");
+    var panel = document.querySelector("[data-rx-memory-panel]");
+    if (!park || !panel) return;
+    if (panel.parentNode !== park) park.appendChild(panel);
+  }
+
+  function mountMemoryForm() {
+    var mount = root.querySelector("[data-rx-memory-mount]");
+    var panel = document.querySelector("[data-rx-memory-panel]");
+    if (!mount || !panel) return;
+    mount.appendChild(panel);
+    var host = panel.querySelector("[data-rx-memory-submit-root]");
+    if (!host) return;
+    if (host.getAttribute("data-memory-mounted") === "1") return;
+    var Mem = window.AlzidanMemorySubmit;
+    if (!Mem || typeof Mem.mount !== "function") {
+      host.innerHTML =
+        '<p class="rx-muted">تعذر تحميل نموذج الذكرى. حدّث الصفحة ثم أعد المحاولة.</p>';
+      return;
+    }
+    Mem.mount({
+      root: host,
+      mode: "public",
+      onSaved: function (result) {
+        var requestId =
+          text(result && (result.requestId || result.id)) ||
+          makeRequestId().replace("REQ", "MEM");
+        trackLocal(
+          TrackStore && typeof TrackStore.buildMemoryEntry === "function"
+            ? TrackStore.buildMemoryEntry({
+                requestId: requestId,
+                title: text(result && result.title) || "ذكرى",
+                person: text(result && result.person_name) || "",
+                status: "submitted",
+                createdAt: new Date().toISOString(),
+              })
+            : {
+                requestId: requestId,
+                kind: "memory_card",
+                intentLabel: "شارك ذكرى",
+                status: "submitted",
+                summary: "ذكرى",
+                createdAt: new Date().toISOString(),
+              }
+        );
+        state.lastRequestId = requestId;
+        state.lastStatusLabel = statusLabel("submitted");
+        state.lastNotifyWarn = "";
+        state.view = "done";
+        render();
+      },
+    });
+    host.setAttribute("data-memory-mounted", "1");
+  }
+
+  function parkSpecialCardForm() {
+    var park = document.querySelector("[data-rx-special-card-park]");
+    var panel = document.querySelector("[data-rx-special-card-panel]");
+    if (!park || !panel) return;
+    if (panel.parentNode !== park) park.appendChild(panel);
+  }
+
+  function mountSpecialCardForm() {
+    var mount = root.querySelector("[data-rx-special-card-mount]");
+    var panel = document.querySelector("[data-rx-special-card-panel]");
+    if (!mount || !panel) return;
+    mount.appendChild(panel);
+    bindSimplePersonSuggest(panel);
+    bindSpecialCardSubmit(panel);
+  }
+
+  function parkAllForms() {
+    parkOccasionForm();
+    parkPatientForm();
+    parkDeathForm();
+    parkTreeEditForm();
+    parkMemoryForm();
+    parkSpecialCardForm();
+  }
+
+  function clearSuggestBox(box) {
+    if (!box) return;
+    box.innerHTML = "";
+    box.hidden = true;
+  }
+
+  function bindSimplePersonSuggest(scope) {
+    if (!scope || scope.getAttribute("data-rx-suggest-bound") === "1") return;
+    var input = scope.querySelector("[data-event-person]");
+    var box = scope.querySelector("[data-event-person-suggest]");
+    var idInput = scope.querySelector("[data-event-person-id]");
+    var branchSelect = scope.querySelector("[data-event-branch]");
+    var hint = scope.querySelector("[data-event-branch-hint]");
+    if (!input || !box) return;
+    scope.setAttribute("data-rx-suggest-bound", "1");
+    var timer = null;
+
+    function applyPick(item) {
+      input.value = text(item.leaf || item.display_name || item.person_name || "");
+      if (idInput) idInput.value = text(item.personId || item.person_id || "");
+      if (branchSelect && item.branch) {
+        branchSelect.value = item.branch;
+        if (hint) {
+          hint.textContent =
+            "تم تحديد الفرع من اختيار الشخص — يمكنك تغييره إن لزم.";
+          hint.hidden = false;
+        }
+      }
+      clearSuggestBox(box);
+    }
+
+    input.addEventListener("input", function () {
+      if (idInput) idInput.value = "";
+      var q = text(input.value);
+      clearTimeout(timer);
+      if (q.length < 2) {
+        clearSuggestBox(box);
+        return;
+      }
+      timer = setTimeout(function () {
+        searchPeople(q, { limit: 8 })
+          .then(function (rows) {
+            box.innerHTML = "";
+            var use = document.createElement("button");
+            use.type = "button";
+            use.className = "rx-person-suggest-btn";
+            use.innerHTML = "<strong>استخدام: " + escapeHtml(q) + "</strong>";
+            use.addEventListener("click", function () {
+              if (idInput) idInput.value = "";
+              clearSuggestBox(box);
+            });
+            box.appendChild(use);
+            (rows || []).slice(0, 8).forEach(function (row) {
+              var btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "rx-person-suggest-btn";
+              btn.innerHTML =
+                "<strong>" +
+                escapeHtml(row.leaf || "") +
+                "</strong><br><small>" +
+                escapeHtml(row.path || row.branch || "") +
+                "</small>";
+              btn.addEventListener("click", function () {
+                applyPick(row);
+              });
+              box.appendChild(btn);
+            });
+            box.hidden = false;
+          })
+          .catch(function () {
+            clearSuggestBox(box);
+          });
+      }, 220);
+    });
+  }
+
+  function setFormAlert(form, type, message) {
+    var el =
+      form.querySelector("[data-tree-edit-submit-alert]") ||
+      form.querySelector("[data-special-card-submit-alert]");
+    if (!el) return;
+    el.className =
+      "founder-alert " +
+      (type === "success" ? "founder-alert-success" : "founder-alert-error");
+    el.textContent = String(message || "");
+    el.style.display = message ? "block" : "none";
+  }
+
+  function bindTreeEditSubmit(panel) {
+    var form = panel.querySelector("[data-tree-edit-submit-form]");
+    if (!form || form.getAttribute("data-rx-bound") === "1") return;
+    form.setAttribute("data-rx-bound", "1");
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      submitTreeEdit(form);
+    });
+    form.addEventListener("reset", function () {
+      setFormAlert(form, "success", "");
+      var idInput = form.querySelector("[data-event-person-id]");
+      if (idInput) idInput.value = "";
+    });
+    // toggle correction value fields
+    form.querySelectorAll("[data-edit-field]").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var key = cb.getAttribute("data-edit-field");
+        var wrap = form.querySelector('[data-edit-value-wrap="' + key + '"]');
+        if (wrap) wrap.hidden = !cb.checked;
+      });
+    });
+  }
+
+  function buildTreeEditMessage(payload) {
+    var lines = [];
+    lines.push("طلب: صحح بيانات شخص");
+    lines.push("");
+    lines.push("رقم الطلب: " + payload.requestId);
+    lines.push("الفرع: " + (payload.branch || ""));
+    lines.push("الشخص: " + (payload.personName || ""));
+    if (payload.personId) lines.push("معرّف الشخص: " + payload.personId);
+    lines.push("الحقول المطلوب تصحيحها:");
+    (payload.fields || []).forEach(function (f) {
+      lines.push(
+        "  - " +
+          (f.label || f.key) +
+          ": " +
+          (f.value || "(بدون قيمة جديدة — توضيح في الملاحظات)")
+      );
+    });
+    if (payload.notes) {
+      lines.push("");
+      lines.push("ملاحظات:");
+      lines.push(payload.notes);
+    }
+    lines.push("");
+    lines.push("بيانات المرسل:");
+    lines.push("الاسم: " + (payload.submitterName || ""));
+    lines.push("الجوال: " + (payload.submitterPhone || ""));
+    lines.push("التاريخ: " + new Date(payload.createdAt).toLocaleString("ar-SA"));
+    lines.push("");
+    lines.push("__JSON__:");
+    lines.push(
+      JSON.stringify(
+        {
+          v: 1,
+          kind: "tree_edit",
+          branch_key: payload.branch,
+          person_id: payload.personId || "",
+          person_name: payload.personName || "",
+          fields: payload.fields || [],
+          notes: payload.notes || "",
+          submitter: {
+            name: payload.submitterName,
+            phone: payload.submitterPhone,
+          },
+          created_at: payload.createdAt,
+        },
+        null,
+        2
+      )
+    );
+    return lines.join("\n");
+  }
+
+  async function submitTreeEdit(form) {
+    if (form.dataset.submitting === "1") return;
+    form.dataset.submitting = "1";
+    var submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "جاري الإرسال...";
+    }
+    try {
+      setFormAlert(form, "error", "");
+      var personName = text(form.querySelector('[name="person"]') && form.querySelector('[name="person"]').value);
+      var personId = text(
+        form.querySelector("[data-event-person-id]") &&
+          form.querySelector("[data-event-person-id]").value
+      );
+      var branch = text(form.querySelector('[name="branch"]') && form.querySelector('[name="branch"]').value);
+      var submitterName = text(
+        form.querySelector('[name="submitterName"]') &&
+          form.querySelector('[name="submitterName"]').value
+      );
+      var phone = normalizePhone(
+        form.querySelector('[name="phone"]') && form.querySelector('[name="phone"]').value
+      );
+      var notes = text(form.querySelector('[name="notes"]') && form.querySelector('[name="notes"]').value);
+      var fieldDefs = [
+        { key: "name", label: "الاسم" },
+        { key: "gender", label: "الجنس" },
+        { key: "birth_date", label: "تاريخ الميلاد" },
+        { key: "other", label: "أخرى" },
+      ];
+      var fields = [];
+      fieldDefs.forEach(function (def) {
+        var cb = form.querySelector('[data-edit-field="' + def.key + '"]');
+        if (!cb || !cb.checked) return;
+        var valEl = form.querySelector('[name="edit_' + def.key + '"]');
+        fields.push({
+          key: def.key,
+          label: def.label,
+          value: text(valEl && valEl.value),
+        });
+      });
+      if (!personName || !branch || !submitterName || !phone) {
+        setFormAlert(form, "error", "أكمل اسم الشخص والفرع واسم المرسل والجوال.");
+        return;
+      }
+      if (!isValidSaudiMobile(phone)) {
+        setFormAlert(form, "error", "رقم الجوال غير صحيح (مثال: 05xxxxxxxx).");
+        return;
+      }
+      if (!fields.length) {
+        setFormAlert(form, "error", "حدّد حقلًا واحدًا على الأقل للتصحيح.");
+        return;
+      }
+      var sb = getClient();
+      if (!sb) {
+        setFormAlert(form, "error", "تعذر الإرسال لأن الربط غير مُعد.");
+        return;
+      }
+      var Create = window.AlzidanHomeRequestCreate;
+      if (!Create || typeof Create.create !== "function") {
+        setFormAlert(form, "error", "حارس الهوية غير محمّل. حدّث الصفحة ثم أعد المحاولة.");
+        return;
+      }
+      // Soft duplicate: pending tree_edit for same person_id or same name+branch
+      try {
+        var pendingQ = await sb
+          .from("approval_requests")
+          .select("id,request_id,kind,message,status,branch_key")
+          .eq("kind", "tree_edit")
+          .eq("status", "pending")
+          .limit(40);
+        if (!pendingQ.error && Array.isArray(pendingQ.data)) {
+          var hit = pendingQ.data.some(function (row) {
+            var msg = String(row.message || "");
+            if (personId && msg.indexOf(personId) >= 0) return true;
+            return (
+              text(row.branch_key) === branch &&
+              msg.indexOf("الشخص: " + personName) >= 0
+            );
+          });
+          if (hit) {
+            setFormAlert(
+              form,
+              "error",
+              "يوجد طلب تصحيح قيد المراجعة لنفس الشخص. راقبه من طلباتي."
+            );
+            return;
+          }
+        }
+      } catch (dupErr) {}
+
+      var payload = {
+        requestId: makeRequestId().replace("REQ", "TED"),
+        createdAt: new Date().toISOString(),
+        branch: branch,
+        personName: personName,
+        personId: personId,
+        fields: fields,
+        notes: notes,
+        submitterName: submitterName,
+        submitterPhone: phone,
+      };
+      var row = {
+        request_id: payload.requestId,
+        kind: "tree_edit",
+        branch_key: branch,
+        name: submitterName,
+        phone: phone,
+        email: null,
+        message: buildTreeEditMessage(payload),
+        status: "pending",
+        created_at: payload.createdAt,
+      };
+      var created = await Create.create({
+        type: "tree_edit",
+        payload: {
+          person_id: personId,
+          person_name: personName,
+          branch_key: branch,
+          fields: fields.map(function (f) {
+            return f.key + "=" + f.value;
+          }).join("|"),
+          phone: phone,
+        },
+        client: sb,
+        mode: "approval",
+        row: row,
+        skipFetch: true,
+      });
+      if (!created.ok) {
+        setFormAlert(
+          form,
+          "error",
+          scrubUserError(
+            (created.guard && created.guard.message_ar) || created.error,
+            created.doubleSubmit
+              ? "طلب مكرر — لن يُنشأ طلب ثانٍ."
+              : "تعذر إرسال الطلب حاليًا."
+          )
+        );
+        return;
+      }
+      var treeEditNotifyFailed = false;
+      try {
+        var treeEditNotify = null;
+        if (typeof Create.notifyBranchDelegatesOfRequest === "function") {
+          treeEditNotify = await Create.notifyBranchDelegatesOfRequest(sb, row);
+        } else {
+          await sb.functions.invoke("alzidan-email-notify", {
+            body: { mode: "branch_delegate_new_request", record: row },
+          });
+          try {
+            await sb.functions.invoke("alzidan-push-notify", {
+              body: { mode: "branch_delegate_new_request", record: row },
+            });
+          } catch (_) {}
+        }
+        if (
+          uf() &&
+          typeof uf().didNotifyFail === "function" &&
+          uf().didNotifyFail(treeEditNotify)
+        ) {
+          treeEditNotifyFailed = true;
+        } else if (treeEditNotify && treeEditNotify.ok === false) {
+          treeEditNotifyFailed = true;
+        }
+        if (treeEditNotifyFailed) {
+          try {
+            console.warn("[branch-delegate-notify] tree_edit", treeEditNotify);
+          } catch (_) {}
+        }
+      } catch (e2) {
+        treeEditNotifyFailed = true;
+        try {
+          console.warn("[branch-delegate-notify] tree_edit", e2);
+        } catch (_) {}
+      }
+      trackLocal(
+        TrackStore && typeof TrackStore.buildTreeEditEntry === "function"
+          ? TrackStore.buildTreeEditEntry({
+              requestId: payload.requestId,
+              person: personName,
+              fields: fields.map(function (f) {
+                return f.label;
+              }).join("، "),
+              status: "submitted",
+              createdAt: payload.createdAt,
+            })
+          : {
+              requestId: payload.requestId,
+              kind: "tree_edit",
+              intentLabel: "صحح بيانات شخص",
+              status: "submitted",
+              summary: personName,
+              person: personName,
+              createdAt: payload.createdAt,
+            }
+      );
+      form.reset();
+      var idInput = form.querySelector("[data-event-person-id]");
+      if (idInput) idInput.value = "";
+      state.lastRequestId = payload.requestId;
+      state.lastStatusLabel = statusLabel("submitted");
+      state.lastNotifyWarn = treeEditNotifyFailed
+        ? submitSuccessCopy("tree_edit", true).notifyNote
+        : "";
+      state.view = "done";
+      render();
+    } finally {
+      form.dataset.submitting = "";
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "إرسال";
+      }
+    }
+  }
+
+  function bindSpecialCardSubmit(panel) {
+    var form = panel.querySelector("[data-special-card-submit-form]");
+    if (!form || form.getAttribute("data-rx-bound") === "1") return;
+    form.setAttribute("data-rx-bound", "1");
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      submitSpecialCard(form);
+    });
+    form.addEventListener("reset", function () {
+      setFormAlert(form, "success", "");
+      var idInput = form.querySelector("[data-event-person-id]");
+      if (idInput) idInput.value = "";
+    });
+  }
+
+  function buildSpecialCardMessage(payload) {
+    var lines = [];
+    lines.push("طلب: اطلب بطاقة");
+    lines.push("");
+    lines.push("رقم الطلب: " + payload.requestId);
+    lines.push("الفرع: " + (payload.branch || ""));
+    lines.push("نوع البطاقة: " + (payload.cardTypeLabel || payload.cardType || ""));
+    lines.push("الشخص: " + (payload.personName || ""));
+    if (payload.personId) lines.push("معرّف الشخص: " + payload.personId);
+    if (payload.imageUrl) lines.push("رابط الصورة: " + payload.imageUrl);
+    if (payload.notes) {
+      lines.push("");
+      lines.push("ملاحظات:");
+      lines.push(payload.notes);
+    }
+    lines.push("");
+    lines.push("بيانات المرسل:");
+    lines.push("الاسم: " + (payload.submitterName || ""));
+    lines.push("الجوال: " + (payload.submitterPhone || ""));
+    lines.push("التاريخ: " + new Date(payload.createdAt).toLocaleString("ar-SA"));
+    lines.push("");
+    lines.push("__JSON__:");
+    lines.push(
+      JSON.stringify(
+        {
+          v: 1,
+          kind: "special_card",
+          branch_key: payload.branch,
+          card_type: payload.cardType,
+          card_type_label: payload.cardTypeLabel,
+          person_id: payload.personId || "",
+          person_name: payload.personName || "",
+          imageUrl: payload.imageUrl || "",
+          notes: payload.notes || "",
+          submitter: {
+            name: payload.submitterName,
+            phone: payload.submitterPhone,
+          },
+          created_at: payload.createdAt,
+        },
+        null,
+        2
+      )
+    );
+    return lines.join("\n");
+  }
+
+  async function submitSpecialCard(form) {
+    if (form.dataset.submitting === "1") return;
+    form.dataset.submitting = "1";
+    var submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "جاري الإرسال...";
+    }
+    try {
+      setFormAlert(form, "error", "");
+      var personName = text(form.querySelector('[name="person"]') && form.querySelector('[name="person"]').value);
+      var personId = text(
+        form.querySelector("[data-event-person-id]") &&
+          form.querySelector("[data-event-person-id]").value
+      );
+      var branch = text(form.querySelector('[name="branch"]') && form.querySelector('[name="branch"]').value);
+      var cardTypeEl = form.querySelector('[name="cardType"]');
+      var cardType = text(cardTypeEl && cardTypeEl.value);
+      var cardTypeLabel = text(
+        cardTypeEl &&
+          cardTypeEl.options &&
+          cardTypeEl.options[cardTypeEl.selectedIndex] &&
+          cardTypeEl.options[cardTypeEl.selectedIndex].textContent
+      );
+      var submitterName = text(
+        form.querySelector('[name="submitterName"]') &&
+          form.querySelector('[name="submitterName"]').value
+      );
+      var phone = normalizePhone(
+        form.querySelector('[name="phone"]') && form.querySelector('[name="phone"]').value
+      );
+      var notes = text(form.querySelector('[name="notes"]') && form.querySelector('[name="notes"]').value);
+      var imageInput = form.querySelector("[data-special-card-image]");
+      var imageFile =
+        imageInput && imageInput.files && imageInput.files[0]
+          ? imageInput.files[0]
+          : null;
+      if (!personName || !branch || !cardType || !submitterName || !phone) {
+        setFormAlert(
+          form,
+          "error",
+          "أكمل نوع البطاقة واسم الشخص والفرع واسم المرسل والجوال."
+        );
+        return;
+      }
+      if (!isValidSaudiMobile(phone)) {
+        setFormAlert(form, "error", "رقم الجوال غير صحيح (مثال: 05xxxxxxxx).");
+        return;
+      }
+      if (imageFile) {
+        if (imageFile.size > SPECIAL_CARD_IMAGE_MAX_BYTES) {
+          setFormAlert(form, "error", "حجم الصورة أكبر من 10MB.");
+          return;
+        }
+        if (!isAllowedSpecialCardImage(imageFile)) {
+          setFormAlert(form, "error", "نوع الصورة غير مدعوم.");
+          return;
+        }
+      }
+      var sb = getClient();
+      if (!sb) {
+        setFormAlert(form, "error", "تعذر الإرسال لأن الربط غير مُعد.");
+        return;
+      }
+      var Create = window.AlzidanHomeRequestCreate;
+      if (!Create || typeof Create.create !== "function") {
+        setFormAlert(form, "error", "حارس الهوية غير محمّل. حدّث الصفحة ثم أعد المحاولة.");
+        return;
+      }
+      try {
+        var pendingQ = await sb
+          .from("approval_requests")
+          .select("id,request_id,kind,message,status,branch_key")
+          .eq("kind", "special_card")
+          .eq("status", "pending")
+          .limit(40);
+        if (!pendingQ.error && Array.isArray(pendingQ.data)) {
+          var hit = pendingQ.data.some(function (row) {
+            var msg = String(row.message || "");
+            if (msg.indexOf("نوع البطاقة: " + cardTypeLabel) < 0) return false;
+            if (personId && msg.indexOf(personId) >= 0) return true;
+            return (
+              text(row.branch_key) === branch &&
+              msg.indexOf("الشخص: " + personName) >= 0
+            );
+          });
+          if (hit) {
+            setFormAlert(
+              form,
+              "error",
+              "يوجد طلب بطاقة مشابه قيد المراجعة. راقبه من طلباتي."
+            );
+            return;
+          }
+        }
+      } catch (dupErr) {}
+
+      var payload = {
+        requestId: makeRequestId().replace("REQ", "CRD"),
+        createdAt: new Date().toISOString(),
+        branch: branch,
+        personName: personName,
+        personId: personId,
+        cardType: cardType,
+        cardTypeLabel: cardTypeLabel,
+        notes: notes,
+        imageUrl: "",
+        submitterName: submitterName,
+        submitterPhone: phone,
+      };
+      if (imageFile) {
+        try {
+          setFormAlert(form, "success", "جاري رفع الصورة...");
+          payload.imageUrl = await uploadSpecialCardImage(
+            sb,
+            payload.requestId,
+            imageFile
+          );
+        } catch (upErr) {
+          setFormAlert(
+            form,
+            "error",
+            (upErr &&
+              scrubUserError(upErr, "تعذر رفع الصورة.")) ||
+            "تعذر رفع الصورة."
+          );
+          return;
+        }
+      }
+      var row = {
+        request_id: payload.requestId,
+        kind: "special_card",
+        branch_key: branch,
+        name: submitterName,
+        phone: phone,
+        email: null,
+        message: buildSpecialCardMessage(payload),
+        status: "pending",
+        created_at: payload.createdAt,
+      };
+      var created = await Create.create({
+        type: "special_card",
+        payload: {
+          person_id: personId,
+          person_name: personName,
+          branch_key: branch,
+          card_type: cardType,
+          phone: phone,
+        },
+        client: sb,
+        mode: "approval",
+        row: row,
+        skipFetch: true,
+      });
+      if (!created.ok) {
+        setFormAlert(
+          form,
+          "error",
+          scrubUserError(
+            (created.guard && created.guard.message_ar) || created.error,
+            created.doubleSubmit
+              ? "طلب مكرر — لن يُنشأ طلب ثانٍ."
+              : "تعذر إرسال الطلب حاليًا."
+          )
+        );
+        return;
+      }
+      var specialNotifyFailed = false;
+      try {
+        var specialNotify = null;
+        if (typeof Create.notifyAdminOfRequest === "function") {
+          specialNotify = await Create.notifyAdminOfRequest(sb, row);
+        } else {
+          await sb.functions.invoke("alzidan-email-notify", {
+            body: { mode: "admin_new_request", record: row },
+          });
+          try {
+            await sb.functions.invoke("alzidan-push-notify", {
+              body: { mode: "admin_new_request", record: row },
+            });
+          } catch (_) {}
+        }
+        if (
+          uf() &&
+          typeof uf().didNotifyFail === "function" &&
+          uf().didNotifyFail(specialNotify)
+        ) {
+          specialNotifyFailed = true;
+        } else if (specialNotify && specialNotify.ok === false) {
+          specialNotifyFailed = true;
+        }
+        if (specialNotifyFailed) {
+          try {
+            console.warn("[admin-notify] special_card", specialNotify);
+          } catch (_) {}
+        }
+      } catch (e) {
+        specialNotifyFailed = true;
+        try {
+          console.warn("[admin-notify] special_card", e);
+        } catch (_) {}
+      }
+      // special_card → central admin only (do not notify branch delegates)
+      trackLocal(
+        TrackStore && typeof TrackStore.buildSpecialCardEntry === "function"
+          ? TrackStore.buildSpecialCardEntry({
+              requestId: payload.requestId,
+              person: personName,
+              cardType: cardTypeLabel,
+              status: "submitted",
+              createdAt: payload.createdAt,
+            })
+          : {
+              requestId: payload.requestId,
+              kind: "special_card",
+              intentLabel: "اطلب بطاقة",
+              status: "submitted",
+              summary: cardTypeLabel + " · " + personName,
+              person: personName,
+              createdAt: payload.createdAt,
+            }
+      );
+      form.reset();
+      var idInput = form.querySelector("[data-event-person-id]");
+      if (idInput) idInput.value = "";
+      state.lastRequestId = payload.requestId;
+      state.lastStatusLabel = statusLabel("submitted");
+      state.lastNotifyWarn = specialNotifyFailed
+        ? submitSuccessCopy("special_card", true).notifyNote
+        : "";
+      state.view = "done";
+      render();
+    } finally {
+      form.dataset.submitting = "";
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "إرسال";
+      }
+    }
+  }
+
+  function renderTreeEdit() {
+    shell(
+      "صحح بيانات شخص",
+      '<p class="rx-lead">اختر الشخص وحدد الحقول التي تريد تصحيحها، ثم أرسل للمراجعة.</p>' +
+        '<div class="rx-tree-edit-mount" data-rx-tree-edit-mount></div>',
+      { sub: "يظهر في طلباتي — بدون حفظ مباشر في الشجرة." }
+    );
+    mountTreeEditForm();
+  }
+
+  function renderMemory() {
+    shell(
+      "شارك ذكرى",
+      '<p class="rx-lead">أرسل ذكرى عائلية (عنوان ونص ووسائط اختيارية) للمراجعة.</p>' +
+        '<div class="rx-memory-mount" data-rx-memory-mount></div>',
+      { sub: "يظهر في طلباتي بعد الإرسال." }
+    );
+    mountMemoryForm();
+  }
+
+  function renderSpecialCard() {
+    shell(
+      "اطلب بطاقة",
+      '<p class="rx-lead">اختر نوع البطاقة والشخص، ويمكنك إرفاق صورة اختيارية، ثم أرسل الطلب للمراجعة.</p>' +
+        '<div class="rx-special-card-mount" data-rx-special-card-mount></div>',
+      { sub: "يظهر في طلباتي — بدون حفظ مباشر." }
+    );
+    mountSpecialCardForm();
+  }
+
+  function openTreeEdit() {
+    clearError();
+    state.intentId = "tree_edit";
+    state.view = "tree_edit";
+    render();
+    try {
+      if (root && typeof root.scrollIntoView === "function") {
+        root.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (e) {}
+  }
+
+  function openMemory() {
+    clearError();
+    state.intentId = "memory_card";
+    state.view = "memory";
+    render();
+    try {
+      if (root && typeof root.scrollIntoView === "function") {
+        root.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (e) {}
+  }
+
+  function openSpecialCard() {
+    clearError();
+    state.intentId = "special_card";
+    state.view = "special_card";
+    render();
+    try {
+      if (root && typeof root.scrollIntoView === "function") {
+        root.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (e) {}
+  }
+
+
+  function openOccasion() {
+    clearError();
+    state.intentId = "occasion";
+    state.view = "occasion";
+    render();
+    try {
+      if (root && typeof root.scrollIntoView === "function") {
+        root.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (e) {}
+  }
+
+  function openPatient() {
+    clearError();
+    state.intentId = "patient";
+    state.view = "patient";
+    render();
+    try {
+      if (root && typeof root.scrollIntoView === "function") {
+        root.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (e) {}
+  }
+
+  function openDeath() {
+    clearError();
+    state.intentId = "event_death";
+    state.view = "death";
+    render();
+    try {
+      if (root && typeof root.scrollIntoView === "function") {
+        root.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (e) {}
+  }
+
   function goHome() {
+    parkAllForms();
     state.view = "home";
     state.intentId = "";
     state.selectedParent = null;
@@ -791,11 +2528,19 @@
     resetIdentityGate();
     state.error = "";
     render();
+    scheduleTrackReconcile(true);
   }
 
   function render() {
+    parkAllForms();
     if (state.view === "home") renderHome();
     else if (state.view === "intent") renderIntentPreview();
+    else if (state.view === "occasion") renderOccasion();
+    else if (state.view === "patient") renderPatient();
+    else if (state.view === "death") renderDeath();
+    else if (state.view === "tree_edit") renderTreeEdit();
+    else if (state.view === "memory") renderMemory();
+    else if (state.view === "special_card") renderSpecialCard();
     else if (state.view === "facts") renderFacts();
     else if (state.view === "identity") renderIdentityCollision();
     else if (state.view === "identity_confirm") renderIdentityConfirm();
@@ -809,6 +2554,7 @@
 
   function shell(title, bodyHtml, opts) {
     opts = opts || {};
+    parkAllForms();
     var back =
       opts.showBack !== false
         ? '<button type="button" class="btn btn-outline btn-sm" data-rx-back>رجوع</button>'
@@ -840,7 +2586,17 @@
     if (backBtn) {
       backBtn.addEventListener("click", function () {
         clearError();
-        if (state.view === "intent" || state.view === "scaffold" || state.view === "done") {
+        if (
+          state.view === "intent" ||
+          state.view === "scaffold" ||
+          state.view === "done" ||
+          state.view === "occasion" ||
+          state.view === "patient" ||
+          state.view === "death" ||
+          state.view === "tree_edit" ||
+          state.view === "memory" ||
+          state.view === "special_card"
+        ) {
           goHome();
         } else if (state.view === "facts") {
           state.view = "intent";
@@ -882,52 +2638,21 @@
         escapeHtml(intent.blurb) +
         "</span>" +
         (!intent.implemented
-          ? '<span class="rx-intent-badge">قريبًا · ' +
-            escapeHtml(intent.slice || "") +
-            "</span>"
+          ? '<span class="rx-intent-badge">قريبًا</span>'
           : "") +
         "</button>"
       );
     }).join("");
-
-    var tracked = readTracked();
-    var trackHtml =
-      tracked.length === 0
-        ? '<p class="rx-muted">لا طلبات محلّية بعد. بعد الإرسال تظهر هنا بحالة الشحن البشرية.</p>'
-        : '<ul class="rx-track-list">' +
-          tracked
-            .slice(0, 8)
-            .map(function (row) {
-              return (
-                "<li>" +
-                "<strong>" +
-                escapeHtml(row.intentLabel || "طلب") +
-                "</strong>" +
-                '<span class="rx-track-status">' +
-                escapeHtml(statusLabel(row.status)) +
-                "</span>" +
-                '<span class="rx-muted">' +
-                escapeHtml(row.summary || row.requestId || "") +
-                "</span>" +
-                "</li>"
-              );
-            })
-            .join("") +
-          "</ul>";
 
     shell(
       "ماذا تريد أن تفعل؟",
       '<div class="rx-intent-grid">' +
         cards +
         "</div>" +
-        '<div class="rx-track">' +
-        "<h3>طلباتي</h3>" +
-        '<p class="rx-muted">حالات الشحن: تم الإرسال → وصل للمندوب → تحت المراجعة → …</p>' +
-        trackHtml +
-        "</div>",
+        buildTrackHtml(),
       {
         showBack: false,
-        sub: "اختر نية بشرية. «ابدأ الآن» يدخل المسار فقط — ولا يغيّر الشجرة.",
+        sub: "اختر ما تريد. الإرسال للمراجعة — ويظهر في طلباتي. بدون حفظ مباشر في الشجرة.",
       }
     );
 
@@ -938,7 +2663,19 @@
         var intent = intentById(id);
         if (!intent) return;
         state.intentId = id;
-        if (!intent.implemented) {
+        if (id === "occasion") {
+          state.view = "occasion";
+        } else if (id === "patient") {
+          state.view = "patient";
+        } else if (id === "event_death") {
+          state.view = "death";
+        } else if (id === "tree_edit") {
+          state.view = "tree_edit";
+        } else if (id === "memory_card") {
+          state.view = "memory";
+        } else if (id === "special_card") {
+          state.view = "special_card";
+        } else if (!intent.implemented) {
           state.view = "scaffold";
         } else {
           state.view = "intent";
@@ -946,6 +2683,45 @@
         render();
       });
     });
+    bindTrackUi();
+    bindTrackRefreshHooks();
+    scheduleTrackReconcile(true);
+  }
+
+  function renderOccasion() {
+    shell(
+      "إضافة مناسبة",
+      '<p class="rx-lead">أرسل خبر مناسبة للعائلة للمراجعة والاعتماد. الزواج نوع من أنواع المناسبة — اختره من القائمة.</p>' +
+        '<div class="rx-occasion-mount" data-rx-occasion-mount></div>',
+      {
+        sub: "زواج · تخرج · مولود · سفر وغيرها — يظهر في طلباتي بعد الإرسال.",
+      }
+    );
+    mountOccasionForm();
+  }
+
+  function renderPatient() {
+    shell(
+      "حالة صحية",
+      '<p class="rx-lead">أرسل حالة مرضية للعائلة للمراجعة والاعتماد — مريض أو عملية أو خروج.</p>' +
+        '<div class="rx-patient-mount" data-rx-patient-mount></div>',
+      {
+        sub: "مريض · عملية · خروج من المستشفى — يظهر في طلباتي بعد الإرسال.",
+      }
+    );
+    mountPatientForm();
+  }
+
+  function renderDeath() {
+    shell(
+      "إعلان وفاة",
+      '<p class="rx-lead">أرسل إعلان وفاة للعائلة للمراجعة والاعتماد — اسم المتوفى والتاريخ.</p>' +
+        '<div class="rx-death-mount" data-rx-death-mount></div>',
+      {
+        sub: "يظهر في طلباتي بعد الإرسال — وبعد المراجعة في قسم الوفيات.",
+      }
+    );
+    mountDeathForm();
   }
 
   function renderIntentPreview() {
@@ -959,12 +2735,12 @@
       '<p class="rx-lead">' +
         escapeHtml(intent.blurb) +
         "</p>" +
-        '<p class="rx-note">لن تُحفظ البيانات في الشجرة من هذه الشاشة. بعد المراجعة فقط تُضاف عبر مسار الاعتماد.</p>' +
+        '<p class="rx-note">لن تُحفظ البيانات مباشرة. بعد الإرسال تظهر في طلباتي، وتُضاف بعد المراجعة فقط.</p>' +
         '<div class="rx-actions">' +
-        '<button type="button" class="btn btn-primary" data-rx-start>ابدأ الآن</button>' +
+        '<button type="button" class="btn btn-primary" data-rx-start>ابدأ</button>' +
         '<button type="button" class="btn btn-outline" data-rx-cancel>إلغاء</button>' +
         "</div>",
-      { sub: "دخول المسار فقط — ليس إرسالًا." }
+      { sub: "هذه الخطوة للبدء فقط — الإرسال في النهاية." }
     );
     root.querySelector("[data-rx-start]").addEventListener("click", function () {
       clearError();
@@ -981,15 +2757,12 @@
   function renderScaffold() {
     var intent = intentById(state.intentId);
     shell(
-      intent ? intent.label : "نية",
-      '<p class="rx-lead">هذه النية معتمدة في فهرس RX v1، وتنفيذ مسارها الكامل يأتي في الشريحة <strong>' +
-        escapeHtml((intent && intent.slice) || "") +
-        "</strong>.</p>" +
-        '<p class="rx-note">الهيكل جاهز من الرئيسية (نية أولًا). لا شاشات زوجة/أبناء/ميلاد في v1.</p>' +
+      intent ? intent.label : "طلب",
+      '<p class="rx-lead">هذا الخيار غير متاح حاليًا.</p>' +
         '<div class="rx-actions">' +
-        '<button type="button" class="btn btn-primary" data-rx-home>العودة للنوايا</button>' +
+        '<button type="button" class="btn btn-primary" data-rx-home>العودة</button>' +
         "</div>",
-      { sub: "Scaffold — الشريحة الحالية RX-1 تغطي «أضف فردًا» فقط." }
+      { sub: "قريبًا." }
     );
     root.querySelector("[data-rx-home]").addEventListener("click", goHome);
   }
@@ -1036,7 +2809,7 @@
               " من " +
               state.childrenUnderParent.length +
               "</p>"
-            : '<p class="rx-muted">القائمة كاملة من tree_children — بلا حد عرض.</p>') +
+            : '<p class="rx-muted">القائمة كاملة كما في الشجرة — بلا حد عرض.</p>') +
           '<ul class="rx-children-list">' +
           siblingFilter
             .map(function (c) {
@@ -1109,7 +2882,7 @@
         escapeHtml(f.submitterName) +
         '" autocomplete="name" /></label>' +
         '<label class="rx-field"><span>رقم الجوال</span>' +
-        '<input name="submitterPhone" required type="tel" inputmode="tel" value="' +
+        '<input name="submitterPhone" required type="text" inputmode="numeric" autocomplete="tel" dir="ltr" value="' +
         escapeHtml(f.submitterPhone) +
         '" placeholder="05xxxxxxxx" autocomplete="tel" /></label>' +
         '<label class="rx-field"><span>البريد (اختياري)</span>' +
@@ -1210,7 +2983,7 @@
         if (countMuted) {
           countMuted.textContent = state.facts.personName
             ? "تصفية حسب اسم الشخص: " + filtered.length + " من " + state.childrenUnderParent.length
-            : "القائمة كاملة من tree_children — بلا حد عرض.";
+            : "القائمة كاملة كما في الشجرة — بلا حد عرض.";
         }
         if (ul) {
           ul.innerHTML = filtered
@@ -1259,7 +3032,7 @@
         render();
         return;
       }
-      if (!state.facts.submitterName || state.facts.submitterPhone.length < 9) {
+      if (!state.facts.submitterName || !isValidSaudiMobile(state.facts.submitterPhone)) {
         setError("يرجى إدخال اسم المرسل ورقم جوال صحيح.");
         render();
         return;
@@ -1277,28 +3050,20 @@
       }
 
       try {
-        var children = await refreshChildrenUnderParent();
-        var underSameFather = findExistingChildUnderParent(
-          state.facts.personName,
-          state.selectedParent,
-          children
-        );
-        if (underSameFather) {
-          blockExistingPerson(underSameFather, "facts-submit-under-parent");
+        await refreshChildrenUnderParent();
+        // Live parent_person_id gate BEFORE identity-review («شخص آخر بنفس الاسم»).
+        var next = await decideAfterNameCheck();
+        if (next === "exists") {
           render();
           return;
         }
-
-        state.identityCandidates = await searchIdentityCollisions(state.facts.personName);
-
-        if (state.identityCandidates.length && !state.differentPersonSameName) {
+        if (next === "identity") {
           state.selectedIdentity = null;
           state.identityAffirmedExisting = false;
           state.view = "identity";
           render();
           return;
         }
-
         state.view = "confirm";
         render();
       } catch (err) {
@@ -1364,14 +3129,8 @@
     });
     root.querySelector("[data-rx-different-name]").addEventListener("click", async function () {
       try {
-        var children = await refreshChildrenUnderParent();
-        var under = findExistingChildUnderParent(
-          state.facts.personName,
-          state.selectedParent,
-          children
-        );
-        if (under) {
-          blockExistingPerson(under, "different-name-same-father");
+        await refreshChildrenUnderParent();
+        if (await blockIfExistsUnderSelectedFather("different-name-same-father")) {
           render();
           return;
         }
@@ -1459,7 +3218,7 @@
         '<p class="rx-lead">' +
         escapeHtml(EXISTING_PERSON_MSG) +
         "</p>" +
-        '<p class="rx-note"><strong>لن يُنشأ طلب إضافة</strong> ولن يظهر شيء في الإدارة أو Workflow.</p>' +
+        '<p class="rx-note"><strong>لن يُنشأ طلب إضافة</strong> — استخدم «صحح بيانات شخص» إن أردت تعديل بياناته.</p>' +
         personBlock +
         "<p>ماذا تريد؟</p>" +
         '<div class="rx-actions rx-actions-stack">' +
@@ -1474,7 +3233,7 @@
     root.querySelector("[data-rx-to-edit]").addEventListener("click", function () {
       clearError();
       state.intentId = "tree_edit";
-      state.view = "scaffold";
+      state.view = "tree_edit";
       render();
     });
     root.querySelector("[data-rx-change-sel]").addEventListener("click", function () {
@@ -1486,14 +3245,8 @@
     });
     root.querySelector("[data-rx-diff-anyway]").addEventListener("click", async function () {
       try {
-        var children = await refreshChildrenUnderParent();
-        var under = findExistingChildUnderParent(
-          state.facts.personName,
-          state.selectedParent,
-          children
-        );
-        if (under) {
-          blockExistingPerson(under, "diff-anyway-same-father");
+        await refreshChildrenUnderParent();
+        if (await blockIfExistsUnderSelectedFather("diff-anyway-same-father")) {
           render();
           return;
         }
@@ -1557,14 +3310,8 @@
     );
     root.querySelector("[data-rx-confirm-yes]").addEventListener("click", async function () {
       try {
-        var children = await refreshChildrenUnderParent();
-        var under = findExistingChildUnderParent(
-          state.facts.personName,
-          state.selectedParent,
-          children
-        );
-        if (under) {
-          blockExistingPerson(under, "confirm-parent-same-child");
+        await refreshChildrenUnderParent();
+        if (await blockIfExistsUnderSelectedFather("confirm-parent-same-child")) {
           render();
           return;
         }
@@ -1637,7 +3384,7 @@
         '<button type="button" class="btn btn-outline" data-rx-edit>تعديل</button>' +
         "</div>" +
         "</div>",
-      { sub: "الإرسال الوحيد إلى مسار المراجعة." }
+      { sub: "إرسال الطلب للمراجعة." }
     );
     root.querySelector("[data-rx-edit]").addEventListener("click", function () {
       state.view = "facts";
@@ -1787,61 +3534,6 @@
     var f = state.facts;
     var p = state.selectedParent;
 
-    try {
-      // Hard gate on live tree_children siblings — before any insert.
-      var children = await refreshChildrenUnderParent();
-      var underSameFather = findExistingChildUnderParent(f.personName, p, children);
-      var hasHasanProbe =
-        normalizeSearchText(f.personName) === normalizeSearchText("حسن") &&
-        normalizeSearchText(p.leaf || "") === normalizeSearchText("خميس");
-      try {
-        console.info("[RX submitAddPerson pre-insert]", {
-          personName: f.personName,
-          parentPersonId: text(p.personId || ""),
-          parentPath: text(p.id || p.path || ""),
-          childrenUnderParentLength: (children || []).length,
-          hasanInChildren: !!(children || []).some(function (c) {
-            return normalizeSearchText(c.leaf) === normalizeSearchText("حسن");
-          }),
-          findExistingChildUnderParent: underSameFather
-            ? {
-                leaf: underSameFather.leaf,
-                personId: underSameFather.personId || underSameFather.person_id || "",
-              }
-            : null,
-          guardDecision: underSameFather ? "block" : "continue",
-          guardReason: underSameFather
-            ? "submit-under-parent"
-            : "no-sibling-leaf-match",
-          different_person_same_name: !!state.differentPersonSameName,
-          acknowledgeReview: !!state.differentPersonSameName,
-          probeHasanKhamis: hasHasanProbe,
-        });
-      } catch (logErr) {}
-      if (underSameFather) {
-        state.busy = false;
-        blockExistingPerson(underSameFather, "submit-under-parent");
-        render();
-        return;
-      }
-      var collisions = await searchIdentityCollisions(f.personName);
-      state.identityCandidates = collisions;
-      if (collisions.length && !state.differentPersonSameName) {
-        state.busy = false;
-        setError(
-          "يوجد تطابق بالاسم في الشجرة. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم."
-        );
-        state.view = "identity";
-        render();
-        return;
-      }
-    } catch (gateErr) {
-      state.busy = false;
-      setError("تعذر التحقق قبل الإرسال. حاول مرة أخرى.");
-      render();
-      return;
-    }
-
     var parentPersonId = text(p.personId || "");
     if (!parentPersonId) {
       state.busy = false;
@@ -1852,24 +3544,40 @@
       render();
       return;
     }
-    // Hard live fetch by parent_person_id — empty siblings / different_person_same_name cannot bypass.
-    var liveUnderParent = await liveChildExistsUnderParentPid(parentPersonId, f.personName);
+
+    // Same-father live gate FIRST — never send same-father hits to identity-review.
+    // Create.create also fail-closes with the same parent_person_id lookup before INSERT.
     try {
-      console.info("[RX submitAddPerson live-pid-gate]", {
-        personName: f.personName,
-        parentPersonId: parentPersonId,
-        parentPath: text(p.id || p.path || ""),
-        liveHit: liveUnderParent,
-        different_person_same_name: !!state.differentPersonSameName,
-        acknowledgeReview: !!state.differentPersonSameName,
-        guardDecision: liveUnderParent ? "block" : "continue",
-        guardReason: liveUnderParent ? "live-parent-person-id" : "no-live-pid-match",
-      });
-    } catch (logErr2) {}
-    if (liveUnderParent) {
+      var nextGate = await decideAfterNameCheck();
+      if (nextGate === "exists") {
+        state.busy = false;
+        render();
+        return;
+      }
+      if (nextGate === "identity") {
+        state.busy = false;
+        setError(
+          "يوجد تطابق بالاسم في الشجرة. أكّد إن كان شخصًا موجودًا أو شخصًا آخر بنفس الاسم."
+        );
+        state.view = "identity";
+        render();
+        return;
+      }
+      try {
+        console.info("[RX submitAddPerson live-pid-gate]", {
+          personName: f.personName,
+          parentPersonId: parentPersonId,
+          parentPath: text(p.id || p.path || ""),
+          liveHit: null,
+          different_person_same_name: !!state.differentPersonSameName,
+          acknowledgeReview: !!state.differentPersonSameName,
+          guardDecision: "continue",
+          guardReason: "no-live-pid-match",
+        });
+      } catch (logErr2) {}
+    } catch (gateErr) {
       state.busy = false;
-      state.differentPersonSameName = false;
-      blockExistingPerson(liveUnderParent, "live-parent-person-id");
+      setError("تعذر التحقق قبل الإرسال. حاول مرة أخرى.");
       render();
       return;
     }
@@ -1972,48 +3680,107 @@
         render();
         return;
       }
+      var notifyWarn = "";
       try {
-        await sb.functions.invoke("alzidan-email-notify", {
-          body: { mode: "new_request", record: row },
-        });
-      } catch (notifyError) {}
-      trackLocal({
-        requestId: payload.requestId,
-        intentLabel: "أضف فردًا للعائلة",
-        status: "submitted",
-        summary: payload.personName + " تحت " + payload.father,
-        createdAt: payload.createdAt,
-      });
+        var CreateNotify = window.AlzidanHomeRequestCreate;
+        var branchNotify = null;
+        if (CreateNotify && typeof CreateNotify.notifyBranchDelegatesOfRequest === "function") {
+          branchNotify = await CreateNotify.notifyBranchDelegatesOfRequest(sb, row);
+        } else {
+          branchNotify = await sb.functions.invoke("alzidan-email-notify", {
+            body: { mode: "branch_delegate_new_request", record: row },
+          });
+          try {
+            await sb.functions.invoke("alzidan-push-notify", {
+              body: { mode: "branch_delegate_new_request", record: row },
+            });
+          } catch (_) {}
+          branchNotify = {
+            ok: !(branchNotify && branchNotify.error),
+            emailError:
+              branchNotify && branchNotify.error
+                ? String(branchNotify.error.message || branchNotify.error)
+                : "",
+          };
+        }
+        var notifyFailed =
+          (uf() &&
+            typeof uf().didNotifyFail === "function" &&
+            uf().didNotifyFail(branchNotify)) ||
+          (branchNotify && branchNotify.ok === false);
+        if (notifyFailed) {
+          try {
+            console.warn("[branch-delegate-notify]", branchNotify);
+          } catch (_) {}
+          notifyWarn = submitSuccessCopy("tree_card", true).notifyNote;
+        }
+      } catch (branchNotifyError) {
+        notifyWarn = submitSuccessCopy("tree_card", true).notifyNote;
+        try {
+          console.warn("[branch-delegate-notify]", branchNotifyError);
+        } catch (_) {}
+      }
+      trackLocal(
+        TrackStore && typeof TrackStore.buildAddPersonEntry === "function"
+          ? TrackStore.buildAddPersonEntry({
+              requestId: payload.requestId,
+              personName: payload.personName,
+              father: payload.father,
+              status: "submitted",
+              createdAt: payload.createdAt,
+            })
+          : {
+              requestId: payload.requestId,
+              kind: "tree_card",
+              intentLabel: "أضف فردًا للعائلة",
+              status: "submitted",
+              summary: payload.personName + " تحت " + payload.father,
+              createdAt: payload.createdAt,
+            }
+      );
       state.lastRequestId = payload.requestId;
       state.lastStatusLabel = statusLabel("submitted");
+      state.lastNotifyWarn = notifyWarn || "";
       state.busy = false;
       state.view = "done";
       clearError();
       render();
     } catch (e) {
       state.busy = false;
-      setError("تعذر إرسال الطلب حاليًا، حاول لاحقًا.");
+      setError(scrubUserError(e, "تعذر إرسال الطلب حاليًا، حاول لاحقًا."));
       render();
     }
   }
 
   function renderDone() {
+    var copy = submitSuccessCopy(
+      state.intentId || "tree_card",
+      !!state.lastNotifyWarn
+    );
+    var notifyNote = state.lastNotifyWarn
+      ? '<p class="rx-note" style="color:#b45309">' +
+        escapeHtml(state.lastNotifyWarn) +
+        "</p>"
+      : "";
     shell(
       "تم الإرسال",
       '<div class="rx-done">' +
-        '<p class="rx-lead">وصل طلبك لمسار المراجعة.</p>' +
+        '<p class="rx-lead">' +
+        escapeHtml(copy.primary) +
+        "</p>" +
         '<p><strong>الحالة:</strong> ' +
-        escapeHtml(state.lastStatusLabel || "تم الإرسال") +
+        escapeHtml(state.lastStatusLabel || statusLabel("submitted")) +
         "</p>" +
         '<p class="rx-muted">مرجع المتابعة (ثانوي): ' +
         escapeHtml(state.lastRequestId) +
         "</p>" +
-        '<p class="rx-note">لن تُحفظ البيانات في الشجرة حتى اعتماد الطلب وتطبيقه.</p>' +
+        '<p class="rx-note">يظهر طلبك في طلباتي. بدون حفظ مباشر حتى تتم المراجعة.</p>' +
+        notifyNote +
         '<div class="rx-actions">' +
         '<button type="button" class="btn btn-primary" data-rx-home>طلب آخر</button>' +
         "</div>" +
         "</div>",
-      { showBack: false, sub: "تتبع إنساني — لغة الشحن من رحلة القرار." }
+      { showBack: false, sub: copy.primary }
     );
     root.querySelector("[data-rx-home]").addEventListener("click", function () {
       state.facts = {
@@ -2030,5 +3797,40 @@
     });
   }
 
+  if (TrackStore && typeof TrackStore.onChange === "function") {
+    TrackStore.onChange(function () {
+      if (state.view === "home") render();
+    });
+  }
+
+  function openIntentFromHash() {
+    var hash = String(location.hash || "");
+    if (hash === "#send-event" || hash === "#rx-occasion") {
+      openOccasion();
+    } else if (hash === "#send-patient" || hash === "#rx-patient") {
+      openPatient();
+    } else if (hash === "#send-death" || hash === "#rx-death") {
+      openDeath();
+    } else if (hash === "#rx-tree-edit" || hash === "#send-tree-edit") {
+      openTreeEdit();
+    } else if (hash === "#rx-memory" || hash === "#send-memory") {
+      openMemory();
+    } else if (hash === "#rx-special-card" || hash === "#send-special-card") {
+      openSpecialCard();
+    }
+  }
+
+  window.AlzidanRequestExperience = {
+    openOccasion: openOccasion,
+    openPatient: openPatient,
+    openDeath: openDeath,
+    openTreeEdit: openTreeEdit,
+    openMemory: openMemory,
+    openSpecialCard: openSpecialCard,
+  };
+
   render();
+  scheduleTrackReconcile(true);
+  openIntentFromHash();
+  window.addEventListener("hashchange", openIntentFromHash);
 })();

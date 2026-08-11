@@ -246,17 +246,32 @@ const PERSON_Y = "cccccccc-cccc-cccc-cccc-cccccccccccc";
   assert(r.verdict === "block" && r.code === "DEATH_SAME", "8 death same person_id → block");
 }
 
-// 8b) Death — name spelling only → REVIEW not BLOCK
+// 8b) Death — same death event by person name (no person_id) → BLOCK
+{
+  const r = Guard.evaluate(
+    "death",
+    { person: "محمد", person_id: "", branch_key: "زيدان" },
+    {
+      people: [],
+      events: [
+        { type: "death", person: "محمد", person_id: "", branch_key: "زيدان" },
+      ],
+    }
+  );
+  assert(r.verdict === "block" && r.code === "DEATH_SAME", "8b death same event by name → block");
+}
+
+// 8c) Death — deceased leaf name on tree only (no death event) → REVIEW
 {
   const r = Guard.evaluate(
     "death",
     { person: "محمد", person_id: "" },
     {
-      people: [],
-      events: [{ type: "death", person: "محمد", person_id: "" }],
+      people: [{ leaf: "محمد", is_deceased: true, person_id: "" }],
+      events: [],
     }
   );
-  assert(r.verdict === "review", "8b death name-only → review (not block)");
+  assert(r.verdict === "review", "8c death name on tree only → review (not block)");
 }
 
 // 9) Memory — same person + title (+ date) → BLOCK
@@ -316,12 +331,33 @@ const PERSON_Y = "cccccccc-cccc-cccc-cccc-cccccccccccc";
     branch_key: "زيدان",
   };
   const catalog = { siblings: [], people: [] };
+  // Live child probe needs a client; empty children → allow once.
+  const emptyClient = {
+    from: function () {
+      const api = {
+        select: function () {
+          return api;
+        },
+        eq: function () {
+          return api;
+        },
+        limit: function () {
+          return api;
+        },
+        then: function (resolve) {
+          resolve({ data: [], error: null });
+        },
+      };
+      return api;
+    },
+  };
   let inserts = 0;
   async function runOnce() {
     return Create.create({
       type: "add_person",
       payload: payload,
       catalog: catalog,
+      client: emptyClient,
       skipFetch: true,
       performInsert: async function () {
         inserts += 1;

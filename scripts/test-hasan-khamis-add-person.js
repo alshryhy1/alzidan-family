@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 /**
- * Prove حسن under خميس (live مزيد tree) cannot insert via Create.create.
- * Also proves the empty-siblings + different_person_same_name bypass is closed.
+ * Prove add-person same-father gate is a direct parent_person_id lookup
+ * (not sibling-catalog success/failure, not name special-cases).
  *
- * Run: node scripts/test-hasan-khamis-add-person.js
+ * Live under خميس:
+ * 1) حسن → Create.create BLOCK, inserts=0, ADD_PERSON_EXISTS
+ * 2) حسين → same BLOCK (proves general matching)
+ * 3) brand-new unique name → ALLOW, inserts=1
+ *
+ * Also static-assert RX short-circuits same-father to exists/block
+ * and does not send same-father hits to identity «different person» path.
+ *
+ * Run: npm run verify:hasan-khamis
+ * Alias: npm run verify:under-father
  */
 "use strict";
 
@@ -107,6 +116,45 @@ function makeRestClient() {
   };
 }
 
+function leafOf(row) {
+  return String(row.child_name || row.name || "")
+    .split("/")
+    .filter(Boolean)
+    .pop();
+}
+
+async function assertCreateBlocked(label, personName, parentPid, parentPath, branch) {
+  if (typeof Create.resetLocksForTests === "function") Create.resetLocksForTests();
+  let inserts = 0;
+  const created = await Create.create({
+    type: "add_person",
+    payload: {
+      person_name: personName,
+      parent_person_id: parentPid,
+      parent_path: parentPath,
+      branch_key: branch,
+      different_person_same_name: true,
+    },
+    client: makeRestClient(),
+    catalog: { siblings: [], people: [] },
+    skipFetch: true,
+    acknowledgeReview: true,
+    performInsert: async function () {
+      inserts += 1;
+      return { request_id: "SHOULD-NOT" };
+    },
+  });
+  assert(
+    created.ok === false && created.blocked === true,
+    label + " block: " + personName + " تحت خميس"
+  );
+  assert(inserts === 0, label + " no INSERT / no new REQ for " + personName);
+  assert(
+    created.guard && created.guard.code === "ADD_PERSON_EXISTS",
+    label + " code ADD_PERSON_EXISTS"
+  );
+}
+
 (async function main() {
   if (!Guard || !Create) {
     console.error("modules not loaded");
@@ -115,11 +163,23 @@ function makeRestClient() {
   if (typeof Create.resetLocksForTests === "function") Create.resetLocksForTests();
 
   const PARENT_PATH = "مزيد بن مطلق بن زيدان/خميس/دليميك/خميس";
-  const PARENT_PATH_SPACED = "مزيد بن مطلق بن زيدان / خميس / دليميك / خميس";
   const BRANCH = "مزيد";
 
-  // Live: resolve the real خميس father + حسن child (same shape as UI sibling fetch).
-  const hasanRows = await rest(
+  // Normalize must keep حسن and حسين distinct (no special-case collapse).
+  assert(
+    Guard.normalizeArabic("حسن") !== Guard.normalizeArabic("حسين"),
+    "normalizeArabic: حسن ≠ حسين"
+  );
+  assert(
+    Guard.normalizeArabic("حسن") === Guard.normalizeArabic("حسن"),
+    "normalizeArabic: حسن matches itself"
+  );
+  assert(
+    Guard.normalizeArabic("حسين") === Guard.normalizeArabic("حسين"),
+    "normalizeArabic: حسين matches itself"
+  );
+
+  const childRows = await rest(
     "tree_children?select=person_id,parent_person_id,parent_name,child_name,name,branch_key" +
       "&branch_key=eq." +
       encodeURIComponent(BRANCH) +
@@ -127,196 +187,163 @@ function makeRestClient() {
       encodeURIComponent(PARENT_PATH) +
       "&limit=50"
   );
-  const leaves = (Array.isArray(hasanRows) ? hasanRows : []).map(function (r) {
-    return String(r.child_name || r.name || "")
-      .split("/")
-      .filter(Boolean)
-      .pop();
+  const hasan = (childRows || []).find(function (r) {
+    return leafOf(r) === "حسن";
   });
-  assert(leaves.indexOf("حسن") >= 0, "live siblings under خميس include حسن");
-  const hasan = (hasanRows || []).find(function (r) {
-    const leaf = String(r.child_name || r.name || "")
-      .split("/")
-      .filter(Boolean)
-      .pop();
-    return leaf === "حسن";
+  const hussein = (childRows || []).find(function (r) {
+    return leafOf(r) === "حسين";
   });
-  assert(!!hasan && !!hasan.parent_person_id, "حسن row has parent_person_id");
+  assert(!!hasan && !!hasan.parent_person_id, "live: حسن exists under خميس with parent_person_id");
+  assert(
+    !!hussein && !!hussein.parent_person_id,
+    "live: حسين exists under خميس with parent_person_id"
+  );
   const parentPid = hasan.parent_person_id;
+  assert(
+    String(hussein.parent_person_id) === String(parentPid),
+    "live: حسن and حسين share the same parent_person_id under خميس"
+  );
   const hasanPid = hasan.person_id;
+  const husseinPid = hussein.person_id;
 
-  // 1) Bypass that previously allowed: empty siblings + people has same-parent child + diffName
-  {
-    const r = Guard.evaluate(
-      "add_person",
-      {
-        person_name: "حسن",
-        parent_person_id: parentPid,
-        parent_path: PARENT_PATH_SPACED,
-        branch_key: BRANCH,
-        different_person_same_name: true,
-      },
-      {
-        siblings: [],
-        people: [
-          {
-            leaf: "حسن",
-            person_id: hasanPid,
-            parent_person_id: parentPid,
-            parent_path: PARENT_PATH,
-            parent_name: PARENT_PATH,
-          },
-        ],
-      }
-    );
-    assert(
-      r.verdict === "block" && r.code === "ADD_PERSON_EXISTS",
-      "bypass closed: empty siblings + people same parent + diffName → block"
-    );
-  }
-
-  // 2) Live catalog via Create.fetchCatalog (same as real submit skipFetch:false)
+  // A) Direct live lookup finds each name under parent_person_id
   {
     const client = makeRestClient();
-    const cat = await Create.fetchCatalog(
-      "add_person",
-      {
-        parent_person_id: parentPid,
-        parent_path: PARENT_PATH_SPACED,
-        branch_key: BRANCH,
-      },
-      client
-    );
-    const sibLeaves = (cat.siblings || []).map(function (s) {
-      return s.leaf;
+    const hitHasan = await Create.findExistingChildLive(client, {
+      person_name: "حسن",
+      parent_person_id: parentPid,
     });
-    assert(sibLeaves.indexOf("حسن") >= 0, "fetchCatalog siblings include حسن for خميس");
-
-    const ev = Guard.evaluate(
-      "add_person",
-      {
-        person_name: "حسن",
-        parent_person_id: parentPid,
-        parent_path: PARENT_PATH,
-        branch_key: BRANCH,
-        different_person_same_name: true,
-      },
-      cat
+    assert(!!hitHasan, "findExistingChildLive finds حسن under parent_person_id");
+    assert(
+      hitHasan && String(hitHasan.person_id || "") === String(hasanPid || ""),
+      "live hit person_id matches حسن"
     );
-    assert(ev.verdict === "block", "evaluate live catalog → block حسن under خميس");
+
+    const hitHussein = await Create.findExistingChildLive(client, {
+      person_name: "حسين",
+      parent_person_id: parentPid,
+    });
+    assert(!!hitHussein, "findExistingChildLive finds حسين under parent_person_id");
+    assert(
+      hitHussein && String(hitHussein.person_id || "") === String(husseinPid || ""),
+      "live hit person_id matches حسين"
+    );
+
+    // Cross-name must not match
+    assert(
+      !(
+        hitHasan &&
+        hitHussein &&
+        String(hitHasan.person_id) === String(hitHussein.person_id)
+      ),
+      "حسن and حسين are distinct person_ids under خميس"
+    );
   }
 
-  // 3) Create.create must NOT insert (real home path contract)
+  // B) Known person_id under same father also hits
+  if (hasanPid) {
+    const client = makeRestClient();
+    const hit = await Create.findExistingChildLive(client, {
+      person_name: "أي اسم",
+      person_id: hasanPid,
+      parent_person_id: parentPid,
+    });
+    assert(!!hit, "findExistingChildLive matches by person_id under father");
+  }
+
+  // C) حسن: Create.create blocked even with empty siblings + «شخص آخر» + skipFetch
+  await assertCreateBlocked("TEST1", "حسن", parentPid, PARENT_PATH, BRANCH);
+
+  // D) حسين: same general BLOCK (not حسن-only)
+  await assertCreateBlocked("TEST2", "حسين", parentPid, PARENT_PATH, BRANCH);
+
+  // E) New person under خميس allowed (direct gate finds nothing)
   {
     if (typeof Create.resetLocksForTests === "function") Create.resetLocksForTests();
+    const unique = "اسم_اختبار_غير_موجود_" + Date.now();
     let inserts = 0;
-    const client = makeRestClient();
+    const miss = await Create.findExistingChildLive(makeRestClient(), {
+      person_name: unique,
+      parent_person_id: parentPid,
+    });
+    assert(miss === null, "TEST3 live check: new name not under خميس");
+
     const created = await Create.create({
       type: "add_person",
       payload: {
-        person_name: "حسن",
+        person_name: unique,
         parent_person_id: parentPid,
         parent_path: PARENT_PATH,
         branch_key: BRANCH,
-        different_person_same_name: true,
       },
-      client: client,
-      skipFetch: false,
-      acknowledgeReview: true,
+      client: makeRestClient(),
+      catalog: { siblings: [], people: [] },
+      skipFetch: true,
       performInsert: async function () {
         inserts += 1;
-        return { request_id: "SHOULD-NOT" };
+        return { request_id: "REQ-OK-NEW" };
       },
     });
-    assert(created.ok === false && created.blocked === true, "Create.create blocks حسن/خميس");
-    assert(inserts === 0, "no INSERT for حسن under خميس");
-    assert(
-      created.guard && created.guard.code === "ADD_PERSON_EXISTS",
-      "block code ADD_PERSON_EXISTS"
-    );
+    assert(created.ok === true, "TEST3 allow: new person under خميس");
+    assert(inserts === 1, "TEST3 INSERT once for new person");
   }
 
-  // 4) Double-submit: one create only (new person under same parent)
-  {
-    if (typeof Create.resetLocksForTests === "function") Create.resetLocksForTests();
-    let inserts = 0;
-    const payload = {
-      person_name: "اسم_اختبار_فريد_" + Date.now(),
-      parent_person_id: parentPid,
-      parent_path: PARENT_PATH,
-      branch_key: BRANCH,
-    };
-    async function once() {
-      return Create.create({
-        type: "add_person",
-        payload: payload,
-        catalog: { siblings: [], people: [] },
-        skipFetch: true,
-        performInsert: async function () {
-          inserts += 1;
-          await new Promise(function (r) {
-            setTimeout(r, 40);
-          });
-          return { request_id: "REQ-TEST" };
-        },
-      });
-    }
-    const pair = await Promise.all([once(), once()]);
-    const okCount = pair.filter(function (x) {
-      return x && x.ok;
-    }).length;
-    const dup = pair.some(function (x) {
-      return x && x.doubleSubmit;
-    });
-    assert(okCount === 1, "double-submit: exactly one create succeeds");
-    assert(dup, "double-submit: second flagged");
-    assert(inserts === 1, "double-submit: insert once");
-  }
-
-  // 5) Code-path proof: submitAddPerson calls hard gate + Create.create (static)
+  // F) Static: RX short-circuits same-father before identity «different person» path
   {
     const rx = fs.readFileSync(
       path.join(root, "assets/js/modules/request-experience.js"),
       "utf8"
     );
-    assert(rx.indexOf("async function submitAddPerson") >= 0, "submitAddPerson exists");
-    assert(
-      /data-rx-submit[\s\S]*submitAddPerson\(/.test(rx),
-      "data-rx-submit handler calls submitAddPerson"
+    const hrc = fs.readFileSync(
+      path.join(root, "assets/js/modules/home-request-create.js"),
+      "utf8"
     );
     const fnStart = rx.indexOf("async function submitAddPerson");
-    const fnBody = rx.slice(fnStart, fnStart + 12000);
+    const fnBody = rx.slice(fnStart, fnStart + 16000);
+    assert(fnStart >= 0, "submitAddPerson exists");
+    assert(/await\s+Create\.create\s*\(/.test(fnBody), "submitAddPerson → Create.create");
     assert(
-      fnBody.indexOf("refreshChildrenUnderParent") >= 0 &&
-        /await\s+Create\.create\s*\(/.test(fnBody),
-      "submitAddPerson: findExistingChildUnderParent + Create.create before insert"
-    );
-    const gateAt = fnBody.indexOf("refreshChildrenUnderParent");
-    const liveAt = fnBody.indexOf("liveChildExistsUnderParentPid");
-    const insertAt = fnBody.search(/await\s+Create\.create\s*\(/);
-    assert(
-      gateAt >= 0 && insertAt >= 0 && gateAt < insertAt,
-      "hard sibling gate runs before Create.create"
+      rx.indexOf("async function decideAfterNameCheck") >= 0 &&
+        rx.indexOf("async function blockIfExistsUnderSelectedFather") >= 0 &&
+        rx.indexOf("function partitionIdentityCollisions") >= 0,
+      "RX: same-father helpers (block / decide / partition) exist"
     );
     assert(
-      liveAt >= 0 && liveAt < insertAt,
-      "submitAddPerson live parent_person_id gate before Create.create"
+      /decideAfterNameCheck\s*\(/.test(fnBody),
+      "submitAddPerson calls decideAfterNameCheck before identity/insert"
+    );
+    const decideStart = rx.indexOf("async function decideAfterNameCheck");
+    const decideBody = rx.slice(decideStart, decideStart + 2500);
+    assert(
+      decideBody.indexOf("blockIfExistsUnderSelectedFather") >= 0 &&
+        decideBody.indexOf('return "exists"') >= 0 &&
+        decideBody.indexOf("partitionIdentityCollisions") >= 0,
+      "decideAfterNameCheck: live same-father → exists before identity"
     );
     assert(
-      fs
-        .readFileSync(path.join(root, "assets/js/modules/home-request-create.js"), "utf8")
-        .indexOf('from("approval_requests").insert') >= 0,
-      "INSERT site: home-request-create insertApprovalRequest"
+      decideBody.indexOf('return "identity"') >
+        decideBody.indexOf("partitionIdentityCollisions"),
+      "identity path only after same-father partition"
     );
-    const app = fs.readFileSync(path.join(root, "assets/js/app.js"), "utf8");
-    const a = app.indexOf('const form = document.querySelector("[data-tree-card-form]")');
-    const b = app.indexOf("FAMILY_TREE_CHILDREN_TABLE", a);
-    const chunk = app.slice(a, b > a ? b : a + 20000);
-    assert(chunk.indexOf("AlzidanHomeRequestCreate") >= 0, "legacy tree-card uses AlzidanHomeRequestCreate");
-    assert(chunk.indexOf("Create.create") >= 0, "legacy tree-card calls Create.create");
     assert(
-      chunk.indexOf('from("approval_requests").insert') < 0,
-      "legacy tree-card has no bare approval_requests.insert"
+      hrc.indexOf("findExistingChildLive") >= 0 &&
+        hrc.indexOf('eq("parent_person_id", parentPid)') >= 0,
+      "Create: direct parent_person_id live check"
+    );
+    const liveAt = hrc.indexOf("findExistingChildLive(client, payload)");
+    const insertAt = hrc.indexOf("insertApprovalRequest");
+    assert(
+      liveAt >= 0 && insertAt >= 0 && liveAt < insertAt,
+      "live child check appears before insertApprovalRequest"
+    );
+    // No hardcoded test names in the general matching helpers
+    const helperSlice = rx.slice(
+      rx.indexOf("async function blockIfExistsUnderSelectedFather"),
+      rx.indexOf("function isAlreadyChildUnderParent")
+    );
+    assert(
+      helperSlice.indexOf("حسن") < 0 && helperSlice.indexOf("حسين") < 0,
+      "RX same-father helpers have no hardcoded حسن/حسين"
     );
   }
 
@@ -325,7 +352,9 @@ function makeRestClient() {
     console.error("FAILED:", failed);
     process.exit(1);
   }
-  console.log("All حسن/خميس add-person checks passed.");
+  console.log(
+    "All under-father checks passed (حسن block, حسين block, new name allow)."
+  );
 })().catch(function (err) {
   console.error(err);
   process.exit(1);

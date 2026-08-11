@@ -12,16 +12,33 @@
     normalizeEmail,
   } = Core;
 
+  /** Browser IIFE must not touch Node's bare `global` (ReferenceError → silent Accept fail). */
+  function treeEngineApi() {
+    const root =
+      typeof window !== "undefined"
+        ? window
+        : typeof globalThis !== "undefined"
+          ? globalThis
+          : null;
+    return root && root.AlzidanTreeEngine ? root.AlzidanTreeEngine : null;
+  }
+
   let reloadRequests = async function () {};
   const treeCardEditDialog = document.getElementById("tree-card-edit-dialog");
   const treeCardEditForm = document.getElementById("tree-card-edit-form");
-  const treeCardEditError = document.getElementById("tree-card-edit-error");
-  const treeCardRelations = document.getElementById("tree-card-relations");
-  const treeCardAddRelation = document.getElementById("tree-card-add-relation");
+  let treeCardEditError = document.getElementById("tree-card-edit-error");
   const treeCardEditCancel = document.getElementById("tree-card-edit-cancel");
 
   let treeCardEditRow = null;
-
+  /** In-flight open-path father UUID resolve; save awaits this to avoid race. */
+  let treeCardFatherAutoResolvePromise = null;
+  let treeCardFatherSearchTimer = null;
+  let treeCardFatherSearchSeq = 0;
+  /** Max father typeahead hits (FM-style capped list; never bulk-load branch). */
+  const TREE_CARD_FATHER_SEARCH_LIMIT = 40;
+  const TREE_CARD_FATHER_SEARCH_DEBOUNCE_MS = 220;
+  const TREE_CARD_RELATION_MISMATCH_AR =
+    "العلاقة المختارة لا تتوافق مع الشجرة الحالية. راجع الأب المختار.";
 
   function setReloadRequests(fn) {
     if (typeof fn === "function") reloadRequests = fn;
@@ -116,11 +133,25 @@
       .trim();
   }
   function appendRequestMediaPreview(parent, message) {
+    const Events = window.AlzidanEvents || {};
     const media = extractRequestMediaLinks(message);
-    if (!media.image && !media.video) return;
+    // Hard gate — never attach <video> for empty/junk URLs (no fail-open if validator missing).
+    const image =
+      typeof Events.resolveValidImageUrl === "function"
+        ? Events.resolveValidImageUrl(media.image)
+        : typeof Events.isValidImageUrl === "function" && Events.isValidImageUrl(media.image)
+          ? media.image
+          : "";
+    const video =
+      typeof Events.resolveValidVideoUrl === "function"
+        ? Events.resolveValidVideoUrl(media.video)
+        : typeof Events.isValidVideoUrl === "function" && Events.isValidVideoUrl(media.video)
+          ? media.video
+          : "";
+    if (!image && !video) return;
     const wrap = document.createElement("div");
     wrap.className = "request-media-preview";
-    if (media.image) {
+    if (image) {
       const item = document.createElement("div");
       item.className = "request-media-item";
       const title = document.createElement("div");
@@ -129,7 +160,7 @@
       const img = document.createElement("img");
       img.alt = "الصورة المرفقة مع الطلب";
       img.loading = "lazy";
-      img.src = media.image;
+      img.src = image;
       const note = document.createElement("div");
       note.className = "request-media-note";
       note.textContent = "الصورة المرفقة مع الطلب.";
@@ -138,37 +169,274 @@
       item.appendChild(note);
       wrap.appendChild(item);
     }
-    if (media.video) {
+    if (video) {
       const item = document.createElement("div");
       item.className = "request-media-item";
       const title = document.createElement("div");
       title.className = "request-media-title";
       title.textContent = "الفيديو المرفق";
-      const video = document.createElement("video");
-      video.controls = true;
-      video.preload = "metadata";
-      video.src = media.video;
+      const videoEl = document.createElement("video");
+      videoEl.controls = true;
+      videoEl.preload = "metadata";
+      videoEl.src = video;
       item.appendChild(title);
-      item.appendChild(video);
+      item.appendChild(videoEl);
       wrap.appendChild(item);
     }
     parent.appendChild(wrap);
   }
+  function summarizePushInvokeDetail(pushResult) {
+    const parts = [];
+    const status = Number(
+      pushResult && pushResult.httpStatus != null
+        ? pushResult.httpStatus
+        : pushResult &&
+            pushResult.error &&
+            pushResult.error.context &&
+            pushResult.error.context.status,
+    );
+    if (Number.isFinite(status) && status > 0) parts.push("HTTP " + status);
+    const snippet = String(
+      (pushResult && pushResult.bodySnippet) ||
+        (pushResult &&
+          pushResult.data &&
+          (pushResult.data.error ||
+            (typeof pushResult.data === "string" ? pushResult.data : ""))) ||
+        "",
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (snippet) parts.push(snippet.slice(0, 140));
+    return parts.join(" — ");
+  }
+
+  async function extractFunctionsInvokeFailure(error, fallbackData) {
+    const out = {
+      data: fallbackData || null,
+      httpStatus: null,
+      bodySnippet: "",
+    };
+    const ctx = error && error.context;
+    if (ctx && typeof ctx.status === "number") out.httpStatus = ctx.status;
+    if (!ctx) return out;
+
+    try {
+      if (typeof ctx.clone === "function") {
+        const cloned = ctx.clone();
+        if (typeof cloned.text === "function") {
+          const text = await cloned.text();
+          out.bodySnippet = String(text || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 240);
+          try {
+            out.data = JSON.parse(text);
+          } catch (_) {}
+        }
+      } else if (typeof ctx.json === "function") {
+        out.data = await ctx.json();
+        out.bodySnippet = JSON.stringify(out.data).slice(0, 240);
+      } else if (typeof ctx.text === "function") {
+        out.bodySnippet = String(await ctx.text() || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 240);
+      }
+    } catch (_) {}
+
+    if (!out.bodySnippet && out.data && typeof out.data === "object") {
+      try {
+        out.bodySnippet = JSON.stringify(out.data).slice(0, 240);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  function formatInvalidCredentialsPushHint(pushResult) {
+    const tokenConfigured =
+      pushResult &&
+      pushResult.data &&
+      pushResult.data.expo_access_token_configured === true;
+    return (
+      "نُشرت المناسبة، لكن Expo رفض التذاكر بـ InvalidCredentials — هذه مشكلة اعتمادات Expo (APNs/FCM أو رمز الوصول)، وليست CORS. " +
+      (tokenConfigured
+        ? "رمز EXPO_ACCESS_TOKEN مضبوط على Supabase؛ راجع في Expo Dashboard → Credentials مفاتيح APNs للإنتاج وFCM V1 للمشروع 8a6659eb-ef85-49b5-a8db-7b7be96b8c1f، ثم eas credentials إن لزم."
+        : "الخطوة التالية: أنشئ Access Token من expo.dev → Account settings → Access tokens، ثم نفّذ: supabase secrets set EXPO_ACCESS_TOKEN=... --project-ref wbskjfdqpugnwvrykqcn ثم أعد نشر alzidan-push-notify، وتأكد من اعتمادات EAS (APNs/FCM) للإنتاج.")
+    );
+  }
+
+  function formatPushNotifyAdminMessage(pushResult) {
+    if (!pushResult) {
+      return "نُشرت المناسبة، لكن حالة إشعار التطبيق غير معروفة (راجع Console: PUSH_NOTIFY_*).";
+    }
+    const ticketErrors = Array.isArray(
+      pushResult.data && pushResult.data.errors,
+    )
+      ? pushResult.data.errors.map(String)
+      : [];
+    const disabled = Number(
+      pushResult.data && pushResult.data.disabled != null
+        ? pushResult.data.disabled
+        : 0,
+    );
+    const hasDeviceNotRegistered = ticketErrors.some((e) =>
+      /DeviceNotRegistered/i.test(e),
+    );
+    const hasInvalidCredentials = ticketErrors.some((e) =>
+      /InvalidCredentials/i.test(e),
+    );
+    if (pushResult.ok) {
+      const sent = Number(
+        pushResult.data && pushResult.data.sent != null
+          ? pushResult.data.sent
+          : 0,
+      );
+      const failedTickets = ticketErrors.length;
+      const deliveredGuess = Math.max(0, sent - failedTickets);
+      if (sent > 0 && failedTickets === 0) {
+        return "تم إرسال إشعار التطبيق إلى " + sent + " جهاز/أجهزة (Expo Push).";
+      }
+      if (sent > 0 && deliveredGuess > 0 && failedTickets > 0) {
+        return (
+          "أُرسل إشعار التطبيق إلى نحو " +
+          deliveredGuess +
+          " جهاز، مع فشل " +
+          failedTickets +
+          " تذكرة Expo" +
+          (hasDeviceNotRegistered
+            ? " (DeviceNotRegistered — غالباً رمز قديم أو بناء بدون اعتماد APNs للإنتاج)."
+            : ".") +
+          (disabled > 0 ? " عُطّلت " + disabled + " رموز." : "")
+        );
+      }
+      if (sent > 0 && failedTickets > 0) {
+        if (hasInvalidCredentials) {
+          return formatInvalidCredentialsPushHint(pushResult);
+        }
+        return (
+          "نُشرت المناسبة، لكن Expo رفض كل تذاكر الدفع" +
+          (hasDeviceNotRegistered
+            ? " (DeviceNotRegistered). افتح تطبيق App Store على جهاز حقيقي، اسمح بالإشعارات، وتأكد من ظهور صف ios/enabled في push_tokens، ثم راجع EAS credentials لـ APNs الإنتاج."
+            : ": " + ticketErrors.slice(0, 3).join("; ")) +
+          (disabled > 0 ? " عُطّلت " + disabled + " رموز." : "")
+        );
+      }
+      return "تم استدعاء إشعار التطبيق بنجاح.";
+    }
+    const skipped = String(pushResult.skipped || "").trim();
+    if (skipped === "no_push_tokens") {
+      return (
+        "نُشرت المناسبة، لكن لا توجد أجهزة مسجّلة في push_tokens. " +
+        "إشعار التطبيق (Expo) يختلف عن إشعار المتصفح: افتح تطبيق App Store (ليس Expo Go فقط)، اسمح بالإشعارات، " +
+        "ثم تأكد أن رمزاً platform=ios و enabled=true ظهر في جدول push_tokens."
+      );
+    }
+    if (skipped === "missing_event_fields") {
+      return "نُشرت المناسبة، لكن إشعار التطبيق تُخطّي لنقص النوع/الاسم.";
+    }
+    if (skipped) {
+      return "نُشرت المناسبة، لكن إشعار التطبيق تُخطّي (" + skipped + ").";
+    }
+    if (hasInvalidCredentials) {
+      return formatInvalidCredentialsPushHint(pushResult);
+    }
+    if (hasDeviceNotRegistered || (ticketErrors.length && !pushResult.ok)) {
+      return (
+        "نُشرت المناسبة، لكن إشعار Expo فشل" +
+        (hasDeviceNotRegistered
+          ? " (DeviceNotRegistered). تطبيق App Store يحتاج رمز push جديد + اعتماد APNs إنتاج عبر EAS؛ رموز Expo Go/معاينة لا تكفي للمتجر."
+          : ": " + ticketErrors.slice(0, 3).join("; ")) +
+        (disabled > 0 ? " عُطّلت " + disabled + " رموز تالفة." : "")
+      );
+    }
+    const detail = summarizePushInvokeDetail(pushResult);
+    const errMsg = String(
+      (pushResult.data && pushResult.data.error) ||
+        (pushResult.error &&
+          (pushResult.error.message || pushResult.error.context || pushResult.error)) ||
+        pushResult.reason ||
+        "",
+    ).trim();
+    if (/Failed to send a request|Failed to fetch|NetworkError|CORS/i.test(errMsg)) {
+      return (
+        "نُشرت المناسبة، لكن استدعاء alzidan-push-notify فشل من المتصفح (شبكة/CORS أو الدالة غير منشورة)" +
+        (detail ? ": " + detail : ".") +
+        " راجع Network → alzidan-push-notify و Console: PUSH_NOTIFY_INVOKE_ERROR."
+      );
+    }
+    if (/missing_service_role_key|push_tokens fetch failed/i.test(errMsg + " " + detail)) {
+      return (
+        "نُشرت المناسبة، لكن دالة الدفع فشلت (أسرار/صلاحيات الخدمة)" +
+        (detail ? ": " + detail : ".") +
+        " راجع سجلات Edge Function."
+      );
+    }
+    return (
+      "نُشرت المناسبة، لكن إشعار التطبيق لم يكتمل" +
+      (detail ? ": " + detail : errMsg ? ": " + errMsg.slice(0, 160) : ".") +
+      " راجع Console: PUSH_NOTIFY_*."
+    );
+  }
+
   async function notifyFamilyEventPush(sb, eventRow) {
     if (!sb || !eventRow) return { ok: false, reason: "missing_client_or_row" };
-    const { data, error } = await sb.functions.invoke("alzidan-push-notify", {
-      body: {
-        type: eventRow.type || "",
-        person: eventRow.person || "",
-        branch_key: eventRow.branch_key || "",
-        details: eventRow.details || "",
-      },
-    });
-    if (error) {
+    let data = null;
+    let error = null;
+    try {
+      const res = await sb.functions.invoke("alzidan-push-notify", {
+        body: {
+          type: eventRow.type || "",
+          person: eventRow.person || "",
+          branch_key: eventRow.branch_key || "",
+          details: eventRow.details || "",
+        },
+      });
+      data = res.data;
+      error = res.error;
+    } catch (invokeErr) {
       try {
-        console.error("PUSH_NOTIFY_INVOKE_ERROR", error);
+        console.error("PUSH_NOTIFY_INVOKE_ERROR", invokeErr);
       } catch (_) {}
-      return { ok: false, reason: "invoke_error", error };
+      return {
+        ok: false,
+        reason: "invoke_exception",
+        error: invokeErr,
+        httpStatus: null,
+        bodySnippet: String(
+          (invokeErr && (invokeErr.message || invokeErr)) || "",
+        ).slice(0, 240),
+      };
+    }
+    if (error) {
+      const extracted = await extractFunctionsInvokeFailure(error, data);
+      const body = extracted.data;
+      try {
+        console.error("PUSH_NOTIFY_INVOKE_ERROR", {
+          message: error && error.message,
+          httpStatus: extracted.httpStatus,
+          bodySnippet: extracted.bodySnippet,
+          body: body || null,
+          error,
+        });
+      } catch (_) {}
+      if (body && body.skipped) {
+        return {
+          ok: false,
+          skipped: body.skipped,
+          data: body,
+          error,
+          httpStatus: extracted.httpStatus,
+          bodySnippet: extracted.bodySnippet,
+        };
+      }
+      return {
+        ok: false,
+        reason: "invoke_error",
+        error,
+        data: body,
+        httpStatus: extracted.httpStatus,
+        bodySnippet: extracted.bodySnippet,
+      };
     }
     if (data && data.skipped) {
       try {
@@ -180,12 +448,320 @@
       try {
         console.error("PUSH_NOTIFY_FAILED", data);
       } catch (_) {}
-      return { ok: false, data };
+      return {
+        ok: false,
+        data,
+        bodySnippet: String(data.error || JSON.stringify(data)).slice(0, 240),
+      };
     }
     try {
       console.log("PUSH_NOTIFY_OK", data);
     } catch (_) {}
     return { ok: true, data };
+  }
+
+  function isEventPublishRequestKind(kind) {
+    const k = String(kind || "").trim();
+    return (
+      k === "event_card" || k === "family_event" || k === "event_request"
+    );
+  }
+
+  /** Same link key as admin_publish_event_card_v1 idempotency (details contains request_id). */
+  function familyEventDetailsMatchRequestId(details, requestId) {
+    const rid = String(requestId || "").trim();
+    if (!rid) return false;
+    const s = String(details == null ? "" : details);
+    if (!s) return false;
+    if (
+      s.indexOf('"requestId":"' + rid + '"') >= 0 ||
+      s.indexOf('"request_id":"' + rid + '"') >= 0
+    ) {
+      return true;
+    }
+    return s.indexOf(rid) >= 0;
+  }
+
+  function normalizeEventMatchText(v) {
+    return String(v == null ? "" : v)
+      .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+      .replace(/[أإآ]/g, "ا")
+      .replace(/ى/g, "ي")
+      .replace(/ة/g, "ه")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
+  function normalizeEventMatchDate(v) {
+    const Guard = window.AlzidanDupIdentityGuard;
+    if (Guard && typeof Guard.normalizeDateKey === "function") {
+      return String(Guard.normalizeDateKey(v) || "");
+    }
+    const s = String(v == null ? "" : v).trim();
+    const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+    if (iso) {
+      return (
+        iso[1] +
+        "-" +
+        String(iso[2]).padStart(2, "0") +
+        "-" +
+        String(iso[3]).padStart(2, "0")
+      );
+    }
+    return normalizeEventMatchText(s);
+  }
+
+  function familyEventMatchesPublishIdentity(ev, identity) {
+    if (!ev || !identity) return false;
+    if (normalizeEventMatchText(ev.type) !== normalizeEventMatchText(identity.type)) {
+      return false;
+    }
+    if (
+      normalizeEventMatchText(ev.person) !==
+      normalizeEventMatchText(identity.person)
+    ) {
+      return false;
+    }
+    const wantDate = normalizeEventMatchDate(identity.date);
+    if (!wantDate) return false;
+    const gotDate = normalizeEventMatchDate(
+      ev.event_date || ev.date_label || "",
+    );
+    return !!gotDate && gotDate === wantDate;
+  }
+
+  function buildPublishIdentityFromRequest(row) {
+    const Events = window.AlzidanEvents || {};
+    if (typeof Events.buildFamilyEventRow === "function") {
+      const built = Events.buildFamilyEventRow({
+        source: "approval_request",
+        row,
+      });
+      if (built && built.type && built.person) {
+        return {
+          type: String(built.type || "").trim(),
+          person: String(built.person || "").trim(),
+          date: String(built.event_date || built.date_label || "").trim(),
+        };
+      }
+    }
+    const person = String((row && row.name) || "").trim();
+    return person
+      ? { type: "gathering", person, date: "" }
+      : null;
+  }
+
+  /**
+   * Same visibility-removal path as Delete (admin_delete_request_v1):
+   * DELETE family_events WHERE details LIKE '%' || request_id || '%'.
+   * Used by table Delete, table Reject, and Workflow Engine reject.
+   * Primary: admin_unpublish_events_for_request_v1 (same SQL match as delete).
+   * Fallback: SELECT + admin_family_event_delete_v1 (occasions admin delete RPC).
+   */
+  async function unpublishPublishedEventForRequest(sb, token, row) {
+    if (!isEventPublishRequestKind(row && row.kind)) {
+      return { ok: true, skipped: true, deleted: 0 };
+    }
+    const requestId = String(
+      row && row.request_id ? row.request_id : "",
+    ).trim();
+    if (!sb || !token) {
+      return { ok: false, deleted: 0, message: "بيانات النشر ناقصة." };
+    }
+
+    const identity = buildPublishIdentityFromRequest(row);
+    const person =
+      (identity && identity.person) ||
+      String((row && row.name) || "").trim() ||
+      null;
+    const evType = (identity && identity.type) || null;
+    const evDate = (identity && identity.date) || null;
+
+    // Primary: same server DELETE as admin_delete_request_v1 (security definer).
+    try {
+      const { data, error } = await sb.rpc(
+        "admin_unpublish_events_for_request_v1",
+        {
+          p_token: token,
+          p_request_id: requestId || null,
+          p_person: person,
+          p_type: evType,
+          p_date: evDate,
+        },
+      );
+      if (!error && data && data.ok === true) {
+        const deleted = Number(data.deleted) || 0;
+        // Trust security-definer RPC even when deleted=0 (already gone / no match).
+        // Falling through to client SELECT used to abort admin delete on RLS errors.
+        if (deleted > 0) {
+          try {
+            localStorage.setItem("alzidan_events_refresh_v1", String(Date.now()));
+            window.dispatchEvent(new CustomEvent("alzidan-events-refresh"));
+          } catch (_) {}
+        }
+        try {
+          console.info("UNPUBLISH_EVENT ok", {
+            via: "rpc",
+            request_id: requestId,
+            deleted,
+          });
+        } catch (_) {}
+        return { ok: true, deleted, via: "rpc" };
+      } else if (
+        error &&
+        !/could not find|schema cache|PGRST202|404/i.test(
+          String(error.message || ""),
+        )
+      ) {
+        const raw = String(error.message || error.details || "").toLowerCase();
+        if (/not allowed|permission|jwt|auth/i.test(raw)) {
+          return {
+            ok: false,
+            deleted: 0,
+            message: "انتهت جلسة الإدارة أو لا توجد صلاحية لإزالة المناسبة المنشورة.",
+            error,
+          };
+        }
+        return {
+          ok: false,
+          deleted: 0,
+          message: "تعذر إزالة المناسبة المنشورة من الشريط/المناسبات.",
+          error,
+        };
+      }
+      // RPC missing → fall through to client safety net.
+    } catch (e) {
+      // fall through
+    }
+
+    const byId = new Map();
+    if (requestId) {
+      try {
+        // Same LIKE match as admin_delete_request_v1
+        const { data, error } = await sb
+          .from("family_events")
+          .select("id,details,type,person,date_label,event_date")
+          .like("details", "%" + requestId + "%")
+          .limit(50);
+        if (error) {
+          // Soft-fail: SELECT quirks/RLS must not block admin delete/reject.
+          // Security-definer RPCs (admin_delete_request_v1 / reject trigger) clean up.
+          try {
+            console.warn("UNPUBLISH_EVENT select soft-fail", error);
+          } catch (_) {}
+          return {
+            ok: true,
+            deleted: 0,
+            softFail: true,
+            message:
+              "تعذر البحث عن المناسبة المنشورة؛ سيُعتمد مسار الحذف/الرفض الآمن.",
+            error,
+          };
+        }
+        (Array.isArray(data) ? data : []).forEach((ev) => {
+          if (
+            familyEventDetailsMatchRequestId(ev && ev.details, requestId) &&
+            ev &&
+            ev.id != null
+          ) {
+            byId.set(Number(ev.id), ev);
+          }
+        });
+      } catch (e) {
+        try {
+          console.warn("UNPUBLISH_EVENT select threw soft-fail", e);
+        } catch (_) {}
+        return {
+          ok: true,
+          deleted: 0,
+          softFail: true,
+          message:
+            "تعذر البحث عن المناسبة المنشورة؛ سيُعتمد مسار الحذف/الرفض الآمن.",
+          error: e,
+        };
+      }
+    }
+
+    // Fallback: same identity as findExistingEventLive / dup-guard (type+person+date).
+    if (!byId.size && identity && identity.type && identity.person && identity.date) {
+      try {
+        const { data, error } = await sb
+          .from("family_events")
+          .select("id,details,type,person,date_label,event_date")
+          .eq("type", identity.type)
+          .limit(200);
+        if (error) {
+          // Soft-fail: SELECT quirks/RLS must not block admin delete/reject.
+          // Security-definer RPCs (admin_delete_request_v1 / reject trigger) clean up.
+          try {
+            console.warn("UNPUBLISH_EVENT select soft-fail", error);
+          } catch (_) {}
+          return {
+            ok: true,
+            deleted: 0,
+            softFail: true,
+            message:
+              "تعذر البحث عن المناسبة المنشورة؛ سيُعتمد مسار الحذف/الرفض الآمن.",
+            error,
+          };
+        }
+        (Array.isArray(data) ? data : []).forEach((ev) => {
+          if (
+            familyEventMatchesPublishIdentity(ev, identity) &&
+            ev &&
+            ev.id != null
+          ) {
+            byId.set(Number(ev.id), ev);
+          }
+        });
+      } catch (e) {
+        try {
+          console.warn("UNPUBLISH_EVENT select threw soft-fail", e);
+        } catch (_) {}
+        return {
+          ok: true,
+          deleted: 0,
+          softFail: true,
+          message:
+            "تعذر البحث عن المناسبة المنشورة؛ سيُعتمد مسار الحذف/الرفض الآمن.",
+          error: e,
+        };
+      }
+    }
+
+    const matches = Array.from(byId.values());
+    let deleted = 0;
+    for (let i = 0; i < matches.length; i++) {
+      const id = Number(matches[i] && matches[i].id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      // Same RPC used by occasions «إدارة المناسبات» delete button.
+      const { data, error } = await sb.rpc("admin_family_event_delete_v1", {
+        p_token: token,
+        p_id: id,
+      });
+      if (error || data !== true) {
+        return {
+          ok: false,
+          deleted,
+          message: "تعذر حذف المناسبة المنشورة من الشريط/المناسبات.",
+          error,
+        };
+      }
+      deleted += 1;
+    }
+    try {
+      localStorage.setItem("alzidan_events_refresh_v1", String(Date.now()));
+      window.dispatchEvent(new CustomEvent("alzidan-events-refresh"));
+    } catch (_) {}
+    try {
+      console.info("UNPUBLISH_EVENT ok", {
+        via: "client",
+        request_id: requestId,
+        deleted,
+      });
+    } catch (_) {}
+    return { ok: true, deleted, via: "client" };
   }
 
   async function publishEventCardRequest(sb, token, row) {
@@ -204,6 +780,29 @@
         message:
           "بيانات المناسبة ناقصة، افتح عرض الطلب وتأكد من الفرع والنوع والاسم.",
       };
+    }
+    // Accept/publish ≠ immediate show: persist schedule (default 3 days before event_date).
+    const Vis = window.AlzidanEventVisibility || null;
+    if (Vis && typeof Vis.buildScheduleFields === "function") {
+      const sch = Vis.buildScheduleFields({
+        event_date: eventRow.event_date || "",
+        show_before_days:
+          eventRow.show_before_days != null ? eventRow.show_before_days : 3,
+        show_at: eventRow.show_at || "",
+        end_at: eventRow.end_at || "",
+        manual_hidden: eventRow.manual_hidden || false,
+      });
+      if (sch.show_before_days != null) eventRow.show_before_days = sch.show_before_days;
+      if (sch.show_at) eventRow.show_at = sch.show_at;
+      if (sch.end_at) eventRow.end_at = sch.end_at;
+      eventRow.manual_hidden = !!sch.manual_hidden;
+      if (typeof Vis.mergeScheduleIntoDetails === "function") {
+        const merged = Vis.mergeScheduleIntoDetails(eventRow.details, sch);
+        eventRow.details =
+          typeof merged === "string" ? merged : JSON.stringify(merged);
+      }
+    } else if (eventRow.show_before_days == null && !eventRow.show_at) {
+      eventRow.show_before_days = 3;
     }
     const { data, error } = await sb.rpc("admin_publish_event_card_v1", {
       p_token: token,
@@ -229,8 +828,13 @@
         ok: false,
         message: "تعذر نشر المناسبة. تحقق من صلاحية الإدارة.",
       };
-    await notifyFamilyEventPush(sb, eventRow);
-    return { ok: true, eventRow };
+    const push = await notifyFamilyEventPush(sb, eventRow);
+    return {
+      ok: true,
+      eventRow,
+      push,
+      pushMessage: formatPushNotifyAdminMessage(push),
+    };
   }
   function buildTreeCardMessageFromPayload(payload, reqRow) {
     const ancestors = Array.isArray(payload.ancestors) ? payload.ancestors : [];
@@ -318,9 +922,21 @@
     return children;
   }
   function showTreeCardEditError(text) {
-    if (!treeCardEditError) return;
-    treeCardEditError.textContent = String(text || "");
-    treeCardEditError.style.display = text ? "block" : "none";
+    if (!treeCardEditError) {
+      treeCardEditError = document.getElementById("tree-card-edit-error");
+    }
+    const el = treeCardEditError || document.getElementById("tree-card-edit-error");
+    if (!el) {
+      if (text) {
+        try {
+          window.alert(String(text));
+        } catch (_) {}
+      }
+      return;
+    }
+    treeCardEditError = el;
+    el.textContent = String(text || "");
+    el.style.display = text ? "block" : "none";
   }
   function relationLeafName(path) {
     const parts = String(path || "")
@@ -336,197 +952,869 @@
       .filter(Boolean)
       .join(" ← ");
   }
-  function getRelationCards() {
-    return treeCardRelations
-      ? Array.from(treeCardRelations.querySelectorAll(".relation-card"))
-      : [];
+  function escapeTreeCardHtml(v) {
+    return String(v || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
-  function getRelationParentPaths() {
-    const branch = normalizeTreeCardText(
-      treeCardEditForm && treeCardEditForm.elements.branch
-        ? treeCardEditForm.elements.branch.value
-        : "",
+
+  function treeCardFormEl(name) {
+    return treeCardEditForm && treeCardEditForm.elements
+      ? treeCardEditForm.elements[name]
+      : null;
+  }
+
+  function treeCardBranchRoot(branch) {
+    const b = normalizeTreeCardText(branch || "");
+    return b ? b + " بن مطلق بن زيدان" : "";
+  }
+
+  function isTreeCardBranchRootPath(path, branch) {
+    const p = normalizeTreeCardText(path || "");
+    const b = normalizeTreeCardText(branch || "");
+    const root = treeCardBranchRoot(b);
+    return !!p && (p === b || p === root);
+  }
+
+  function fatherSearchMatches(term, label, value) {
+    const q = normalizeTreeCardText(term || "");
+    if (!q) return false;
+    const SpousesCore = window.AlzidanSpousesCore || {};
+    if (SpousesCore && typeof SpousesCore.matchesOrderedSubstring === "function") {
+      return (
+        SpousesCore.matchesOrderedSubstring(q, label || "") ||
+        SpousesCore.matchesOrderedSubstring(q, value || "")
+      );
+    }
+    const ql = q.toLowerCase();
+    return (
+      String(label || "")
+        .toLowerCase()
+        .indexOf(ql) >= 0 ||
+      String(value || "")
+        .toLowerCase()
+        .indexOf(ql) >= 0
     );
-    const root = branch ? branch + " بن مطلق بن زيدان" : "";
-    const paths = new Set(root ? [root] : []);
-    getRelationCards().forEach((card) => {
-      const parent = normalizeTreeCardText(
-        card.querySelector('[name="relationParent"]')?.value || "",
-      );
-      const childName = normalizeTreeCardText(
-        card.querySelector('[name="relationChild"]')?.value || "",
-      );
-      if (parent) paths.add(parent);
-      if (parent && childName) paths.add(parent + "/" + childName);
-    });
-    return Array.from(paths);
   }
-  function refreshRelationParentOptions() {
-    const paths = getRelationParentPaths();
-    getRelationCards().forEach((card) => {
-      const select = card.querySelector('[name="relationParent"]');
-      if (!select) return;
-      const current = normalizeTreeCardText(
-        select.dataset.value || select.value || "",
-      );
-      select.innerHTML = "";
-      paths.forEach((path) => {
-        const option = document.createElement("option");
-        option.value = path;
-        option.textContent = relationPathLabel(path);
-        select.appendChild(option);
-      });
-      if (current && !paths.includes(current)) {
-        const option = document.createElement("option");
-        option.value = current;
-        option.textContent = relationPathLabel(current);
-        select.appendChild(option);
-      }
-      select.value = current || paths[0] || "";
-      delete select.dataset.value;
-    });
-  }
-  function addRelationCard(relation) {
-    if (!treeCardRelations) return;
-    const card = document.createElement("div");
-    card.className = "relation-card";
-    card.innerHTML = `<div class="relation-fields"><div class="field"><label>الأب</label><select name="relationParent"></select></div><div class="field"><label>اسم الابن/الابنة</label><input name="relationChild" type="text" readonly /></div><div class="field"><label>تاريخ الميلاد</label><input name="relationDob" type="date" /></div></div><div class="relation-actions"><button class="btn btn-primary btn-sm" type="button" data-add-child-relation>إضافة أبناء</button><button class="btn btn-outline btn-sm" type="button" data-edit-relation>تعديل الاسم</button><button class="btn btn-outline btn-sm" type="button" data-remove-relation>حذف الشخص</button></div>`;
-    const select = card.querySelector('[name="relationParent"]');
-    const child = card.querySelector('[name="relationChild"]');
-    const dob = card.querySelector('[name="relationDob"]');
-    const initialChildName = normalizeTreeCardText(
-      relation && relation.child_name
-        ? relationLeafName(relation.child_name)
-        : "",
-    );
-    if (select)
-      select.dataset.value = normalizeTreeCardText(
-        relation && relation.parent_name ? relation.parent_name : "",
-      );
-    if (child) {
-      child.value = initialChildName;
-      child.readOnly = !!initialChildName;
-      if (!initialChildName) {
-        child.placeholder = "اكتب اسم الابن/الابنة";
-        child.addEventListener("input", refreshRelationParentOptions);
-      }
-    }
-    if (dob)
-      dob.value = normalizeTreeCardText(
-        relation && relation.birth_date_g ? relation.birth_date_g : "",
-      );
-    const addChild = card.querySelector("[data-add-child-relation]");
-    if (addChild) {
-      addChild.addEventListener("click", () => {
-        const parent = normalizeTreeCardText(select ? select.value : "");
-        const childName = normalizeTreeCardText(child ? child.value : "");
-        if (!parent || !childName) {
-          showTreeCardEditError("اكتب اسم الشخص أولًا ثم أضف أبناءه.");
-          return;
-        }
-        const newChildName = normalizeTreeCardText(
-          window.prompt("اكتب اسم الابن/الابنة:", "") || "",
+
+  function filterFatherSearchOptions(term, options) {
+    const q = normalizeTreeCardText(term || "");
+    if (!q) return [];
+    const list = Array.isArray(options) ? options : [];
+    return list
+      .filter(function (opt) {
+        return fatherSearchMatches(
+          q,
+          opt.label || opt.leaf || "",
+          opt.value || opt.path || "",
         );
-        if (!newChildName) return;
-        showTreeCardEditError("");
-        addRelationCard({
-          parent_name: parent + "/" + childName,
-          child_name: parent + "/" + childName + "/" + newChildName,
-        });
-      });
-    }
-    const edit = card.querySelector("[data-edit-relation]");
-    if (edit) {
-      edit.addEventListener("click", () => {
-        const oldName = normalizeTreeCardText(child ? child.value : "");
-        const newName = normalizeTreeCardText(
-          window.prompt("اكتب الاسم الصحيح:", oldName) || "",
-        );
-        if (!newName || newName === oldName) return;
-        const parent = normalizeTreeCardText(select ? select.value : "");
-        const oldPath = parent && oldName ? parent + "/" + oldName : "";
-        const newPath = parent + "/" + newName;
-        if (child) child.value = newName;
-        getRelationCards().forEach((otherCard) => {
-          const otherSelect = otherCard.querySelector(
-            '[name="relationParent"]',
-          );
-          if (!otherSelect || !oldPath) return;
-          const current = normalizeTreeCardText(
-            otherSelect.value || otherSelect.dataset.value || "",
-          );
-          if (current === oldPath || current.startsWith(oldPath + "/")) {
-            otherSelect.dataset.value = newPath + current.slice(oldPath.length);
-          }
-        });
-        refreshRelationParentOptions();
-      });
-    }
-    const remove = card.querySelector("[data-remove-relation]");
-    if (remove) {
-      remove.addEventListener("click", () => {
-        const parent = normalizeTreeCardText(select ? select.value : "");
-        const childName = normalizeTreeCardText(child ? child.value : "");
-        const removedPath = parent && childName ? parent + "/" + childName : "";
-        if (removedPath) {
-          getRelationCards().forEach((otherCard) => {
-            if (otherCard === card) return;
-            const otherParent = normalizeTreeCardText(
-              otherCard.querySelector('[name="relationParent"]')?.value || "",
-            );
-            if (
-              otherParent === removedPath ||
-              otherParent.startsWith(removedPath + "/")
-            )
-              otherCard.remove();
-          });
-        }
-        card.remove();
-        refreshRelationParentOptions();
-      });
-    }
-    treeCardRelations.appendChild(card);
-    refreshRelationParentOptions();
+      })
+      .slice(0, TREE_CARD_FATHER_SEARCH_LIMIT);
   }
-  function collectRelationRows(branch) {
-    const rows = [];
-    const seen = new Set();
-    for (const card of getRelationCards()) {
-      const parent = normalizeTreeCardText(
-        card.querySelector('[name="relationParent"]')?.value || "",
-      );
-      const childName = normalizeTreeCardText(
-        card.querySelector('[name="relationChild"]')?.value || "",
-      );
-      const dob = normalizeTreeCardText(
-        card.querySelector('[name="relationDob"]')?.value || "",
-      );
-      if (!parent && !childName) continue;
-      if (!parent || !childName)
+
+  function fatherShortDisambiguator(path) {
+    const parts = String(path || "")
+      .split("/")
+      .map(normalizeTreeCardText)
+      .filter(Boolean);
+    if (parts.length < 2) return "";
+    return parts[parts.length - 2] || "";
+  }
+
+  function labelFatherOptions(rows) {
+    const mapped = (rows || [])
+      .map(function (r) {
+        const path = normalizeTreeCardText(
+          r.person_lineage ||
+            r.child_name ||
+            r.full_name ||
+            r.name ||
+            r.path ||
+            "",
+        );
+        const personId = normalizeTreeCardText(
+          r.person_id || r.personId || r.id || "",
+        );
+        const leaf =
+          relationLeafName(path) ||
+          normalizeTreeCardText(r.display_name || r.leaf || "");
         return {
-          ok: false,
-          message: "كل علاقة تحتاج اختيار الأب وكتابة اسم الابن/الابنة.",
-          rows: [],
+          path: path,
+          value: path,
+          person_id: personId,
+          leaf: leaf,
+          label: leaf,
         };
-      const child = parent + "/" + childName;
-      const key = parent + "|" + child;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push({
-        branch_key: branch,
-        parent_name: parent,
-        child_name: child,
-        birth_date_g: dob || "",
+      })
+      .filter(function (o) {
+        // Path is required; person_id may be resolved after pick.
+        return !!o.path;
+      });
+    const leafCounts = {};
+    mapped.forEach(function (o) {
+      leafCounts[o.leaf] = (leafCounts[o.leaf] || 0) + 1;
+    });
+    return mapped.map(function (o) {
+      let label = o.leaf || o.path;
+      if ((leafCounts[o.leaf] || 0) > 1) {
+        // Full path for ambiguous same-leaf fathers (e.g. many محمد).
+        label = (o.leaf || "") + " — " + o.path;
+      }
+      return Object.assign({}, o, { label: label });
+    });
+  }
+
+  function rankFatherSearchOptions(term, options) {
+    const q = normalizeTreeCardText(term || "");
+    const list = Array.isArray(options) ? options.slice() : [];
+    list.sort(function (a, b) {
+      const aLeaf = normalizeTreeCardText(a.leaf || "");
+      const bLeaf = normalizeTreeCardText(b.leaf || "");
+      const aExact = aLeaf === q ? 0 : aLeaf.indexOf(q) === 0 ? 1 : 2;
+      const bExact = bLeaf === q ? 0 : bLeaf.indexOf(q) === 0 ? 1 : 2;
+      if (aExact !== bExact) return aExact - bExact;
+      const aPid = a.person_id ? 0 : 1;
+      const bPid = b.person_id ? 0 : 1;
+      if (aPid !== bPid) return aPid - bPid;
+      return String(a.path || "").localeCompare(String(b.path || ""), "ar");
+    });
+    return list;
+  }
+
+  async function resolveFatherIdentityInTree(sb, branch, personId, pathHint) {
+    const pid = normalizeTreeCardText(personId || "");
+    const path = normalizeTreeCardText(pathHint || "");
+    const key = normalizeTreeCardText(branch || "");
+    if (!sb) return { ok: false };
+
+    if (pid) {
+      let q = sb
+        .from("tree_children")
+        .select("person_id,child_name,name,branch_key,parent_name,parent")
+        .eq("person_id", pid)
+        .limit(8);
+      if (key) q = q.eq("branch_key", key);
+      const res = await q;
+      if (!res.error && Array.isArray(res.data) && res.data.length) {
+        let row = res.data[0];
+        if (path && res.data.length > 1) {
+          const hit = res.data.find(function (r) {
+            return (
+              normalizeTreeCardText(r.child_name || r.name || "") === path
+            );
+          });
+          if (hit) row = hit;
+        }
+        const resolvedPath = normalizeTreeCardText(
+          row.child_name || row.name || path || "",
+        );
+        const resolvedPid = normalizeTreeCardText(row.person_id || pid);
+        if (resolvedPid) {
+          return { ok: true, path: resolvedPath, person_id: resolvedPid };
+        }
+      }
+    }
+
+    if (path) {
+      let byChild = sb
+        .from("tree_children")
+        .select("person_id,child_name,name,branch_key,parent_name,parent")
+        .eq("child_name", path)
+        .limit(5);
+      if (key) byChild = byChild.eq("branch_key", key);
+      let res = await byChild;
+      if (res.error || !Array.isArray(res.data) || !res.data.length) {
+        let byName = sb
+          .from("tree_children")
+          .select("person_id,child_name,name,branch_key,parent_name,parent")
+          .eq("name", path)
+          .limit(5);
+        if (key) byName = byName.eq("branch_key", key);
+        res = await byName;
+      }
+      if (!res.error && Array.isArray(res.data) && res.data.length) {
+        const withPid = res.data.filter(function (r) {
+          return !!normalizeTreeCardText(r.person_id || "");
+        });
+        const pool = withPid.length ? withPid : res.data;
+        if (pool.length === 1) {
+          const row = pool[0];
+          const resolvedPid = normalizeTreeCardText(row.person_id || "");
+          const resolvedPath = normalizeTreeCardText(
+            row.child_name || row.name || path,
+          );
+          if (resolvedPid) {
+            return { ok: true, path: resolvedPath, person_id: resolvedPid };
+          }
+        } else if (pid) {
+          const hit = pool.find(function (r) {
+            return normalizeTreeCardText(r.person_id || "") === pid;
+          });
+          if (hit) {
+            return {
+              ok: true,
+              path: normalizeTreeCardText(hit.child_name || hit.name || path),
+              person_id: pid,
+            };
+          }
+        }
+      }
+    }
+
+    return { ok: false };
+  }
+
+  async function queryFatherSearchCandidates(branch, term) {
+    const q = normalizeTreeCardText(term || "");
+    if (q.length < 1) return [];
+    const sb = getClient();
+    const key = normalizeTreeCardText(branch || "");
+    const out = [];
+    const root = treeCardBranchRoot(key);
+    if (root && fatherSearchMatches(q, root, key)) {
+      out.push({
+        path: root,
+        value: root,
+        person_id: "",
+        leaf: relationLeafName(root) || key,
+        label: key + " (أصل الفرع)",
+        is_root: true,
       });
     }
-    if (!rows.length)
+    if (!sb) return out.slice(0, TREE_CARD_FATHER_SEARCH_LIMIT);
+
+    let rows = [];
+    // Primary: tree_children leaf/path search (always includes person_id when present).
+    // Avoid relying solely on memory_tree_search_v1 parent_name matches that can
+    // surface children-of-X when searching for X.
+    try {
+      const FM = window.AlzidanFamilyPersonCore || {};
+      const orFilter =
+        typeof FM.buildPersonNameIlikeOrFilter === "function"
+          ? FM.buildPersonNameIlikeOrFilter(q)
+          : "child_name.ilike.%" + q + "%,name.ilike.%" + q + "%";
+      let fb = sb
+        .from("tree_children")
+        .select("person_id,branch_key,child_name,name,parent_name,parent")
+        .or(orFilter)
+        .limit(TREE_CARD_FATHER_SEARCH_LIMIT);
+      if (key) fb = fb.eq("branch_key", key);
+      const res = await fb;
+      if (!res.error && Array.isArray(res.data)) {
+        rows = res.data.map(function (r) {
+          const lineage =
+            normalizeTreeCardText(r.child_name) ||
+            normalizeTreeCardText(r.name);
+          return {
+            person_id: r.person_id,
+            full_name: lineage,
+            display_name: relationLeafName(lineage) || lineage,
+            person_lineage: lineage,
+            child_name: lineage,
+            branch_key: r.branch_key,
+          };
+        });
+      }
+    } catch (_) {
+      rows = [];
+    }
+
+    if (!rows.length) {
+      try {
+        const rpc = await sb.rpc("memory_tree_search_v1", {
+          p_query: q,
+          p_branch_key: key || null,
+          p_limit: TREE_CARD_FATHER_SEARCH_LIMIT,
+        });
+        if (!rpc.error && rpc.data) {
+          rows = typeof rpc.data === "string" ? JSON.parse(rpc.data) : rpc.data;
+          if (!Array.isArray(rows)) rows = [];
+        }
+      } catch (_) {
+        rows = [];
+      }
+    }
+
+    let labeled = labelFatherOptions(rows);
+    // Prefer people whose leaf matches the query (e.g. محمد) over descendants
+    // whose path merely contains the query.
+    const FMLeaf = window.AlzidanFamilyPersonCore || {};
+    const qVariants =
+      typeof FMLeaf.arabicSearchQueryVariants === "function"
+        ? FMLeaf.arabicSearchQueryVariants(q)
+        : [q];
+    const leafHits = labeled.filter(function (o) {
+      const leaf = normalizeTreeCardText(o.leaf || "");
+      return qVariants.some(function (qv) {
+        return leaf === qv || leaf.indexOf(qv) >= 0;
+      });
+    });
+    if (leafHits.length) labeled = leafHits;
+    labeled = rankFatherSearchOptions(q, filterFatherSearchOptions(q, labeled));
+    const seen = {};
+    labeled.forEach(function (opt) {
+      const id = opt.person_id || opt.path;
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      out.push(opt);
+    });
+    return out.slice(0, TREE_CARD_FATHER_SEARCH_LIMIT);
+  }
+
+  function renderFatherSearchResults(items) {
+    const box = document.getElementById("edit-card-father-results");
+    if (!box) return;
+    if (!items || !items.length) {
+      box.classList.remove("fm-open");
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML = items
+      .map(function (opt) {
+        return (
+          '<div class="fm-search-item" role="option" data-father-path="' +
+          escapeTreeCardHtml(opt.path || "") +
+          '" data-father-pid="' +
+          escapeTreeCardHtml(opt.person_id || "") +
+          '" data-father-label="' +
+          escapeTreeCardHtml(opt.label || opt.leaf || "") +
+          '">' +
+          escapeTreeCardHtml(opt.label || opt.leaf || opt.path || "") +
+          "</div>"
+        );
+      })
+      .join("");
+    box.classList.add("fm-open");
+    box.querySelectorAll(".fm-search-item").forEach(function (el) {
+      el.addEventListener("click", function () {
+        selectTreeCardFather({
+          path: el.getAttribute("data-father-path") || "",
+          person_id: el.getAttribute("data-father-pid") || "",
+          label: el.getAttribute("data-father-label") || "",
+          inferAncestors: true,
+        });
+      });
+    });
+  }
+
+  function setFatherSearchOpen(open) {
+    const wrap = document.getElementById("edit-card-father-search-wrap");
+    const search = document.getElementById("edit-card-father-search");
+    if (wrap) wrap.style.display = open ? "block" : "none";
+    if (!open) {
+      renderFatherSearchResults([]);
+      if (search) search.value = "";
+    } else if (search) {
+      search.focus();
+    }
+  }
+
+  function treeCardFatherPersonIdValue() {
+    return normalizeTreeCardText(
+      treeCardFormEl("fatherPersonId") && treeCardFormEl("fatherPersonId").value,
+    );
+  }
+
+  /**
+   * Seed father typeahead without dispatching "input" (input clears a bound
+   * father UUID — that raced with manual pick during auto-resolve).
+   */
+  async function seedFatherSearchTerm(term, opts) {
+    const o = opts || {};
+    const q = normalizeTreeCardText(term || "");
+    setFatherSearchOpen(true);
+    const search = document.getElementById("edit-card-father-search");
+    if (search) {
+      if (o.placeholder) search.placeholder = String(o.placeholder);
+      search.value = q;
+    }
+    if (!q) {
+      renderFatherSearchResults([]);
+      return;
+    }
+    const seq = ++treeCardFatherSearchSeq;
+    const branch = normalizeTreeCardText(
+      treeCardFormEl("branch") && treeCardFormEl("branch").value,
+    );
+    const items = await queryFatherSearchCandidates(branch, q);
+    if (seq !== treeCardFatherSearchSeq) return;
+    // If admin already bound a father while we queried, do not clobber UI.
+    if (treeCardFatherPersonIdValue()) return;
+    renderFatherSearchResults(items);
+  }
+
+  function updateFatherCurrentUi() {
+    const current = document.getElementById("edit-card-father-current");
+    const clearBtn = document.getElementById("edit-card-father-clear");
+    const pathEl = treeCardFormEl("fatherPath");
+    const pidEl = treeCardFormEl("fatherPersonId");
+    const labelEl = treeCardFormEl("fatherLabel");
+    const path = normalizeTreeCardText(pathEl && pathEl.value);
+    const pid = normalizeTreeCardText(pidEl && pidEl.value);
+    const label =
+      normalizeTreeCardText(labelEl && labelEl.value) ||
+      relationLeafName(path) ||
+      "";
+    if (!current) return;
+    if (!path && !pid) {
+      current.textContent =
+        "الأب الحالي: غير محدد — اضغط «تغيير الأب» للبحث في الشجرة.";
+      current.classList.add("is-empty");
+      if (clearBtn) clearBtn.style.display = "none";
+      return;
+    }
+    const leaf = label || relationLeafName(path) || "محدد";
+    const branch =
+      treeCardFormEl("branch") && treeCardFormEl("branch").value;
+    if (pid) {
+      current.textContent = "الأب الحالي: " + leaf;
+      current.classList.remove("is-empty");
+    } else if (isTreeCardBranchRootPath(path, branch)) {
+      current.textContent = "الأب الحالي: " + leaf + " (أصل الفرع)";
+      current.classList.remove("is-empty");
+    } else {
+      current.textContent =
+        "الأب الحالي: " + leaf + " — بانتظار ربط الهوية من الشجرة";
+      current.classList.add("is-empty");
+    }
+    if (clearBtn) clearBtn.style.display = "inline-flex";
+  }
+
+  function clearTreeCardFatherSelection() {
+    const pathEl = treeCardFormEl("fatherPath");
+    const pidEl = treeCardFormEl("fatherPersonId");
+    const labelEl = treeCardFormEl("fatherLabel");
+    if (pathEl) pathEl.value = "";
+    if (pidEl) pidEl.value = "";
+    if (labelEl) labelEl.value = "";
+    updateFatherCurrentUi();
+    setFatherSearchOpen(true);
+  }
+
+  function inferAncestorsFromFatherPath(path, branch) {
+    const root = treeCardBranchRoot(branch);
+    const parts = String(path || "")
+      .split("/")
+      .map(normalizeTreeCardText)
+      .filter(Boolean);
+    if (root && parts[0] === root) parts.shift();
+    if (parts.length) parts.pop();
+    return parts.slice().reverse().slice(0, 4);
+  }
+
+  function selectTreeCardFather(opts) {
+    const o = opts || {};
+    const path = normalizeTreeCardText(o.path || "");
+    let pid = normalizeTreeCardText(o.person_id || "");
+    const label =
+      normalizeTreeCardText(o.label || "") || relationLeafName(path) || "";
+    const branch = normalizeTreeCardText(
+      treeCardFormEl("branch") && treeCardFormEl("branch").value,
+    );
+    const pathEl = treeCardFormEl("fatherPath");
+    const pidEl = treeCardFormEl("fatherPersonId");
+    const labelEl = treeCardFormEl("fatherLabel");
+    if (pathEl) pathEl.value = path;
+    if (pidEl) pidEl.value = pid;
+    if (labelEl) labelEl.value = label;
+    if (o.inferAncestors && path) {
+      const inferred = inferAncestorsFromFatherPath(path, branch);
+      ["grandfather1", "grandfather2", "grandfather3", "grandfather4"].forEach(
+        function (name, idx) {
+          const el = treeCardFormEl(name);
+          if (el) el.value = inferred[idx] || "";
+        },
+      );
+    }
+    updateFatherCurrentUi();
+    setFatherSearchOpen(false);
+    showTreeCardEditError("");
+
+    // Resolve missing person_id from exact tree path (person_id is SSOT).
+    if (
+      path &&
+      !pid &&
+      !isTreeCardBranchRootPath(path, branch) &&
+      o.resolveIdentity !== false
+    ) {
+      const sb = getClient();
+      if (sb) {
+        showTreeCardEditError("جاري التحقق من هوية الأب في الشجرة…");
+        resolveFatherIdentityInTree(sb, branch, "", path)
+          .then(function (resolved) {
+            if (!resolved || !resolved.ok || !resolved.person_id) {
+              showTreeCardEditError(
+                "تعذر ربط الأب بهوية فريدة في الشجرة. اختر نتيجة بحث أخرى لنفس الاسم.",
+              );
+              return;
+            }
+            if (pathEl && pathEl.value !== path) return; // user changed selection
+            if (pathEl && resolved.path) pathEl.value = resolved.path;
+            if (pidEl) pidEl.value = resolved.person_id;
+            if (labelEl && !labelEl.value) {
+              labelEl.value = relationLeafName(resolved.path) || label;
+            }
+            if (o.inferAncestors && resolved.path) {
+              const inferred = inferAncestorsFromFatherPath(
+                resolved.path,
+                branch,
+              );
+              [
+                "grandfather1",
+                "grandfather2",
+                "grandfather3",
+                "grandfather4",
+              ].forEach(function (name, idx) {
+                const el = treeCardFormEl(name);
+                if (el) el.value = inferred[idx] || "";
+              });
+            }
+            updateFatherCurrentUi();
+            showTreeCardEditError("");
+          })
+          .catch(function () {
+            showTreeCardEditError(
+              "تعذر التحقق من الأب. حاول اختياره مرة أخرى من نتائج البحث.",
+            );
+          });
+      }
+    }
+  }
+
+  function renderOriginalRequestReview(payload, row) {
+    const box = document.getElementById("edit-card-original-review");
+    if (!box) return;
+    const p = payload || {};
+    const submitter = p.submitter || {};
+    const ancestors = treeCardAncestorsClosestFirst(p);
+    const rows = [
+      ["الفرع", p.branch_key || (row && row.branch_key) || "—"],
+      ["الاسم", p.name || "—"],
+      ["الأب", p.father || relationLeafName(p.father_path || "") || "—"],
+      ["الجد 1", ancestors[0] || p.grandfather || "—"],
+      ["الجد 2", ancestors[1] || p.grandfather2 || "—"],
+      ["الجد 3", ancestors[2] || p.grandfather3 || "—"],
+      ["الجد 4", ancestors[3] || p.grandfather4 || "—"],
+      ["تاريخ الميلاد", p.birth_date_g || "—"],
+      ["المدينة", p.city || "—"],
+      ["الحي/القرية", p.area || "—"],
+      ["المرسل", submitter.name || (row && row.name) || "—"],
+      ["الجوال", submitter.phone || (row && row.phone) || "—"],
+      ["البريد", submitter.email || (row && row.email) || "—"],
+    ];
+    box.innerHTML =
+      '<dl class="tce-kv">' +
+      rows
+        .map(function (pair) {
+          return (
+            "<dt>" +
+            escapeTreeCardHtml(pair[0]) +
+            "</dt><dd>" +
+            escapeTreeCardHtml(pair[1]) +
+            "</dd>"
+          );
+        })
+        .join("") +
+      "</dl>";
+  }
+
+  function fillCorrectionFieldsFromPayload(payload, row) {
+    const p = payload || {};
+    const submitter = p.submitter || {};
+    const branch = normalizeTreeCardText(
+      p.branch_key || (row && row.branch_key) || "",
+    );
+    const ancestors = treeCardAncestorsClosestFirst(p);
+    if (treeCardFormEl("branch")) treeCardFormEl("branch").value = branch;
+    if (treeCardFormEl("personName"))
+      treeCardFormEl("personName").value = normalizeTreeCardText(p.name || "");
+    if (treeCardFormEl("birthDate"))
+      treeCardFormEl("birthDate").value = normalizeTreeCardText(
+        p.birth_date_g || "",
+      );
+    if (treeCardFormEl("city"))
+      treeCardFormEl("city").value = normalizeTreeCardText(p.city || "");
+    if (treeCardFormEl("area"))
+      treeCardFormEl("area").value = normalizeTreeCardText(p.area || "");
+    if (treeCardFormEl("grandfather1"))
+      treeCardFormEl("grandfather1").value = ancestors[0] || "";
+    if (treeCardFormEl("grandfather2"))
+      treeCardFormEl("grandfather2").value = ancestors[1] || "";
+    if (treeCardFormEl("grandfather3"))
+      treeCardFormEl("grandfather3").value = ancestors[2] || "";
+    if (treeCardFormEl("grandfather4"))
+      treeCardFormEl("grandfather4").value = ancestors[3] || "";
+    if (treeCardFormEl("submitterName"))
+      treeCardFormEl("submitterName").value = normalizeTreeCardText(
+        submitter.name || (row && row.name) || "",
+      );
+    if (treeCardFormEl("submitterPhone"))
+      treeCardFormEl("submitterPhone").value = normalizeAdminPhone(
+        submitter.phone || (row && row.phone) || "",
+      );
+    if (treeCardFormEl("submitterEmail"))
+      treeCardFormEl("submitterEmail").value = normalizeEmail(
+        submitter.email || (row && row.email) || "",
+      );
+
+    const fatherLeaf = normalizeTreeCardText(p.father || "");
+    const fatherPath = normalizeTreeCardText(
+      p.father_path || p.parent_path || p.parent_node_id || "",
+    );
+    const fatherPid = normalizeTreeCardText(
+      p.father_person_id ||
+        p.parent_person_id ||
+        p.selected_parent_person_id ||
+        "",
+    );
+    if (fatherPid || (fatherPath && fatherPath.indexOf("/") >= 0)) {
+      selectTreeCardFather({
+        path: fatherPath || fatherLeaf,
+        person_id: fatherPid,
+        label: fatherLeaf || relationLeafName(fatherPath) || "",
+        inferAncestors: !ancestors.length,
+        resolveIdentity: true,
+      });
+    } else {
+      // Text-only father from member request — show grandparents/name but do not
+      // pretend the father is verified until person_id is resolved.
+      clearTreeCardFatherSelection();
+      setFatherSearchOpen(false);
+      updateFatherCurrentUi();
+      if (fatherLeaf) {
+        showTreeCardEditError(
+          "جاري ربط الأب «" + fatherLeaf + "» بهوية الشجرة…",
+        );
+      }
+    }
+  }
+
+  /**
+   * Resolve admin-correction father person_id from request text + ancestors
+   * using targeted tree_children lookups (no full-branch dump).
+   */
+  async function autoResolveAdminFatherFromPayload(payload, branch) {
+    const sb = getClient();
+    const key = normalizeTreeCardText(branch || "");
+    const p = payload || {};
+    if (!sb || !key) return { ok: false, reason: "no_client" };
+
+    const existingPid = normalizeTreeCardText(
+      p.father_person_id ||
+        p.parent_person_id ||
+        p.selected_parent_person_id ||
+        "",
+    );
+    const existingPath = normalizeTreeCardText(
+      p.father_path || p.parent_path || p.parent_node_id || "",
+    );
+    if (existingPid) {
+      const verified = await resolveFatherIdentityInTree(
+        sb,
+        key,
+        existingPid,
+        existingPath,
+      );
+      if (verified.ok) return verified;
+    }
+
+    const hints = buildTreeCardFatherResolveHints(p, key);
+    const found = [];
+    const seenPid = {};
+    for (let i = 0; i < hints.hints.length; i += 1) {
+      const hint = hints.hints[i];
+      const path = normalizeTreeCardText(hint.path || "");
+      if (!path || path.indexOf("/") < 0) continue; // skip bare leaf guesses first
+      const resolved = await resolveFatherIdentityInTree(sb, key, "", path);
+      if (resolved && resolved.ok && resolved.person_id) {
+        if (seenPid[resolved.person_id]) continue;
+        seenPid[resolved.person_id] = true;
+        found.push(resolved);
+      }
+    }
+
+    // If full-path hints missed, try unique leaf under closest grandfather.
+    if (!found.length && hints.father) {
+      const leaf = hints.father;
+      const gf = hints.closestGrandfather || "";
+      let res = await sb
+        .from("tree_children")
+        .select("person_id,child_name,name,branch_key,parent_name,parent")
+        .eq("branch_key", key)
+        .ilike("child_name", "%/" + leaf)
+        .limit(20);
+      if (res.error || !Array.isArray(res.data) || !res.data.length) {
+        res = await sb
+          .from("tree_children")
+          .select("person_id,child_name,name,branch_key,parent_name,parent")
+          .eq("branch_key", key)
+          .ilike("child_name", "%" + leaf)
+          .limit(20);
+      }
+      if (!res.error && Array.isArray(res.data)) {
+        const leafHits = res.data.filter(function (r) {
+          const path = normalizeTreeCardText(r.child_name || r.name || "");
+          const pid = normalizeTreeCardText(r.person_id || "");
+          if (!pid || relationLeafName(path) !== leaf) return false;
+          if (gf && path.indexOf("/" + gf + "/" + leaf) < 0) return false;
+          return true;
+        });
+        const uniq = {};
+        leafHits.forEach(function (r) {
+          const pid = normalizeTreeCardText(r.person_id || "");
+          if (!pid || uniq[pid]) return;
+          uniq[pid] = {
+            ok: true,
+            path: normalizeTreeCardText(r.child_name || r.name || ""),
+            person_id: pid,
+          };
+        });
+        Object.keys(uniq).forEach(function (k) {
+          found.push(uniq[k]);
+        });
+      }
+    }
+
+    if (found.length === 1) {
+      return {
+        ok: true,
+        path: found[0].path,
+        person_id: found[0].person_id,
+        label: relationLeafName(found[0].path) || hints.father || "",
+      };
+    }
+    if (found.length > 1) {
       return {
         ok: false,
-        message: "أضف علاقة عائلية واحدة على الأقل.",
-        rows: [],
+        ambiguous: true,
+        candidates: found,
+        father: hints.father || "",
       };
-    return { ok: true, rows };
+    }
+    return { ok: false, reason: "not_found", father: hints.father || "" };
   }
+
+  function collectAdminCorrection(branch) {
+    const personName = normalizeTreeCardText(
+      treeCardFormEl("personName") && treeCardFormEl("personName").value,
+    );
+    const fatherPath = normalizeTreeCardText(
+      treeCardFormEl("fatherPath") && treeCardFormEl("fatherPath").value,
+    );
+    const fatherPid = normalizeTreeCardText(
+      treeCardFormEl("fatherPersonId") && treeCardFormEl("fatherPersonId").value,
+    );
+    const fatherLabel = normalizeTreeCardText(
+      treeCardFormEl("fatherLabel") && treeCardFormEl("fatherLabel").value,
+    );
+    const dob = normalizeTreeCardText(
+      treeCardFormEl("birthDate") && treeCardFormEl("birthDate").value,
+    );
+    const city = normalizeTreeCardText(
+      treeCardFormEl("city") && treeCardFormEl("city").value,
+    );
+    const area = normalizeTreeCardText(
+      treeCardFormEl("area") && treeCardFormEl("area").value,
+    );
+    const ancestors = [
+      normalizeTreeCardText(
+        treeCardFormEl("grandfather1") && treeCardFormEl("grandfather1").value,
+      ),
+      normalizeTreeCardText(
+        treeCardFormEl("grandfather2") && treeCardFormEl("grandfather2").value,
+      ),
+      normalizeTreeCardText(
+        treeCardFormEl("grandfather3") && treeCardFormEl("grandfather3").value,
+      ),
+      normalizeTreeCardText(
+        treeCardFormEl("grandfather4") && treeCardFormEl("grandfather4").value,
+      ),
+    ].filter(Boolean);
+    if (!personName) {
+      return { ok: false, message: "اكتب اسم الشخص المضاف." };
+    }
+    if (!fatherPath) {
+      return { ok: false, message: "اختر الأب من البحث قبل الحفظ." };
+    }
+    const isRoot = isTreeCardBranchRootPath(fatherPath, branch);
+    if (!isRoot && !fatherPid && fatherPath.indexOf("/") < 0) {
+      return {
+        ok: false,
+        message:
+          "اختر الأب من نتائج البحث حتى يُربط بمعرّف الشجرة قبل الحفظ.",
+      };
+    }
+    const fatherLeaf = fatherLabel || relationLeafName(fatherPath) || fatherPath;
+    const childPath = fatherPath + "/" + personName;
+    const rows = [
+      {
+        branch_key: branch,
+        parent_name: fatherPath,
+        child_name: childPath,
+        birth_date_g: dob || "",
+        parent_person_id: isRoot ? "" : fatherPid,
+        city: city || "",
+        area: area || "",
+      },
+    ];
+    return {
+      ok: true,
+      rows: rows,
+      personName: personName,
+      fatherPath: fatherPath,
+      fatherLeaf: fatherLeaf,
+      fatherPersonId: isRoot ? "" : fatherPid,
+      ancestors: ancestors,
+      dob: dob,
+      city: city,
+      area: area,
+      isRoot: isRoot,
+    };
+  }
+
+  async function verifyFatherPersonInTree(sb, branch, personId, pathHint) {
+    return resolveFatherIdentityInTree(sb, branch, personId, pathHint);
+  }
+
+  function resolveFatherPathFromPayload(payload, branch, pathToRow) {
+    const hints = buildTreeCardFatherResolveHints(payload || {}, branch);
+    const index = pathToRow || {};
+    for (let i = 0; i < hints.hints.length; i += 1) {
+      const hint = hints.hints[i];
+      const direct = index[hint.path];
+      if (direct && direct.person_id) {
+        return {
+          path: normalizeTreeCardText(direct.db_child_name || hint.path),
+          person_id: String(direct.person_id),
+        };
+      }
+      if (typeof resolveExistingTreeNode === "function") {
+        const resolved = resolveExistingTreeNode(index, {
+          path: hint.path,
+          leaf: relationLeafName(hint.path),
+          parentPath: hint.parentPath || "",
+        });
+        if (
+          resolved &&
+          resolved.ok &&
+          resolved.found &&
+          resolved.meta &&
+          resolved.meta.person_id
+        ) {
+          return {
+            path: normalizeTreeCardText(
+              resolved.meta.db_child_name || hint.path,
+            ),
+            person_id: String(resolved.meta.person_id),
+          };
+        }
+      }
+    }
+    return null;
+  }
+
   function normalizeKnownLahmSalehRows(rows, branch) {
     const source = Array.isArray(rows) ? rows : [];
     if (normalizeTreeCardText(branch) !== "لاحم") return source;
@@ -648,47 +1936,118 @@
     });
   }
   function openTreeCardEditor(row) {
-    const payload = extractTreeCardPayloadFromMessage(
-      row && row.message ? row.message : "",
-    );
-    if (!payload || !treeCardEditForm || !treeCardEditDialog) {
-      showAlert("error", "تعذر قراءة تفاصيل بطاقة الشجرة.");
-      return;
+    try {
+      const dialog =
+        document.getElementById("tree-card-edit-dialog") || treeCardEditDialog;
+      const form =
+        document.getElementById("tree-card-edit-form") || treeCardEditForm;
+      const payload = extractTreeCardPayloadFromMessage(
+        row && row.message ? row.message : "",
+      );
+      if (!payload) {
+        showAlert("error", "تعذر قراءة تفاصيل بطاقة الشجرة (لا يوجد JSON).");
+        return;
+      }
+      if (!dialog || !form || typeof dialog.showModal !== "function") {
+        showAlert("error", "نافذة التعديل غير متاحة في الصفحة. حدّث الصفحة بقوة.");
+        return;
+      }
+      treeCardEditRow = row;
+      showTreeCardEditError("");
+      // افتح النافذة فورًا قبل أي تعبئة — يمنع انطباع التجمّد.
+      if (dialog.open) {
+        try {
+          dialog.close();
+        } catch (_) {}
+      }
+      dialog.showModal();
+      renderOriginalRequestReview(payload, row);
+      fillCorrectionFieldsFromPayload(payload, row);
+      setFatherSearchOpen(false);
+      try {
+        const first = form.querySelector("#edit-card-person-name");
+        if (first && typeof first.focus === "function") first.focus();
+      } catch (_) {}
+
+      // Auto-bind father person_id from unique tree path (member text is not enough).
+      treeCardFatherAutoResolvePromise = (async function () {
+        const branch = normalizeTreeCardText(
+          (treeCardFormEl("branch") && treeCardFormEl("branch").value) ||
+            payload.branch_key ||
+            (row && row.branch_key) ||
+            "",
+        );
+        if (treeCardFatherPersonIdValue()) {
+          showTreeCardEditError("");
+          return;
+        }
+        const resolved = await autoResolveAdminFatherFromPayload(payload, branch);
+        if (treeCardEditRow !== row) return; // dialog moved on
+        // Admin may have picked a father while auto-resolve was in flight —
+        // never overwrite/clear that bind (dispatchEvent("input") used to).
+        if (treeCardFatherPersonIdValue()) {
+          showTreeCardEditError("");
+          return;
+        }
+        if (resolved && resolved.ok && resolved.person_id) {
+          selectTreeCardFather({
+            path: resolved.path,
+            person_id: resolved.person_id,
+            label:
+              resolved.label ||
+              relationLeafName(resolved.path) ||
+              normalizeTreeCardText(payload.father || ""),
+            inferAncestors: true,
+            resolveIdentity: false,
+          });
+          showTreeCardEditError("");
+          return;
+        }
+        if (resolved && resolved.ambiguous) {
+          showTreeCardEditError(
+            "يوجد أكثر من شخص باسم «" +
+              (resolved.father || "الأب") +
+              "». اختر الأب الصحيح من البحث.",
+          );
+          await seedFatherSearchTerm(resolved.father || "");
+          return;
+        }
+        const leaf = normalizeTreeCardText(payload.father || "");
+        if (leaf) {
+          showTreeCardEditError(
+            "تعذر ربط الأب «" +
+              leaf +
+              "» تلقائيًا. افتح «تغيير الأب» واختره من نتائج البحث.",
+          );
+          await seedFatherSearchTerm(leaf, {
+            placeholder: "ابحث عن الأب: " + leaf,
+          });
+        }
+      })().catch(function () {
+        if (treeCardFatherPersonIdValue()) {
+          showTreeCardEditError("");
+          return;
+        }
+        showTreeCardEditError(
+          "تعذر التحقق من الأب تلقائيًا. اختره يدويًا من البحث.",
+        );
+      });
+    } catch (err) {
+      console.error("openTreeCardEditor failed", err);
+      try {
+        showAlert(
+          "error",
+          "تعذر فتح التعديل: " +
+            String((err && err.message) || err || "خطأ غير معروف"),
+        );
+      } catch (_) {
+        try {
+          window.alert("تعذر فتح التعديل.");
+        } catch (_) {}
+      }
     }
-    treeCardEditRow = row;
-    const submitter = payload.submitter || {};
-    treeCardEditForm.elements.branch.value = normalizeTreeCardText(
-      payload.branch_key || row.branch_key || "",
-    );
-    if (treeCardRelations) treeCardRelations.innerHTML = "";
-    const built = buildTreeCardRows(
-      row,
-      treeCardEditForm.elements.branch.value,
-    );
-    const rawInitialRows =
-      Array.isArray(payload.tree_rows) && payload.tree_rows.length
-        ? payload.tree_rows
-        : built.ok
-          ? built.rows
-          : [];
-    const initialRows = normalizeKnownLahmSalehRows(
-      rawInitialRows,
-      treeCardEditForm.elements.branch.value,
-    );
-    initialRows.forEach((relation) => addRelationCard(relation));
-    if (!initialRows.length) addRelationCard(null);
-    treeCardEditForm.elements.submitterName.value = normalizeTreeCardText(
-      submitter.name || row.name || "",
-    );
-    treeCardEditForm.elements.submitterPhone.value = normalizeAdminPhone(
-      submitter.phone || row.phone || "",
-    );
-    treeCardEditForm.elements.submitterEmail.value = normalizeEmail(
-      submitter.email || row.email || "",
-    );
-    showTreeCardEditError("");
-    treeCardEditDialog.showModal();
   }
+
   function buildTreeCardRows(reqRow, branchOverride) {
     const payload = extractTreeCardPayloadFromMessage(
       reqRow && reqRow.message ? reqRow.message : "",
@@ -741,7 +2100,7 @@
         created_at: createdAt,
       };
       if (extra && typeof extra === "object") Object.assign(row, extra);
-      const TE = global.AlzidanTreeEngine;
+      const TE = treeEngineApi();
       if (TE && typeof TE.prepareChildWriteRow === "function") {
         const prepared = TE.prepareChildWriteRow(row);
         if (!prepared.ok) return;
@@ -750,12 +2109,22 @@
       const fatherPath = normalizeTreeCardText(payload.father_path || father);
       if (
         fatherPersonId &&
-        fatherPath &&
-        normalizeTreeCardText(row.parent_name || row.parent || "") ===
-          fatherPath &&
         !normalizeTreeCardText(row.parent_person_id || "")
       ) {
-        row.parent_person_id = fatherPersonId;
+        const rowParent = normalizeTreeCardText(row.parent_name || row.parent || "");
+        const fatherLeaf = relationLeafName(fatherPath || father);
+        const rowLeaf = relationLeafName(rowParent);
+        const isSelectedFather =
+          !!rowParent &&
+          ((fatherPath && rowParent === fatherPath) ||
+            (!!father && rowParent === father) ||
+            // Short parent leaf on the son edge (legacy payloads).
+            (rowParent.indexOf("/") < 0 &&
+              fatherLeaf &&
+              rowLeaf === fatherLeaf));
+        if (isSelectedFather) {
+          row.parent_person_id = fatherPersonId;
+        }
       }
       rows.push(row);
     }
@@ -832,7 +2201,7 @@
       return {
         ok: false,
         message:
-          "يلزم parent_person_id / father_person_id من اختيار الأب في الواجهة قبل الاعتماد (TREE-003).",
+          "يلزم parent_person_id / father_person_id قبل الاعتماد (TREE-003). إن وُجد مسار فريد سيُحل تلقائياً عند القبول؛ وإلا افتح «تعديل كامل» واختر الأب من الشجرة ثم احفظ.",
         code: "TREE-003",
         rows: [],
       };
@@ -915,49 +2284,127 @@
     });
     return { ok: true, rows, father_person_id: fatherPersonId, father_path: fatherPath };
   }
-  if (treeCardAddRelation) {
-    treeCardAddRelation.addEventListener("click", () => addRelationCard(null));
-  }
-  if (treeCardEditForm && treeCardEditForm.elements.branch) {
-    treeCardEditForm.elements.branch.addEventListener("change", () => {
-      const branch = normalizeTreeCardText(
-        treeCardEditForm.elements.branch.value,
-      );
-      const root = branch ? branch + " بن مطلق بن زيدان" : "";
-      getRelationCards().forEach((card) => {
-        const select = card.querySelector('[name="relationParent"]');
-        if (
-          select &&
-          select.value.includes(" بن مطلق بن زيدان") &&
-          !select.value.includes("/")
-        ) {
-          select.dataset.value = root;
-        }
+  (function bindTreeCardFatherSearch() {
+    if (
+      typeof document === "undefined" ||
+      typeof document.addEventListener !== "function" ||
+      typeof document.getElementById !== "function"
+    ) {
+      return;
+    }
+    const changeBtn = document.getElementById("edit-card-father-change");
+    const clearBtn = document.getElementById("edit-card-father-clear");
+    const searchInput = document.getElementById("edit-card-father-search");
+    if (changeBtn) {
+      changeBtn.addEventListener("click", function () {
+        setFatherSearchOpen(true);
       });
-      refreshRelationParentOptions();
+    }
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        clearTreeCardFatherSelection();
+      });
+    }
+    if (searchInput) {
+      searchInput.addEventListener("input", function () {
+        // Typing means the admin is changing father — clear prior bind.
+        // Programmatic seeds must use seedFatherSearchTerm (not input events).
+        const pathEl = treeCardFormEl("fatherPath");
+        const pidEl = treeCardFormEl("fatherPersonId");
+        const labelEl = treeCardFormEl("fatherLabel");
+        if (
+          (pidEl && pidEl.value) ||
+          (pathEl && normalizeTreeCardText(pathEl.value))
+        ) {
+          if (pathEl) pathEl.value = "";
+          if (pidEl) pidEl.value = "";
+          if (labelEl) labelEl.value = "";
+          updateFatherCurrentUi();
+        }
+        const term = searchInput.value;
+        if (treeCardFatherSearchTimer) clearTimeout(treeCardFatherSearchTimer);
+        treeCardFatherSearchTimer = setTimeout(async function () {
+          const seq = ++treeCardFatherSearchSeq;
+          const branch = normalizeTreeCardText(
+            treeCardFormEl("branch") && treeCardFormEl("branch").value,
+          );
+          const items = await queryFatherSearchCandidates(branch, term);
+          if (seq !== treeCardFatherSearchSeq) return;
+          renderFatherSearchResults(items);
+        }, TREE_CARD_FATHER_SEARCH_DEBOUNCE_MS);
+      });
+      searchInput.addEventListener("focus", function () {
+        // Re-query for the visible term without clearing a bound father.
+        const term = normalizeTreeCardText(searchInput.value);
+        if (!term) return;
+        const seq = ++treeCardFatherSearchSeq;
+        const branch = normalizeTreeCardText(
+          treeCardFormEl("branch") && treeCardFormEl("branch").value,
+        );
+        queryFatherSearchCandidates(branch, term).then(function (items) {
+          if (seq !== treeCardFatherSearchSeq) return;
+          renderFatherSearchResults(items);
+        });
+      });
+    }
+    document.addEventListener("click", function (e) {
+      const wrap = document.getElementById("edit-card-father-search-wrap");
+      const results = document.getElementById("edit-card-father-results");
+      if (!wrap || !results || !results.classList.contains("fm-open")) return;
+      if (wrap.contains(e.target)) return;
+      results.classList.remove("fm-open");
+    });
+  })();
+
+  if (treeCardEditForm && treeCardEditForm.elements.branch) {
+    treeCardEditForm.elements.branch.addEventListener("change", function () {
+      clearTreeCardFatherSelection();
+      setFatherSearchOpen(false);
+      updateFatherCurrentUi();
+      showTreeCardEditError("تغيّر الفرع — اختر الأب من جديد عبر «تغيير الأب».");
     });
   }
   if (treeCardEditCancel) {
     treeCardEditCancel.addEventListener("click", () => {
       treeCardEditRow = null;
+      treeCardFatherAutoResolvePromise = null;
       showTreeCardEditError("");
       if (treeCardEditDialog && treeCardEditDialog.open)
         treeCardEditDialog.close();
     });
   }
   if (treeCardEditForm) {
+    // Never use method=dialog auto-close: if submit is cancelled/fails mid-flight,
+    // the dialog must stay open with a visible error (not a silent close).
+    try {
+      treeCardEditForm.setAttribute("method", "post");
+      treeCardEditForm.setAttribute("action", "#");
+    } catch (_) {}
     treeCardEditForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (typeof event.stopPropagation === "function") event.stopPropagation();
       showTreeCardEditError("");
       const row = treeCardEditRow;
       if (!row) {
         showTreeCardEditError("تعذر تحديد الطلب.");
         return;
       }
+      const submitBtn = treeCardEditForm.querySelector('button[type="submit"]');
+      try {
+      // Wait for open-path auto-resolve so Save does not run on text-only father.
+      if (treeCardFatherAutoResolvePromise) {
+        try {
+          await treeCardFatherAutoResolvePromise;
+        } catch (_) {}
+        if (treeCardEditRow !== row) {
+          showTreeCardEditError("أُغلق التعديل أثناء التحقق من الأب — أعد فتح «تعديل كامل».");
+          return;
+        }
+      }
       const branch = normalizeTreeCardText(
         treeCardEditForm.elements.branch.value,
       );
-      const relations = collectRelationRows(branch);
+      const correction = collectAdminCorrection(branch);
       const submitterName = normalizeTreeCardText(
         treeCardEditForm.elements.submitterName.value,
       );
@@ -969,12 +2416,12 @@
       );
       if (
         !branch ||
-        !relations.ok ||
+        !correction.ok ||
         !submitterName ||
         submitterPhone.length < 9
       ) {
         showTreeCardEditError(
-          relations.ok ? "أكمل الفرع وبيانات المرسل." : relations.message,
+          correction.ok ? "أكمل الفرع وبيانات المرسل." : correction.message,
         );
         return;
       }
@@ -983,71 +2430,112 @@
         return;
       }
       const oldPayload = extractTreeCardPayloadFromMessage(row.message) || {};
-      const lastRelation = relations.rows[relations.rows.length - 1];
-      const personName = relationLeafName(lastRelation.child_name);
-      const father = lastRelation.parent_name;
-      const sb = getClient();
-      const token = getAdminToken();
-      const id = coerceRpcId(row.id != null ? row.id : row.request_id);
+      const core = window.AlzidanAdminCore || {};
+      const sb =
+        typeof getClient === "function"
+          ? getClient()
+          : typeof core.getClient === "function"
+            ? core.getClient()
+            : null;
+      const token = String(
+        (typeof getAdminToken === "function"
+          ? getAdminToken()
+          : typeof core.getAdminToken === "function"
+            ? core.getAdminToken()
+            : "") || "",
+      ).trim();
+      const idCoerce =
+        typeof coerceRpcId === "function"
+          ? coerceRpcId
+          : typeof core.coerceRpcId === "function"
+            ? core.coerceRpcId
+            : function (v) {
+                return String(v == null ? "" : v).trim();
+              };
+      const id = idCoerce(row.id != null ? row.id : row.request_id);
       if (!sb || !token || !id) {
         showTreeCardEditError("يلزم تسجيل الدخول والاتصال بقاعدة البيانات.");
         return;
       }
-      // Stamp parent_person_id from exact path index only (TREE-004) before saving request.
-      const pathToRow = await loadPathToRowForBranch(sb, branch);
+
       const stampedRows = [];
-      for (let i = 0; i < relations.rows.length; i += 1) {
-        const edge = Object.assign({}, relations.rows[i]);
+      for (let i = 0; i < correction.rows.length; i += 1) {
+        const edge = Object.assign({}, correction.rows[i]);
         const parent = normalizeTreeCardText(edge.parent_name || "");
-        const branchRoot = branch + " بن مطلق بن زيدان";
-        const isRoot = parent === branch || parent === branchRoot;
+        const isRoot = isTreeCardBranchRootPath(parent, branch);
         if (!isRoot) {
-          const meta = pathToRow[parent];
-          const pid = meta && meta.person_id ? String(meta.person_id) : "";
+          let pid = normalizeTreeCardText(edge.parent_person_id || "");
+          const pathHint = normalizeTreeCardText(
+            edge.parent_name || correction.fatherPath || "",
+          );
+          if (!pid && pathHint) {
+            const resolvedEarly = await verifyFatherPersonInTree(
+              sb,
+              branch,
+              "",
+              pathHint,
+            );
+            if (resolvedEarly && resolvedEarly.ok && resolvedEarly.person_id) {
+              pid = resolvedEarly.person_id;
+              if (resolvedEarly.path) edge.parent_name = resolvedEarly.path;
+            }
+          }
           if (!pid) {
-            showTreeCardEditError(
-              "تعذر تحديد parent_person_id للأب «" +
-                relationPathLabel(parent) +
-                "». اختر مسار أب فريد من الشجرة (TREE-003).",
-            );
+            showTreeCardEditError(TREE_CARD_RELATION_MISMATCH_AR);
             return;
           }
-          const matches = countExactParentPersonMatches(pathToRow, pid);
-          if (matches.count !== 1) {
-            showTreeCardEditError(
-              "الأب «" +
-                relationPathLabel(parent) +
-                "» غير فريد بالهوية — أوقف الحفظ (TREE-001).",
-            );
+          const verified = await verifyFatherPersonInTree(
+            sb,
+            branch,
+            pid,
+            edge.parent_name || pathHint,
+          );
+          if (!verified.ok || !verified.person_id) {
+            showTreeCardEditError(TREE_CARD_RELATION_MISMATCH_AR);
             return;
           }
-          edge.parent_person_id = pid;
+          if (verified.path) edge.parent_name = verified.path;
+          edge.child_name = edge.parent_name + "/" + correction.personName;
+          edge.parent_person_id = verified.person_id;
+        } else {
+          edge.parent_person_id = "";
         }
         stampedRows.push(edge);
       }
+
+      const fatherPath = normalizeTreeCardText(
+        (stampedRows[0] && stampedRows[0].parent_name) || correction.fatherPath,
+      );
       const fatherPersonId = normalizeTreeCardText(
-        (stampedRows.find((r) => r.parent_name === father) || {}).parent_person_id ||
-          (pathToRow[father] && pathToRow[father].person_id) ||
+        (stampedRows[0] && stampedRows[0].parent_person_id) ||
+          correction.fatherPersonId ||
           "",
       );
-      const payload = {
-        ...oldPayload,
+      const ancestors = correction.ancestors || [];
+
+      const payload = Object.assign({}, oldPayload, {
         v: 1,
         kind: "tree_card",
         branch_key: branch,
-        grandfather: "",
-        ancestors: [],
-        lineage_path: [],
-        tree_rows: stampedRows,
-        father: relationLeafName(father),
-        father_path: father,
+        name: correction.personName,
+        father: correction.fatherLeaf,
+        father_path: fatherPath,
         father_person_id: fatherPersonId,
         parent_person_id: fatherPersonId,
-        name: personName,
-        birth_date_g: lastRelation.birth_date_g || "",
-        city: "",
-        area: "",
-        children: [],
+        selected_parent_person_id: fatherPersonId,
+        parent_node_id: fatherPath,
+        parent_path: fatherPath,
+        grandfather: ancestors[0] || "",
+        grandfather2: ancestors[1] || "",
+        grandfather3: ancestors[2] || "",
+        grandfather4: ancestors[3] || "",
+        ancestors: ancestors,
+        lineage_path: [],
+        tree_rows: stampedRows,
+        birth_date_g: correction.dob || "",
+        city: correction.city || "",
+        area: correction.area || "",
+        children: Array.isArray(oldPayload.children) ? oldPayload.children : [],
         submitter: {
           name: submitterName,
           phone: submitterPhone,
@@ -1055,18 +2543,37 @@
         },
         created_at:
           oldPayload.created_at || row.created_at || new Date().toISOString(),
-      };
+        admin_corrected_at: new Date().toISOString(),
+      });
+
       const message = buildTreeCardMessageFromPayload(payload, row);
-      const oldBuilt = buildTreeCardRows(
-        row,
-        row.branch_key || oldPayload.branch_key || "",
-      );
-      if (!oldBuilt.ok) {
-        showTreeCardEditError(oldBuilt.message || "تعذر تجهيز بيانات الشجرة.");
-        return;
+      // p_old_tree_rows is only applied by RPC when status=approved.
+      // Pending member requests often lack father person_id — do NOT run
+      // buildTreeCardRows(old) through TREE-003 or save is blocked incorrectly.
+      let oldTreeRows = [];
+      if (String(row.status || "") === "approved") {
+        try {
+          const stampedOld = await stampTreeCardFatherPersonId(sb, row);
+          const oldSource =
+            stampedOld && stampedOld.ok && stampedOld.row
+              ? stampedOld.row
+              : row;
+          const oldBuilt = buildTreeCardRows(
+            oldSource,
+            row.branch_key || oldPayload.branch_key || "",
+          );
+          if (oldBuilt.ok) oldTreeRows = oldBuilt.rows || [];
+        } catch (_) {
+          oldTreeRows = [];
+        }
       }
-      const submitBtn = treeCardEditForm.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;
+      console.info("ADMIN_RPC admin_update_request_branch_v1 start", {
+        id: String(id),
+        father_person_id: fatherPersonId,
+        father_path: fatherPath,
+        status: row.status,
+      });
       const { data, error } = await sb.rpc("admin_update_request_branch_v1", {
         p_token: token,
         p_id: String(id),
@@ -1079,21 +2586,20 @@
         p_phone: submitterPhone,
         p_email: submitterEmail || null,
         p_message: message,
-        p_old_tree_rows: oldBuilt.rows,
+        p_old_tree_rows: oldTreeRows,
         p_new_tree_rows: stampedRows,
       });
       if (submitBtn) submitBtn.disabled = false;
+      console.info("ADMIN_RPC admin_update_request_branch_v1 done", {
+        id: String(id),
+        data: data,
+        error: error && error.message,
+      });
       if (error) {
-        const errorText = String(error.message || "");
-        const missingRpc =
-          errorText.toLowerCase().includes("could not find the function") ||
-          errorText.toLowerCase().includes("does not exist") ||
-          String(error.code || "").toLowerCase() === "pgrst202";
-        showTreeCardEditError(
-          missingRpc
-            ? "تعذر حفظ التعديلات حالياً، حاول لاحقاً أو تواصل مع الإدارة."
-            : "تعذر حفظ التعديلات حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
-        );
+        const errMsg =
+          "تعذر حفظ التعديلات حالياً، حاول لاحقاً أو تواصل مع الإدارة." +
+          (error.message ? " (" + String(error.message) + ")" : "");
+        showTreeCardEditError(errMsg);
         return;
       }
       if (data !== true) {
@@ -1101,16 +2607,48 @@
         return;
       }
       treeCardEditRow = null;
-      treeCardEditDialog.close();
-      showAlert(
-        "success",
+      treeCardFatherAutoResolvePromise = null;
+      if (treeCardEditDialog && treeCardEditDialog.open) {
+        treeCardEditDialog.close();
+      } else {
+        const dlg =
+          document.getElementById("tree-card-edit-dialog") || treeCardEditDialog;
+        if (dlg && dlg.open) dlg.close();
+      }
+      const alertFn =
+        typeof showAlert === "function"
+          ? showAlert
+          : typeof core.showAlert === "function"
+            ? core.showAlert
+            : null;
+      const okMsg =
         row.status === "approved"
-          ? "تم تعديل الطلب وتصحيح بيانات الشجرة."
-          : "تم تعديل الطلب كاملًا.",
-      );
+          ? "تم حفظ تصحيح الإدارة وتحديث بيانات الشجرة."
+          : "تم حفظ تصحيح الإدارة.";
+      if (alertFn) {
+        alertFn("success", okMsg);
+      }
+      try {
+        const sbStatus = document.getElementById("sb-status");
+        if (sbStatus) {
+          sbStatus.textContent = okMsg;
+          sbStatus.style.color = "#065f46";
+        }
+      } catch (_) {}
       await reloadRequests();
+      } catch (saveErr) {
+        if (submitBtn) submitBtn.disabled = false;
+        try {
+          console.error("tree-card-edit save failed", saveErr);
+        } catch (_) {}
+        const errMsg =
+          "تعذر حفظ التصحيح: " +
+          String((saveErr && saveErr.message) || saveErr || "خطأ غير متوقع");
+        showTreeCardEditError(errMsg);
+      }
     });
   }
+
   function canonicalHelpers() {
     return {
       normalizePersonName: normalizeTreeCardText,
@@ -1171,9 +2709,32 @@
     if (a === b) return true;
     const aLeaf = relationLeafName(a);
     const bLeaf = relationLeafName(b);
-    if (a === bLeaf || b === aLeaf) return true;
-    if (a.endsWith("/" + b) || b.endsWith("/" + aLeaf)) return true;
+    const aIsPath = a.indexOf("/") >= 0;
+    const bIsPath = b.indexOf("/") >= 0;
+    // Full path vs full path: never treat shared leaf (محمد) as the same father.
+    if (aIsPath && bIsPath) {
+      return a.endsWith("/" + b) || b.endsWith("/" + a);
+    }
+    if (!aIsPath) {
+      return b === a || bLeaf === a || b.endsWith("/" + a);
+    }
+    if (!bIsPath) {
+      return a === b || aLeaf === b || a.endsWith("/" + b);
+    }
     return false;
+  }
+
+  /** True when an indexed tree row sits under the intended parent (UUID and/or path). */
+  function metaMatchesIntendedParent(meta, parentPersonId, parentPath) {
+    if (!meta) return false;
+    const wantPid = normalizeTreeCardText(parentPersonId || "");
+    const metaPid = normalizeTreeCardText(meta.parent_person_id || "");
+    if (wantPid) {
+      return !!metaPid && metaPid === wantPid;
+    }
+    const wantParent = normalizeTreeCardText(parentPath || "");
+    if (!wantParent) return true;
+    return parentPathsCompatible(wantParent, meta.db_parent_name || "");
   }
 
   /**
@@ -1216,7 +2777,10 @@
       if (byPid.count === 1 && byPid.meta) {
         // Ignore a stamped person_id that conflicts with the edge's parent/child path
         // (legacy tree_rows often copied father_person_id onto every ancestor edge).
-        if (metaMatchesWantedPath(byPid.meta)) {
+        if (
+          metaMatchesWantedPath(byPid.meta) &&
+          metaMatchesIntendedParent(byPid.meta, parentPersonId, parentPath)
+        ) {
           return { ok: true, found: true, meta: byPid.meta };
         }
       } else if (byPid.count > 1) {
@@ -1231,7 +2795,10 @@
     }
 
     if (path && pathToRow && pathToRow[path] && pathToRow[path].id) {
-      return { ok: true, found: true, meta: pathToRow[path] };
+      const exactMeta = pathToRow[path];
+      if (metaMatchesIntendedParent(exactMeta, parentPersonId, parentPath)) {
+        return { ok: true, found: true, meta: exactMeta };
+      }
     }
 
     if (CP && typeof CP.resolveFromPathIndex === "function" && (path || personId)) {
@@ -1241,7 +2808,12 @@
         personId,
         canonicalHelpers(),
       );
-      if (fromIndex && fromIndex.ok && fromIndex.meta) {
+      if (
+        fromIndex &&
+        fromIndex.ok &&
+        fromIndex.meta &&
+        metaMatchesIntendedParent(fromIndex.meta, parentPersonId, parentPath)
+      ) {
         return { ok: true, found: true, meta: fromIndex.meta };
       }
       if (fromIndex && fromIndex.code === "TREE-001") {
@@ -1549,11 +3121,86 @@
     return child.indexOf("/") >= 0 ? child : leaf;
   }
 
+  /** Ancestors closest-first (grandfather first) from tree_card JSON. */
+  function treeCardAncestorsClosestFirst(payload) {
+    const fromArray = Array.isArray(payload && payload.ancestors)
+      ? payload.ancestors
+      : [];
+    const fromFields = [
+      payload && payload.grandfather,
+      payload && payload.grandfather2,
+      payload && payload.grandfather3,
+      payload && payload.grandfather4,
+    ].filter(Boolean);
+    return (fromArray.length ? fromArray : fromFields)
+      .map((v) => normalizeTreeCardText(v))
+      .filter(Boolean);
+  }
+
+  /**
+   * Build father path / leaf hints for UUID stamp (prefer unique slash paths).
+   * Ancestors are closest-first → reverse for root→…→father.
+   */
+  function buildTreeCardFatherResolveHints(payload, branchKey) {
+    const branch = normalizeTreeCardText(branchKey || "");
+    const branchRoot = branch ? branch + " بن مطلق بن زيدان" : "";
+    const father = normalizeTreeCardText((payload && payload.father) || "");
+    const ancestorsClosest = treeCardAncestorsClosestFirst(payload || {});
+    const farthestFirst = ancestorsClosest.slice().reverse();
+    const closestGrandfather = ancestorsClosest[0] || "";
+    const ordered = [];
+    const seen = {};
+    function pushHint(path, parentPath) {
+      const p = normalizeTreeCardText(path || "");
+      if (!p) return;
+      const key = p + "|" + normalizeTreeCardText(parentPath || "");
+      if (seen[key]) return;
+      seen[key] = true;
+      ordered.push({
+        path: p,
+        parentPath: normalizeTreeCardText(parentPath || ""),
+      });
+    }
+
+    // Explicit path fields first (RX / edit dialog).
+    pushHint(payload && payload.parent_node_id, closestGrandfather);
+    pushHint(payload && payload.father_path, closestGrandfather);
+    pushHint(payload && payload.parent_path, closestGrandfather);
+
+    // Reconstruct unique path: branchRoot / فايز / … / هاجس / محمد
+    if (father && farthestFirst.length) {
+      if (branchRoot) {
+        pushHint([branchRoot].concat(farthestFirst, [father]).join("/"), "");
+      }
+      pushHint(farthestFirst.concat([father]).join("/"), "");
+      // Father leaf constrained by closest grandfather (disambiguates محمد).
+      pushHint(father, closestGrandfather);
+      if (branchRoot && farthestFirst.length) {
+        pushHint(
+          father,
+          [branchRoot].concat(farthestFirst).join("/"),
+        );
+        pushHint(father, farthestFirst.join("/"));
+      }
+    } else if (father) {
+      pushHint(father, "");
+    }
+
+    return {
+      hints: ordered,
+      father: father,
+      closestGrandfather: closestGrandfather,
+      ancestorsClosest: ancestorsClosest,
+    };
+  }
+
   /**
    * Stamp missing father person_id for RX / legacy payloads that only stored a path.
+   * Uses ancestors + father when UUID missing; unique match only (TREE-001 if ambiguous).
    * Always hits tree_children when resolution is needed (visible Fetch on Accept).
    */
   async function stampTreeCardFatherPersonId(sb, reqRow) {
+    const CP = window.AlzidanCanonicalPerson;
     const payload = extractTreeCardPayloadFromMessage(
       reqRow && reqRow.message ? reqRow.message : "",
     );
@@ -1569,48 +3216,79 @@
     const branchKey = normalizeTreeCardText(
       payload.branch_key || (reqRow && reqRow.branch_key) || "",
     );
-    const hints = [
-      payload.parent_node_id,
-      payload.father_path,
-      payload.parent_path,
-      payload.father,
-    ]
-      .map((v) => normalizeTreeCardText(v))
-      .filter(Boolean);
+    const builtHints = buildTreeCardFatherResolveHints(payload, branchKey);
+    const hints = builtHints.hints;
     if (!sb || !branchKey || !hints.length) {
-      return { ok: true, row: reqRow, resolved: false };
+      return {
+        ok: false,
+        code: (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
+        message:
+          "يلزم parent_person_id / father_person_id من اختيار الأب قبل الاعتماد (TREE-003). افتح «تعديل كامل» واختر الأب من الشجرة ثم احفظ وأعد القبول.",
+        row: reqRow,
+        resolved: false,
+      };
     }
 
     console.info("ADMIN_RPC approve resolve-parent start", {
       request_id: reqRow && reqRow.request_id,
       branch_key: branchKey,
-      hints: hints.slice(0, 4),
+      hints: hints.slice(0, 6).map((h) => h.path),
+      ancestors: builtHints.ancestorsClosest.slice(0, 6),
     });
     const pathToRow = await loadPathToRowForBranch(sb, branchKey);
     let personId = "";
     let fatherPath = "";
+    let ambiguous = null;
     for (let i = 0; i < hints.length; i += 1) {
       const hint = hints[i];
-      const direct = pathToRow[hint];
+      const direct = pathToRow[hint.path];
       if (direct && direct.person_id) {
         personId = String(direct.person_id);
-        fatherPath = normalizeTreeCardText(direct.db_child_name || hint);
+        fatherPath = normalizeTreeCardText(direct.db_child_name || hint.path);
         break;
       }
       const resolved = resolveExistingTreeNode(pathToRow, {
-        path: hint,
-        leaf: relationLeafName(hint),
+        path: hint.path,
+        leaf: relationLeafName(hint.path),
+        parentPath: hint.parentPath || "",
       });
       if (resolved && resolved.ok && resolved.found && resolved.meta && resolved.meta.person_id) {
         personId = String(resolved.meta.person_id);
         fatherPath = normalizeTreeCardText(
-          resolved.meta.db_child_name || hint,
+          resolved.meta.db_child_name || hint.path,
         );
         break;
       }
+      if (resolved && !resolved.ok && resolved.code === "TREE-001") {
+        ambiguous = resolved;
+      }
+    }
+    if (!personId && ambiguous) {
+      return {
+        ok: false,
+        code: "TREE-001",
+        message:
+          "الأب «" +
+          relationPathLabel(builtHints.father || "") +
+          "» يطابق أكثر من شخص — لن يُعتمد بلا مسار فريد. افتح «تعديل كامل» واختر مسار الأب من الشجرة (TREE-001).",
+        row: reqRow,
+        resolved: false,
+        matchCount: ambiguous.matchCount || 0,
+      };
     }
     if (!personId) {
-      return { ok: true, row: reqRow, resolved: false };
+      return {
+        ok: false,
+        code: (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
+        message:
+          "تعذر تحديد معرّف الأب من المسار النصي (TREE-003). افتح «تعديل كامل» واختر الأب «" +
+          relationPathLabel(builtHints.father || "") +
+          "» تحت «" +
+          relationPathLabel(builtHints.closestGrandfather || "") +
+          "» من الشجرة ثم احفظ وأعد القبول.",
+        row: reqRow,
+        resolved: false,
+      };
     }
 
     const stamped = Object.assign({}, payload, {
@@ -1619,7 +3297,33 @@
       father_path: fatherPath || payload.father_path || payload.parent_node_id || "",
       parent_node_id:
         payload.parent_node_id || fatherPath || payload.father_path || "",
+      parent_path:
+        payload.parent_path || fatherPath || payload.father_path || "",
     });
+    // Keep tree_rows edges in sync so approve does not lose parent_person_id
+    // when legacy payloads only had path text on the son edge.
+    if (Array.isArray(payload.tree_rows) && payload.tree_rows.length) {
+      const fatherLeaf = relationLeafName(fatherPath || stamped.father || "");
+      stamped.tree_rows = payload.tree_rows.map(function (edge) {
+        const next = Object.assign({}, edge || {});
+        const parent = normalizeTreeCardText(next.parent_name || "");
+        if (!parent) return next;
+        if (normalizeTreeCardText(next.parent_person_id || "")) return next;
+        const isFatherEdge =
+          (fatherPath && parent === fatherPath) ||
+          parent === normalizeTreeCardText(stamped.father || "") ||
+          (parent.indexOf("/") < 0 &&
+            fatherLeaf &&
+            relationLeafName(parent) === fatherLeaf);
+        if (isFatherEdge) next.parent_person_id = personId;
+        if (fatherPath && isFatherEdge && parent.indexOf("/") < 0) {
+          next.parent_name = fatherPath;
+          const leaf = relationLeafName(next.child_name || stamped.name || "");
+          if (leaf) next.child_name = fatherPath + "/" + leaf;
+        }
+        return next;
+      });
+    }
     const marker = "__JSON__:";
     const text = String(reqRow.message || "");
     const idx = text.indexOf(marker);
@@ -1629,6 +3333,7 @@
     console.info("ADMIN_RPC approve resolve-parent ok", {
       request_id: reqRow && reqRow.request_id,
       person_id: personId,
+      father_path: fatherPath,
     });
     return {
       ok: true,
@@ -1647,6 +3352,14 @@
   async function importTreeCardToTree(sb, token, reqRow) {
     const CP = window.AlzidanCanonicalPerson;
     const stamped = await stampTreeCardFatherPersonId(sb, reqRow);
+    if (stamped && stamped.ok === false) {
+      return requestFail(
+        stamped.code || (CP && CP.ERROR && CP.ERROR.TREE_003) || "TREE-003",
+        stamped.message ||
+          "يلزم تحديد الأب قبل الاعتماد (TREE-003). افتح «تعديل كامل» واختره من الشجرة.",
+        { matchCount: stamped.matchCount || 0 },
+      );
+    }
     const workingRow = stamped && stamped.row ? stamped.row : reqRow;
     const built = buildTreeCardRows(workingRow);
     if (!built.ok) {
@@ -1695,30 +3408,43 @@
       if (!existingChild.ok) return existingChild;
       if (existingChild.found && existingChild.meta) {
         const meta = existingChild.meta;
-        const reuse = Object.assign({}, row, {
-          child_name: meta.db_child_name || row.child_name,
-          parent_name:
-            meta.db_parent_name || row.parent_name || row.parent || "",
-          parent: meta.db_parent_name || row.parent_name || row.parent || "",
-          person_id: meta.person_id || row.person_id || "",
-          parent_person_id:
-            meta.parent_person_id || row.parent_person_id || "",
-        });
-        pathToRow = indexImportedChild(pathToRow, {
-          id: meta.id,
-          person_id: reuse.person_id,
-          parent_person_id: reuse.parent_person_id,
-          parent_name: reuse.parent_name,
-          parent: reuse.parent_name,
-          child_name: reuse.child_name,
-          name: reuse.child_name,
-        });
-        appliedRows.push(reuse);
-        skippedTotal += 1;
-        continue;
+        const wantPid = normalizeTreeCardText(row.parent_person_id || "");
+        const metaPid = normalizeTreeCardText(meta.parent_person_id || "");
+        const wantParent = normalizeTreeCardText(row.parent_name || "");
+        const metaParent = normalizeTreeCardText(meta.db_parent_name || "");
+        // Never reuse a same-name child under a different محمد / father UUID.
+        const parentMismatch =
+          (wantPid && metaPid && wantPid !== metaPid) ||
+          (wantPid && !metaPid) ||
+          (wantParent.indexOf("/") >= 0 &&
+            metaParent.indexOf("/") >= 0 &&
+            wantParent !== metaParent);
+        if (!parentMismatch) {
+          const reuse = Object.assign({}, row, {
+            child_name: meta.db_child_name || row.child_name,
+            parent_name:
+              meta.db_parent_name || row.parent_name || row.parent || "",
+            parent: meta.db_parent_name || row.parent_name || row.parent || "",
+            person_id: meta.person_id || row.person_id || "",
+            parent_person_id:
+              meta.parent_person_id || row.parent_person_id || "",
+          });
+          pathToRow = indexImportedChild(pathToRow, {
+            id: meta.id,
+            person_id: reuse.person_id,
+            parent_person_id: reuse.parent_person_id,
+            parent_name: reuse.parent_name,
+            parent: reuse.parent_name,
+            child_name: reuse.child_name,
+            name: reuse.child_name,
+          });
+          appliedRows.push(reuse);
+          skippedTotal += 1;
+          continue;
+        }
       }
 
-      const TE = global.AlzidanTreeEngine;
+      const TE = treeEngineApi();
       let writeRow = row;
       if (TE && typeof TE.prepareChildWriteRow === "function") {
         const prepared = TE.prepareChildWriteRow(row);
@@ -1741,14 +3467,50 @@
       }
 
       const before = await fetchTreeCardChildRow(sb, writeRow);
-      const { data, error } = await sb.rpc("admin_tree_children_import_v1", {
+      // Prefer upsert-insert for missing children: admin_tree_children_import_v1
+      // step 4 can wrongly UPDATE another same-leaf son under a different محمد
+      // (shared parent leaf) instead of inserting under the selected father UUID.
+      let inserted = 0;
+      let updated = 0;
+      let skipped = 0;
+      const upsert = await sb.rpc("admin_tree_child_upsert_v1", {
         p_token: token,
-        p_rows: [writeRow],
+        p_row: writeRow,
       });
-      if (error) {
-        const msg = String(error.message || "");
+      if (upsert.error) {
+        const msg = String(upsert.error.message || "");
         const low = msg.toLowerCase();
-        if (low.includes("tree-001") || msg.includes("TREE-001")) {
+        // Older deployments may lack upsert — fall back to import RPC.
+        if (
+          /could not find|schema cache|pgrst202|does not exist/i.test(msg) ||
+          low.includes("pgrst202")
+        ) {
+          const { data, error } = await sb.rpc("admin_tree_children_import_v1", {
+            p_token: token,
+            p_rows: [writeRow],
+          });
+          if (error) {
+            const em = String(error.message || "");
+            const el = em.toLowerCase();
+            if (el.includes("tree-001") || em.includes("TREE-001")) {
+              return requestFail(
+                (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
+                "الأب «" +
+                  relationPathLabel(row.parent_name || "") +
+                  "» غامض أو غير فريد — أوقف الاعتماد (TREE-001).",
+                { detail: em },
+              );
+            }
+            return requestFail(
+              (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+              "تعذر إضافة البيانات للشجرة حالياً، حاول لاحقاً أو تواصل مع الإدارة. (REQ-002)",
+              { detail: em, rows: appliedRows },
+            );
+          }
+          inserted = data && data.inserted != null ? Number(data.inserted) : 0;
+          updated = data && data.updated != null ? Number(data.updated) : 0;
+          skipped = data && data.skipped != null ? Number(data.skipped) : 0;
+        } else if (low.includes("tree-001") || msg.includes("TREE-001")) {
           return requestFail(
             (CP && CP.ERROR && CP.ERROR.TREE_001) || "TREE-001",
             "الأب «" +
@@ -1756,17 +3518,22 @@
               "» غامض أو غير فريد — أوقف الاعتماد (TREE-001).",
             { detail: msg },
           );
+        } else {
+          return requestFail(
+            (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
+            "تعذر إضافة البيانات للشجرة حالياً، حاول لاحقاً أو تواصل مع الإدارة. (REQ-002)",
+            { detail: msg, rows: appliedRows },
+          );
         }
+      } else if (upsert.data && upsert.data.ok === false) {
         return requestFail(
           (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
           "تعذر إضافة البيانات للشجرة حالياً، حاول لاحقاً أو تواصل مع الإدارة. (REQ-002)",
-          { detail: msg, rows: appliedRows },
+          { detail: String((upsert.data && upsert.data.reason) || ""), rows: appliedRows },
         );
+      } else {
+        inserted = 1;
       }
-      const inserted =
-        data && data.inserted != null ? Number(data.inserted) : 0;
-      const updated = data && data.updated != null ? Number(data.updated) : 0;
-      const skipped = data && data.skipped != null ? Number(data.skipped) : 0;
       insertedTotal += Number.isFinite(inserted) ? inserted : 0;
       updatedTotal += Number.isFinite(updated) ? updated : 0;
       skippedTotal += Number.isFinite(skipped) ? skipped : 0;
@@ -1780,18 +3547,27 @@
       const linkedOk = writeRow.parent_person_id
         ? after &&
           String(after.parent_person_id || "") ===
-            String(writeRow.parent_person_id)
+            String(writeRow.parent_person_id) &&
+          normalizeTreeCardText(after.child_name || after.name || "") ===
+            normalizeTreeCardText(writeRow.child_name || "")
         : !!after && (isBranchRoot || !!after.parent_person_id);
       if (!linkedOk) {
+        const updatedOnly =
+          !inserted &&
+          (Number.isFinite(updated) ? updated : 0) > 0 &&
+          !!writeRow.parent_person_id;
         return requestFail(
           (CP && CP.ERROR && CP.ERROR.REQ_002) || "REQ-002",
-          (CP && CP.MSG && CP.MSG.REQ_002) ||
-            "فشل إنشاء أو ربط الابن بعد الاعتماد (REQ-002).",
+          updatedOnly
+            ? "تعذر إنشاء الابن تحت الأب المحدد: وُجد اسم مطابق تحت أب آخر بنفس ورقة الاسم، ولم يُدرج صف جديد تحت الأب المختار (REQ-002)."
+            : (CP && CP.MSG && CP.MSG.REQ_002) ||
+                "فشل إنشاء أو ربط الابن بعد الاعتماد (REQ-002).",
           {
             inserted: insertedTotal,
             updated: updatedTotal,
             skipped: skippedTotal,
             rows: appliedRows,
+            reason: updatedOnly ? "same_leaf_under_other_father" : "link_verify_failed",
           },
         );
       }
@@ -1872,6 +3648,12 @@
   window.AlzidanRequestActions = {
     setReloadRequests,
     publishEventCardRequest,
+    isEventPublishRequestKind,
+    familyEventDetailsMatchRequestId,
+    familyEventMatchesPublishIdentity,
+    unpublishPublishedEventForRequest,
+    notifyFamilyEventPush,
+    formatPushNotifyAdminMessage,
     openTreeCardEditor,
     importTreeCardToTree,
     reapplyApprovedTreeCard,
@@ -1881,6 +3663,8 @@
     alignChildPathUnderParent,
     verifyTreeCardRowsInTree,
     countExactParentPersonMatches,
+    buildTreeCardFatherResolveHints,
+    stampTreeCardFatherPersonId,
     updateBranchInRequestMessage,
     extractRequestMediaLinks,
     appendRequestMediaPreview,

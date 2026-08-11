@@ -595,12 +595,31 @@ async function familyApiSaveChild(payload) {
   return { ok: true, message: "تم حفظ بيانات الابن في قاعدة البيانات: " + finalName, selectedPersonId: childId };
 }
 
+function originLockMessage() {
+  const FM = window.AlzidanFamilyPersonCore || {};
+  return FM.ORIGIN_LOCK_MSG || "هذا من الأصول — لا يمكن تعديله أو حذفه.";
+}
+
+function isOriginNode(nodeId, parentId, personId) {
+  const FM = window.AlzidanFamilyPersonCore || {};
+  if (typeof FM.isOriginPerson !== "function") return false;
+  return !!FM.isOriginPerson(nodeId, state.branch, {
+    parentId: parentId || "",
+    personId: personId || "",
+    pathToRow: state.pathToRow || {},
+    normalizePersonName,
+  });
+}
+
 async function familyApiUpdateChild(payload) {
   if (!state.branch) return { ok: false, message: "يلزم تسجيل دخول المندوب أولاً." };
   const parentId = normalizePersonName(payload.parentId || "");
   const child = payload.child || {};
-  const childId = normalizePersonName(child.name || "");
+  const childId = normalizePersonName(payload.childId || child.name || "");
   if (!parentId || !childId) return { ok: false, message: "تعذر تحديد السجل." };
+  if (isOriginNode(childId, parentId, child.personId || payload.personId || "")) {
+    return { ok: false, message: originLockMessage() };
+  }
   const deceased = !!payload.deceased;
   const hijriInput = deceased ? "" : String(payload.hijri || "").trim();
   const gregInput = deceased ? "" : String(payload.greg || "").trim();
@@ -653,7 +672,11 @@ async function familyApiDeleteChild(payload) {
   if (!state.branch) return { ok: false, message: "يلزم تسجيل دخول المندوب أولاً." };
   const parentId = normalizePersonName(payload.parentId || "");
   const child = payload.child || {};
-  const childIdForDelete = normalizePersonName(child.name || "");
+  const childIdForDelete = normalizePersonName(payload.childId || child.name || "");
+  if (!parentId || !childIdForDelete) return { ok: false, message: "تعذر تحديد السجل." };
+  if (isOriginNode(childIdForDelete, parentId, child.personId || payload.personId || "")) {
+    return { ok: false, message: originLockMessage() };
+  }
   const display = getDisplayNameForNodeId(childIdForDelete, state.branch ? getBranchRootName(state.branch) : "");
   const nameToConfirm = normalizePersonName(display || normalizePersonBaseName(childIdForDelete) || childIdForDelete);
   const ok = await confirmTypedText(nameToConfirm, {
@@ -698,6 +721,10 @@ function buildDelegateFamilyApi() {
     getDefaultPersonId: (branchKey) => {
       const root = getBranchRootName(branchKey);
       return root || "";
+    },
+    isOriginPerson: (nodeId, opts) => {
+      const o = opts || {};
+      return isOriginNode(nodeId, o.parentId || o.parentName || "", o.personId || "");
     },
     ensurePersonOption: () => {},
     loadWivesForPerson: familyApiLoadWivesForPerson,

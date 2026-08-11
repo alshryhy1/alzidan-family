@@ -21,6 +21,8 @@
 -- -----------------------------------------------------------------------------
 -- A) Activate / upsert delegates_v2 from one approval_requests row (by pk id)
 -- -----------------------------------------------------------------------------
+-- NOTE: Prefer COPY-ME-delegates-v2-dual-role-activate.sql / sync-email preset
+-- (includes dual-intent message → full_delegate + email sync). Kept in sync here.
 create or replace function public.delegates_v2_activate_from_request_pk_v1(
   p_request_pk bigint
 )
@@ -41,6 +43,16 @@ declare
   v_enabled boolean;
   v_hash text;
   v_name text;
+  v_email_store text;
+  v_msg_json jsonb;
+  v_roles jsonb;
+  v_tree_status text;
+  v_events_status text;
+  v_tree_rid text;
+  v_events_rid text;
+  v_dual_from_message boolean := false;
+  v_marker int;
+  v_json_text text;
 begin
   if to_regclass('public.delegates_v2') is null then
     return jsonb_build_object('ok', false, 'reason', 'no_v2_schema');
@@ -72,7 +84,6 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'missing_identity');
   end if;
 
-  -- Latest tree + events rows for same identity (role inference)
   select * into v_tree
   from public.approval_requests r
   where r.kind = 'tree_delegate'
@@ -99,11 +110,49 @@ begin
   order by r.created_at desc nulls last
   limit 1;
 
-  v_role := public.delegates_v2_infer_role(v_tree.status, v_events.status);
-  v_enabled := (
-    coalesce(v_tree.status, '') = 'approved'
-    or coalesce(v_events.status, '') = 'approved'
-  );
+  v_tree_status := coalesce(v_tree.status, '');
+  v_events_status := coalesce(v_events.status, '');
+  v_tree_rid := nullif(btrim(coalesce(v_tree.request_id, '')), '');
+  v_events_rid := nullif(btrim(coalesce(v_events.request_id, '')), '');
+
+  v_msg_json := null;
+  begin
+    v_marker := position('__JSON__:' in coalesce(v_req.message, ''));
+    if v_marker > 0 then
+      v_json_text := btrim(substring(v_req.message from v_marker + length('__JSON__:')));
+      if v_json_text <> '' then
+        v_msg_json := v_json_text::jsonb;
+      end if;
+    end if;
+  exception when others then
+    v_msg_json := null;
+  end;
+
+  if coalesce(v_req.status, '') = 'approved' and v_msg_json is not null then
+    v_roles := coalesce(v_msg_json->'delegate_roles', '[]'::jsonb);
+    if jsonb_typeof(v_roles) = 'array'
+       and v_roles @> '["tree_delegate"]'::jsonb
+       and v_roles @> '["events_delegate"]'::jsonb then
+      v_dual_from_message := true;
+      if v_tree_rid is null then
+        v_tree_status := 'approved';
+        v_tree_rid := nullif(btrim(coalesce(v_req.request_id, '')), '');
+      elsif v_tree_status <> 'approved' and v_req.kind = 'tree_delegate' then
+        v_tree_status := 'approved';
+        v_tree_rid := nullif(btrim(coalesce(v_req.request_id, '')), '');
+      end if;
+      if v_events_rid is null then
+        v_events_status := 'approved';
+        v_events_rid := nullif(btrim(coalesce(v_req.request_id, '')), '');
+      elsif v_events_status <> 'approved' and v_req.kind = 'events_delegate' then
+        v_events_status := 'approved';
+        v_events_rid := nullif(btrim(coalesce(v_req.request_id, '')), '');
+      end if;
+    end if;
+  end if;
+
+  v_role := public.delegates_v2_infer_role(v_tree_status, v_events_status);
+  v_enabled := (v_tree_status = 'approved' or v_events_status = 'approved');
   v_hash := nullif(btrim(coalesce(
     case
       when v_req.kind = 'tree_delegate' then v_req.secret_hash
@@ -115,6 +164,12 @@ begin
     v_hash := nullif(btrim(coalesce(v_tree.secret_hash, v_events.secret_hash, '')), '');
   end if;
   v_name := nullif(btrim(coalesce(v_req.name, v_tree.name, v_events.name, '')), '');
+  v_email_store := nullif(lower(btrim(coalesce(
+    nullif(btrim(coalesce(v_req.email, '')), ''),
+    nullif(btrim(coalesce(v_tree.email, '')), ''),
+    nullif(btrim(coalesce(v_events.email, '')), ''),
+    ''
+  ))), '');
 
   select d.id into v_id
   from public.delegates_v2 d
@@ -136,12 +191,12 @@ begin
       nullif(btrim(v_req.branch_key), ''),
       v_name,
       nullif(btrim(v_req.phone), ''),
-      nullif(lower(btrim(coalesce(v_req.email, ''))), ''),
+      v_email_store,
       v_hash,
       v_role,
       v_enabled,
-      nullif(btrim(coalesce(v_tree.request_id, '')), ''),
-      nullif(btrim(coalesce(v_events.request_id, '')), ''),
+      v_tree_rid,
+      v_events_rid,
       now()
     )
     returning id into v_id;
@@ -149,17 +204,12 @@ begin
     update public.delegates_v2 d
     set
       name = coalesce(v_name, d.name),
+      email = coalesce(v_email_store, d.email),
       secret_hash = coalesce(v_hash, d.secret_hash),
       role_key = v_role,
       is_enabled = v_enabled,
-      tree_request_id = coalesce(
-        nullif(btrim(coalesce(v_tree.request_id, '')), ''),
-        d.tree_request_id
-      ),
-      events_request_id = coalesce(
-        nullif(btrim(coalesce(v_events.request_id, '')), ''),
-        d.events_request_id
-      ),
+      tree_request_id = coalesce(v_tree_rid, d.tree_request_id),
+      events_request_id = coalesce(v_events_rid, d.events_request_id),
       updated_at = now()
     where d.id = v_id;
   end if;
@@ -178,6 +228,8 @@ begin
       'status', v_req.status,
       'role_key', v_role,
       'is_enabled', v_enabled,
+      'email', v_email_store,
+      'dual_from_message', v_dual_from_message,
       'at', now()
     )
   );
@@ -187,7 +239,10 @@ begin
     'delegate_id', v_id,
     'role_key', v_role,
     'is_enabled', v_enabled,
-    'has_secret', v_hash is not null
+    'has_secret', v_hash is not null,
+    'dual_from_message', v_dual_from_message,
+    'tree_request_id', v_tree_rid,
+    'events_request_id', v_events_rid
   );
 end;
 $$;

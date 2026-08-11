@@ -1,4 +1,4 @@
-/* Request Experience — visitor intent-first (RX-1) */
+/* Home request hub — visitor intent-first */
 .rx-shell {
   background: linear-gradient(160deg, rgba(240, 253, 244, 0.95), rgba(255, 255, 255, 0.98));
   border: 1px solid rgba(16, 185, 129, 0.22);
@@ -110,30 +110,200 @@
   padding-top: 14px;
   border-top: 1px dashed rgba(15, 118, 110, 0.2);
 }
-.rx-track h3 {
-  margin: 0 0 6px;
+.rx-track-summary {
+  cursor: pointer;
+  list-style: none;
   color: #064e3b;
   font-size: 1.1rem;
+  font-weight: 800;
+  padding: 4px 0;
+  user-select: none;
+}
+.rx-track-summary::-webkit-details-marker {
+  display: none;
+}
+.rx-track-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  margin-inline-end: 4px;
+  color: #047857;
+  transition: transform 0.15s ease;
+}
+.rx-track[open] > .rx-track-summary::before {
+  transform: rotate(90deg);
+}
+.rx-track-body {
+  margin-top: 8px;
+}
+.rx-track-summary-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+.rx-track-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #fff;
+  color: #334155;
+}
+.rx-track-count b {
+  font-weight: 900;
+  margin-inline-start: 2px;
+}
+.rx-track-count--pending {
+  border-color: rgba(234, 88, 12, 0.35);
+  background: #fff7ed;
+  color: #9a3412;
+}
+.rx-track-count--approved {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: #f0fdf4;
+  color: #166534;
+}
+.rx-track-count--rejected {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: #fef2f2;
+  color: #991b1b;
+}
+.rx-track-box {
+  margin-top: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 8px;
+  display: grid;
+  gap: 12px;
+}
+.rx-track-bucket h4 {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.rx-track-bucket--pending h4 {
+  color: #9a3412;
+}
+.rx-track-bucket--approved h4 {
+  color: #166534;
+}
+.rx-track-bucket--rejected h4 {
+  color: #991b1b;
 }
 .rx-track-list {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
-.rx-track-list li {
+.rx-track-item {
+  margin: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #fff;
+  overflow: visible;
+}
+.rx-track-row {
+  width: 100%;
   display: grid;
-  gap: 2px;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  align-items: start;
   padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 0;
+  background: transparent;
+  text-align: inherit;
+  font: inherit;
+  color: inherit;
+  min-width: 0;
+}
+.rx-track-field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 6px 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+.rx-track-field--reason {
+  padding-top: 2px;
+  border-top: 1px dashed rgba(185, 28, 28, 0.22);
+}
+.rx-track-k {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748b;
+  white-space: nowrap;
+}
+.rx-track-type {
+  font-weight: 800;
+  color: #064e3b;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.rx-track-date {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .rx-track-status {
   font-weight: 800;
+  font-size: 0.88rem;
   color: #047857;
-  font-size: 0.92rem;
+  min-width: 0;
+}
+.rx-track-status--pending {
+  color: #c2410c;
+}
+.rx-track-status--approved {
+  color: #15803d;
+}
+.rx-track-status--rejected {
+  color: #b91c1c;
+}
+.rx-track-reason {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #7f1d1d;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.rx-track-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+.rx-track-more {
+  margin-top: 8px;
+}
+@media (max-width: 640px) {
+  .rx-track-box {
+    max-height: 340px;
+  }
+  .rx-track-field {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .rx-track-k {
+    font-size: 0.72rem;
+  }
 }
 .rx-actions {
   display: flex;
@@ -271,6 +441,60 @@
   font-weight: 800;
   color: #0f172a;
 }
+.rx-occasion-mount {
+  margin-top: 12px;
+}
+.rx-occasion-panel {
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px 12px 12px;
+}
+.rx-occasion-heading {
+  font-weight: 900;
+  color: #064e3b;
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+[data-rx-occasion-park][hidden] {
+  display: none !important;
+}
+.rx-patient-mount {
+  margin-top: 12px;
+}
+.rx-patient-panel {
+  border: 1px solid rgba(79, 113, 135, 0.28);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px 12px 12px;
+}
+.rx-patient-heading {
+  font-weight: 900;
+  color: #1e3a4c;
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+[data-rx-patient-park][hidden] {
+  display: none !important;
+}
+.rx-death-mount {
+  margin-top: 12px;
+}
+.rx-death-panel {
+  border: 1px solid rgba(120, 53, 15, 0.28);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px 12px 12px;
+}
+.rx-death-heading {
+  font-weight: 900;
+  color: #78350f;
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+[data-rx-death-park][hidden] {
+  display: none !important;
+}
 @media (max-width: 640px) {
   .rx-review dl > div {
     grid-template-columns: 1fr;
@@ -278,4 +502,100 @@
   .rx-shell-head {
     flex-direction: column;
   }
+}
+
+
+/* Event/health/death branch + person suggest (RX mount) */
+.rx-field-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b7280;
+}
+
+.rx-person-suggest {
+  margin-top: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.rx-person-suggest[hidden],
+.rx-field-hint[hidden] {
+  display: none !important;
+}
+
+.rx-person-suggest-btn {
+  display: block;
+  width: 100%;
+  text-align: right;
+  border: 0;
+  border-bottom: 1px solid #f3f4f6;
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.rx-person-suggest-btn:hover {
+  background: #f9fafb;
+}
+
+.rx-person-suggest-btn:last-child {
+  border-bottom: 0;
+}
+
+.rx-person-suggest-btn small {
+  color: #6b7280;
+}
+
+.rx-tree-edit-mount,
+.rx-memory-mount,
+.rx-special-card-mount {
+  margin-top: 12px;
+}
+.rx-tree-edit-panel,
+.rx-memory-panel,
+.rx-special-card-panel {
+  border: 1px solid rgba(6, 78, 59, 0.22);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px 12px 12px;
+}
+.rx-tree-edit-heading,
+.rx-memory-heading,
+.rx-special-card-heading {
+  font-weight: 900;
+  color: #064e3b;
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+[data-rx-tree-edit-park][hidden],
+[data-rx-memory-park][hidden],
+[data-rx-special-card-park][hidden] {
+  display: none !important;
+}
+.rx-edit-fields {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+.rx-edit-field-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+.rx-edit-field-row label.rx-edit-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rx-edit-field-row [data-edit-value-wrap] {
+  margin-top: 8px;
 }

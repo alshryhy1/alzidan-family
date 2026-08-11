@@ -167,6 +167,35 @@
     set("[data-em-person]", row.person || "");
     set("[data-em-date]", resolveEventDateInputValue ? resolveEventDateInputValue(row) : "");
     set("[data-em-show-days]", String(getEventVisibilityDays ? getEventVisibilityDays(row) : 7));
+    const Vis = typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+    const before =
+      Vis && typeof Vis.getShowBeforeDays === "function"
+        ? Vis.getShowBeforeDays(row)
+        : 3;
+    set("[data-em-show-before]", String(before));
+    const showAtRaw =
+      (row && (row.show_at || row.showAt)) ||
+      (Vis && Vis.resolveScheduleWindow
+        ? null
+        : null);
+    if (showAtRaw) {
+      try {
+        const d = new Date(String(showAtRaw));
+        if (Number.isFinite(d.getTime())) {
+          const local =
+            d.getFullYear() +
+            "-" +
+            String(d.getMonth() + 1).padStart(2, "0") +
+            "-" +
+            String(d.getDate()).padStart(2, "0") +
+            "T" +
+            String(d.getHours()).padStart(2, "0") +
+            ":" +
+            String(d.getMinutes()).padStart(2, "0");
+          set("[data-em-show-at]", local);
+        }
+      } catch (_) {}
+    }
     set("[data-em-type]", row.type || "");
 
     if (category === "happy") {
@@ -255,6 +284,22 @@
         if (category !== "death" && (!type || !person)) {
           return { ok: false, message: category === "sick" ? "يرجى اختيار نوع الحالة وكتابة اسم الشخص." : "يرجى اختيار نوع المناسبة وكتابة اسم الشخص." };
         }
+        if (category === "happy") {
+          const FormCore = window.AlzidanEventFormCore || {};
+          const allowed =
+            typeof FormCore.isAllowedHappyType === "function"
+              ? FormCore.isAllowedHappyType(type)
+              : type !== "engagement" && type !== "خطوبة";
+          if (!allowed) {
+            return { ok: false, message: "نوع المناسبة غير مسموح. اختر نوعًا من القائمة." };
+          }
+        }
+        if (category === "sick") {
+          const FormCore = window.AlzidanEventFormCore || {};
+          if (typeof FormCore.isAllowedSickType === "function" && !FormCore.isAllowedSickType(type)) {
+            return { ok: false, message: "نوع الحالة غير مسموح. اختر نوعًا من القائمة." };
+          }
+        }
         if (category === "death" && !person) {
           return { ok: false, message: "يرجى كتابة اسم المتوفى." };
         }
@@ -263,6 +308,32 @@
         if (!dateValue && todayGregorianISO) dateValue = todayGregorianISO();
         const dateLabel = formatDateISO ? formatDateISO(dateValue) : dateValue;
         const showDays = clampVisibilityDays ? clampVisibilityDays(v.showDays) : 7;
+        const Vis =
+          typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+        if (category === "happy" && Vis && typeof Vis.validateEventDateForSubmit === "function") {
+          const dateCheck = Vis.validateEventDateForSubmit(dateValue || dateLabel, {
+            category: "happy",
+            type: type,
+            required: true,
+          });
+          if (!dateCheck || !dateCheck.ok) {
+            return {
+              ok: false,
+              message:
+                (dateCheck && dateCheck.reason) ||
+                "تاريخ المناسبة منتهٍ ولا يمكن إرسالها. اختر تاريخًا اليوم أو لاحقًا.",
+            };
+          }
+        }
+        const showBeforeDays =
+          Vis && typeof Vis.clampShowBeforeDays === "function"
+            ? Vis.clampShowBeforeDays(
+                v.showBeforeDays != null ? v.showBeforeDays : v.show_before_days,
+                Vis.DEFAULT_SHOW_BEFORE_DAYS || 3
+              )
+            : 3;
+        const showAt = String(v.showAt || v.show_at || "").trim();
+        const endAt = String(v.endAt || v.end_at || "").trim();
 
         const sb = getClient ? getClient() : null;
         if (!sb) return { ok: false, message: "تعذر الحفظ حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
@@ -274,6 +345,12 @@
           dateLabel,
           eventDate: dateValue,
           showDays,
+          showBeforeDays,
+          show_before_days: showBeforeDays,
+          showAt: showAt || undefined,
+          show_at: showAt || undefined,
+          endAt: endAt || undefined,
+          end_at: endAt || undefined,
         });
 
         if (category === "happy") {
@@ -307,17 +384,35 @@
               : [];
         }
 
-        const patch =
-          typeof FormCore.buildRowFromForm === "function"
-            ? FormCore.buildRowFromForm(category, payloadValues)
-            : typeof Events.buildFamilyEventRow === "function"
-              ? Events.buildFamilyEventRow(
-                  FormCore.buildDelegateFormPayload
-                    ? FormCore.buildDelegateFormPayload(category, payloadValues)
-                    : payloadValues
-                )
-              : null;
-        if (!patch) return { ok: false, message: "وحدة المناسبات غير محمّلة." };
+        let patch = null;
+        try {
+          patch =
+            typeof FormCore.buildRowFromForm === "function"
+              ? FormCore.buildRowFromForm(category, payloadValues)
+              : typeof Events.buildFamilyEventRow === "function"
+                ? Events.buildFamilyEventRow(
+                    FormCore.buildDelegateFormPayload
+                      ? FormCore.buildDelegateFormPayload(category, payloadValues)
+                      : payloadValues
+                  )
+                : null;
+        } catch (buildErr) {
+          return {
+            ok: false,
+            message:
+              (buildErr && buildErr.message) ||
+              "نوع المناسبة غير مسموح. اختر نوعًا من القائمة.",
+          };
+        }
+        if (!patch) {
+          return {
+            ok: false,
+            message:
+              category === "happy" || category === "sick"
+                ? "نوع المناسبة غير مسموح أو وحدة المناسبات غير محمّلة."
+                : "وحدة المناسبات غير محمّلة.",
+          };
+        }
 
         if (editingId) {
           const oldRow = findRowById(category, editingId);
@@ -380,7 +475,7 @@
                 (guarded.guard && guarded.guard.message_ar) ||
                 (guarded.needsReview
                   ? "سجل مشابه — راجع قبل الحفظ (لا دمج تلقائي)."
-                  : "تعذر الحفظ بسبب تطابق كيان."),
+                  : "موجود مسبقًا — تعذر الحفظ."),
             };
           }
           const res = guarded.result || {};
