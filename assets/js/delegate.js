@@ -1239,14 +1239,22 @@ function paintDelegateBranchRequestsList() {
       async function notifySubmitterOnly(sbClient, decisionStatus) {
         try {
           const Safe = window.AlzidanSafeRequestNotify || null;
+          const phone =
+            String(req.phone || "").trim() ||
+            String((parsed && parsed.submitterPhone) || "").trim() ||
+            null;
+          const email =
+            String(req.email || "").trim() ||
+            String((parsed && parsed.submitterEmail) || "").trim() ||
+            null;
           const base = {
             request_id: req.request_id || null,
             kind: req.kind || "",
             branch_key: req.branch_key || state.branch || "",
             status: decisionStatus,
-            email: String(req.email || "").trim() || null,
-            phone: String(req.phone || "").trim() || null,
-            name: req.name || null,
+            email: email,
+            phone: phone,
+            name: req.name || (parsed && parsed.person) || null,
             person: (parsed && parsed.person) || req.name || null,
           };
           const rec =
@@ -1266,6 +1274,10 @@ function paintDelegateBranchRequestsList() {
               console.warn("[delegate] status notify blocked by safe renderer", rec.kind);
               return;
             }
+          }
+          if (!rec.phone && !rec.email) {
+            console.warn("[delegate] status notify skipped — no submitter phone/email");
+            return;
           }
           // Never notify the logged-in reviewing delegate as if they were submitter.
           if (rec.email) {
@@ -1379,20 +1391,8 @@ function paintDelegateBranchRequestsList() {
               lock(false);
               return;
             }
-            try {
-              await sb.functions.invoke("alzidan-push-notify", {
-                body: {
-                  type: row.type || "",
-                  person: row.person || "",
-                  branch_key: row.branch_key || state.branch || "",
-                  details: row.details || "",
-                },
-              });
-            } catch (familyPushErr) {
-              try {
-                console.warn("[delegate] family push soft-fail", familyPushErr);
-              } catch (_) {}
-            }
+            // Family broadcast deferred until AFTER submitter status push
+            // (broadcast to all tokens can disable a stale token before acceptance notify).
           } else if (classified.intent === "tree") {
             const applyRes = await applyDelegateTreeCardRequest(sb, req);
             if (!applyRes || !applyRes.ok) {
@@ -1425,7 +1425,32 @@ function paintDelegateBranchRequestsList() {
             return;
           }
           bumpDelegateSessionTodayStat("approved");
+          // Submitter OS push first (reject path only does this — must match on accept).
           await notifySubmitterOnly(sb, "approved");
+
+          if (isEventIntent && !scheduledOnly) {
+            try {
+              let eventRow =
+                typeof Events.buildFamilyEventRow === "function"
+                  ? Events.buildFamilyEventRow({ source: "approval_request", row: req })
+                  : null;
+              if (eventRow) {
+                await sb.functions.invoke("alzidan-push-notify", {
+                  body: {
+                    type: eventRow.type || "",
+                    person: eventRow.person || "",
+                    branch_key: eventRow.branch_key || state.branch || "",
+                    details: eventRow.details || "",
+                  },
+                });
+              }
+            } catch (familyPushErr) {
+              try {
+                console.warn("[delegate] family push soft-fail", familyPushErr);
+              } catch (_) {}
+            }
+          }
+
           const successMsg =
             isEventIntent
               ? scheduledOnly

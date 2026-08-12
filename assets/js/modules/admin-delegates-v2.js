@@ -541,9 +541,12 @@
     state.busy = true;
     try {
       if (state.mode === "v2" && !row.legacy) {
+        const c = core();
+        const rpcId =
+          typeof c.coerceRpcId === "function" ? c.coerceRpcId(id) : id;
         const { error } = await rpc("admin_delegates_v2_set_enabled_v1", {
           p_token: token,
-          p_id: id,
+          p_id: rpcId,
           p_enabled: !!enabled,
         });
         if (error) throw error;
@@ -555,7 +558,14 @@
       await loadAll({ force: true });
     } catch (err) {
       console.error("delegates_v2_set_enabled", err);
-      showAlert("error", "تعذر تحديث حالة المندوب.");
+      const detail =
+        (err && (err.message || err.details || err.hint)) ||
+        (typeof err === "string" ? err : "");
+      showAlert(
+        "error",
+        "تعذر تحديث حالة المندوب." +
+          (detail ? " (" + String(detail).slice(0, 160) + ")" : ""),
+      );
     } finally {
       state.busy = false;
     }

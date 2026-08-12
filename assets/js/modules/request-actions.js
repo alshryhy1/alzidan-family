@@ -777,7 +777,9 @@
     return { msg, blob, needsSql, badDate };
   }
 
-  async function publishEventCardRequest(sb, token, row) {
+  async function publishEventCardRequest(sb, token, row, opts) {
+    const options = opts && typeof opts === "object" ? opts : {};
+    const skipFamilyPush = options.skipFamilyPush === true;
     const requestId = String(
       row && row.request_id ? row.request_id : "",
     ).trim();
@@ -882,6 +884,18 @@
         ok: false,
         message: "تعذر نشر المناسبة. تحقق من صلاحية الإدارة.",
       };
+    // Callers that also send status_changed to the submitter should pass
+    // skipFamilyPush:true, then notify the submitter, then call notifyFamilyEventPush
+    // — otherwise a dead Expo token disabled during family broadcast can block approval push.
+    if (skipFamilyPush) {
+      return {
+        ok: true,
+        eventRow,
+        push: null,
+        pushMessage: "",
+        familyPushDeferred: true,
+      };
+    }
     const push = await notifyFamilyEventPush(sb, eventRow);
     return {
       ok: true,

@@ -398,6 +398,9 @@ as $$
 declare
   v_row public.delegates_v2%rowtype;
   v_status text;
+  v_branch text;
+  v_phone text;
+  v_email text;
 begin
   if not public.admin_token_ok_v1(p_token) then
     raise exception 'not allowed';
@@ -411,29 +414,17 @@ begin
     raise exception 'delegate not found';
   end if;
 
-  update public.delegates_v2
-  set is_enabled = coalesce(p_enabled, false),
-      updated_at = now()
-  where id = p_id;
-
   v_status := case when coalesce(p_enabled, false) then 'approved' else 'rejected' end;
+  v_branch := regexp_replace(btrim(coalesce(v_row.branch_key, '')), '\s+', ' ', 'g');
+  v_phone := regexp_replace(btrim(coalesce(v_row.phone, '')), '\s+', '', 'g');
+  v_email := lower(regexp_replace(btrim(coalesce(v_row.email, '')), '\s+', '', 'g'));
 
-  -- Mirror to legacy rows so tree_delegate_allowed_v1 / events_* keep working
+  -- Linked request ids (when present)
   if nullif(btrim(coalesce(v_row.tree_request_id, '')), '') is not null then
     update public.approval_requests
     set status = v_status
     where request_id = v_row.tree_request_id
       and kind = 'tree_delegate';
-  else
-    update public.approval_requests r
-    set status = v_status
-    where r.kind = 'tree_delegate'
-      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g')
-        = regexp_replace(btrim(coalesce(v_row.branch_key, '')), '\s+', ' ', 'g')
-      and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g')
-        = regexp_replace(btrim(coalesce(v_row.phone, '')), '\s+', '', 'g')
-      and lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g'))
-        = lower(regexp_replace(btrim(coalesce(v_row.email, '')), '\s+', '', 'g'));
   end if;
 
   if nullif(btrim(coalesce(v_row.events_request_id, '')), '') is not null then
@@ -441,17 +432,27 @@ begin
     set status = v_status
     where request_id = v_row.events_request_id
       and kind = 'events_delegate';
-  else
+  end if;
+
+  -- ALL identity matches (newer rejected sibling must not undo enable)
+  if nullif(v_branch, '') is not null and nullif(v_phone, '') is not null then
     update public.approval_requests r
     set status = v_status
-    where r.kind = 'events_delegate'
-      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g')
-        = regexp_replace(btrim(coalesce(v_row.branch_key, '')), '\s+', ' ', 'g')
-      and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g')
-        = regexp_replace(btrim(coalesce(v_row.phone, '')), '\s+', '', 'g')
-      and lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g'))
-        = lower(regexp_replace(btrim(coalesce(v_row.email, '')), '\s+', '', 'g'));
+    where r.kind in ('tree_delegate', 'events_delegate')
+      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g') = v_branch
+      and regexp_replace(btrim(coalesce(r.phone, '')), '\s+', '', 'g') = v_phone
+      and (
+        v_email = ''
+        or lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g')) = ''
+        or lower(regexp_replace(btrim(coalesce(r.email, '')), '\s+', '', 'g')) = v_email
+      );
   end if;
+
+  -- Admin intent wins after approval sync triggers
+  update public.delegates_v2
+  set is_enabled = coalesce(p_enabled, false),
+      updated_at = now()
+  where id = p_id;
 
   perform public.admin_audit_write_v1(
     'admin', null,
