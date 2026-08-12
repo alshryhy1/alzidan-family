@@ -404,15 +404,35 @@
       inserted += 1;
 
       try {
-        if (Create && typeof Create.notifyBranchDelegatesOfRequest === "function" && branchKey) {
-          var nres = await Create.notifyBranchDelegatesOfRequest(sb, {
+        if (branchKey) {
+          var notifyRecord = {
             request_id: requestId,
             kind: "memory_card",
             branch_key: branchKey,
             status: "pending",
             name: personName,
-            phone: phone || null
-          });
+            person: personName,
+            phone: phone || null,
+            email: null
+          };
+          var nres = null;
+          if (Create && typeof Create.notifyBranchDelegatesOfRequest === "function") {
+            nres = await Create.notifyBranchDelegatesOfRequest(sb, notifyRecord);
+          } else {
+            try {
+              await sb.functions.invoke("alzidan-email-notify", {
+                body: { mode: "branch_delegate_new_request", record: notifyRecord }
+              });
+            } catch (_) {}
+            try {
+              await sb.functions.invoke("alzidan-push-notify", {
+                body: { mode: "branch_delegate_new_request", record: notifyRecord }
+              });
+              nres = { ok: true };
+            } catch (_) {
+              nres = { ok: false };
+            }
+          }
           if (nres && nres.ok) notified += 1;
         }
       } catch (notifyErr) {
