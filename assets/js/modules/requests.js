@@ -958,13 +958,15 @@ function showAlert(kind, msg) {
   function renderRequestRow(row, qualityContext) {
     if (!requestsBody) return;
     const tr = document.createElement("tr");
-    function tdText(text) {
+    function tdText(text, label) {
       const td = document.createElement("td");
       td.textContent = text || "";
+      if (label) td.setAttribute("data-label", label);
       return td;
     }
-    tr.appendChild(tdText(row.request_id || ""));
+    tr.appendChild(tdText(row.request_id || "", "رقم الطلب"));
     const tdKind = document.createElement("td");
+    tdKind.setAttribute("data-label", "النوع");
     const kindMain = document.createElement("div");
     kindMain.textContent = kindLabel(row.kind);
     tdKind.appendChild(kindMain);
@@ -980,16 +982,18 @@ function showAlert(kind, msg) {
     }
     tdKind.appendChild(createRequestQualityPill(row, qualityContext));
     tr.appendChild(tdKind);
-    tr.appendChild(tdText(row.branch_key || ""));
-    tr.appendChild(tdText(row.name || ""));
-    tr.appendChild(tdText(row.phone || ""));
+    tr.appendChild(tdText(row.branch_key || "", "الفرع"));
+    tr.appendChild(tdText(row.name || "", "الاسم"));
+    tr.appendChild(tdText(row.phone || "", "الجوال"));
     tr.appendChild(
       tdText(
         row.email ||
           (isDelegateAccessKind(row.kind) ? "لم يُسجّل" : ""),
+        "البريد",
       ),
     );
     const tdStatus = document.createElement("td");
+    tdStatus.setAttribute("data-label", "الحالة");
     const pill = document.createElement("span");
     const displayStatus = String(row.wf_state || row.status || "").trim();
     const legacy = String(row.status || "").trim();
@@ -1018,6 +1022,7 @@ function showAlert(kind, msg) {
     tdStatus.appendChild(pill);
     tr.appendChild(tdStatus);
     const tdDate = document.createElement("td");
+    tdDate.setAttribute("data-label", "التاريخ");
     if (row.created_at) {
       try {
         tdDate.textContent = formatDateShortForRequests(row.created_at);
@@ -1029,6 +1034,7 @@ function showAlert(kind, msg) {
     }
     tr.appendChild(tdDate);
     const tdMsg = document.createElement("td");
+    tdMsg.setAttribute("data-label", "البيانات");
     const det = document.createElement("details");
     det.className = "msg";
     const sum = document.createElement("summary");
@@ -1039,6 +1045,7 @@ function showAlert(kind, msg) {
     tdMsg.appendChild(det);
     tr.appendChild(tdMsg);
     const tdActions = document.createElement("td");
+    tdActions.setAttribute("data-label", "إجراء");
     const actions = document.createElement("div");
     actions.className = "cell-actions";
     const approveBtn = document.createElement("button");

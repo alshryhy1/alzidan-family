@@ -724,3 +724,136 @@ body:not(.admin-authenticated) section.admin-only-section {
 #tree-card-edit-dialog .edit-dialog-body {
   padding: 18px 16px 16px;
 }
+
+
+/* —— iPhone / small screens: responsive only (desktop unchanged) —— */
+@media (max-width: 640px) {
+  html, body {
+    overflow-x: hidden;
+  }
+
+  .page {
+    padding: 12px 10px 28px;
+    max-width: 100%;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .field input,
+  .field select,
+  .field textarea,
+  .btn {
+    max-width: 100%;
+  }
+
+  .btn,
+  .btn-sm {
+    min-height: 40px;
+  }
+
+  .cell-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .cell-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  /* Requests: turn table into stacked cards */
+  #admin-requests-section .table-wrap {
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  #admin-requests-section table {
+    min-width: 0 !important;
+    width: 100% !important;
+    border-collapse: separate;
+    border-spacing: 0 10px;
+  }
+
+  #admin-requests-section thead {
+    display: none;
+  }
+
+  #admin-requests-section tbody tr {
+    display: block;
+    background: #fff;
+    border: 1px solid rgba(16, 36, 28, 0.12);
+    border-radius: 14px;
+    padding: 10px 12px;
+    margin: 0;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+  }
+
+  #admin-requests-section tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100% !important;
+    border: none !important;
+    padding: 6px 0 !important;
+    white-space: normal !important;
+    word-break: break-word;
+    text-align: left;
+  }
+
+  #admin-requests-section tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 34%;
+    max-width: 38%;
+    color: #5b6b63;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: right;
+  }
+
+  #admin-requests-section tbody td > * {
+    flex: 1 1 auto;
+    text-align: left;
+  }
+
+  #admin-requests-section .cell-actions {
+    width: 100%;
+  }
+
+  #requests-toolbar,
+  .requests-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Events module: stack list + form */
+  #events-source-manager > .card > .grid,
+  #banner-messages-manager > .card > .grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .source-tree-list {
+    max-height: 280px;
+  }
+
+  #events-source-form .grid,
+  #banner-general-form .grid,
+  #banner-messages-manager .grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Avoid page-level horizontal scroll from wide children */
+  #admin-protected-sections,
+  #admin-protected-sections .card,
+  #admin-protected-sections .section {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+}
