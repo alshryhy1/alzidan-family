@@ -63,6 +63,18 @@ const deathPastOk = vis.validateEventDateForSubmit(dayOffsetIso(-1), {
 });
 assert(deathPastOk.ok === true, "death past date allowed");
 
+const emptyDeath = vis.validateEventDateForSubmit("", {
+  category: "death",
+  required: true,
+});
+assert(emptyDeath.ok === false, "empty death date rejected");
+
+const emptyHealth = vis.validateEventDateForSubmit("", {
+  category: "health",
+  required: true,
+});
+assert(emptyHealth.ok === false, "empty health date rejected");
+
 // 2) Schedule: future event not public until show window
 const farFuture = {
   type: "marriage",

@@ -558,17 +558,51 @@
             );
             return;
           }
+          var VisDeath =
+            typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+          if (VisDeath && typeof VisDeath.validateEventDateForSubmit === "function") {
+            var deathDateCheck = VisDeath.validateEventDateForSubmit(dateLabel, {
+              category: "death",
+              type: "death",
+              required: true,
+            });
+            if (!deathDateCheck || !deathDateCheck.ok) {
+              setAlert(
+                "error",
+                (deathDateCheck && deathDateCheck.reason) ||
+                  "أدخل تاريخ الوفاة. بدونه لا يُحدد وقت الظهور."
+              );
+              return;
+            }
+          }
         } else if (isPatient) {
-          if (!person || !phone || !type) {
+          if (!person || !phone || !type || !dateLabel) {
             setAlert(
               "error",
-              "أكمل اسم المريض ورقم الجوال ونوع الحالة."
+              "أكمل اسم المريض ورقم الجوال ونوع الحالة والتاريخ."
             );
             return;
           }
           if (!HEALTH_TYPES.has(type)) {
             setAlert("error", "اختر نوع حالة صحيحًا (مريض / عملية / خروج).");
             return;
+          }
+          var VisHealth =
+            typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+          if (VisHealth && typeof VisHealth.validateEventDateForSubmit === "function") {
+            var healthDateCheck = VisHealth.validateEventDateForSubmit(dateLabel, {
+              category: "health",
+              type: type,
+              required: true,
+            });
+            if (!healthDateCheck || !healthDateCheck.ok) {
+              setAlert(
+                "error",
+                (healthDateCheck && healthDateCheck.reason) ||
+                  "أدخل التاريخ. بدونه لا يُحدد وقت ظهور الحالة."
+              );
+              return;
+            }
           }
         } else {
           if (!person || !phone || !type || !dateLabel) {

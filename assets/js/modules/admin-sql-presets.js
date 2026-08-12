@@ -3257,6 +3257,79 @@ select
       order: 54.6,
     },
     {
+      id: "maint.public_my_requests_by_phone_v1",
+      title: "طلباتي: جلب طلبات العضو برقم الجوال",
+      desc:
+        "بعد تسجيل الدخول من ملفي: دالة SECURITY DEFINER تُرجع طلبات هذا الجوال (إضافة/تصحيح/مناسبة/ذكرى) دون قراءة الجدول مباشرة. تطابق آخر 9 أرقام. الصق مرة في محرر SQL.",
+      sql: `-- Homepage «طلباتي» for a member logged in by phone.
+-- anon cannot SELECT approval_requests under RLS.
+-- Matches last 9 digits. Does not return message.
+
+create or replace function public.public_my_requests_by_phone_v1(p_phone text)
+returns table(
+  request_id text,
+  kind text,
+  status text,
+  created_at timestamptz,
+  reject_reason text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_tail text;
+begin
+  v_tail := right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9);
+  if v_tail is null or length(v_tail) < 9 then
+    return;
+  end if;
+
+  return query
+  select
+    r.request_id::text,
+    btrim(coalesce(r.kind, ''))::text as kind,
+    lower(btrim(coalesce(r.status, '')))::text as status,
+    r.created_at,
+    coalesce(
+      nullif(
+        btrim(
+          substring(
+            regexp_replace(coalesce(r.message, ''), E'\\s*__JSON__[\\s\\S]*$', '', 'n')
+            from E'(?m)^(?:سبب الرفض|السبب|سبب)\\s*:\\s*(.+)$'
+          )
+        ),
+        ''
+      ),
+      ''
+    )::text as reject_reason
+  from public.approval_requests r
+  where r.kind in (
+      'event_card',
+      'family_event',
+      'event_request',
+      'tree_card',
+      'tree_edit',
+      'memory_card'
+    )
+    and r.status in ('pending', 'approved', 'rejected', 'submitted')
+    and right(regexp_replace(coalesce(r.phone, ''), '[^0-9]', '', 'g'), 9) = v_tail
+  order by r.created_at desc
+  limit 20;
+end;
+$fn$;
+
+revoke all on function public.public_my_requests_by_phone_v1(text) from public;
+grant execute on function public.public_my_requests_by_phone_v1(text) to anon, authenticated;
+
+select
+  (to_regprocedure('public.public_my_requests_by_phone_v1(text)') is not null)
+    as has_public_my_requests_by_phone_v1;
+`,
+      order: 54.65,
+    },
+    {
       id: "maint.event_schedule_visibility_v1",
       title: "جدولة ظهور المناسبات والأخبار",
       desc:
@@ -3396,14 +3469,27 @@ begin
     nullif(p_row->>'type', ''),
     nullif(p_row->>'person', ''),
     nullif(p_row->>'date_label', ''),
-    nullif(p_row->>'event_date', '')::date,
+    case
+      when btrim(coalesce(p_row->>'event_date', '')) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        and substring(btrim(p_row->>'event_date') from 1 for 4)::int between 1800 and 2100
+      then btrim(p_row->>'event_date')::date
+      else null
+    end,
     v_details,
     nullif(p_row->>'hospital_name', ''),
     nullif(p_row->>'hospital_dept', ''),
     nullif(p_row->>'contact_method', ''),
     nullif(p_row->>'contact_phone', ''),
-    nullif(p_row->>'visit_date_from', '')::date,
-    nullif(p_row->>'visit_date_to', '')::date,
+    case
+      when btrim(coalesce(p_row->>'visit_date_from', '')) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      then btrim(p_row->>'visit_date_from')::date
+      else null
+    end,
+    case
+      when btrim(coalesce(p_row->>'visit_date_to', '')) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      then btrim(p_row->>'visit_date_to')::date
+      else null
+    end,
     nullif(p_row->>'visit_time_from', ''),
     nullif(p_row->>'visit_time_to', ''),
     coalesce(nullif(p_row->>'created_at', '')::timestamptz, now()),

@@ -26,6 +26,85 @@
     return JSON.stringify(details);
   }
 
+  function toSqlDateOrEmpty(v) {
+    const raw = normalizeText(v)
+      .replace(/[٠-٩]/g, function (d) {
+        return String("٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      })
+      .replace(/[۰-۹]/g, function (d) {
+        return String("۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+      })
+      .replace(/[.\s]+/g, "/");
+    if (!raw) return "";
+    let y = null;
+    let m = null;
+    let d = null;
+    let mm = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (mm) {
+      y = parseInt(mm[1], 10);
+      m = parseInt(mm[2], 10);
+      d = parseInt(mm[3], 10);
+    } else {
+      mm = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+      if (mm) {
+        d = parseInt(mm[1], 10);
+        m = parseInt(mm[2], 10);
+        y = parseInt(mm[3], 10);
+      }
+    }
+    if (!y || !m || !d) return "";
+    if (y < 1800 || y > 2100) return "";
+    if (m < 1 || m > 12 || d < 1 || d > 31) return "";
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    if (
+      dt.getUTCFullYear() !== y ||
+      dt.getUTCMonth() !== m - 1 ||
+      dt.getUTCDate() !== d
+    ) {
+      return "";
+    }
+    return (
+      String(y).padStart(4, "0") +
+      "-" +
+      String(m).padStart(2, "0") +
+      "-" +
+      String(d).padStart(2, "0")
+    );
+  }
+
+  function toSqlTimestamptzOrEmpty(v) {
+    const s = normalizeText(v);
+    if (!s) return "";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s;
+    const ms = Date.parse(s);
+    if (!Number.isFinite(ms)) return "";
+    return new Date(ms).toISOString();
+  }
+
+  function sanitizeFamilyEventRowForPublish(row) {
+    if (!row || typeof row !== "object") return row;
+    const out = Object.assign({}, row);
+    const isoEvent =
+      toSqlDateOrEmpty(out.event_date) || toSqlDateOrEmpty(out.date_label);
+    out.event_date = isoEvent || "";
+    out.date_label = normalizeText(out.date_label) || out.event_date || "";
+    out.visit_date_from = toSqlDateOrEmpty(out.visit_date_from);
+    out.visit_date_to = toSqlDateOrEmpty(out.visit_date_to);
+    const created = toSqlTimestamptzOrEmpty(out.created_at);
+    if (created) out.created_at = created;
+    else delete out.created_at;
+    const showAt = toSqlTimestamptzOrEmpty(out.show_at);
+    if (showAt) out.show_at = showAt;
+    else delete out.show_at;
+    const endAt = toSqlTimestamptzOrEmpty(out.end_at);
+    if (endAt) out.end_at = endAt;
+    else delete out.end_at;
+    if (typeof E.normalizeEventType === "function") {
+      out.type = E.normalizeEventType(out.type || "gathering");
+    }
+    return out;
+  }
+
   function buildFromApprovalRequest(input) {
     const row = input.row || {};
     const requestId = normalizeText(row.request_id);
@@ -59,22 +138,24 @@
           : Object.assign({}, details, schedule);
       const out = {
         branch_key: normalizeText(row.branch_key || event.branch_key || ""),
-        type: normalizeText(event.type || "gathering"),
+        type: E.normalizeEventType
+          ? E.normalizeEventType(event.type || event.typeLabel || "gathering")
+          : normalizeText(event.type || "gathering"),
         person: normalizeText(event.person || row.name || ""),
         date_label: normalizeText(event.date_label || ""),
-        event_date: normalizeText(event.event_date || ""),
+        event_date: toSqlDateOrEmpty(event.event_date || ""),
         details: stringifyDetails(details),
         hospital_name: normalizeText(event.hospital_name || ""),
         hospital_dept: normalizeText(event.hospital_dept || ""),
         contact_method: normalizeText(event.contact_method || ""),
         contact_phone: normalizeText(event.contact_phone || ""),
-        visit_date_from: normalizeText(event.visit_date_from || ""),
-        visit_date_to: normalizeText(event.visit_date_to || ""),
+        visit_date_from: toSqlDateOrEmpty(event.visit_date_from || ""),
+        visit_date_to: toSqlDateOrEmpty(event.visit_date_to || ""),
         visit_time_from: normalizeText(event.visit_time_from || ""),
         visit_time_to: normalizeText(event.visit_time_to || ""),
-        created_at: normalizeText(
-          event.created_at || row.created_at || new Date().toISOString(),
-        ),
+        created_at:
+          toSqlTimestamptzOrEmpty(event.created_at || row.created_at) ||
+          new Date().toISOString(),
       };
       if (schedule.show_before_days != null) out.show_before_days = schedule.show_before_days;
       if (schedule.show_at) out.show_at = schedule.show_at;
@@ -104,7 +185,15 @@
       type: E.eventTypeFromLabel ? E.eventTypeFromLabel(typeLabel) : "gathering",
       person:
         (E.readMessageLine
-          ? E.readMessageLine(msg, ["اسم صاحب المناسبة", "صاحب المناسبة"])
+          ? E.readMessageLine(msg, [
+              "اسم صاحب المناسبة",
+              "صاحب المناسبة",
+              "اسم المريض",
+              "اسم المتوفى",
+              "اسم المولود",
+              "اسم العريس",
+              "اسم الخريج",
+            ])
           : "") || normalizeText(row.name || ""),
       date_label: E.readMessageLine ? E.readMessageLine(msg, "التاريخ") : "",
       event_date: "",
@@ -479,5 +568,7 @@
   root.AlzidanEvents = root.AlzidanEvents || {};
   Object.assign(root.AlzidanEvents, {
     buildFamilyEventRow,
+    sanitizeFamilyEventRowForPublish,
+    toSqlDateOrEmpty,
   });
 })(typeof window !== "undefined" ? window : globalThis);

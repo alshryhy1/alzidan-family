@@ -132,14 +132,27 @@ begin
     nullif(p_row->>'type', ''),
     nullif(p_row->>'person', ''),
     nullif(p_row->>'date_label', ''),
-    nullif(p_row->>'event_date', '')::date,
+    case
+      when btrim(coalesce(p_row->>'event_date', '')) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        and substring(btrim(p_row->>'event_date') from 1 for 4)::int between 1800 and 2100
+      then btrim(p_row->>'event_date')::date
+      else null
+    end,
     v_details,
     nullif(p_row->>'hospital_name', ''),
     nullif(p_row->>'hospital_dept', ''),
     nullif(p_row->>'contact_method', ''),
     nullif(p_row->>'contact_phone', ''),
-    nullif(p_row->>'visit_date_from', '')::date,
-    nullif(p_row->>'visit_date_to', '')::date,
+    case
+      when btrim(coalesce(p_row->>'visit_date_from', '')) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      then btrim(p_row->>'visit_date_from')::date
+      else null
+    end,
+    case
+      when btrim(coalesce(p_row->>'visit_date_to', '')) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      then btrim(p_row->>'visit_date_to')::date
+      else null
+    end,
     nullif(p_row->>'visit_time_from', ''),
     nullif(p_row->>'visit_time_to', ''),
     coalesce(nullif(p_row->>'created_at', '')::timestamptz, now()),

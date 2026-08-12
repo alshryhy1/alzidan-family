@@ -585,13 +585,13 @@
                   </select>
                 </div>
                 <div class="founder-field">
-                  <label for="patient-submit-date-label"
-                    >التاريخ <span class="field-optional">(اختياري)</span></label
+                  <label for="patient-submit-date-label">التاريخ</label
                   ><input
                     id="patient-submit-date-label"
                     name="dateLabel"
                     type="text"
                     inputmode="text"
+                    required
                     placeholder="مثال: 1448/01/10 أو 2026-08-09"
                   />
                 </div>
@@ -1549,13 +1549,13 @@
                 ><span
                   id="events-count-sick"
                   class="toggle-count"
-                  aria-label="عدد إعلانات المرضى"
+                  aria-label="عدد إعلانات المرضى والخروج"
                   >0</span
                 ></span
               ><span class="toggle-text"
-                ><span class="toggle-title">المرضى</span
+                ><span class="toggle-title">المرضى والخروج</span
                 ><span class="toggle-sub"
-                  >وقت الزيارة وبدائلها مع أرقام التواصل.</span
+                  >مريض أو عملية أو خروج من المستشفى، مع مكان الزيارة والتواصل.</span
                 ></span
               >
             </summary>
@@ -1643,19 +1643,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4"></script>
     <script src="../assets/js/config.js"></script>
 
-    <script src="../assets/js/modules/events/event-types.js?v=20260811noeng1"></script>
+    <script src="../assets/js/modules/events/event-types.js?v=20260812pub2"></script>
     <script src="../assets/js/modules/events/event-media.js?v=20260810home2"></script>
     <script src="../assets/js/modules/events/event-parser.js?v=20260810home2"></script>
-    <script src="../assets/js/modules/events/event-builder.js?v=20260811sched1"></script>
+    <script src="../assets/js/modules/events/event-builder.js?v=20260812pub1"></script>
     <script src="../assets/js/modules/events/index.js?v=2026071117"></script>
-    <script src="../assets/js/modules/events/event-visibility.js?v=20260812del1"></script>
+    <script src="../assets/js/modules/events/event-visibility.js?v=20260812date1"></script>
     <script src="../assets/js/modules/events/event-form-core.js?v=20260811sched1"></script>
     <script src="../assets/js/modules/dup-identity-guard.js?v=20260810home2"></script>
     <script src="../assets/js/modules/safe-request-notify.js?v=20260812safe2"></script>
     <script src="../assets/js/modules/user-facing-request-messages.js?v=20260812safe2"></script>
     <script src="../assets/js/modules/home-request-create.js?v=20260812safe2"></script>
     <script src="../assets/js/modules/my-requests-track.js?v=20260810home2"></script>
-    <script src="../assets/js/event-submit.js?v=20260812safe2"></script>
+    <script src="../assets/js/event-submit.js?v=20260812date1"></script>
     <script src="../assets/js/app.js?v=20260812safe2"></script>
     <script src="../assets/js/memory/submit.js?v=20260812safe2"></script>
     <script src="../assets/js/modules/request-experience.js?v=20260812safe2"></script>

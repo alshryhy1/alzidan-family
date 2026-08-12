@@ -1350,6 +1350,7 @@ where c.id = matches.id; commit;
       general: "مناسبة عامة",
       sick: "مريض",
       operation: "عملية",
+      discharge: "خروج من المستشفى",
       death: "وفاة",
       happy: "فرح",
       meeting: "اجتماع",

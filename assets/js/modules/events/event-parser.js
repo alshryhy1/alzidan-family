@@ -119,7 +119,16 @@
       event.type || event.typeLabel || getLabel("نوع المناسبة") || getLabel("النوع") || j.type || "",
     );
     const person = normalizeText(
-      event.person || getLabel("اسم صاحب المناسبة") || getLabel("صاحب المناسبة") || j.person || "",
+      event.person ||
+        getLabel("اسم صاحب المناسبة") ||
+        getLabel("صاحب المناسبة") ||
+        getLabel("اسم المريض") ||
+        getLabel("اسم المتوفى") ||
+        getLabel("اسم المولود") ||
+        getLabel("اسم العريس") ||
+        getLabel("اسم الخريج") ||
+        j.person ||
+        "",
     );
     const dateLabel = normalizeText(
       event.dateLabel ||

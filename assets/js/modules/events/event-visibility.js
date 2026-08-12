@@ -23,7 +23,7 @@
     DATE_EXPIRED:
       "تاريخ المناسبة منتهٍ ولا يمكن إرسالها. اختر تاريخًا اليوم أو لاحقًا.",
     DATE_INVALID: "تاريخ المناسبة غير مفهوم. أدخل تاريخًا صحيحًا.",
-    DATE_REQUIRED: "أدخل تاريخ المناسبة قبل الإرسال.",
+    DATE_REQUIRED: "أدخل التاريخ. بدونه لا يُحدد وقت ظهور المناسبة.",
     SCHEDULED: "مجدولة للظهور",
     VISIBLE: "ظاهر الآن",
     ENDED: "منتهية",
@@ -379,7 +379,7 @@
       category === "health" ||
       category === "operation" ||
       category === "discharge";
-    var required = options.required !== false && !allowPast;
+    var required = options.required !== false;
     var raw = normalizeText(rawDate);
     if (!raw) {
       if (required) return { ok: false, reason: MSG.DATE_REQUIRED };

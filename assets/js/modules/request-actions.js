@@ -764,13 +764,26 @@
     return { ok: true, deleted, via: "client" };
   }
 
+  function publishEventRpcErrorMeta(error) {
+    const msg = String((error && error.message) || "");
+    const details = String((error && error.details) || "");
+    const hint = String((error && error.hint) || "");
+    const blob = (msg + " " + details + " " + hint).toLowerCase();
+    const needsSql =
+      msg.includes("تعذر تنفيذ العملية") ||
+      msg.includes("تحديث الخدمة") ||
+      /could not find|schema cache|pgrst202|does not exist|404/.test(blob);
+    const badDate = /invalid input syntax|date\/time/.test(blob);
+    return { msg, blob, needsSql, badDate };
+  }
+
   async function publishEventCardRequest(sb, token, row) {
     const requestId = String(
       row && row.request_id ? row.request_id : "",
     ).trim();
     if (!requestId) return { ok: false, message: "رقم الطلب ناقص." };
     const Events = window.AlzidanEvents || {};
-    const eventRow =
+    let eventRow =
       typeof Events.buildFamilyEventRow === "function"
         ? Events.buildFamilyEventRow({ source: "approval_request", row })
         : null;
@@ -785,7 +798,7 @@
     const Vis = window.AlzidanEventVisibility || null;
     if (Vis && typeof Vis.buildScheduleFields === "function") {
       const sch = Vis.buildScheduleFields({
-        event_date: eventRow.event_date || "",
+        event_date: eventRow.event_date || eventRow.date_label || "",
         show_before_days:
           eventRow.show_before_days != null ? eventRow.show_before_days : 3,
         show_at: eventRow.show_at || "",
@@ -804,18 +817,54 @@
     } else if (eventRow.show_before_days == null && !eventRow.show_at) {
       eventRow.show_before_days = 3;
     }
-    const { data, error } = await sb.rpc("admin_publish_event_card_v1", {
-      p_token: token,
-      p_request_id: requestId,
-      p_row: eventRow,
-    });
+    if (typeof Events.sanitizeFamilyEventRowForPublish === "function") {
+      eventRow = Events.sanitizeFamilyEventRowForPublish(eventRow);
+    }
+    if (!eventRow.branch_key || !eventRow.type || !eventRow.person) {
+      return {
+        ok: false,
+        message:
+          "بيانات المناسبة ناقصة، افتح عرض الطلب وتأكد من الفرع والنوع والاسم.",
+      };
+    }
+
+    async function callPublish(payload) {
+      return sb.rpc("admin_publish_event_card_v1", {
+        p_token: token,
+        p_request_id: requestId,
+        p_row: payload,
+      });
+    }
+
+    let { data, error } = await callPublish(eventRow);
+    if (error && publishEventRpcErrorMeta(error).badDate) {
+      try {
+        console.warn("PUBLISH_EVENT date-cast retry", error);
+      } catch (_) {}
+      const retryRow = Object.assign({}, eventRow, {
+        event_date: "",
+        visit_date_from: "",
+        visit_date_to: "",
+      });
+      delete retryRow.created_at;
+      delete retryRow.show_at;
+      delete retryRow.end_at;
+      const second = await callPublish(retryRow);
+      data = second.data;
+      error = second.error;
+      if (!error && data === true) eventRow = retryRow;
+    }
     if (error) {
-      const msg = String(error.message || "");
-      if (msg.includes("تعذر تنفيذ العملية") || msg.includes("تحديث الخدمة")) {
+      try {
+        console.warn("PUBLISH_EVENT rpc error", error);
+      } catch (_) {}
+      const meta = publishEventRpcErrorMeta(error);
+      if (meta.needsSql) {
         return {
           ok: false,
           needsSql: true,
-          message: "تعذر نشر المناسبة حالياً، حاول لاحقاً أو تواصل مع الإدارة.",
+          message:
+            "تعذر نشر المناسبة حالياً. من أدوات الصيانة شغّل «جدولة ظهور المناسبات» ثم حدّث الصفحة وأعد النشر.",
         };
       }
       return {

@@ -44,7 +44,7 @@
     tabs.className = "em-category-tabs";
     tabs.innerHTML =
       '<button type="button" class="em-category-tab em-active" data-category="happy">أفراح</button>' +
-      '<button type="button" class="em-category-tab" data-category="sick">مرضى</button>' +
+      '<button type="button" class="em-category-tab" data-category="sick">مرضى وخروج</button>' +
       '<button type="button" class="em-category-tab" data-category="death">وفيات</button>';
     panel.appendChild(tabs);
 

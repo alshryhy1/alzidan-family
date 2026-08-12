@@ -237,6 +237,96 @@ for (const sample of samples) {
   }
 }
 
+const mobileArabicDateRow = {
+  request_id: "EVN-MOB1-HASS",
+  branch_key: "زيدان",
+  name: "حسن",
+  phone: "0500000001",
+  created_at: "2026-08-12T10:00:00.000Z",
+  message: [
+    "طلب نشر مناسبة في تطبيق عائلة الزيدان",
+    "رقم الطلب: EVN-MOB1-HASS",
+    "الفرع: زيدان",
+    "النوع: مناسبة عامة",
+    "نوع المناسبة: مناسبة عامة",
+    "اسم صاحب المناسبة: حسن",
+    "صاحب المناسبة: حسن",
+    "التاريخ: ١٢ أغسطس ٢٠٢٦",
+    "النص: خبر تجريبي",
+    "المرسل: حسن",
+    "الجوال: 0500000001",
+    "__JSON__:",
+    JSON.stringify({
+      v: 1,
+      kind: "event_card",
+      source: "mobile_app",
+      event: {
+        type: "general",
+        typeLabel: "مناسبة عامة",
+        person: "حسن",
+        date_label: "١٢ أغسطس ٢٠٢٦",
+        event_date: "١٢ أغسطس ٢٠٢٦",
+        details: { v: 1, kind: "happy_notice", text: "خبر تجريبي", showDays: 7 },
+      },
+      submitter: { name: "حسن", phone: "0500000001" },
+    }),
+  ].join("\n"),
+};
+
+const mobileBuilt = E.buildFamilyEventRow({
+  source: "approval_request",
+  row: mobileArabicDateRow,
+});
+if (!mobileBuilt || mobileBuilt.person !== "حسن" || mobileBuilt.type !== "general") {
+  console.error("FAIL: mobile_app envelope did not build person/type");
+  failed += 1;
+} else if (mobileBuilt.event_date !== "") {
+  console.error("FAIL: mobile_app free-text event_date must not reach SQL:", mobileBuilt.event_date);
+  failed += 1;
+} else {
+  console.log("OK: mobile_app_arabic_date_cleared");
+}
+
+if (typeof E.toSqlDateOrEmpty === "function") {
+  const slash = E.toSqlDateOrEmpty("2026/08/12");
+  const dmy = E.toSqlDateOrEmpty("12/08/2026");
+  const junk = E.toSqlDateOrEmpty("١٢ أغسطس ٢٠٢٦");
+  if (slash !== "2026-08-12" || dmy !== "2026-08-12" || junk !== "") {
+    console.error("FAIL: toSqlDateOrEmpty", { slash, dmy, junk });
+    failed += 1;
+  } else {
+    console.log("OK: toSqlDateOrEmpty");
+  }
+} else {
+  console.error("FAIL: toSqlDateOrEmpty missing");
+  failed += 1;
+}
+
+if (typeof E.sanitizeFamilyEventRowForPublish === "function") {
+  const sanitized = E.sanitizeFamilyEventRowForPublish({
+    branch_key: "زيدان",
+    type: "مولود",
+    person: "حسن",
+    date_label: "2026/08/12",
+    event_date: "١٢ أغسطس ٢٠٢٦",
+    visit_date_from: "bad",
+    created_at: "2026-08-12T10:00:00.000Z",
+  });
+  if (
+    sanitized.event_date !== "2026-08-12" ||
+    sanitized.type !== "birth" ||
+    sanitized.visit_date_from !== ""
+  ) {
+    console.error("FAIL: sanitizeFamilyEventRowForPublish", sanitized);
+    failed += 1;
+  } else {
+    console.log("OK: sanitizeFamilyEventRowForPublish");
+  }
+} else {
+  console.error("FAIL: sanitizeFamilyEventRowForPublish missing");
+  failed += 1;
+}
+
 if (failed) {
   console.error(`\n${failed} sample(s) failed.`);
   process.exit(1);

@@ -266,7 +266,6 @@
         const getClient = h("getClient");
         const normalizePersonName = h("normalizePersonName");
         const formatDateISO = h("formatDateISO");
-        const todayGregorianISO = h("todayGregorianISO");
         const formatEventText = h("formatEventText");
         const clampVisibilityDays = h("clampVisibilityDays");
         const touchEventsRefresh = h("touchEventsRefresh");
@@ -305,15 +304,14 @@
         }
 
         let dateValue = String(v.dateLabel || "").trim();
-        if (!dateValue && todayGregorianISO) dateValue = todayGregorianISO();
         const dateLabel = formatDateISO ? formatDateISO(dateValue) : dateValue;
         const showDays = clampVisibilityDays ? clampVisibilityDays(v.showDays) : 7;
         const Vis =
           typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
-        if (category === "happy" && Vis && typeof Vis.validateEventDateForSubmit === "function") {
+        if (Vis && typeof Vis.validateEventDateForSubmit === "function") {
           const dateCheck = Vis.validateEventDateForSubmit(dateValue || dateLabel, {
-            category: "happy",
-            type: type,
+            category: category,
+            type: type || category,
             required: true,
           });
           if (!dateCheck || !dateCheck.ok) {
@@ -321,9 +319,14 @@
               ok: false,
               message:
                 (dateCheck && dateCheck.reason) ||
-                "تاريخ المناسبة منتهٍ ولا يمكن إرسالها. اختر تاريخًا اليوم أو لاحقًا.",
+                "أدخل التاريخ. بدونه لا يُحدد وقت ظهور المناسبة.",
             };
           }
+        } else if (!dateValue) {
+          return {
+            ok: false,
+            message: "أدخل التاريخ. بدونه لا يُحدد وقت ظهور المناسبة.",
+          };
         }
         const showBeforeDays =
           Vis && typeof Vis.clampShowBeforeDays === "function"

@@ -526,6 +526,16 @@ function showAlert(kind, msg) {
     }
     return "";
   }
+  function eventSubtypeArabicLabel(type) {
+    const raw = String(type || "").trim();
+    if (!raw) return "";
+    const Events = window.AlzidanEvents || {};
+    if (typeof Events.eventTypeArabicLabel === "function") {
+      const label = Events.eventTypeArabicLabel(raw);
+      if (label) return label;
+    }
+    return raw;
+  }
   function parseEventPayloadFromRow(row) {
     const Events = window.AlzidanEvents || {};
     if (typeof Events.parseEventCardMessage !== "function") {
@@ -649,14 +659,12 @@ function showAlert(kind, msg) {
         return { key: "review", label: "يحتاج مراجعة", reason: "يوجد طلب مكرر بنفس الاسم والتاريخ في نفس الفرع." };
       }
 
-      if (!parsed.image && !parsed.video) {
-        return { key: "review", label: "يحتاج مراجعة", reason: "لا توجد مرفقات (صورة/فيديو)." };
-      }
-
       return {
         key: "complete",
         label: "مكتمل",
-        reason: "البيانات الأساسية مكتملة مع عدم وجود تكرار ظاهر.",
+        reason: parsed.image || parsed.video
+          ? "البيانات الأساسية مكتملة مع عدم وجود تكرار ظاهر."
+          : "البيانات الأساسية مكتملة، والمرفقات اختيارية.",
       };
     }
 
@@ -806,7 +814,10 @@ function showAlert(kind, msg) {
     }
     const eventData = parseEventPayloadFromRow(row);
     if (kindKey === "event_card") {
-      summaryData.push(["نوع المناسبة", eventData.type || "غير محدد"]);
+      summaryData.push([
+        "نوع المناسبة",
+        eventSubtypeArabicLabel(eventData.type) || eventData.type || "غير محدد",
+      ]);
       summaryData.push(["صاحب المناسبة", eventData.person || "غير محدد"]);
       summaryData.push(["تاريخ المناسبة", eventData.date || "غير محدد"]);
       summaryData.push(["نص المناسبة", eventData.text || "غير متوفر"]);
@@ -957,6 +968,16 @@ function showAlert(kind, msg) {
     const kindMain = document.createElement("div");
     kindMain.textContent = kindLabel(row.kind);
     tdKind.appendChild(kindMain);
+    if (String(row.kind || "").trim() === "event_card") {
+      const parsed = parseEventPayloadFromRow(row);
+      const subtype = eventSubtypeArabicLabel(parsed && parsed.type);
+      if (subtype) {
+        const kindSub = document.createElement("div");
+        kindSub.className = "hint";
+        kindSub.textContent = subtype;
+        tdKind.appendChild(kindSub);
+      }
+    }
     tdKind.appendChild(createRequestQualityPill(row, qualityContext));
     tr.appendChild(tdKind);
     tr.appendChild(tdText(row.branch_key || ""));
