@@ -1,6 +1,6 @@
 /**
  * Admin mobile (iPhone Safari) — load LAST.
- * Desktop layout stays unchanged; only ≤900px (shell already collapses).
+ * Desktop layout unchanged; applies at ≤900px (shell already collapses).
  */
 @media (max-width: 900px) {
   html,
@@ -22,11 +22,18 @@
     box-sizing: border-box !important;
   }
 
-  /* Header: keep usable, avoid horizontal sprawl */
   .page > header {
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 8px !important;
+  }
+
+  body.admin-shell-ready.admin-authenticated .page > header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: #e8efe9;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px)) !important;
   }
 
   .page > header nav {
@@ -55,7 +62,7 @@
     max-width: 100% !important;
   }
 
-  /* Login: stack fields + full-width actions */
+  /* Login */
   #admin-login-section .grid,
   #admin-login-controls.grid,
   #admin-login-controls {
@@ -82,7 +89,6 @@
     min-height: 44px !important;
   }
 
-  /* Universal grids/forms */
   .grid,
   .relation-fields,
   .batch-tools,
@@ -103,11 +109,10 @@
 
   .btn,
   .btn-sm {
-    min-height: 42px !important;
+    min-height: 40px !important;
     white-space: normal !important;
   }
 
-  /* Kill forced wide tables everywhere; scroll only inside wrap if needed */
   table {
     min-width: 0 !important;
     width: 100% !important;
@@ -125,7 +130,7 @@
     min-width: 0 !important;
   }
 
-  /* Requests: real stacked cards; un-hide compact-hidden columns on phone */
+  /* Requests → compact cards */
   #admin-requests-section .table-wrap {
     overflow: visible !important;
     max-height: none !important;
@@ -151,11 +156,13 @@
   }
 
   #admin-requests-section tbody tr {
+    display: flex !important;
+    flex-direction: column !important;
     background: #fff !important;
     border: 1px solid rgba(16, 36, 28, 0.14) !important;
     border-radius: 14px !important;
-    padding: 10px 12px !important;
-    margin: 0 0 12px !important;
+    padding: 8px 10px 10px !important;
+    margin: 0 0 10px !important;
     box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06) !important;
   }
 
@@ -164,7 +171,7 @@
     align-items: flex-start !important;
     justify-content: space-between !important;
     gap: 10px !important;
-    padding: 7px 0 !important;
+    padding: 5px 0 !important;
     border: none !important;
     white-space: normal !important;
     overflow: visible !important;
@@ -197,6 +204,23 @@
     text-align: left;
   }
 
+  #admin-requests-section tbody td[data-label="إجراء"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    order: 50 !important;
+    margin-top: 6px !important;
+    padding-top: 10px !important;
+    border-top: 1px solid rgba(16, 36, 28, 0.1) !important;
+  }
+
+  #admin-requests-section tbody td[data-label="إجراء"]::before {
+    display: none !important;
+  }
+
+  #admin-requests-section tbody td.is-blank-mobile {
+    display: none !important;
+  }
+
   #admin-requests-section details.msg,
   #admin-requests-section details.msg > div {
     min-width: 0 !important;
@@ -204,16 +228,41 @@
     width: 100% !important;
   }
 
+  #admin-requests-section .btn,
+  #admin-requests-section .btn-sm {
+    min-height: 38px !important;
+    padding: 8px 10px !important;
+    font-size: 13px !important;
+  }
+
   #admin-requests-section .cell-actions {
-    display: flex !important;
-    flex-wrap: wrap !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
     gap: 8px !important;
     width: 100% !important;
   }
 
   #admin-requests-section .cell-actions .btn {
-    flex: 1 1 calc(50% - 8px);
-    min-width: 120px;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Hide disabled accept/reject on phone to save space */
+  #admin-requests-section .cell-actions .btn[disabled] {
+    display: none !important;
+  }
+
+  #admin-requests-section .delegate-admin-email {
+    grid-column: 1 / -1;
+    min-width: 0 !important;
+    width: 100% !important;
+    margin: 0 0 4px !important;
+    padding: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  #admin-requests-section .delegate-admin-email input {
+    min-height: 40px;
   }
 
   #requests-toolbar,
@@ -227,7 +276,6 @@
     justify-content: flex-start !important;
   }
 
-  /* Events / banner / special cards */
   #events-source-manager > .card > .grid,
   #banner-messages-manager > .card > .grid,
   #events-source-form .grid,
@@ -241,7 +289,6 @@
     max-height: 260px !important;
   }
 
-  /* Dialogs fit phone */
   dialog {
     width: calc(100vw - 16px) !important;
     max-width: calc(100vw - 16px) !important;
@@ -257,13 +304,13 @@
     grid-template-columns: 1fr !important;
   }
 
-  /* Shell main padding + safe area */
   body.admin-shell-ready.admin-authenticated #admin-protected-sections,
   body.admin-shell-ready.admin-authenticated #bulk-name-audit-section,
   body.admin-shell-ready.admin-authenticated #admin-module-hub,
   body.admin-shell-ready.admin-authenticated #admin-module-delegates,
   body.admin-shell-ready.admin-authenticated .admin-shell-main {
     padding-inline: 10px !important;
+    padding-top: 8px !important;
     padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
     max-width: 100% !important;
     overflow-x: hidden !important;
@@ -279,21 +326,15 @@
     grid-template-columns: 1fr !important;
   }
 
-  /* Generic remaining tables → readable stacked rows when labeled */
   #admin-memory-section .table-wrap table,
   #admin-module-delegates table {
     min-width: 0 !important;
   }
 }
 
-/* Extra-tight phones */
 @media (max-width: 430px) {
   .page > header nav a {
     font-size: 11px !important;
     padding: 7px 8px !important;
-  }
-
-  #admin-requests-section .cell-actions .btn {
-    flex: 1 1 100%;
   }
 }

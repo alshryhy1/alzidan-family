@@ -960,8 +960,12 @@ function showAlert(kind, msg) {
     const tr = document.createElement("tr");
     function tdText(text, label) {
       const td = document.createElement("td");
-      td.textContent = text || "";
+      const value = text || "";
+      td.textContent = value;
       if (label) td.setAttribute("data-label", label);
+      if (label === "البريد" && !String(value).trim()) {
+        td.classList.add("is-blank-mobile");
+      }
       return td;
     }
     tr.appendChild(tdText(row.request_id || "", "رقم الطلب"));
