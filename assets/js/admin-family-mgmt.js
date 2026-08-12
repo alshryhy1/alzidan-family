@@ -77,6 +77,35 @@
     return null;
   }
 
+  function syncAdminBranchFromSelect() {
+    if (!state.branch) {
+      state.branch = getAdminFmBranch() || "";
+    }
+    return state.branch || "";
+  }
+
+  /** Login ≠ loaded branch. Search can run from the dropdown before «تحميل الشجرة». */
+  async function ensureAdminWriteContext() {
+    if (!getAdminToken()) {
+      return { ok: false, message: "سجل الدخول أولاً." };
+    }
+    syncAdminBranchFromSelect();
+    if (!state.branch) {
+      return { ok: false, message: "اختر الفرع ثم حمّل الشجرة." };
+    }
+    const hasLoadedRows = Object.values(state.pathToRow || {}).some(function (row) {
+      return row && Number(row.id) > 0;
+    });
+    const hasChildren = !!(state.children && Object.keys(state.children).length);
+    if (!hasLoadedRows && !hasChildren) {
+      const res = await loadChildrenForBranchAdmin(state.branch, { applyToState: true });
+      if (!res.ok) {
+        return { ok: false, message: "حمّل الشجرة أولاً من الفرع المحدد ثم أعد الحفظ." };
+      }
+    }
+    return { ok: true };
+  }
+
   function getAdminFamilyRoot() {
     return document.getElementById("admin-family-management-root");
   }
@@ -420,22 +449,49 @@
     if (!phone) return { ok: true, skipped: true };
     const branch = String(branchKey || "").trim();
     const path = normalizePersonName(childPath || "");
-    const rowId = findRowIdForPath(path);
-    if (!branch || !rowId) return { ok: false, error: { message: "missing member profile keys" } };
+    let rowId = findRowIdForPath(path);
+    let resolvedPersonId = normalizePersonName(personId || "");
+    if ((!rowId || !resolvedPersonId) && sb && branch && (path || resolvedPersonId)) {
+      let q = sb.from("tree_children").select("id,person_id,child_name").eq("branch_key", branch).limit(1);
+      q = resolvedPersonId ? q.eq("person_id", resolvedPersonId) : q.eq("child_name", path);
+      const foundRow = await q.maybeSingle();
+      if (foundRow.data && foundRow.data.id) {
+        rowId = Number(foundRow.data.id);
+        resolvedPersonId = normalizePersonName(foundRow.data.person_id || resolvedPersonId);
+      }
+    }
+    if (!branch || !rowId) return { ok: false, error: { message: "تعذر ربط رقم الجوال بسجل الشخص." } };
     const displayName = path.split("/").filter(Boolean).slice(-1)[0] || "";
     const row = {
       phone,
       branch_key: branch,
       tree_child_id: rowId,
-      person_id: personId || null,
+      person_id: resolvedPersonId || personId || null,
       display_name: displayName || null,
       status: "active",
       updated_at: new Date().toISOString(),
     };
-    const found = await sb.from("member_profiles").select("id").eq("phone", phone).limit(1).maybeSingle();
-    if (found.error) return { ok: false, error: found.error };
-    if (found.data && found.data.id) {
-      const { error } = await sb.from("member_profiles").update(row).eq("id", found.data.id);
+    let existingId = 0;
+    if (rowId) {
+      const byChild = await sb.from("member_profiles").select("id").eq("tree_child_id", rowId).limit(1).maybeSingle();
+      if (byChild.data && byChild.data.id) existingId = Number(byChild.data.id);
+    }
+    if (!existingId && (resolvedPersonId || personId)) {
+      const byPid = await sb
+        .from("member_profiles")
+        .select("id")
+        .eq("person_id", resolvedPersonId || personId)
+        .limit(1)
+        .maybeSingle();
+      if (byPid.data && byPid.data.id) existingId = Number(byPid.data.id);
+    }
+    if (!existingId) {
+      const byPhone = await sb.from("member_profiles").select("id").eq("phone", phone).limit(1).maybeSingle();
+      if (byPhone.error) return { ok: false, error: byPhone.error };
+      if (byPhone.data && byPhone.data.id) existingId = Number(byPhone.data.id);
+    }
+    if (existingId) {
+      const { error } = await sb.from("member_profiles").update(row).eq("id", existingId);
       if (error) return { ok: false, error };
       return { ok: true };
     }
@@ -608,6 +664,7 @@
     const limit =
       typeof FM.PERSON_SEARCH_LIMIT === "number" ? FM.PERSON_SEARCH_LIMIT : 40;
     const branch = normalizePersonName(state.branch || getAdminFmBranch() || "");
+    if (branch && !state.branch) state.branch = branch;
     const sb = getSupabaseClient();
     if (!sb || !branch) return [];
 
@@ -722,7 +779,9 @@
   async function familyApiLoadWivesForPerson(personName) {
     const sb = getSupabaseClient();
     const SpousesCore = window.AlzidanSpousesCore || {};
-    if (!sb || !state.branch) return { data: [], error: { message: "no branch" } };
+    const ctx = await ensureAdminWriteContext();
+    if (!ctx.ok) return { data: [], error: { message: ctx.message } };
+    if (!sb) return { data: [], error: { message: "تعذر تحميل الزوجات حالياً، حاول لاحقاً." } };
     const husbandResolved = await resolveHusbandForSpouseWrite(sb, personName);
     if (!husbandResolved.ok || !husbandResolved.rowId) {
       if (husbandResolved.code === "TREE-001") {
@@ -763,7 +822,8 @@
   }
 
   async function familyApiSaveWife(payload) {
-    if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
     const sb = getSupabaseClient();
     if (!sb) return { ok: false, message: "تعذر الاتصال بقاعدة البيانات." };
     const husbandResolved = await resolveHusbandForSpouseWrite(sb, payload.personId);
@@ -815,13 +875,14 @@
 
   async function familyApiGetParentChildrenForWifeManager(personName) {
     const sb = getSupabaseClient();
+    syncAdminBranchFromSelect();
     const parentId = resolveSelectedParentId(normalizePersonName(personName || ""), state.branch);
     if (!sb || !parentId || !state.branch) return [];
     const parentLeaf = getLeafStoredNameFromNodeId(parentId);
     const parentCandidates = [parentId, parentLeaf].filter(Boolean);
     const { data, error } = await sb
       .from("tree_children")
-      .select("id,branch_key,parent_name,parent,child_name,name,birth_order,birth_date_h,birth_date_g,birth_year")
+      .select("id,person_id,branch_key,parent_name,parent,child_name,name,birth_order,birth_date_h,birth_date_g,birth_year,city,area,is_deceased,deceased")
       .eq("branch_key", state.branch)
       .in("parent_name", parentCandidates)
       .limit(500);
@@ -832,11 +893,15 @@
       return {
         id: r.id,
         name: childPath,
+        personId: normalizePersonName(r.person_id || ""),
         label,
         order: r.birth_order || "",
         hdate: r.birth_date_h || "",
         gdate: r.birth_date_g || "",
         year: r.birth_year || "",
+        city: r.city || "",
+        area: r.area || "",
+        deceased: !!(r.is_deceased || r.deceased),
       };
     }).filter((c) => c.id != null && c.name);
   }
@@ -883,7 +948,8 @@
   
 
   async function familyApiConfirmLinkAllChildrenToOnlyWife(personName) {
-    if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
     const sb = getSupabaseClient();
     if (!sb) return { ok: false, message: "تعذر الاتصال بقاعدة البيانات." };
     const husbandResolved = await resolveHusbandForSpouseWrite(sb, personName);
@@ -941,7 +1007,8 @@
   
 
   async function familyApiSaveChild(payload) {
-    if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
     const selectedParentName = resolveSelectedParentId(normalizePersonName(payload.personId || payload.boundParentPath), state.branch);
     const FM = window.AlzidanFamilyPersonCore || {};
     const bound =
@@ -1151,17 +1218,29 @@
       if (isRpcMissingError(insertRes.error)) return { ok: false, message: "تعذر الحفظ حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
       return { ok: false, message: formatTreeChildrenDbError(insertRes.error, "save") };
     }
-    const memberPhoneForChild = normalizeMemberPhone(payload.phone || "");
-    const memberProfileRes = await saveAdminMemberProfile(sb, memberPhoneForChild, state.branch, childId, "");
-    if (!memberProfileRes.ok) {
-      return { ok: false, message: "تم حفظ الابن لكن تعذر حفظ رقم الجوال: " + ((memberProfileRes.error && memberProfileRes.error.message) || "خطأ غير معروف") };
+    const reloadRes = await loadChildrenForBranchAdmin(state.branch, { applyToState: true });
+    const rawPhone = String(payload.phone || "").trim();
+    const memberPhoneForChild = normalizeMemberPhone(rawPhone);
+    if (rawPhone && !memberPhoneForChild) {
+      return { ok: false, message: "تم حفظ الابن لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+    }
+    if (memberPhoneForChild) {
+      const memberProfileRes = await saveAdminMemberProfile(
+        sb,
+        memberPhoneForChild,
+        state.branch,
+        childId,
+        findStablePersonId(childId),
+      );
+      if (!memberProfileRes.ok) {
+        return { ok: false, message: "تم حفظ الابن لكن تعذر حفظ رقم الجوال. أعد إدخاله من تعديل الابن." };
+      }
     }
     const spouseId = payload.spouseId ? Number(payload.spouseId) : null;
     const motherLinkRes = await familyApiLinkChildToSpouse(childId, spouseId);
     if (!motherLinkRes.ok) {
-      return { ok: false, message: "تم حفظ الابن لكن تعذر ربط الأم: " + ((motherLinkRes.error && motherLinkRes.error.message) || "خطأ غير معروف") };
+      return { ok: false, message: "تم حفظ الابن لكن تعذر ربط الأم. أعد الربط من إدارة الزوجات." };
     }
-    const reloadRes = await loadChildrenForBranchAdmin(state.branch, { applyToState: true });
     if (!reloadRes.ok) return { ok: true, message: "تم حفظ بيانات الابن في قاعدة البيانات، لكن تعذر تحديث العرض الآن.", selectedPersonId: childId };
     return { ok: true, message: "تم حفظ بيانات الابن في قاعدة البيانات: " + finalName, selectedPersonId: childId };
   }
@@ -1184,7 +1263,8 @@
   }
 
   async function familyApiUpdateChild(payload) {
-    if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
     const parentId = normalizePersonName(payload.parentId || "");
     const child = payload.child || {};
     const childId = normalizePersonName(payload.childId || child.name || "");
@@ -1271,19 +1351,32 @@
       if (isRpcMissingError(res.error)) return { ok: false, message: "تعذر تنفيذ التعديل حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
       return { ok: false, message: formatTreeChildrenDbError(res.error, "update") };
     }
-    const editPhoneValue = normalizeMemberPhone(payload.phone || "");
-    const memberProfileEditRes = await saveAdminMemberProfile(sb, editPhoneValue, state.branch, finalChildId, personId);
-    if (!memberProfileEditRes.ok) {
-      return { ok: false, message: "تم حفظ التعديل لكن تعذر حفظ رقم الجوال: " + ((memberProfileEditRes.error && memberProfileEditRes.error.message) || "خطأ غير معروف") };
-    }
     const reloadRes = await loadChildrenForBranchAdmin(state.branch, { applyToState: true });
+    const rawEditPhone = String(payload.phone || "").trim();
+    const editPhoneValue = normalizeMemberPhone(rawEditPhone);
+    if (rawEditPhone && !editPhoneValue) {
+      return { ok: false, message: "تم حفظ التعديل لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+    }
+    if (editPhoneValue) {
+      const memberProfileEditRes = await saveAdminMemberProfile(
+        sb,
+        editPhoneValue,
+        state.branch,
+        finalChildId,
+        personId || findStablePersonId(finalChildId),
+      );
+      if (!memberProfileEditRes.ok) {
+        return { ok: false, message: "تم حفظ التعديل لكن تعذر حفظ رقم الجوال. أعد إدخاله." };
+      }
+    }
     if (!reloadRes.ok) return { ok: true, message: "تم حفظ التعديل. تعذر تحديث البيانات من قاعدة البيانات الآن." };
     return { ok: true, message: "تم حفظ التعديل." };
   }
   
 
   async function familyApiDeleteChild(payload) {
-    if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
     const parentId = normalizePersonName(payload.parentId || "");
     const child = payload.child || {};
     const childIdForDelete = normalizePersonName(payload.childId || child.name || "");
@@ -1316,7 +1409,8 @@
   
 
   async function familyApiDeleteSubtree(personPath) {
-    if (!state.branch) return { ok: false, message: "سجل الدخول أولًا." };
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
     const path = normalizePersonName(personPath || "");
     if (isOriginNode(path, "", "")) {
       return { ok: false, message: originLockMessage() };
@@ -1336,8 +1430,11 @@
   function buildAdminFamilyApi() {
     return {
       mode: "admin",
-      getState: () => state,
-      getBranchKey: () => state.branch,
+      getState: () => {
+        syncAdminBranchFromSelect();
+        return state;
+      },
+      getBranchKey: () => syncAdminBranchFromSelect(),
       getClient: getSupabaseClient,
       getBranchRootName,
       normalizePersonName,
@@ -1375,6 +1472,7 @@
       deleteSubtree: familyApiDeleteSubtree,
       loadMemberPhone: async (parentId, child) => {
         const sb = getSupabaseClient();
+        syncAdminBranchFromSelect();
         if (!sb || !state.branch) return "";
         return loadAdminMemberPhone(
           sb,

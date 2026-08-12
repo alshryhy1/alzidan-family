@@ -338,6 +338,12 @@
       return "visible";
     }
 
+    // Date label present but unparsed → treat as scheduled (do not show as "new").
+    var datedHint = normalizeText(
+      (row && (row.event_date || row.date_label || row.date || row.dateLabel)) || ""
+    );
+    if (datedHint) return "scheduled";
+
     // Legacy undated: created_at + showDays window
     if (!isCreatedWithinShowWindow(row, when)) return "ended";
     return "visible";
@@ -442,9 +448,16 @@
       manual_hidden: manualHidden,
     };
 
-    // If specific show_at provided, still keep before-days for admin display.
-    if (!fields.show_at && src.event_date) {
-      var dayMs = parseIsoDateToLocalDayMs(src.event_date) || eventDayMs({ event_date: src.event_date });
+    // Prefer explicit show_at; otherwise derive from Gregorian or Hijri label.
+    if (!fields.show_at) {
+      var dayMs =
+        parseIsoDateToLocalDayMs(src.event_date) ||
+        eventDayMs({
+          event_date: src.event_date,
+          date_label: src.date_label || src.dateLabel || src.date || "",
+          date: src.date || "",
+        }) ||
+        parseHijriApproxToGregorianMs(src.date_label || src.dateLabel || src.event_date || src.date || "");
       if (dayMs != null) {
         var start = new Date(dayMs - showBeforeDays * 24 * 60 * 60 * 1000);
         fields.show_at = start.toISOString();

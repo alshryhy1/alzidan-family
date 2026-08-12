@@ -218,7 +218,13 @@ function formatDelegateDeniedError(info, domain) {
 }
 
 async function getDelegateRpcAuth() { const session = loadDelegateSession(); if (!session) return { ok: false, reason: "no_session" }; const secretHash = String(session.secretHash || "").trim(); if (!secretHash) return { ok: false, reason: "hash_failed" }; return { ok: true, branch: session.branch, phone: session.phone, email: session.email, secretHash }; }
-function normalizeMemberPhoneForDelegate(v) { return normalizeArabicDigitsToLatin(String(v || "")).replace(/[^\d]/g, "").trim(); }
+function normalizeMemberPhoneForDelegate(v) {
+  var digits = normalizeArabicDigitsToLatin(String(v || "")).replace(/[^\d]/g, "").trim();
+  if (!digits) return "";
+  if (digits.indexOf("966") === 0 && digits.length >= 12) digits = "0" + digits.slice(3);
+  if (digits.length === 9 && digits.charAt(0) === "5") digits = "0" + digits;
+  return digits.length === 10 && digits.indexOf("05") === 0 ? digits : "";
+}
 
 async function findTreeRowForMemberProfile(sb, branchKey, childId, personId) {
   const branch = normalizePersonName(branchKey || "");
@@ -226,11 +232,21 @@ async function findTreeRowForMemberProfile(sb, branchKey, childId, personId) {
   const pid = normalizePersonName(personId || "");
   if (!sb || !branch || (!child && !pid)) return null;
 
-  let q = sb.from("tree_children").select("id,branch_key,person_id,child_name,name").eq("branch_key", branch).limit(1);
-  q = pid ? q.eq("person_id", pid) : q.eq("child_name", child);
-  const { data, error } = await q.maybeSingle();
-  if (error || !data) return null;
-  return data;
+  const selectCols = "id,branch_key,person_id,child_name,name";
+  if (pid) {
+    const byPid = await sb.from("tree_children").select(selectCols).eq("branch_key", branch).eq("person_id", pid).limit(1).maybeSingle();
+    if (!byPid.error && byPid.data) return byPid.data;
+  }
+  if (child) {
+    const byPath = await sb.from("tree_children").select(selectCols).eq("branch_key", branch).eq("child_name", child).limit(1).maybeSingle();
+    if (!byPath.error && byPath.data) return byPath.data;
+    const leaf = child.includes("/") ? child.split("/").map(normalizePersonName).filter(Boolean).slice(-1)[0] : child;
+    if (leaf && leaf !== child) {
+      const byLeaf = await sb.from("tree_children").select(selectCols).eq("branch_key", branch).eq("child_name", leaf).limit(1).maybeSingle();
+      if (!byLeaf.error && byLeaf.data) return byLeaf.data;
+    }
+  }
+  return null;
 }
 
 async function saveDelegateMemberProfile(sb, phoneRaw, branchKey, childId, personId) {
@@ -253,11 +269,21 @@ async function saveDelegateMemberProfile(sb, phoneRaw, branchKey, childId, perso
     updated_at: new Date().toISOString()
   };
 
-  const found = await sb.from("member_profiles").select("id").eq("phone", phone).limit(1).maybeSingle();
-  if (found.error) return { ok: false, error: found.error };
+  let existingId = 0;
+  const byChild = await sb.from("member_profiles").select("id").eq("tree_child_id", treeRow.id).limit(1).maybeSingle();
+  if (byChild.data && byChild.data.id) existingId = Number(byChild.data.id);
+  if (!existingId && row.person_id) {
+    const byPid = await sb.from("member_profiles").select("id").eq("person_id", row.person_id).limit(1).maybeSingle();
+    if (byPid.data && byPid.data.id) existingId = Number(byPid.data.id);
+  }
+  if (!existingId) {
+    const found = await sb.from("member_profiles").select("id").eq("phone", phone).limit(1).maybeSingle();
+    if (found.error) return { ok: false, error: found.error };
+    if (found.data && found.data.id) existingId = Number(found.data.id);
+  }
 
-  if (found.data && found.data.id) {
-    const { error } = await sb.from("member_profiles").update(row).eq("id", found.data.id);
+  if (existingId) {
+    const { error } = await sb.from("member_profiles").update(row).eq("id", existingId);
     if (error) return { ok: false, error };
     return { ok: true };
   }
@@ -1352,6 +1378,20 @@ function paintDelegateBranchRequestsList() {
               showAlert(inlineAlert, "error", errMsg);
               lock(false);
               return;
+            }
+            try {
+              await sb.functions.invoke("alzidan-push-notify", {
+                body: {
+                  type: row.type || "",
+                  person: row.person || "",
+                  branch_key: row.branch_key || state.branch || "",
+                  details: row.details || "",
+                },
+              });
+            } catch (familyPushErr) {
+              try {
+                console.warn("[delegate] family push soft-fail", familyPushErr);
+              } catch (_) {}
             }
           } else if (classified.intent === "tree") {
             const applyRes = await applyDelegateTreeCardRequest(sb, req);
@@ -3083,17 +3123,23 @@ async function familyApiSaveChild(payload) {
     if (isRpcMissingError(insertRes.error)) return { ok: false, message: "تعذر الحفظ حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
     return { ok: false, message: formatTreeChildrenDbError(insertRes.error, "save") };
   }
-  const memberPhoneForChild = normalizeMemberPhoneForDelegate(payload.phone || "");
-  const memberProfileRes = await saveDelegateMemberProfile(sb, memberPhoneForChild, state.branch, childId, "");
-  if (!memberProfileRes.ok) {
-    return { ok: false, message: "تم حفظ الابن لكن تعذر حفظ رقم الجوال: " + ((memberProfileRes.error && memberProfileRes.error.message) || "خطأ غير معروف") };
+  const reloadRes = await loadChildrenForBranchDelegate(state.branch, { applyToState: true });
+  const rawPhone = String(payload.phone || "").trim();
+  const memberPhoneForChild = normalizeMemberPhoneForDelegate(rawPhone);
+  if (rawPhone && !memberPhoneForChild) {
+    return { ok: false, message: "تم حفظ الابن لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+  }
+  if (memberPhoneForChild) {
+    const memberProfileRes = await saveDelegateMemberProfile(sb, memberPhoneForChild, state.branch, childId, findStablePersonId(childId));
+    if (!memberProfileRes.ok) {
+      return { ok: false, message: "تم حفظ الابن لكن تعذر حفظ رقم الجوال. أعد إدخاله من تعديل الابن." };
+    }
   }
   const spouseId = payload.spouseId ? Number(payload.spouseId) : null;
   const motherLinkRes = await familyApiLinkChildToSpouse(childId, spouseId);
   if (!motherLinkRes.ok) {
-    return { ok: false, message: "تم حفظ الابن لكن تعذر ربط الأم: " + ((motherLinkRes.error && motherLinkRes.error.message) || "خطأ غير معروف") };
+    return { ok: false, message: "تم حفظ الابن لكن تعذر ربط الأم. أعد الربط من إدارة الزوجات." };
   }
-  const reloadRes = await loadChildrenForBranchDelegate(state.branch, { applyToState: true });
   if (!reloadRes.ok) return { ok: true, message: "تم حفظ بيانات الابن في قاعدة البيانات، لكن تعذر تحديث العرض الآن.", selectedPersonId: childId };
   return { ok: true, message: "تم حفظ بيانات الابن في قاعدة البيانات: " + finalName, selectedPersonId: childId };
 }
@@ -3189,12 +3235,24 @@ async function familyApiUpdateChild(payload) {
     if (isRpcMissingError(res.error)) return { ok: false, message: "تعذر تنفيذ التعديل حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
     return { ok: false, message: formatTreeChildrenDbError(res.error, "update") };
   }
-  const editPhoneValue = normalizeMemberPhoneForDelegate(payload.phone || "");
-  const memberProfileEditRes = await saveDelegateMemberProfile(sb, editPhoneValue, state.branch, childId, personId);
-  if (!memberProfileEditRes.ok) {
-    return { ok: false, message: "تم حفظ التعديل لكن تعذر حفظ رقم الجوال: " + ((memberProfileEditRes.error && memberProfileEditRes.error.message) || "خطأ غير معروف") };
-  }
   const reloadRes = await loadChildrenForBranchDelegate(state.branch, { applyToState: true });
+  const rawEditPhone = String(payload.phone || "").trim();
+  const editPhoneValue = normalizeMemberPhoneForDelegate(rawEditPhone);
+  if (rawEditPhone && !editPhoneValue) {
+    return { ok: false, message: "تم حفظ التعديل لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+  }
+  if (editPhoneValue) {
+    const memberProfileEditRes = await saveDelegateMemberProfile(
+      sb,
+      editPhoneValue,
+      state.branch,
+      childId,
+      personId || findStablePersonId(childId),
+    );
+    if (!memberProfileEditRes.ok) {
+      return { ok: false, message: "تم حفظ التعديل لكن تعذر حفظ رقم الجوال. أعد إدخاله." };
+    }
+  }
   if (!reloadRes.ok) return { ok: true, message: "تم حفظ التعديل. تعذر تحديث البيانات من قاعدة البيانات الآن." };
   return { ok: true, message: res.degraded ? "تم حفظ التعديل، لكن تعذر حفظ حالة متوفى في الخدمة لأن عمود الوفاة غير متاح." : "تم حفظ التعديل." };
 }

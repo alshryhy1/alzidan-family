@@ -796,27 +796,32 @@
     }
     // Accept/publish ≠ immediate show: persist schedule (default 3 days before event_date).
     const Vis = window.AlzidanEventVisibility || null;
-    if (Vis && typeof Vis.buildScheduleFields === "function") {
-      const sch = Vis.buildScheduleFields({
-        event_date: eventRow.event_date || eventRow.date_label || "",
-        show_before_days:
-          eventRow.show_before_days != null ? eventRow.show_before_days : 3,
-        show_at: eventRow.show_at || "",
-        end_at: eventRow.end_at || "",
-        manual_hidden: eventRow.manual_hidden || false,
-      });
-      if (sch.show_before_days != null) eventRow.show_before_days = sch.show_before_days;
-      if (sch.show_at) eventRow.show_at = sch.show_at;
-      if (sch.end_at) eventRow.end_at = sch.end_at;
-      eventRow.manual_hidden = !!sch.manual_hidden;
-      if (typeof Vis.mergeScheduleIntoDetails === "function") {
-        const merged = Vis.mergeScheduleIntoDetails(eventRow.details, sch);
-        eventRow.details =
-          typeof merged === "string" ? merged : JSON.stringify(merged);
+    function applyPublishSchedule(target) {
+      const row = target || {};
+      if (!(Vis && typeof Vis.buildScheduleFields === "function")) {
+        if (row.show_before_days == null && !row.show_at) row.show_before_days = 3;
+        return row;
       }
-    } else if (eventRow.show_before_days == null && !eventRow.show_at) {
-      eventRow.show_before_days = 3;
+      const sch = Vis.buildScheduleFields({
+        event_date: row.event_date || "",
+        date_label: row.date_label || "",
+        date: row.date_label || row.date || "",
+        show_before_days: row.show_before_days != null ? row.show_before_days : 3,
+        show_at: row.show_at || "",
+        end_at: row.end_at || "",
+        manual_hidden: row.manual_hidden || false,
+      });
+      if (sch.show_before_days != null) row.show_before_days = sch.show_before_days;
+      if (sch.show_at) row.show_at = sch.show_at;
+      if (sch.end_at) row.end_at = sch.end_at;
+      row.manual_hidden = !!sch.manual_hidden;
+      if (typeof Vis.mergeScheduleIntoDetails === "function") {
+        const merged = Vis.mergeScheduleIntoDetails(row.details, sch);
+        row.details = typeof merged === "string" ? merged : JSON.stringify(merged);
+      }
+      return row;
     }
+    eventRow = applyPublishSchedule(eventRow);
     if (typeof Events.sanitizeFamilyEventRowForPublish === "function") {
       eventRow = Events.sanitizeFamilyEventRowForPublish(eventRow);
     }
@@ -841,14 +846,14 @@
       try {
         console.warn("PUBLISH_EVENT date-cast retry", error);
       } catch (_) {}
-      const retryRow = Object.assign({}, eventRow, {
+      // Keep schedule; only clear Gregorian cast fields that Postgres rejected.
+      let retryRow = Object.assign({}, eventRow, {
         event_date: "",
         visit_date_from: "",
         visit_date_to: "",
       });
       delete retryRow.created_at;
-      delete retryRow.show_at;
-      delete retryRow.end_at;
+      retryRow = applyPublishSchedule(retryRow);
       const second = await callPublish(retryRow);
       data = second.data;
       error = second.error;

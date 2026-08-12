@@ -65,8 +65,9 @@ function requestLabel(kind: string) {
 
 function isInternalAuditKind(kind: unknown) {
   const k = normalizeText(kind).toLowerCase();
+  // Empty kind is NOT audit — family broadcast payloads use type/person, not kind.
+  if (!k) return false;
   return (
-    !k ||
     k === "events_audit" ||
     k === "tree_audit" ||
     k === "audit" ||

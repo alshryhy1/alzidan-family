@@ -127,7 +127,7 @@
           ? '<div class="field"><label>person_id (UUID)</label><input type="text" data-fm-edit-person-id dir="ltr" lang="en" placeholder="اختياري — للإدارة فقط" /></div>'
           : "") +
         '<div class="field"><label for="fm-edit-child-name">تعديل الاسم</label><input id="fm-edit-child-name" type="text" data-fm-edit-name placeholder="اسم الابن/الابنة" /></div>' +
-        '<div class="field"><label>رقم الجوال</label><input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="05XXXXXXXX" /></div>' +
+        '<div class="field"><label>رقم الجوال</label><input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="05XXXXXXXX" maxlength="10" /><div class="hint">10 أرقام تبدأ بـ 05</div></div>' +
         '<div class="field"><label>تاريخ الميلاد (هجري)</label><input type="text" data-fm-edit-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
         '<div class="field"><label>تاريخ الميلاد (ميلادي)</label><input type="date" data-fm-edit-greg dir="ltr" lang="en" /></div>' +
         '<div class="field"><label>ترتيب الميلاد</label><input type="number" data-fm-edit-order min="1" step="1" inputmode="numeric" /></div>' +
@@ -294,7 +294,7 @@
       });
     }
 
-    function refresh() {
+    async function refresh() {
       hideAlert(alertEl);
       listEl.innerHTML = "";
       var isolated = listChildrenForSelectedFather();
@@ -304,6 +304,12 @@
         return;
       }
       var list = sortChildren(isolated.list);
+      if (!list.length && typeof api.getParentChildrenForWifeManager === "function") {
+        try {
+          var dbRows = await api.getParentChildrenForWifeManager(key);
+          if (Array.isArray(dbRows) && dbRows.length) list = sortChildren(dbRows);
+        } catch (e) {}
+      }
       if (!list.length) {
         listEl.innerHTML = '<div class="hint">لا توجد بيانات مسجلة لهذا الشخص بعد.</div>';
         return;

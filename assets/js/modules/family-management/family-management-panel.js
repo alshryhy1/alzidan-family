@@ -275,8 +275,10 @@
       }
     }
 
-    function refreshChildren() {
-      if (childrenSection) childrenSection.refresh();
+    async function refreshChildren() {
+      if (childrenSection && typeof childrenSection.refresh === "function") {
+        await childrenSection.refresh();
+      }
       updatePersonCard();
     }
 
@@ -365,7 +367,9 @@
       } else if (spousesSection) {
         spousesSection.closeManager();
       }
-      refreshSpouses();
+      refreshSpouses().then(function () {
+        refreshChildren();
+      });
       refreshChildren();
       updatePersonCard();
       if (searchInput) searchInput.value = "";

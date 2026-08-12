@@ -201,7 +201,13 @@
       if (typeof api.loadWivesForPerson !== "function") return;
       var loaded = await api.loadWivesForPerson(personId);
       if (loaded && loaded.error) {
-        setAlert(alertEl, "error", "تعذر تحميل الزوجات: " + (loaded.error.message || "خطأ غير معروف"));
+        var raw = String((loaded.error && loaded.error.message) || "").trim();
+        var hasArabic = /[\u0600-\u06FF]/.test(raw);
+        setAlert(
+          alertEl,
+          "error",
+          hasArabic ? raw : "تعذر تحميل الزوجات حالياً، حاول لاحقاً.",
+        );
         return;
       }
       wivesRows = loaded && Array.isArray(loaded.data) ? loaded.data : [];
