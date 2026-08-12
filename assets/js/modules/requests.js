@@ -96,19 +96,63 @@ function showAlert(kind, msg) {
   }
 
   /** Soft end-user notify after decision — SUBMITTER only via scrubbed structured fields. */
+  function extractSubmitterContactFromRow(row) {
+    let phone = String((row && row.phone) || "").trim();
+    let email = String((row && row.email) || "").trim();
+    if (phone && email) return { phone, email };
+    try {
+      const msg = String((row && row.message) || "");
+      const idx = msg.indexOf("__JSON__:");
+      if (idx >= 0) {
+        const raw = msg.slice(idx + "__JSON__:".length).trim();
+        const parsed = JSON.parse(raw);
+        if (!phone) {
+          phone = String(
+            (parsed &&
+              (parsed.submitterPhone ||
+                parsed.submitter_phone ||
+                (parsed.submitter && parsed.submitter.phone) ||
+                parsed.phone)) ||
+              "",
+          ).trim();
+        }
+        if (!email) {
+          email = String(
+            (parsed &&
+              (parsed.submitterEmail ||
+                parsed.submitter_email ||
+                (parsed.submitter && parsed.submitter.email) ||
+                parsed.email)) ||
+              "",
+          ).trim();
+        }
+      }
+    } catch (_) {}
+    return { phone, email };
+  }
+
   async function notifyRequesterStatusChanged(sb, row, status, reason) {
-    if (!sb || !row) return;
+    if (!sb || !row) {
+      return { ok: false, skipped: "missing_client_or_row" };
+    }
     const Safe =
       (typeof window !== "undefined" && window.AlzidanSafeRequestNotify) || null;
     const kind = String(row.kind || "").trim().toLowerCase();
     const st = String(status || "").trim().toLowerCase();
+    const contact = extractSubmitterContactFromRow(row);
+    const phone = String(contact.phone || row.phone || "").trim();
+    const email = String(contact.email || row.email || "").trim();
 
     let rec;
     if (Safe && typeof Safe.scrubRecordForNotify === "function") {
       rec = Safe.scrubRecordForNotify(
         Object.assign({}, row, {
           status: st,
+          phone: phone || null,
+          email: email || null,
           reject_reason: reason || row.reject_reason || null,
+          name: row.name || null,
+          person: row.name || null,
         }),
       );
     } else {
@@ -117,20 +161,25 @@ function showAlert(kind, msg) {
         kind === "tree_audit" ||
         kind.endsWith("_audit")
       ) {
-        return;
+        return { ok: false, skipped: "audit_kind" };
       }
       rec = {
         request_id: row.request_id || null,
         kind: row.kind || "",
         branch_key: row.branch_key || "",
         status: st,
-        email: String(row.email || "").trim() || null,
-        phone: String(row.phone || "").trim() || null,
+        email: email || null,
+        phone: phone || null,
         reject_reason: reason || row.reject_reason || null,
         name: row.name || null,
         person: row.name || null,
       };
     }
+
+    // Never drop phone/email during scrub for status pushes.
+    if (!rec.phone && phone) rec.phone = phone;
+    if (!rec.email && email) rec.email = email;
+    rec.status = st;
 
     if (Safe && typeof Safe.safeRenderOutbound === "function") {
       const preview = Safe.safeRenderOutbound({
@@ -146,11 +195,20 @@ function showAlert(kind, msg) {
         try {
           console.warn("[status_changed] safe_render_blocked", rec.kind, rec.status);
         } catch (_) {}
-        return;
+        return { ok: false, skipped: "safe_render_blocked", kind: rec.kind, status: st };
       }
     }
 
-    if (st !== "approved" && st !== "rejected" && st !== "deferred") return;
+    if (st !== "approved" && st !== "rejected" && st !== "deferred") {
+      return { ok: false, skipped: "bad_status", status: st };
+    }
+
+    if (!String(rec.phone || "").trim() && !String(rec.email || "").trim()) {
+      try {
+        console.warn("[status_changed] missing phone/email", row.request_id, kind);
+      } catch (_) {}
+      return { ok: false, skipped: "missing_phone_email", request_id: row.request_id };
+    }
 
     try {
       if (String(rec.email || "").trim()) {
@@ -163,17 +221,75 @@ function showAlert(kind, msg) {
         console.warn("[status_changed email]", e);
       } catch (_) {}
     }
+
+    if (!String(rec.phone || "").trim()) {
+      return { ok: false, skipped: "missing_phone_for_push", email_only: true };
+    }
+
     try {
-      if (String(rec.phone || "").trim()) {
-        await sb.functions.invoke("alzidan-push-notify", {
-          body: { mode: "status_changed", record: rec },
+      const res = await sb.functions.invoke("alzidan-push-notify", {
+        body: { mode: "status_changed", record: rec },
+      });
+      const data = res && res.data ? res.data : null;
+      const err = res && res.error ? res.error : null;
+      try {
+        console.info("[status_changed push]", {
+          request_id: rec.request_id,
+          kind: rec.kind,
+          status: st,
+          phone: String(rec.phone || "").slice(0, 4) + "****",
+          data,
+          error: err ? String(err.message || err) : null,
         });
+      } catch (_) {}
+      if (err) {
+        return {
+          ok: false,
+          skipped: "invoke_error",
+          error: String(err.message || err),
+        };
       }
+      if (data && data.skipped) {
+        return {
+          ok: false,
+          skipped: String(data.skipped),
+          data,
+        };
+      }
+      if (data && data.ok === false) {
+        return { ok: false, skipped: "push_failed", data };
+      }
+      return { ok: true, data };
     } catch (e) {
       try {
         console.warn("[status_changed push]", e);
       } catch (_) {}
+      return {
+        ok: false,
+        skipped: "invoke_exception",
+        error: String((e && e.message) || e || ""),
+      };
     }
+  }
+
+  function formatDelegateStatusPushHint(pushRes, decisionLabel) {
+    if (!pushRes) return "";
+    if (pushRes.ok) {
+      return " · إشعار التطبيق: تم الإرسال (" + decisionLabel + ")";
+    }
+    const skipped = String(pushRes.skipped || "");
+    if (skipped === "no_requester_push_tokens" || skipped === "missing_phone_for_push") {
+      return (
+        " · إشعار التطبيق: لم يُرسل — افتح التطبيق وسجّل الدخول بنفس جوال الطلب لربط الإشعارات"
+      );
+    }
+    if (skipped === "missing_phone_email" || skipped === "missing_request_phone") {
+      return " · إشعار التطبيق: لم يُرسل — لا يوجد جوال على الطلب";
+    }
+    if (skipped) {
+      return " · إشعار التطبيق: لم يُرسل (" + skipped + ")";
+    }
+    return " · إشعار التطبيق: تعذر الإرسال";
   }
 
   function requestActions() {
@@ -1572,20 +1688,24 @@ function showAlert(kind, msg) {
             } catch (_) {}
           }
           if (act.error && !/could not find the function|PGRST202/i.test(String(act.error.message || ""))) {
+            const pushRes = await notifyRequesterStatusChanged(sb, row, "approved");
             showAlert(
               "error",
-              "تم قبول الطلب لكن تعذر تفعيل دخول المندوب. طبّق COPY-ME-delegates-v2-dual-role-activate.sql ثم أعد القبول أو المزامنة.",
+              "تم قبول الطلب لكن تعذر تفعيل دخول المندوب. طبّق COPY-ME-delegates-v2-dual-role-activate.sql ثم أعد القبول أو المزامنة." +
+                formatDelegateStatusPushHint(pushRes, "قبول"),
             );
             approveBtn.disabled = false;
             await loadRequests();
             return;
           }
           if (act.data && act.data.ok === false && act.data.reason !== "not_delegate_kind") {
+            const pushRes = await notifyRequesterStatusChanged(sb, row, "approved");
             showAlert(
               "error",
               "تم قبول الطلب لكن تفعيل دخول المندوب فشل (" +
                 String(act.data.reason || "unknown") +
-                "). راجع سجل المندوبين أو أعد المزامنة.",
+                "). راجع سجل المندوبين أو أعد المزامنة." +
+                formatDelegateStatusPushHint(pushRes, "قبول"),
             );
             approveBtn.disabled = false;
             await loadRequests();
@@ -1594,11 +1714,13 @@ function showAlert(kind, msg) {
           const roleKey = act.data && act.data.role_key ? String(act.data.role_key) : "";
           const dualOk = roleKey === "full_delegate" || (sibling.approvedIds && sibling.approvedIds.length);
           if (dualOk) {
+            const pushRes = await notifyRequesterStatusChanged(sb, row, "approved");
             showAlert(
               "success",
               `تم قبول الطلب وتفعيل دخول المندوب` +
                 (roleKey === "full_delegate" ? " (شجرة + مناسبات)" : "") +
-                `: ${row.request_id}`,
+                `: ${row.request_id}` +
+                formatDelegateStatusPushHint(pushRes, "قبول"),
             );
             approveBtn.disabled = false;
             await loadRequests();
@@ -1633,9 +1755,11 @@ function showAlert(kind, msg) {
           );
         }
       } else if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
+        const pushRes = await notifyRequesterStatusChanged(sb, row, "approved");
         showAlert(
           "success",
-          `تم قبول الطلب وتفعيل دخول المندوب: ${row.request_id}`,
+          `تم قبول الطلب وتفعيل دخول المندوب: ${row.request_id}` +
+            formatDelegateStatusPushHint(pushRes, "قبول"),
         );
       } else if (row.kind === "special_card") {
         const filled = openSpecialCardCmsFromRequest(row);
@@ -1653,7 +1777,9 @@ function showAlert(kind, msg) {
       } else {
         showAlert("success", `تم قبول الطلب: ${row.request_id}`);
       }
-      await notifyRequesterStatusChanged(sb, row, "approved");
+      if (row.kind !== "tree_delegate" && row.kind !== "events_delegate") {
+        await notifyRequesterStatusChanged(sb, row, "approved");
+      }
       await loadRequests();
       } catch (approveErr) {
         approveBtn.disabled = false;
@@ -1997,7 +2123,14 @@ function showAlert(kind, msg) {
       } else {
         showAlert("success", `تم رفض الطلب: ${row.request_id}`);
       }
-      await notifyRequesterStatusChanged(sb, row, "rejected");
+      const pushRes = await notifyRequesterStatusChanged(sb, row, "rejected");
+      if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
+        showAlert(
+          "success",
+          `تم رفض طلب المندوب: ${row.request_id}` +
+            formatDelegateStatusPushHint(pushRes, "رفض"),
+        );
+      }
       await loadRequests();
     });
     requestsBody.appendChild(tr);

@@ -115,16 +115,32 @@ function safeRenderPush(input: {
 
   if (mode === "status_changed") {
     if (status !== "approved" && status !== "rejected" && status !== "deferred") return null;
+    const isDelegateKind = kind === "tree_delegate" || kind === "events_delegate";
     const statusLabel =
       status === "approved" ? "تمت الموافقة" : status === "rejected" ? "تم الرفض" : "مؤجل";
-    const title = `تحديث طلبك: ${statusLabel} — ${kindLabel}`;
-    const bodyParts = [
-      "تحديث طلبك في عائلة الزيدان",
-      `نوع الطلب: ${kindLabel}`,
-    ];
+    const title = isDelegateKind
+      ? status === "approved"
+        ? `تم قبولك كمندوب — ${kindLabel}`
+        : status === "rejected"
+          ? `تم رفض طلب المندوبية — ${kindLabel}`
+          : `تحديث طلب المندوبية — ${kindLabel}`
+      : `تحديث طلبك: ${statusLabel} — ${kindLabel}`;
+    const bodyParts = isDelegateKind
+      ? [
+          status === "approved"
+            ? "تم قبول طلبك كمندوب في عائلة الزيدان."
+            : status === "rejected"
+              ? "تم رفض طلبك كمندوب في عائلة الزيدان."
+              : "تم تحديث حالة طلب المندوبية.",
+          `النوع: ${kindLabel}`,
+        ]
+      : [
+          "تحديث طلبك في عائلة الزيدان",
+          `نوع الطلب: ${kindLabel}`,
+        ];
     if (branch) bodyParts.push(`الفرع: ${branch}`);
-    if (person) bodyParts.push(`الموضوع: ${person}`);
-    bodyParts.push(`الحالة: ${statusLabel}`);
+    if (person) bodyParts.push(isDelegateKind ? `الاسم: ${person}` : `الموضوع: ${person}`);
+    if (!isDelegateKind) bodyParts.push(`الحالة: ${statusLabel}`);
     const reason = safePushDisplay(input.reject_reason);
     if (status === "rejected" && reason) bodyParts.push(`السبب: ${reason}`);
     return { title, body: bodyParts.join(" · "), kindLabel };
