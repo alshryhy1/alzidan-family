@@ -292,6 +292,148 @@
     await loadMemoryQueue();
   }
 
+  function memoryAlreadyBridged(existingRows, memoryId) {
+    var idText = String(memoryId);
+    var needleA = '"memory_id":' + idText;
+    var needleB = '"memory_id": ' + idText;
+    var requestId = "MEM-ITEM-" + idText;
+    for (var i = 0; i < existingRows.length; i++) {
+      var row = existingRows[i] || {};
+      if (String(row.request_id || "") === requestId) return true;
+      var msg = String(row.message || "");
+      if (msg.indexOf(needleA) >= 0 || msg.indexOf(needleB) >= 0) return true;
+    }
+    return false;
+  }
+
+  async function bridgePendingMemoriesToDelegates() {
+    var sb = getClient();
+    var token = getAdminToken();
+    if (!sb || !token) {
+      setStatus("سجّل الدخول أولاً.");
+      return;
+    }
+
+    setStatus("جاري إرسال الذكريات المعلّقة لطلبات المناديب...");
+    var listRes = await sb.rpc("memory_admin_list_v1", {
+      p_token: token,
+      p_status: "pending",
+      p_limit: 100
+    });
+    if (listRes.error) {
+      setStatus("تعذر تحميل الذكريات المعلّقة: " + (listRes.error.message || ""));
+      return;
+    }
+
+    var pending = Array.isArray(listRes.data) ? listRes.data : [];
+    if (!pending.length) {
+      setStatus("لا توجد ذكريات معلّقة لإرسالها للمناديب.");
+      return;
+    }
+
+    var existingRes = await sb
+      .from("approval_requests")
+      .select("request_id,message,kind,status")
+      .eq("kind", "memory_card")
+      .in("status", ["pending", "submitted"])
+      .limit(300);
+    var existing = !existingRes.error && Array.isArray(existingRes.data) ? existingRes.data : [];
+
+    var Create = global.AlzidanHomeRequestCreate;
+    var inserted = 0;
+    var skipped = 0;
+    var notified = 0;
+    var failed = 0;
+
+    for (var i = 0; i < pending.length; i++) {
+      var mem = pending[i] || {};
+      var memoryId = mem.id;
+      if (!memoryId) continue;
+      if (memoryAlreadyBridged(existing, memoryId)) {
+        skipped += 1;
+        continue;
+      }
+
+      var requestId = "MEM-ITEM-" + String(memoryId);
+      var branchKey = text(mem.branch_key);
+      var personName = text(mem.person_name) || text(mem.title) || "ذكرى";
+      var phone = text(mem.submitted_by_phone);
+      var title = text(mem.title) || "ذكرى";
+      var approvalRow = {
+        request_id: requestId,
+        kind: "memory_card",
+        branch_key: branchKey,
+        name: personName,
+        phone: phone || null,
+        email: null,
+        status: "pending",
+        message:
+          "طلب: ذكرى\n" +
+          "العنوان: " +
+          title +
+          "\n" +
+          "الشخص: " +
+          personName +
+          "\n" +
+          "الفرع: " +
+          branchKey +
+          "\n" +
+          "المرسل: " +
+          text(mem.submitted_by_name) +
+          "\n" +
+          "الجوال: " +
+          phone +
+          "\n__JSON__:" +
+          JSON.stringify({
+            memory_id: memoryId,
+            title: title,
+            person_name: personName,
+            memory_kind: mem.memory_kind || null,
+            branch_key: branchKey
+          })
+      };
+
+      var ins = await sb.from("approval_requests").insert(approvalRow);
+      if (ins.error) {
+        failed += 1;
+        try {
+          console.warn("[memory-bridge] insert failed", memoryId, ins.error);
+        } catch (_) {}
+        continue;
+      }
+      inserted += 1;
+
+      try {
+        if (Create && typeof Create.notifyBranchDelegatesOfRequest === "function" && branchKey) {
+          var nres = await Create.notifyBranchDelegatesOfRequest(sb, {
+            request_id: requestId,
+            kind: "memory_card",
+            branch_key: branchKey,
+            status: "pending",
+            name: personName,
+            phone: phone || null
+          });
+          if (nres && nres.ok) notified += 1;
+        }
+      } catch (notifyErr) {
+        try {
+          console.warn("[memory-bridge] notify failed", memoryId, notifyErr);
+        } catch (_) {}
+      }
+    }
+
+    setStatus(
+      "تم: أُرسل " +
+        inserted +
+        " للمندوبين، تخطي " +
+        skipped +
+        " (موجودة)، إشعارات " +
+        notified +
+        (failed ? "، فشل " + failed : "") +
+        "."
+    );
+  }
+
   function bindEvents() {
     if (initialized) return;
     initialized = true;
@@ -301,6 +443,22 @@
       refreshBtn.addEventListener("click", function () {
         loadMemoryQueue().catch(function () {
           setStatus("تعذر تحديث الذكريات.");
+        });
+      });
+    }
+
+    var bridgeBtn = document.getElementById("admin-memory-bridge-delegates");
+    if (bridgeBtn) {
+      bridgeBtn.addEventListener("click", function () {
+        if (
+          !window.confirm(
+            "إرسال كل الذكريات المعلّقة إلى «طلبات فرعي» للمناديب مع محاولة إرسال إشعار؟"
+          )
+        ) {
+          return;
+        }
+        bridgePendingMemoriesToDelegates().catch(function () {
+          setStatus("تعذر إرسال الذكريات للمناديب.");
         });
       });
     }

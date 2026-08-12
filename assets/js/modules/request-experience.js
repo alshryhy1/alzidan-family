@@ -3774,7 +3774,13 @@
         '<p class="rx-muted">مرجع المتابعة (ثانوي): ' +
         escapeHtml(state.lastRequestId) +
         "</p>" +
-        '<p class="rx-note">يظهر طلبك في طلباتي. بدون حفظ مباشر حتى تتم المراجعة.</p>' +
+        '<p class="rx-note">' +
+        escapeHtml(
+          state.intentId === "memory_card"
+            ? "تظهر الذكرى لدى الإدارة في «الذكريات» للمراجعة قبل النشر."
+            : "يظهر طلبك في طلباتي. بدون حفظ مباشر حتى تتم المراجعة."
+        ) +
+        "</p>" +
         notifyNote +
         '<div class="rx-actions">' +
         '<button type="button" class="btn btn-primary" data-rx-home>طلب آخر</button>' +

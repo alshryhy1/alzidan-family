@@ -278,12 +278,76 @@
           : "موجود مسبقًا — تعذر إرسال الذكرى.");
       throw new Error(gmsg);
     }
+
+    var memoryDbId = created.result && created.result.id;
+    // جسر لطلبات المندوب: طابور «طلبات فرعي» يقرأ approval_requests فقط.
+    var approvalRow = {
+      request_id: requestId,
+      kind: "memory_card",
+      branch_key: payload.branch_key,
+      name: payload.person_name || payload.title,
+      phone: payload.submitted_by_phone,
+      email: null,
+      status: "pending",
+      message:
+        "طلب: ذكرى\n" +
+        "العنوان: " +
+        payload.title +
+        "\n" +
+        "الشخص: " +
+        payload.person_name +
+        "\n" +
+        "الفرع: " +
+        payload.branch_key +
+        "\n" +
+        "المرسل: " +
+        payload.submitted_by_name +
+        "\n" +
+        "الجوال: " +
+        payload.submitted_by_phone +
+        "\n__JSON__:" +
+        JSON.stringify({
+          memory_id: memoryDbId,
+          title: payload.title,
+          person_name: payload.person_name,
+          memory_kind: payload.memory_kind,
+          branch_key: payload.branch_key
+        })
+    };
+    try {
+      var arIns = await client.from("approval_requests").insert(approvalRow);
+      if (arIns && arIns.error) {
+        try {
+          console.warn("[memory_card] approval_requests insert failed", arIns.error);
+        } catch (_) {}
+      }
+    } catch (arErr) {
+      try {
+        console.warn("[memory_card] approval_requests insert error", arErr);
+      } catch (_) {}
+    }
+
+    // إشعار مندوبي الفرع (بريد + push).
+    try {
+      if (typeof Create.notifyBranchDelegatesOfRequest === "function") {
+        await Create.notifyBranchDelegatesOfRequest(client, {
+          request_id: requestId,
+          kind: "memory_card",
+          branch_key: payload.branch_key,
+          status: "pending",
+          name: payload.person_name || payload.title,
+          phone: payload.submitted_by_phone
+        });
+      }
+    } catch (_) {}
+
     return {
-      id: created.result && created.result.id,
+      id: memoryDbId,
       requestId: requestId,
       mediaUrl: mediaUrl,
       title: payload.title,
-      person_name: payload.person_name
+      person_name: payload.person_name,
+      branch_key: payload.branch_key
     };
   }
 

@@ -4966,15 +4966,44 @@ where c.id = matches.id; commit;
     if (!sb) return;
     const token = getAdminToken();
     if (!token) return;
+
+    let newest = null;
     const { data, error } = await sb.rpc("admin_list_requests", {
       p_token: token,
       p_status: "pending",
       p_kind: null,
       p_limit: 20,
     });
-    if (error) return;
-    const list = Array.isArray(data) ? data : [];
-    const newest = list && list[0] ? list[0] : null;
+    if (!error) {
+      const list = Array.isArray(data) ? data : [];
+      newest = list && list[0] ? list[0] : null;
+    }
+
+    // الذكريات لا تدخل approval_requests — نراقب طابور الذكريات أيضاً.
+    try {
+      const memRes = await sb.rpc("memory_admin_list_v1", {
+        p_token: token,
+        p_status: "pending",
+        p_limit: 5,
+      });
+      if (!memRes.error && Array.isArray(memRes.data) && memRes.data[0]) {
+        const mem = memRes.data[0];
+        const memCreated = String(mem.created_at || "");
+        const reqCreated = newest ? String(newest.created_at || "") : "";
+        if (!newest || memCreated > reqCreated) {
+          newest = {
+            request_id: "MEM-" + String(mem.id || ""),
+            id: mem.id,
+            kind: "memory_card",
+            branch_key: mem.branch_key || "",
+            name: mem.person_name || mem.title || "",
+            phone: mem.submitted_by_phone || "",
+            created_at: mem.created_at,
+          };
+        }
+      }
+    } catch (_) {}
+
     if (!newest) {
       if (!didInitialPendingSync) didInitialPendingSync = true;
       return;
