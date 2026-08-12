@@ -210,11 +210,70 @@ function showAlert(kind, msg) {
       return { ok: false, skipped: "missing_phone_email", request_id: row.request_id };
     }
 
-    try {
-      if (String(rec.email || "").trim()) {
-        await sb.functions.invoke("alzidan-email-notify", {
+    // Push FIRST (OS notification). Never block on email — a slow/hung email
+    // invoke was preventing both accept and reject pushes from reaching the app.
+    let pushResult = {
+      ok: false,
+      skipped: "missing_phone_for_push",
+      email_only: true,
+    };
+    if (String(rec.phone || "").trim()) {
+      try {
+        const res = await sb.functions.invoke("alzidan-push-notify", {
           body: { mode: "status_changed", record: rec },
         });
+        const data = res && res.data ? res.data : null;
+        const err = res && res.error ? res.error : null;
+        try {
+          console.info("[status_changed push]", {
+            request_id: rec.request_id,
+            kind: rec.kind,
+            status: st,
+            phone: String(rec.phone || "").slice(0, 4) + "****",
+            data,
+            error: err ? String(err.message || err) : null,
+          });
+        } catch (_) {}
+        if (err) {
+          pushResult = {
+            ok: false,
+            skipped: "invoke_error",
+            error: String(err.message || err),
+          };
+        } else if (data && data.skipped) {
+          pushResult = {
+            ok: false,
+            skipped: String(data.skipped),
+            data,
+          };
+        } else if (data && data.ok === false) {
+          pushResult = { ok: false, skipped: "push_failed", data };
+        } else {
+          pushResult = { ok: true, data };
+        }
+      } catch (e) {
+        try {
+          console.warn("[status_changed push]", e);
+        } catch (_) {}
+        pushResult = {
+          ok: false,
+          skipped: "invoke_exception",
+          error: String((e && e.message) || e || ""),
+        };
+      }
+    }
+
+    try {
+      if (String(rec.email || "").trim()) {
+        sb.functions
+          .invoke("alzidan-email-notify", {
+            body: { mode: "status_changed", record: rec },
+          })
+          .catch(function (e) {
+            try {
+              console.warn("[status_changed email]", e);
+            } catch (_) {}
+          });
       }
     } catch (e) {
       try {
@@ -222,54 +281,7 @@ function showAlert(kind, msg) {
       } catch (_) {}
     }
 
-    if (!String(rec.phone || "").trim()) {
-      return { ok: false, skipped: "missing_phone_for_push", email_only: true };
-    }
-
-    try {
-      const res = await sb.functions.invoke("alzidan-push-notify", {
-        body: { mode: "status_changed", record: rec },
-      });
-      const data = res && res.data ? res.data : null;
-      const err = res && res.error ? res.error : null;
-      try {
-        console.info("[status_changed push]", {
-          request_id: rec.request_id,
-          kind: rec.kind,
-          status: st,
-          phone: String(rec.phone || "").slice(0, 4) + "****",
-          data,
-          error: err ? String(err.message || err) : null,
-        });
-      } catch (_) {}
-      if (err) {
-        return {
-          ok: false,
-          skipped: "invoke_error",
-          error: String(err.message || err),
-        };
-      }
-      if (data && data.skipped) {
-        return {
-          ok: false,
-          skipped: String(data.skipped),
-          data,
-        };
-      }
-      if (data && data.ok === false) {
-        return { ok: false, skipped: "push_failed", data };
-      }
-      return { ok: true, data };
-    } catch (e) {
-      try {
-        console.warn("[status_changed push]", e);
-      } catch (_) {}
-      return {
-        ok: false,
-        skipped: "invoke_exception",
-        error: String((e && e.message) || e || ""),
-      };
-    }
+    return pushResult;
   }
 
   function formatDelegateStatusPushHint(pushRes, decisionLabel) {
@@ -278,9 +290,15 @@ function showAlert(kind, msg) {
       return " · إشعار التطبيق: تم الإرسال (" + decisionLabel + ")";
     }
     const skipped = String(pushRes.skipped || "");
+    const data = pushRes.data || {};
+    if (skipped === "no_recipients" && Number(data.deduped || 0) > 0) {
+      return (
+        " · إشعار التطبيق: سبق إرساله لهذا الطلب (dedupe) — أعد الاختبار بطلب جديد"
+      );
+    }
     if (skipped === "no_requester_push_tokens" || skipped === "missing_phone_for_push") {
       return (
-        " · إشعار التطبيق: لم يُرسل — افتح التطبيق وسجّل الدخول بنفس جوال الطلب لربط الإشعارات"
+        " · إشعار التطبيق: لم يُرسل — لا توكن مرتبط بجوال الطلب. افتح التطبيق وسجّل الدخول بنفس الجوال المكتوب في الطلب"
       );
     }
     if (skipped === "missing_phone_email" || skipped === "missing_request_phone") {
@@ -2125,11 +2143,15 @@ function showAlert(kind, msg) {
       }
       const pushRes = await notifyRequesterStatusChanged(sb, row, "rejected");
       if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
-        showAlert(
-          "success",
+        const msg =
           `تم رفض طلب المندوب: ${row.request_id}` +
-            formatDelegateStatusPushHint(pushRes, "رفض"),
-        );
+          formatDelegateStatusPushHint(pushRes, "رفض");
+        showAlert(pushRes && pushRes.ok ? "success" : "error", msg);
+        if (!pushRes || !pushRes.ok) {
+          try {
+            window.alert(msg);
+          } catch (_) {}
+        }
       }
       await loadRequests();
     });

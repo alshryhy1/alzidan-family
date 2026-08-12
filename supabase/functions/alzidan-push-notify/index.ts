@@ -486,9 +486,20 @@ function matchTokensForPhones(
   tokenRows: Array<{ token?: string; phone?: string; platform?: string }>,
   phoneSet: Set<string>,
 ) {
+  const wanted = new Set<string>();
+  for (const p of phoneSet) {
+    const n = normalizeSaudiPhone(p);
+    if (!n) continue;
+    wanted.add(n);
+    if (n.length >= 9) wanted.add(n.slice(-9));
+  }
+
   const matched = (Array.isArray(tokenRows) ? tokenRows : []).filter((row) => {
     const phone = normalizeSaudiPhone(row?.phone);
-    return Boolean(phone && phoneSet.has(phone));
+    if (!phone) return false;
+    if (wanted.has(phone)) return true;
+    if (phone.length >= 9 && wanted.has(phone.slice(-9))) return true;
+    return false;
   });
 
   // Dedupe by token string within this send set
@@ -852,7 +863,8 @@ async function notifyRequesterStatusChanged(payload: Record<string, unknown>, dr
 
   const tokenRows = await fetchEnabledTokensWithPhone();
   const phoneSet = new Set([phone]);
-  const { unique } = matchTokensForPhones(tokenRows, phoneSet);
+  const matchedInfo = matchTokensForPhones(tokenRows, phoneSet);
+  const { unique } = matchedInfo;
   if (!unique.length) {
     return json({
       ok: true,
@@ -860,6 +872,8 @@ async function notifyRequesterStatusChanged(payload: Record<string, unknown>, dr
       mode: "status_changed",
       title,
       body,
+      normalized_phone: phone,
+      tokens_with_phone: matchedInfo.tokens_with_phone,
     });
   }
 
