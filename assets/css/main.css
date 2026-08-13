@@ -341,29 +341,57 @@ nav a:hover {
 .section {
   margin-top: 16px;
 }
-#search {
+/* Homepage visual order: ticker → poll/stats → branches → search → request → rest */
+#home-poll-mount {
   order: 1;
 }
 #branches {
   order: 2;
 }
-#tree {
+#search {
   order: 3;
 }
-#fund {
+#request-experience {
   order: 4;
 }
-#events {
+#review {
   order: 5;
 }
 #stats {
   order: 6;
 }
-#about {
+#tree {
   order: 7;
 }
-#review {
+#fund {
   order: 8;
+}
+#events {
+  order: 9;
+}
+#about {
+  order: 10;
+}
+
+/* Make «قدّم طلبًا» stand out on the homepage */
+#request-experience > .section-header {
+  margin-bottom: 12px;
+}
+#request-experience > .section-header .section-title {
+  font-size: clamp(1.65rem, 2.4vw, 2.05rem);
+  font-weight: 900;
+  color: #064e3b;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+#request-experience > .section-header .section-title::after {
+  content: "";
+  display: block;
+  width: 4.5rem;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #059669, rgba(16, 185, 129, 0.15));
 }
 .section-header {
   display: flex;
@@ -2374,6 +2402,9 @@ footer {
 
 /* ===== extracted block ===== */
 
+.home-poll-mount {
+  margin: 0;
+}
 .search-poll-row {
   --search-poll-card-height: 178px;
   display: grid;

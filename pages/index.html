@@ -23,10 +23,10 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23065f46' d='M32 6c-10.6 0-19.2 7.3-19.2 16.3 0 7 5 13 12.2 15.4-1.7 1.1-2.8 2.6-3.5 4.3h21c-.7-1.7-1.8-3.2-3.5-4.3 7.2-2.4 12.2-8.4 12.2-15.4C51.2 13.3 42.6 6 32 6z'/%3E%3Cpath fill='%23065f46' d='M30 34h4v24h-4z'/%3E%3Cpath fill='%23065f46' d='M22 58h20v-4H22z'/%3E%3C/svg%3E"
     />
 
-    <link rel="stylesheet" href="../assets/css/main.css?v=20260810home2" />
+    <link rel="stylesheet" href="../assets/css/main.css?v=20260813home3" />
     <link rel="stylesheet" href="../assets/css/person-card.css?v=1782540603" />
     <link rel="stylesheet" href="../assets/css/legal.css?v=2026071207" />
-    <link rel="stylesheet" href="../assets/css/request-experience.css?v=20260812myreq6" />
+    <link rel="stylesheet" href="../assets/css/request-experience.css?v=20260813home1" />
     <link rel="stylesheet" href="../assets/css/memory-submit.css?v=20260810home2" />
 </head>
   <body>
@@ -92,6 +92,7 @@
           ></a>
         </div>
       </div>
+      <div id="home-poll-mount" class="home-poll-mount" aria-live="polite"></div>
       <section id="branches" class="section">
         <div class="section-header">
           <div>
@@ -212,7 +213,7 @@
           >
         </div>
       </section>
-      <section id="search" class="section">
+<section id="search" class="section">
         <div class="section-header">
           <div>
             <div class="section-title">البحث في الشجرة</div>
@@ -264,111 +265,10 @@
           </div>
         </details>
       </section>
-      <section id="review" class="section">
-        <div class="section-header">
-          <div>
-            <div class="section-title">مراجعة البيانات</div>
-            <div class="section-sub">
-              كشف سريع للتكرارات الواضحة والأسماء التي قد تحتاج تصحيحًا قبل
-              إضافة دفعات جديدة.
-            </div>
-          </div>
-        </div>
-        <details class="stats-panel" data-family-review>
-          <summary class="stats-panel-summary">
-            <span class="stats-panel-title"
-              ><strong>فتح المراجعة</strong
-              ><span data-family-review-status
-                >جاري تجهيز المراجعة...</span
-              ></span
-            ><span class="stats-panel-pill">فحص</span
-            ><span class="stats-panel-chevron" aria-hidden="true">⌄</span>
-          </summary>
-          <div class="stats-panel-body review-panel">
-            <div class="review-toolbar">
-              <div class="review-status">
-                اضغط تحديث لإعادة فحص البيانات بعد أي تعديل.
-              </div>
-              <button
-                class="btn btn-outline btn-small"
-                type="button"
-                data-family-review-refresh
-              >
-                تحديث
-              </button>
-            </div>
-            <div class="review-grid" data-family-review-summary></div>
-            <div class="review-list" data-family-review-results></div>
-          </div>
-        </details>
-      </section>
-      <section id="stats" class="section">
-        <div class="section-header">
-          <div>
-            <div class="section-title">إحصائيات الشجرة</div>
-            <div class="section-sub">
-              أعداد المضافين حسب الفروع والجدود، مع توزيع الأعمار حسب بيانات
-              الميلاد المتوفرة.
-            </div>
-          </div>
-        </div>
-        <div class="public-affinity-overview" data-public-affinity-overview>
-          <div class="public-affinity-head">
-            <strong>نسب المصاهرة العامة</strong>
-            <span data-public-affinity-status>جاري تحميل نسب المصاهرة...</span>
-          </div>
-          <div class="public-affinity-grid" data-public-affinity-cards></div>
-          <div class="public-affinity-list" data-public-affinity-branches></div>
-        </div>
-        <details class="stats-panel" data-family-stats>
-          <summary class="stats-panel-summary">
-            <span class="stats-panel-title"
-              ><strong>عرض الإحصائيات</strong
-              ><span data-family-stats-status
-                >جاري تحميل الإحصائيات...</span
-              ></span
-            ><span class="stats-panel-pill" data-family-stats-total>...</span
-            ><span class="stats-panel-chevron" aria-hidden="true">⌄</span>
-          </summary>
-          <div class="stats-panel-body">
-            <div class="stats-toolbar">
-              <div class="stats-updated">
-                اضغط تحديث لإعادة حساب الأرقام من قاعدة البيانات.
-              </div>
-              <button
-                class="btn btn-outline btn-small"
-                type="button"
-                data-family-stats-refresh
-              >
-                تحديث
-              </button>
-            </div>
-            <div class="stats-grid" data-family-stats-summary></div>
-            <div class="stats-columns">
-              <div class="stats-section">
-                <div class="stats-section-title">حسب الفرع الرئيسي</div>
-                <div class="stats-table" data-family-stats-branches></div>
-              </div>
-              <div class="stats-section">
-                <div class="stats-section-title">توزيع الأعمار</div>
-                <div class="stats-table" data-family-stats-ages></div>
-              </div>
-            </div>
-            <div class="stats-section">
-              <div class="stats-section-title">أكبر العوائل من الجدود</div>
-              <div class="stats-table" data-family-stats-grandfathers></div>
-            </div>
-          </div>
-        </details>
-      </section>
       <section id="request-experience" class="section">
         <div class="section-header">
           <div>
             <div class="section-title">قدّم طلبًا</div>
-            <div class="section-sub">
-              اختر ما تريد · أرسل للمراجعة · يظهر في طلباتي — بدون حفظ مباشر في
-              الشجرة.
-            </div>
           </div>
         </div>
         <div data-rx-root></div>
@@ -1024,6 +924,104 @@
           </div>
         </div>
       </section>
+      
+      <section id="review" class="section">
+        <div class="section-header">
+          <div>
+            <div class="section-title">مراجعة البيانات</div>
+            <div class="section-sub">
+              كشف سريع للتكرارات الواضحة والأسماء التي قد تحتاج تصحيحًا قبل
+              إضافة دفعات جديدة.
+            </div>
+          </div>
+        </div>
+        <details class="stats-panel" data-family-review>
+          <summary class="stats-panel-summary">
+            <span class="stats-panel-title"
+              ><strong>فتح المراجعة</strong
+              ><span data-family-review-status
+                >جاري تجهيز المراجعة...</span
+              ></span
+            ><span class="stats-panel-pill">فحص</span
+            ><span class="stats-panel-chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="stats-panel-body review-panel">
+            <div class="review-toolbar">
+              <div class="review-status">
+                اضغط تحديث لإعادة فحص البيانات بعد أي تعديل.
+              </div>
+              <button
+                class="btn btn-outline btn-small"
+                type="button"
+                data-family-review-refresh
+              >
+                تحديث
+              </button>
+            </div>
+            <div class="review-grid" data-family-review-summary></div>
+            <div class="review-list" data-family-review-results></div>
+          </div>
+        </details>
+      </section>
+      <section id="stats" class="section">
+        <div class="section-header">
+          <div>
+            <div class="section-title">إحصائيات الشجرة</div>
+            <div class="section-sub">
+              أعداد المضافين حسب الفروع والجدود، مع توزيع الأعمار حسب بيانات
+              الميلاد المتوفرة.
+            </div>
+          </div>
+        </div>
+        <div class="public-affinity-overview" data-public-affinity-overview>
+          <div class="public-affinity-head">
+            <strong>نسب المصاهرة العامة</strong>
+            <span data-public-affinity-status>جاري تحميل نسب المصاهرة...</span>
+          </div>
+          <div class="public-affinity-grid" data-public-affinity-cards></div>
+          <div class="public-affinity-list" data-public-affinity-branches></div>
+        </div>
+        <details class="stats-panel" data-family-stats>
+          <summary class="stats-panel-summary">
+            <span class="stats-panel-title"
+              ><strong>عرض الإحصائيات</strong
+              ><span data-family-stats-status
+                >جاري تحميل الإحصائيات...</span
+              ></span
+            ><span class="stats-panel-pill" data-family-stats-total>...</span
+            ><span class="stats-panel-chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="stats-panel-body">
+            <div class="stats-toolbar">
+              <div class="stats-updated">
+                اضغط تحديث لإعادة حساب الأرقام من قاعدة البيانات.
+              </div>
+              <button
+                class="btn btn-outline btn-small"
+                type="button"
+                data-family-stats-refresh
+              >
+                تحديث
+              </button>
+            </div>
+            <div class="stats-grid" data-family-stats-summary></div>
+            <div class="stats-columns">
+              <div class="stats-section">
+                <div class="stats-section-title">حسب الفرع الرئيسي</div>
+                <div class="stats-table" data-family-stats-branches></div>
+              </div>
+              <div class="stats-section">
+                <div class="stats-section-title">توزيع الأعمار</div>
+                <div class="stats-table" data-family-stats-ages></div>
+              </div>
+            </div>
+            <div class="stats-section">
+              <div class="stats-section-title">أكبر العوائل من الجدود</div>
+              <div class="stats-table" data-family-stats-grandfathers></div>
+            </div>
+          </div>
+        </details>
+      </section>
       <section id="tree" class="section">
         <div class="section-header">
           <div
@@ -1667,9 +1665,9 @@
     <script src="../assets/js/event-submit.js?v=20260812date1"></script>
     <script src="../assets/js/app.js?v=20260812safe2"></script>
     <script src="../assets/js/memory/submit.js?v=20260812safe2"></script>
-    <script src="../assets/js/modules/request-experience.js?v=20260812safe2"></script>
+    <script src="../assets/js/modules/request-experience.js?v=20260813home4"></script>
     <script src="../assets/js/public-marriage-stats.js?v=20260810p3"></script>
     <script src="../assets/js/modules/date-engine.js?v=20260808de"></script>
-    <script src="../assets/js/poll.js?v=20260808ux"></script>
+    <script src="../assets/js/poll.js?v=20260813home1"></script>
   </body>
 </html>

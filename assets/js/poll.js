@@ -447,13 +447,17 @@
 
   function mount() {
     console.log("[poll] initPoll/mount start");
-    const search = document.getElementById("search");
-    if (!search) {
-      console.warn("[poll] mount aborted: #search not found");
-      return;
-    }
     if (document.querySelector(".search-poll-row")) {
       console.log("[poll] mount skipped: already mounted");
+      return;
+    }
+
+    const slot = document.getElementById("home-poll-mount");
+    const branches = document.getElementById("branches");
+    const search = document.getElementById("search");
+    const parent = (slot && slot.parentNode) || (branches && branches.parentNode) || (search && search.parentNode);
+    if (!parent) {
+      console.warn("[poll] mount aborted: no mount parent found");
       return;
     }
 
@@ -461,8 +465,6 @@
     row.className = "search-poll-row";
 
     const card = buildCard();
-    const parent = search.parentNode;
-    parent.insertBefore(row, search);
 
     const statsCard = document.createElement("aside");
     statsCard.className = "family-mini-stats-card";
@@ -471,6 +473,14 @@
 
     row.appendChild(card);
     row.appendChild(statsCard);
+
+    if (slot) {
+      slot.appendChild(row);
+    } else if (branches) {
+      parent.insertBefore(row, branches);
+    } else {
+      parent.insertBefore(row, search);
+    }
 
     bindVoteButtons(card);
     loadPoll(card).catch((err) => {

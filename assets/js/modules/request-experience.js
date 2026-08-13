@@ -2628,14 +2628,11 @@
   function renderHome() {
     var cards = INTENTS.map(function (intent) {
       return (
-        '<button type="button" class="rx-intent-card" data-rx-intent="' +
+        '<button type="button" class="rx-intent-card rx-intent-card--compact" data-rx-intent="' +
         escapeHtml(intent.id) +
         '">' +
         '<span class="rx-intent-label">' +
         escapeHtml(intent.label) +
-        "</span>" +
-        '<span class="rx-intent-blurb">' +
-        escapeHtml(intent.blurb) +
         "</span>" +
         (!intent.implemented
           ? '<span class="rx-intent-badge">قريبًا</span>'
@@ -2644,17 +2641,20 @@
       );
     }).join("");
 
-    shell(
-      "ماذا تريد أن تفعل؟",
-      '<div class="rx-intent-grid">' +
-        cards +
-        "</div>" +
-        buildTrackHtml(),
-      {
-        showBack: false,
-        sub: "اختر ما تريد. الإرسال للمراجعة — ويظهر في طلباتي. بدون حفظ مباشر في الشجرة.",
-      }
-    );
+    /* Compact home: title + type buttons, then طلباتي below. */
+    parkAllForms();
+    root.innerHTML =
+      '<div class="rx-shell rx-shell--compact-home">' +
+      (state.error
+        ? '<div class="rx-alert rx-alert-error" role="alert">' +
+          escapeHtml(state.error) +
+          "</div>"
+        : "") +
+      '<div class="rx-body"><div class="rx-intent-grid rx-intent-grid--compact">' +
+      cards +
+      "</div>" +
+      buildTrackHtml() +
+      "</div></div>";
 
     root.querySelectorAll("[data-rx-intent]").forEach(function (btn) {
       btn.addEventListener("click", function () {

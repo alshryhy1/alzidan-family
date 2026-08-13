@@ -599,3 +599,26 @@
 .rx-edit-field-row [data-edit-value-wrap] {
   margin-top: 8px;
 }
+
+
+/* Compact homepage request hub: title lives in section header; buttons only */
+.rx-shell--compact-home {
+  padding: 12px 12px 14px;
+}
+.rx-shell--compact-home .rx-shell-head {
+  display: none;
+}
+.rx-intent-grid--compact {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.rx-intent-card--compact {
+  padding: 12px 12px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 52px;
+}
+.rx-intent-card--compact .rx-intent-label {
+  font-size: 0.98rem;
+}
