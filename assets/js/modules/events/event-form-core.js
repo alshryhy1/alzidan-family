@@ -3,25 +3,52 @@
 
   var Events = root.AlzidanEvents || {};
 
-  // Shared selectable catalog for homepage + delegate (and any consumer).
-  // Legacy DB rows may still use "engagement"/خطوبة for display only — do not add them here.
-  var HAPPY_TYPE_OPTIONS = [
-    { value: "birth", label: "مولود جديد" },
-    { value: "contract", label: "عقد قران" },
-    { value: "marriage", label: "زواج" },
-    { value: "graduation", label: "تخرج" },
-    { value: "success", label: "نجاح / تفوق" },
-    { value: "promotion", label: "ترقية / وظيفة" },
-    { value: "new_house", label: "منزل جديد" },
-    { value: "travel", label: "سفر" },
-    { value: "gathering", label: "اجتماع عائلي" },
-  ];
+  function catalogOptions(list) {
+    return (list || []).map(function (def) {
+      return { value: def.key, label: def.label, family: def.family };
+    });
+  }
 
-  var SICK_TYPE_OPTIONS = [
-    { value: "sick", label: "مريض" },
-    { value: "operation", label: "عملية" },
-    { value: "discharge", label: "خروج من المستشفى" },
-  ];
+  function newsAndOccasionOptions() {
+    if (typeof Events.listNewsAndOccasionTypes === "function") {
+      return catalogOptions(Events.listNewsAndOccasionTypes());
+    }
+    return [];
+  }
+
+  function healthOptions() {
+    if (typeof Events.listHealthTypes === "function") {
+      return catalogOptions(Events.listHealthTypes());
+    }
+    return [
+      { value: "sick", label: "مريض" },
+      { value: "operation", label: "عملية" },
+      { value: "healing", label: "شفاء" },
+      { value: "discharge", label: "خروج من المستشفى" },
+      { value: "safety", label: "سلامة" },
+    ];
+  }
+
+  function deathOptions() {
+    if (typeof Events.listDeathTypes === "function") {
+      return catalogOptions(Events.listDeathTypes());
+    }
+    return [
+      { value: "death", label: "إعلان وفاة" },
+      { value: "condolence", label: "تعزية" },
+    ];
+  }
+
+  function familyOptions() {
+    return (Events.EVENT_FAMILIES || []).map(function (f) {
+      return { value: f.key, label: f.label };
+    });
+  }
+
+  // Backward-compatible aliases used by older panels.
+  var HAPPY_TYPE_OPTIONS = newsAndOccasionOptions();
+  var SICK_TYPE_OPTIONS = healthOptions();
+  var DEATH_TYPE_OPTIONS = deathOptions();
 
   var VISIBILITY_OPTIONS = [
     { value: "1", label: "يوم" },
@@ -33,7 +60,6 @@
     { value: "7", label: "أسبوع" },
   ];
 
-  /** أيام الظهور قبل تاريخ المناسبة (افتراضي 3). */
   var SHOW_BEFORE_OPTIONS = [
     { value: "1", label: "قبل يوم" },
     { value: "2", label: "قبل يومين" },
@@ -42,57 +68,56 @@
     { value: "7", label: "قبل أسبوع" },
   ];
 
-  var BLOCKED_NEW_EVENT_TYPES = {
-    engagement: true,
-    خطوبة: true,
-  };
-
-  var ALLOWED_HAPPY_TYPE_VALUES = HAPPY_TYPE_OPTIONS.reduce(function (acc, opt) {
-    if (opt && opt.value) acc[String(opt.value)] = true;
-    return acc;
-  }, {});
-
-  var ALLOWED_SICK_TYPE_VALUES = SICK_TYPE_OPTIONS.reduce(function (acc, opt) {
-    if (opt && opt.value) acc[String(opt.value)] = true;
-    return acc;
-  }, {});
+  var BLOCKED_NEW_EVENT_TYPES =
+    Events.BLOCKED_NEW_EVENT_TYPES || { engagement: true, خطوبة: true };
 
   function normalizeText(v) {
     return String(v || "").replace(/\s+/g, " ").trim();
   }
 
   function isBlockedNewEventType(type) {
+    if (typeof Events.isBlockedNewEventType === "function") {
+      return Events.isBlockedNewEventType(type);
+    }
     var key = normalizeText(type);
     if (!key) return false;
     if (BLOCKED_NEW_EVENT_TYPES[key]) return true;
-    var lower = key.toLowerCase();
-    return !!BLOCKED_NEW_EVENT_TYPES[lower];
+    return !!BLOCKED_NEW_EVENT_TYPES[key.toLowerCase()];
+  }
+
+  function isAllowedCatalogType(type) {
+    if (typeof Events.isSelectableEventType === "function") {
+      return Events.isSelectableEventType(type);
+    }
+    return !isBlockedNewEventType(type);
   }
 
   function isAllowedHappyType(type) {
-    var key = normalizeText(type);
-    if (!key || isBlockedNewEventType(key)) return false;
-    return !!ALLOWED_HAPPY_TYPE_VALUES[key];
+    return isAllowedCatalogType(type);
   }
 
   function isAllowedSickType(type) {
-    var key = normalizeText(type);
-    if (!key) return false;
-    return !!ALLOWED_SICK_TYPE_VALUES[key];
+    var key =
+      typeof Events.normalizeEventType === "function"
+        ? Events.normalizeEventType(type)
+        : normalizeText(type);
+    var family =
+      typeof Events.eventFamilyFromType === "function"
+        ? Events.eventFamilyFromType(key)
+        : "";
+    return family === "health" && isAllowedCatalogType(key);
   }
 
-  function fillHappyTypeSelect(selectEl, opts) {
+  function fillSelectOptions(selectEl, options, opts) {
     if (!selectEl) return;
     var selected = opts && opts.selected != null ? String(opts.selected) : "";
     var placeholder =
-      opts && opts.placeholder
-        ? String(opts.placeholder)
-        : "اختر نوع المناسبة";
+      opts && opts.placeholder ? String(opts.placeholder) : "اختر النوع";
     var html =
       '<option value="">' +
       placeholder.replace(/</g, "&lt;").replace(/>/g, "&gt;") +
       "</option>";
-    HAPPY_TYPE_OPTIONS.forEach(function (opt) {
+    (options || []).forEach(function (opt) {
       var value = String(opt.value || "");
       var label = String(opt.label || value);
       var sel = value && value === selected ? " selected" : "";
@@ -108,9 +133,36 @@
     selectEl.innerHTML = html;
   }
 
+  function fillHappyTypeSelect(selectEl, opts) {
+    fillSelectOptions(selectEl, newsAndOccasionOptions(), opts);
+  }
+
+  function fillFamilySelect(selectEl, opts) {
+    fillSelectOptions(
+      selectEl,
+      familyOptions(),
+      Object.assign({ placeholder: "ماذا تريد نشره؟" }, opts || {}),
+    );
+  }
+
+  function fillTypeSelectForFamily(selectEl, family, opts) {
+    var list = [];
+    if (typeof Events.listEventTypesByFamily === "function") {
+      list = catalogOptions(Events.listEventTypesByFamily(family));
+    }
+    fillSelectOptions(
+      selectEl,
+      list,
+      Object.assign({ placeholder: "اختر النوع" }, opts || {}),
+    );
+  }
+
   function categoryFromTab(tab) {
     var t = normalizeText(tab);
-    if (t === "sick" || t === "death") return t;
+    if (t === "sick" || t === "health" || t === "death") {
+      return t === "health" ? "sick" : t;
+    }
+    if (t === "news" || t === "occasion" || t === "happy") return "happy";
     return "happy";
   }
 
@@ -118,8 +170,8 @@
     var v = values || {};
     var branch = normalizeText(v.branch);
     var type = normalizeText(v.type);
-    if (category === "happy" && type && !isAllowedHappyType(type)) {
-      throw new Error("نوع المناسبة غير مسموح. اختر نوعًا من القائمة.");
+    if (type && !isAllowedCatalogType(type)) {
+      throw new Error("نوع غير مسموح. اختر نوعًا من القائمة.");
     }
     if (category === "sick" && type && !isAllowedSickType(type)) {
       throw new Error("نوع الحالة غير مسموح. اختر نوعًا من القائمة.");
@@ -149,6 +201,7 @@
         extra: normalizeText(v.extra),
         imageUrl: normalizeText(v.imageUrl),
         videoUrl: normalizeText(v.videoUrl),
+        place: normalizeText(v.place),
       });
     }
     if (category === "sick") {
@@ -191,13 +244,22 @@
   root.AlzidanEventFormCore = {
     HAPPY_TYPE_OPTIONS: HAPPY_TYPE_OPTIONS,
     SICK_TYPE_OPTIONS: SICK_TYPE_OPTIONS,
+    DEATH_TYPE_OPTIONS: DEATH_TYPE_OPTIONS,
     VISIBILITY_OPTIONS: VISIBILITY_OPTIONS,
     SHOW_BEFORE_OPTIONS: SHOW_BEFORE_OPTIONS,
     BLOCKED_NEW_EVENT_TYPES: BLOCKED_NEW_EVENT_TYPES,
     isBlockedNewEventType: isBlockedNewEventType,
     isAllowedHappyType: isAllowedHappyType,
     isAllowedSickType: isAllowedSickType,
+    isAllowedCatalogType: isAllowedCatalogType,
     fillHappyTypeSelect: fillHappyTypeSelect,
+    fillFamilySelect: fillFamilySelect,
+    fillTypeSelectForFamily: fillTypeSelectForFamily,
+    fillSelectOptions: fillSelectOptions,
+    newsAndOccasionOptions: newsAndOccasionOptions,
+    healthOptions: healthOptions,
+    deathOptions: deathOptions,
+    familyOptions: familyOptions,
     categoryFromTab: categoryFromTab,
     buildDelegateFormPayload: buildDelegateFormPayload,
     buildRowFromForm: buildRowFromForm,

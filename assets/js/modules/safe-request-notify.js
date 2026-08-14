@@ -24,6 +24,7 @@
     tree_delegate: { label: "مندوب شجرة", family: "privilege" },
     events_delegate: { label: "مندوب مناسبات", family: "privilege" },
     test_request: { label: "طلب اختبار", family: "content" },
+    delegate_secret_reset: { label: "إعادة تعيين رقم سري", family: "privilege" },
   };
 
   var STATUS_AR = {
@@ -31,6 +32,7 @@
     approved: "تمت الموافقة",
     rejected: "تم الرفض",
     deferred: "مؤجل",
+    needs_changes: "يحتاج تعديل",
     scheduled: "مجدول للظهور",
     visible: "ظاهر الآن",
     ended: "منتهٍ",
@@ -52,11 +54,13 @@
     if (s === "مجدول" || s === "مجدول للظهور") return "scheduled";
     if (s === "ظاهر" || s === "ظاهر الآن") return "visible";
     if (s === "منته" || s === "منتهٍ" || s === "منتهية") return "ended";
+    if (s === "needs_changes" || s === "needs-changes" || s === "changes_requested") {
+      return "needs_changes";
+    }
     if (
       s === "submitted" ||
       s === "assigned" ||
-      s === "in_review" ||
-      s === "needs_changes"
+      s === "in_review"
     ) {
       return "pending";
     }
@@ -156,7 +160,12 @@
         } catch (_) {}
         return null;
       }
-      if (status !== "approved" && status !== "rejected" && status !== "deferred") {
+      if (
+        status !== "approved" &&
+        status !== "rejected" &&
+        status !== "deferred" &&
+        status !== "needs_changes"
+      ) {
         try {
           console.warn("[safe-request-notify] blocked unmapped status", status);
         } catch (_) {}
@@ -171,7 +180,9 @@
       if (branch) lines.push("الفرع: " + branch);
       if (person) lines.push("الموضوع: " + person);
       lines.push("الحالة: " + statusLabel);
-      if (status === "rejected" && reason) lines.push("السبب: " + reason);
+      if ((status === "rejected" || status === "needs_changes") && reason) {
+        lines.push("السبب: " + reason);
+      }
       lines.push("يمكنك المتابعة من قسم طلباتي.");
 
       var subject = "تحديث طلبك: " + statusLabel + " — " + kindLabel;

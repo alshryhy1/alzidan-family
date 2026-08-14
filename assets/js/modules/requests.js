@@ -199,7 +199,12 @@ function showAlert(kind, msg) {
       }
     }
 
-    if (st !== "approved" && st !== "rejected" && st !== "deferred") {
+    if (
+      st !== "approved" &&
+      st !== "rejected" &&
+      st !== "deferred" &&
+      st !== "needs_changes"
+    ) {
       return { ok: false, skipped: "bad_status", status: st };
     }
 
@@ -210,8 +215,7 @@ function showAlert(kind, msg) {
       return { ok: false, skipped: "missing_phone_email", request_id: row.request_id };
     }
 
-    // Push FIRST (OS notification). Never block on email — a slow/hung email
-    // invoke was preventing both accept and reject pushes from reaching the app.
+    // Push + email both required for admin decisions. Push first, then email.
     let pushResult = {
       ok: false,
       skipped: "missing_phone_for_push",
@@ -263,51 +267,93 @@ function showAlert(kind, msg) {
       }
     }
 
-    try {
-      if (String(rec.email || "").trim()) {
-        sb.functions
-          .invoke("alzidan-email-notify", {
-            body: { mode: "status_changed", record: rec },
-          })
-          .catch(function (e) {
-            try {
-              console.warn("[status_changed email]", e);
-            } catch (_) {}
-          });
-      }
-    } catch (e) {
+    let emailResult = { ok: false, skipped: "missing_email" };
+    if (String(rec.email || "").trim()) {
       try {
-        console.warn("[status_changed email]", e);
-      } catch (_) {}
+        const eres = await sb.functions.invoke("alzidan-email-notify", {
+          body: { mode: "status_changed", record: rec },
+        });
+        const edata = eres && eres.data ? eres.data : null;
+        const eerr = eres && eres.error ? eres.error : null;
+        try {
+          console.info("[status_changed email]", {
+            request_id: rec.request_id,
+            kind: rec.kind,
+            status: st,
+            data: edata,
+            error: eerr ? String(eerr.message || eerr) : null,
+          });
+        } catch (_) {}
+        if (eerr) {
+          emailResult = {
+            ok: false,
+            skipped: "invoke_error",
+            error: String(eerr.message || eerr),
+          };
+        } else if (edata && edata.skipped) {
+          emailResult = { ok: false, skipped: String(edata.skipped), data: edata };
+        } else if (edata && edata.ok === false) {
+          emailResult = { ok: false, skipped: "email_failed", data: edata };
+        } else {
+          emailResult = { ok: true, data: edata };
+        }
+      } catch (e) {
+        try {
+          console.warn("[status_changed email]", e);
+        } catch (_) {}
+        emailResult = {
+          ok: false,
+          skipped: "invoke_exception",
+          error: String((e && e.message) || e || ""),
+        };
+      }
     }
 
-    return pushResult;
+    return Object.assign({}, pushResult, {
+      email: emailResult,
+      push_ok: !!pushResult.ok,
+      email_ok: !!emailResult.ok,
+      ok: !!(pushResult.ok || emailResult.ok),
+    });
   }
 
   function formatDelegateStatusPushHint(pushRes, decisionLabel) {
     if (!pushRes) return "";
-    if (pushRes.ok) {
-      return " · إشعار التطبيق: تم الإرسال (" + decisionLabel + ")";
+    const emailBit =
+      pushRes.email_ok
+        ? " · البريد: تم الإرسال"
+        : pushRes.email && pushRes.email.skipped === "missing_email"
+          ? " · البريد: لا يوجد بريد على الطلب"
+          : pushRes.email && pushRes.email.skipped
+            ? " · البريد: لم يُرسل (" + pushRes.email.skipped + ")"
+            : "";
+    if (pushRes.push_ok || (pushRes.ok && !pushRes.email_only)) {
+      return " · إشعار التطبيق: تم الإرسال (" + decisionLabel + ")" + emailBit;
+    }
+    if (pushRes.ok && pushRes.email_ok) {
+      return " · إشعار التطبيق/البريد: تم الإرسال (" + decisionLabel + ")";
     }
     const skipped = String(pushRes.skipped || "");
     const data = pushRes.data || {};
     if (skipped === "no_recipients" && Number(data.deduped || 0) > 0) {
       return (
-        " · إشعار التطبيق: سبق إرساله لهذا الطلب (dedupe) — أعد الاختبار بطلب جديد"
+        " · إشعار التطبيق: سبق إرساله لهذا الطلب (dedupe) — أعد الاختبار بطلب جديد" +
+        emailBit
       );
     }
     if (skipped === "no_requester_push_tokens" || skipped === "missing_phone_for_push") {
       return (
-        " · إشعار التطبيق: لم يُرسل — لا توكن مرتبط بجوال الطلب. افتح التطبيق وسجّل الدخول بنفس الجوال المكتوب في الطلب"
+        " · إشعار التطبيق: لم يُرسل — لا توكن مرتبط بجوال الطلب. افتح التطبيق وسجّل الدخول بنفس الجوال المكتوب في الطلب" +
+        emailBit
       );
     }
     if (skipped === "missing_phone_email" || skipped === "missing_request_phone") {
-      return " · إشعار التطبيق: لم يُرسل — لا يوجد جوال على الطلب";
+      return " · إشعار التطبيق: لم يُرسل — لا يوجد جوال على الطلب" + emailBit;
     }
     if (skipped) {
-      return " · إشعار التطبيق: لم يُرسل (" + skipped + ")";
+      return " · إشعار التطبيق: لم يُرسل (" + skipped + ")" + emailBit;
     }
-    return " · إشعار التطبيق: تعذر الإرسال";
+    return " · إشعار التطبيق: تعذر الإرسال" + emailBit;
   }
 
   function requestActions() {
@@ -402,6 +448,7 @@ function showAlert(kind, msg) {
     });
 
     const approvedIds = [];
+    const approvedRows = [];
     for (const sib of matched) {
       const sibId = coerceRpcId(sib.id != null ? sib.id : sib.request_id);
       if (!sibId) continue;
@@ -411,11 +458,15 @@ function showAlert(kind, msg) {
           p_id: sibId,
           p_status: "approved",
         });
-        if (!error && data !== false) approvedIds.push(String(sibId));
+        if (!error && data !== false) {
+          approvedIds.push(String(sibId));
+          approvedRows.push(Object.assign({}, sib, { status: "approved" }));
+        }
       } catch (_) {}
     }
     return {
       approvedIds,
+      approvedRows,
       activateId: approvedIds.length ? approvedIds[approvedIds.length - 1] : null,
     };
   }
@@ -1133,16 +1184,29 @@ function showAlert(kind, msg) {
     const tdStatus = document.createElement("td");
     tdStatus.setAttribute("data-label", "الحالة");
     const pill = document.createElement("span");
-    const displayStatus = String(row.wf_state || row.status || "").trim();
     const legacy = String(row.status || "").trim();
+    // Delegate privilege requests: status is SSOT (do not let wf_state look «مقبول» early).
+    const displayStatus = isDelegateAccessKind(row.kind)
+      ? legacy
+      : String(row.wf_state || row.status || "").trim();
     pill.className =
       "status-pill " +
-      (legacy === "approved" || displayStatus === "approved" || displayStatus === "applied" || displayStatus === "done"
+      (legacy === "approved"
         ? "status-approved"
-        : legacy === "rejected" || displayStatus === "rejected"
+        : legacy === "rejected"
           ? "status-rejected"
-          : "status-pending");
-    pill.textContent = requestStatusLabel(displayStatus || legacy, row);
+          : !isDelegateAccessKind(row.kind) &&
+              (displayStatus === "approved" ||
+                displayStatus === "applied" ||
+                displayStatus === "done")
+            ? "status-approved"
+            : displayStatus === "rejected"
+              ? "status-rejected"
+              : "status-pending");
+    pill.textContent = requestStatusLabel(
+      isDelegateAccessKind(row.kind) ? legacy : displayStatus || legacy,
+      row,
+    );
     if (row.wf_state) pill.title = "Workflow: " + String(row.wf_state);
     const Vis = window.AlzidanEventVisibility || null;
     if (
@@ -1537,19 +1601,16 @@ function showAlert(kind, msg) {
         }
         showAlert("success", note);
         try {
-          await sb.functions.invoke("alzidan-email-notify", {
-            body: {
-              mode: "secret_reset_approved",
-              record: {
-                request_id: row.request_id,
-                kind: "delegate_secret_reset",
-                branch_key: row.branch_key,
-                phone: row.phone,
-                email: row.email,
-                name: row.name,
-              },
-            },
-          });
+          const pushRes = await notifyRequesterStatusChanged(
+            sb,
+            Object.assign({}, row, { kind: "delegate_secret_reset" }),
+            "approved",
+          );
+          if (pushRes && !pushRes.ok) {
+            try {
+              console.warn("[secret_reset] notify", pushRes);
+            } catch (_) {}
+          }
         } catch (_) {}
         await loadRequests();
         return;
@@ -1569,6 +1630,19 @@ function showAlert(kind, msg) {
       if (!id) {
         showAlert("error", "بيانات الطلب ناقصة.");
         return;
+      }
+      // Dual-role (-TREE/-EVENTS): warn before silent sibling auto-approve.
+      if (isDelegateAccessKind(row.kind)) {
+        const roles = parseDelegateRolesFromRow(row);
+        const wantsBoth =
+          (roles.includes("tree_delegate") && roles.includes("events_delegate")) ||
+          /-(TREE|EVENTS)$/i.test(String(row.request_id || ""));
+        if (wantsBoth) {
+          const ok = window.confirm(
+            "هذا طلب صلاحيتين (شجرة + مناسبات).\nعند القبول سيتم اعتماد الطلب الشقيق تلقائيًا أيضًا.\nهل تريد المتابعة؟",
+          );
+          if (!ok) return;
+        }
       }
       approveBtn.disabled = true;
       try {
@@ -1693,6 +1767,13 @@ function showAlert(kind, msg) {
       if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
         try {
           const sibling = await approveDelegateSiblingRequests(sb, token, row);
+          if (sibling && Array.isArray(sibling.approvedRows)) {
+            for (const sibRow of sibling.approvedRows) {
+              try {
+                await notifyRequesterStatusChanged(sb, sibRow, "approved");
+              } catch (_) {}
+            }
+          }
           const act = await sb.rpc("admin_delegates_v2_activate_from_request_v1", {
             p_token: token,
             p_id: String(id),
@@ -2034,6 +2115,14 @@ function showAlert(kind, msg) {
           return;
         }
         showAlert("success", "تم رفض طلب إعادة التعيين: " + (row.request_id || ""));
+        try {
+          await notifyRequesterStatusChanged(
+            sb,
+            Object.assign({}, row, { kind: "delegate_secret_reset" }),
+            "rejected",
+            reason,
+          );
+        } catch (_) {}
         await loadRequests();
         return;
       }
@@ -2052,6 +2141,8 @@ function showAlert(kind, msg) {
         showAlert("error", "بيانات الطلب ناقصة.");
         return;
       }
+      const rejectReason =
+        window.prompt("سبب الرفض (اختياري — يُرسل في البريد وإشعار التطبيق):") || "";
       rejectBtn.disabled = true;
       // Best-effort unpublish. Reject trigger also removes family_events —
       // do not abort reject when pre-unpublish fails (same bug as Delete).
@@ -2141,7 +2232,7 @@ function showAlert(kind, msg) {
       } else {
         showAlert("success", `تم رفض الطلب: ${row.request_id}`);
       }
-      const pushRes = await notifyRequesterStatusChanged(sb, row, "rejected");
+      const pushRes = await notifyRequesterStatusChanged(sb, row, "rejected", rejectReason);
       if (row.kind === "tree_delegate" || row.kind === "events_delegate") {
         const msg =
           `تم رفض طلب المندوب: ${row.request_id}` +
@@ -2280,6 +2371,7 @@ function showAlert(kind, msg) {
     init,
     loadRequests,
     renderRequestsPage,
+    notifyRequesterStatusChanged,
   };
 
   function bootstrap() {

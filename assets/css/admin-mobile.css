@@ -243,13 +243,20 @@
   }
 
   #admin-requests-section .cell-actions .btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     width: 100% !important;
     min-width: 0 !important;
+    min-height: 44px !important;
+    white-space: nowrap !important;
   }
 
-  /* Hide disabled accept/reject on phone to save space */
+  /* Keep قبول/رفض visible on phone even when disabled (muted, not hidden) */
   #admin-requests-section .cell-actions .btn[disabled] {
-    display: none !important;
+    display: flex !important;
+    opacity: 0.55 !important;
+    pointer-events: none !important;
   }
 
   #admin-requests-section .delegate-admin-email {
@@ -337,4 +344,51 @@
     font-size: 11px !important;
     padding: 7px 8px !important;
   }
+}
+
+@media (max-width: 900px) {
+
+  /* Family management — touch targets & search overlay on phones */
+  .fm-search-results {
+    z-index: 60 !important;
+    max-height: min(42vh, 260px) !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fm-search-item {
+    min-height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 10px 12px !important;
+  }
+  .fm-search-item:active,
+  .fm-search-item.fm-highlight {
+    background: #dbeafe !important;
+  }
+  .fm-row-actions .btn,
+  .fm-toolbar .btn,
+  .fm-type-tab,
+  .fm-accordion > summary {
+    min-height: 44px !important;
+  }
+  .fm-add-sheet-backdrop.fm-open {
+    align-items: flex-end !important;
+  }
+  .fm-add-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: min(92dvh, 920px) !important;
+    border-radius: 16px 16px 0 0 !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .source-tree-toolbar {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .source-tree-toolbar .btn {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
+
 }

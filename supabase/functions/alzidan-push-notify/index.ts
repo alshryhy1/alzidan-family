@@ -58,6 +58,7 @@ function requestLabel(kind: string) {
     tree_delegate: "مندوب شجرة",
     events_delegate: "مندوب مناسبات",
     test_request: "طلب اختبار",
+    delegate_secret_reset: "إعادة تعيين رقم سري",
   };
   // Empty string = unknown → callers must block send (no soft fallback).
   return map[k] || "";
@@ -112,12 +113,13 @@ function safeRenderPush(input: {
   if (status === "accepted" || status === "applied" || status === "done") status = "approved";
   if (status === "denied") status = "rejected";
   if (status === "postponed") status = "deferred";
+  if (status === "needs-changes" || status === "changes_requested") status = "needs_changes";
 
   if (mode === "status_changed") {
-    if (status !== "approved" && status !== "rejected" && status !== "deferred") return null;
+    if (status !== "approved" && status !== "rejected" && status !== "deferred" && status !== "needs_changes") return null;
     const isDelegateKind = kind === "tree_delegate" || kind === "events_delegate";
     const statusLabel =
-      status === "approved" ? "تمت الموافقة" : status === "rejected" ? "تم الرفض" : "مؤجل";
+      status === "approved" ? "تمت الموافقة" : status === "rejected" ? "تم الرفض" : status === "needs_changes" ? "يحتاج تعديل" : "مؤجل";
     const title = isDelegateKind
       ? status === "approved"
         ? `تم قبولك كمندوب — ${kindLabel}`
@@ -142,7 +144,7 @@ function safeRenderPush(input: {
     if (person) bodyParts.push(isDelegateKind ? `الاسم: ${person}` : `الموضوع: ${person}`);
     if (!isDelegateKind) bodyParts.push(`الحالة: ${statusLabel}`);
     const reason = safePushDisplay(input.reject_reason);
-    if (status === "rejected" && reason) bodyParts.push(`السبب: ${reason}`);
+    if ((status === "rejected" || status === "needs_changes") && reason) bodyParts.push(`السبب: ${reason}`);
     return { title, body: bodyParts.join(" · "), kindLabel };
   }
 
@@ -882,7 +884,7 @@ async function notifyRequesterStatusChanged(payload: Record<string, unknown>, dr
     mode: "status_changed",
     type: "status_changed",
     notification_type: "status_changed",
-    status: status === "approved" ? "approved" : status === "rejected" ? "rejected" : "deferred",
+    status: status === "approved" ? "approved" : status === "rejected" ? "rejected" : status === "needs_changes" ? "needs_changes" : "deferred",
     screen: "home",
     request_id: requestId,
     kind,

@@ -24,7 +24,13 @@
   ]);
   const EVENT_VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm"]);
   const BRANCHES = ["زيدان", "مزيد", "زايد", "لاحم", "ملحم"];
-  const HEALTH_TYPES = new Set(["sick", "operation", "discharge"]);
+  const HEALTH_TYPES = new Set([
+    "sick",
+    "operation",
+    "discharge",
+    "healing",
+    "safety",
+  ]);
   const PERSON_SEARCH_LIMIT = 8;
   const FormCore =
     typeof window !== "undefined" ? window.AlzidanEventFormCore || {} : {};
@@ -52,25 +58,99 @@
     return fallback.has(key);
   }
 
+  function syncDatePlaceRequirements(form) {
+    if (!form) return;
+    const EventsApi =
+      typeof window !== "undefined" ? window.AlzidanEvents || {} : {};
+    const typeEl =
+      form.querySelector("#event-submit-type") ||
+      form.querySelector("[data-event-type]") ||
+      form.querySelector('[name="type"]');
+    const type = String((typeEl && typeEl.value) || "").trim();
+    const dateEl =
+      form.querySelector("#event-submit-date-label") ||
+      form.querySelector('[name="dateLabel"]');
+    const dateWrap = form.querySelector("[data-event-date-wrap]");
+    const placeEl =
+      form.querySelector("#event-submit-place") ||
+      form.querySelector('[name="place"]');
+    const needsDate =
+      type &&
+      typeof EventsApi.eventRequiresDate === "function" &&
+      EventsApi.eventRequiresDate(type);
+    const needsPlace =
+      type &&
+      typeof EventsApi.eventRequiresPlace === "function" &&
+      EventsApi.eventRequiresPlace(type);
+    if (dateEl) {
+      dateEl.required = !!needsDate;
+      dateEl.placeholder = needsDate
+        ? "مطلوب — مثال: 1448/01/10 أو 2026-08-09"
+        : "اختياري — مثال: 1448/01/10 أو 2026-08-09";
+    }
+    if (dateWrap) {
+      dateWrap.hidden = false;
+      const label = dateWrap.querySelector("label");
+      if (label) {
+        label.textContent = needsDate ? "التاريخ" : "التاريخ (اختياري)";
+      }
+    }
+    if (placeEl) {
+      placeEl.required = !!needsPlace;
+      const placeField = placeEl.closest(".founder-field");
+      const placeLabel = placeField && placeField.querySelector("label");
+      if (placeLabel) {
+        placeLabel.innerHTML = needsPlace
+          ? "المكان"
+          : 'المكان <span class="field-optional">(اختياري)</span>';
+      }
+    }
+  }
+
   function syncOccasionTypeSelect(form) {
-    const select =
-      form &&
-      (form.querySelector("#event-submit-type") ||
-        form.querySelector('[name="type"]'));
-    if (!select) return;
-    if (typeof FormCore.fillHappyTypeSelect === "function") {
-      FormCore.fillHappyTypeSelect(select, {
-        selected: select.value || "",
+    if (!form) return;
+    const familyEl =
+      form.querySelector("#event-submit-family") ||
+      form.querySelector("[data-event-family]") ||
+      form.querySelector('[name="family"]');
+    const typeEl =
+      form.querySelector("#event-submit-type") ||
+      form.querySelector("[data-event-type]") ||
+      form.querySelector('[name="type"]');
+    if (!typeEl) return;
+
+    if (familyEl && typeof FormCore.fillTypeSelectForFamily === "function") {
+      const family = String(familyEl.value || "").trim();
+      if (family) {
+        FormCore.fillTypeSelectForFamily(typeEl, family, {
+          selected: typeEl.value || "",
+          placeholder: "اختر النوع",
+        });
+      } else {
+        typeEl.innerHTML = '<option value="">اختر الفئة أولًا</option>';
+      }
+    } else if (typeof FormCore.fillHappyTypeSelect === "function") {
+      FormCore.fillHappyTypeSelect(typeEl, {
+        selected: typeEl.value || "",
         placeholder: "اختر النوع",
       });
-    } else {
-      Array.from(select.options || []).forEach(function (opt) {
-        const v = String(opt.value || "").trim();
-        if (v === "engagement" || opt.textContent.trim() === "خطوبة") {
-          opt.remove();
-        }
+    }
+
+    if (familyEl && !familyEl.dataset.catalogBound) {
+      familyEl.dataset.catalogBound = "1";
+      familyEl.addEventListener("change", function () {
+        if (typeEl) typeEl.value = "";
+        syncOccasionTypeSelect(form);
+        syncDatePlaceRequirements(form);
       });
     }
+    if (typeEl && !typeEl.dataset.catalogBound) {
+      typeEl.dataset.catalogBound = "1";
+      typeEl.addEventListener("change", function () {
+        syncDatePlaceRequirements(form);
+      });
+    }
+    syncDatePlaceRequirements(form);
   }
 
   function normalizeBranchKey(v) {
@@ -468,9 +548,29 @@
   function bindSubmitForm(form, mode) {
     if (!form) return;
     bindPersonSuggest(form);
-    const isPatient = mode === "patient";
-    const isDeath = mode === "death";
-    if (!isPatient && !isDeath) syncOccasionTypeSelect(form);
+    let isPatient = mode === "patient";
+    let isDeath = mode === "death";
+    if (!isPatient && !isDeath) {
+      syncOccasionTypeSelect(form);
+    } else if (isPatient && typeof FormCore.fillSelectOptions === "function") {
+      const typeEl = form.querySelector('[name="type"]');
+      FormCore.fillSelectOptions(
+        typeEl,
+        typeof FormCore.healthOptions === "function"
+          ? FormCore.healthOptions()
+          : FormCore.SICK_TYPE_OPTIONS || [],
+        { selected: (typeEl && typeEl.value) || "sick", placeholder: "اختر الحالة" },
+      );
+    } else if (isDeath && typeof FormCore.fillSelectOptions === "function") {
+      const typeEl = form.querySelector('[name="type"]');
+      FormCore.fillSelectOptions(
+        typeEl,
+        typeof FormCore.deathOptions === "function"
+          ? FormCore.deathOptions()
+          : FormCore.DEATH_TYPE_OPTIONS || [],
+        { selected: (typeEl && typeEl.value) || "death", placeholder: "اختر النوع" },
+      );
+    }
     const alertEl = form.querySelector(alertSelector(mode));
     const submitBtn = form.querySelector('button[type="submit"]');
 
@@ -511,9 +611,18 @@
         let typeLabel = normalizeEventText(
           form.querySelector('[name="type"] option:checked')?.textContent
         );
-        if (isDeath) {
-          type = "death";
-          typeLabel = "وفاة";
+        const EventsApi =
+          typeof window !== "undefined" ? window.AlzidanEvents || {} : {};
+        if (mode === "occasion" && type && typeof EventsApi.eventFamilyFromType === "function") {
+          const fam = EventsApi.eventFamilyFromType(type);
+          isPatient = fam === "health";
+          isDeath = fam === "death";
+        }
+        if (typeof EventsApi.normalizeEventType === "function" && type) {
+          type = EventsApi.normalizeEventType(type);
+        }
+        if (!typeLabel && typeof EventsApi.eventTypeArabicLabel === "function") {
+          typeLabel = EventsApi.eventTypeArabicLabel(type);
         }
         const person = normalizeEventText(
           form.querySelector('[name="person"]')?.value
@@ -551,65 +660,97 @@
           return;
         }
         if (isDeath) {
-          if (!person || !phone || !dateLabel) {
+          if (!person || !phone || !type) {
             setAlert(
               "error",
-              "أكمل اسم المتوفى ورقم الجوال والتاريخ."
+              "أكمل اسم المتوفى ورقم الجوال ونوع الإعلان (وفاة أو تعزية)."
             );
             return;
           }
-          var VisDeath =
-            typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
-          if (VisDeath && typeof VisDeath.validateEventDateForSubmit === "function") {
-            var deathDateCheck = VisDeath.validateEventDateForSubmit(dateLabel, {
-              category: "death",
-              type: "death",
-              required: true,
-            });
-            if (!deathDateCheck || !deathDateCheck.ok) {
-              setAlert(
-                "error",
-                (deathDateCheck && deathDateCheck.reason) ||
-                  "أدخل تاريخ الوفاة. بدونه لا يُحدد وقت الظهور."
-              );
-              return;
+          if (dateLabel) {
+            var VisDeath =
+              typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+            if (VisDeath && typeof VisDeath.validateEventDateForSubmit === "function") {
+              var deathDateCheck = VisDeath.validateEventDateForSubmit(dateLabel, {
+                category: "death",
+                type: type || "death",
+                required: false,
+              });
+              if (!deathDateCheck || !deathDateCheck.ok) {
+                setAlert(
+                  "error",
+                  (deathDateCheck && deathDateCheck.reason) ||
+                    "تاريخ غير صالح."
+                );
+                return;
+              }
             }
           }
         } else if (isPatient) {
-          if (!person || !phone || !type || !dateLabel) {
+          if (!person || !phone || !type) {
             setAlert(
               "error",
-              "أكمل اسم المريض ورقم الجوال ونوع الحالة والتاريخ."
+              "أكمل اسم المريض ورقم الجوال ونوع الحالة."
             );
             return;
           }
           if (!HEALTH_TYPES.has(type)) {
-            setAlert("error", "اختر نوع حالة صحيحًا (مريض / عملية / خروج).");
+            setAlert(
+              "error",
+              "اختر نوع حالة صحيحًا (مريض / عملية / شفاء / خروج / سلامة).",
+            );
             return;
           }
-          var VisHealth =
-            typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
-          if (VisHealth && typeof VisHealth.validateEventDateForSubmit === "function") {
-            var healthDateCheck = VisHealth.validateEventDateForSubmit(dateLabel, {
-              category: "health",
-              type: type,
-              required: true,
-            });
-            if (!healthDateCheck || !healthDateCheck.ok) {
-              setAlert(
-                "error",
-                (healthDateCheck && healthDateCheck.reason) ||
-                  "أدخل التاريخ. بدونه لا يُحدد وقت ظهور الحالة."
-              );
-              return;
+          if (dateLabel) {
+            var VisHealth =
+              typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+            if (VisHealth && typeof VisHealth.validateEventDateForSubmit === "function") {
+              var healthDateCheck = VisHealth.validateEventDateForSubmit(dateLabel, {
+                category: "health",
+                type: type,
+                required: false,
+              });
+              if (!healthDateCheck || !healthDateCheck.ok) {
+                setAlert(
+                  "error",
+                  (healthDateCheck && healthDateCheck.reason) ||
+                    "تاريخ غير صالح."
+                );
+                return;
+              }
             }
           }
         } else {
-          if (!person || !phone || !type || !dateLabel) {
+          var isNotice =
+            EventsApi && typeof EventsApi.isNoticeEventType === "function"
+              ? EventsApi.isNoticeEventType(type)
+              : type === "promotion_notice" || type === "congratulation";
+          var needsDate =
+            EventsApi && typeof EventsApi.eventRequiresDate === "function"
+              ? EventsApi.eventRequiresDate(type)
+              : !isNotice;
+          if (!person || !phone || !type) {
             setAlert(
               "error",
-              "أكمل اسم صاحب المناسبة ورقم الجوال ونوع المناسبة والتاريخ."
+              isNotice
+                ? "أكمل اسم المُهنَّأ ورقم الجوال ونوع التهنئة/الخبر."
+                : "أكمل اسم صاحب المناسبة ورقم الجوال ونوع المناسبة."
             );
+            return;
+          }
+          if (needsDate && !dateLabel) {
+            setAlert(
+              "error",
+              "أكمل تاريخ المناسبة. للتهنئة/الخبر التاريخ اختياري."
+            );
+            return;
+          }
+          var needsPlace =
+            EventsApi && typeof EventsApi.eventRequiresPlace === "function"
+              ? EventsApi.eventRequiresPlace(type)
+              : false;
+          if (needsPlace && !place) {
+            setAlert("error", "المكان مطلوب لهذا النوع من المناسبات.");
             return;
           }
           if (!isAllowedOccasionType(type)) {
@@ -621,11 +762,15 @@
           }
           var VisDate =
             typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
-          if (VisDate && typeof VisDate.validateEventDateForSubmit === "function") {
+          if (
+            dateLabel &&
+            VisDate &&
+            typeof VisDate.validateEventDateForSubmit === "function"
+          ) {
             var dateCheck = VisDate.validateEventDateForSubmit(dateLabel, {
               category: "happy",
               type: type,
-              required: true,
+              required: needsDate,
             });
             if (!dateCheck || !dateCheck.ok) {
               setAlert(

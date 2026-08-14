@@ -308,21 +308,31 @@
         const showDays = clampVisibilityDays ? clampVisibilityDays(v.showDays) : 7;
         const Vis =
           typeof window !== "undefined" ? window.AlzidanEventVisibility : null;
+        const EventsApi = typeof window !== "undefined" ? window.AlzidanEvents : null;
+        const dateRequired =
+          category === "happy"
+            ? EventsApi && typeof EventsApi.eventRequiresDate === "function"
+              ? EventsApi.eventRequiresDate(type)
+              : true
+            : false;
         if (Vis && typeof Vis.validateEventDateForSubmit === "function") {
           const dateCheck = Vis.validateEventDateForSubmit(dateValue || dateLabel, {
             category: category,
             type: type || category,
-            required: true,
+            required: dateRequired,
+            allowPast: category === "death" || category === "sick",
           });
           if (!dateCheck || !dateCheck.ok) {
             return {
               ok: false,
               message:
                 (dateCheck && dateCheck.reason) ||
-                "أدخل التاريخ. بدونه لا يُحدد وقت ظهور المناسبة.",
+                (dateRequired
+                  ? "أدخل التاريخ. بدونه لا يُحدد وقت ظهور المناسبة."
+                  : "صيغة التاريخ غير صحيحة."),
             };
           }
-        } else if (!dateValue) {
+        } else if (dateRequired && !dateValue) {
           return {
             ok: false,
             message: "أدخل التاريخ. بدونه لا يُحدد وقت ظهور المناسبة.",
@@ -343,7 +353,7 @@
 
         let payloadValues = Object.assign({}, v, {
           branch,
-          type: category === "death" ? "death" : type,
+          type: category === "death" ? (type || "death") : type,
           person,
           dateLabel,
           eventDate: dateValue,

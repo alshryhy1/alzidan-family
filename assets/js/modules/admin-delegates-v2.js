@@ -528,6 +528,35 @@
       });
       if (error) throw error;
     }
+    // Notify submitter when legacy privilege rows are toggled from Delegates v2.
+    try {
+      const Notify =
+        window.AlzidanAdminRequests &&
+        typeof window.AlzidanAdminRequests.notifyRequesterStatusChanged === "function"
+          ? window.AlzidanAdminRequests.notifyRequesterStatusChanged
+          : null;
+      const sb = getClient && getClient();
+      if (Notify && sb) {
+        const kind =
+          (caps.tree && "tree_delegate") ||
+          (caps.events && "events_delegate") ||
+          "tree_delegate";
+        await Notify(
+          sb,
+          {
+            id: targets[0],
+            request_id: (caps.tree && caps.tree.request_id) || (caps.events && caps.events.request_id) || null,
+            kind,
+            branch_key: row.branch_key || row.branch || null,
+            phone: row.phone || null,
+            email: row.email || null,
+            name: row.name || null,
+            status,
+          },
+          status,
+        );
+      }
+    } catch (_) {}
   }
 
   async function setEnabled(id, enabled) {

@@ -103,7 +103,7 @@
           optionsHtml(happyTypes) +
           "</select></div>" +
           '<div class="field"><label>اسم الشخص</label><input data-em-person type="text" placeholder="الاسم الكامل" /></div>' +
-          '<div class="field"><label>تاريخ المناسبة</label><input data-em-date type="text" dir="ltr" placeholder="1448-01-11 أو 2026-06-24" /></div>' +
+          '<div class="field"><label>التاريخ (إلزامي للمناسبات فقط)</label><input data-em-date type="text" dir="ltr" placeholder="1448-01-11 أو 2026-06-24" /></div>' +
           '<div class="field"><label>الظهور قبل الموعد</label><select data-em-show-before>' +
           optionsHtml(FormCore.SHOW_BEFORE_OPTIONS || [{ value: "3", label: "قبل 3 أيام" }], "3") +
           "</select></div>" +
@@ -118,6 +118,27 @@
           '<div class="field"><label>رابط فيديو</label><input data-em-video-url type="url" dir="ltr" placeholder="https://..." /></div>' +
           '<div class="field"><label>رفع فيديو</label><input data-em-video-file type="file" accept="video/mp4,video/quicktime,video/webm" /></div>' +
           "</div>";
+        var typeElHappy = formWrap.querySelector("[data-em-type]");
+        var dateLabelEl = formWrap.querySelector("[data-em-date]")
+          ? formWrap.querySelector("[data-em-date]").closest(".field")
+          : null;
+        function syncHappyDateHint() {
+          if (!dateLabelEl) return;
+          var lab = dateLabelEl.querySelector("label");
+          if (!lab) return;
+          var tv = typeElHappy ? String(typeElHappy.value || "") : "";
+          var needs =
+            Events && typeof Events.eventRequiresDate === "function"
+              ? Events.eventRequiresDate(tv)
+              : true;
+          lab.textContent = needs
+            ? "التاريخ (إلزامي للمناسبات)"
+            : "التاريخ (اختياري للأخبار/التهاني)";
+        }
+        if (typeElHappy) {
+          typeElHappy.addEventListener("change", syncHappyDateHint);
+          syncHappyDateHint();
+        }
         return;
       }
       if (category === "sick") {
@@ -127,7 +148,7 @@
           optionsHtml(sickTypes, "sick") +
           "</select></div>" +
           '<div class="field"><label>اسم الشخص</label><input data-em-person type="text" /></div>' +
-          '<div class="field"><label>التاريخ</label><input data-em-date type="text" dir="ltr" /></div>' +
+          '<div class="field"><label>التاريخ (اختياري)</label><input data-em-date type="text" dir="ltr" /></div>' +
           '<div class="field"><label>مدة العرض</label><select data-em-show-days>' +
           optionsHtml(vis, "7") +
           "</select></div>" +
@@ -152,10 +173,17 @@
         }
         return;
       }
+      var deathTypes = FormCore.DEATH_TYPE_OPTIONS || [
+        { value: "death", label: "إعلان وفاة" },
+        { value: "condolence", label: "تعزية" },
+      ];
       formWrap.innerHTML =
         '<div class="em-form-grid">' +
-        '<div class="field"><label>اسم المتوفى</label><input data-em-person type="text" /></div>' +
-        '<div class="field"><label>تاريخ الوفاة</label><input data-em-date type="text" dir="ltr" /></div>' +
+        '<div class="field"><label>النوع</label><select data-em-type>' +
+        optionsHtml(deathTypes, "death") +
+        "</select></div>" +
+        '<div class="field"><label>اسم المتوفى / أهل الفقيد</label><input data-em-person type="text" /></div>' +
+        '<div class="field"><label>التاريخ (اختياري)</label><input data-em-date type="text" dir="ltr" /></div>' +
         '<div class="field"><label>مدة العرض</label><select data-em-show-days>' +
         optionsHtml(vis, "7") +
         "</select></div></div>" +

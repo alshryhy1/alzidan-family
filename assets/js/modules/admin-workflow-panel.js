@@ -512,6 +512,42 @@
     } else {
       showAlert("success", "تم الانتقال إلى: " + stateLabel(toState));
     }
+
+    // Notify submitter (email + app push) for user-facing decisions.
+    try {
+      const notifyStatus =
+        toState === "rejected"
+          ? "rejected"
+          : toState === "needs_changes"
+            ? "needs_changes"
+            : toState === "approved" || toState === "applied" || toState === "done"
+              ? "approved"
+              : "";
+      if (notifyStatus) {
+        const Notify =
+          window.AlzidanAdminRequests &&
+          typeof window.AlzidanAdminRequests.notifyRequesterStatusChanged === "function"
+            ? window.AlzidanAdminRequests.notifyRequesterStatusChanged
+            : null;
+        const sb = getClient();
+        const row =
+          lastWorkflowRow &&
+          String(lastWorkflowRow.request_id || "") === String(requestId)
+            ? lastWorkflowRow
+            : { request_id: requestId };
+        if (Notify && sb) {
+          const res = await Notify(sb, row, notifyStatus, reason);
+          try {
+            console.info("[workflow] status notify", notifyStatus, res);
+          } catch (_) {}
+        }
+      }
+    } catch (notifyErr) {
+      try {
+        console.warn("[workflow] status notify failed", notifyErr);
+      } catch (_) {}
+    }
+
     await loadRequest(requestId);
   }
 

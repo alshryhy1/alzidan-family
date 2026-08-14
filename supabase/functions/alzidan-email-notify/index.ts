@@ -38,6 +38,7 @@ const KNOWN_KINDS: Record<string, { label: string; family: "content" | "privileg
   tree_delegate: { label: "مندوب شجرة", family: "privilege" },
   events_delegate: { label: "مندوب مناسبات", family: "privilege" },
   test_request: { label: "طلب اختبار", family: "content" },
+  delegate_secret_reset: { label: "إعادة تعيين رقم سري", family: "privilege" },
 };
 
 const STATUS_AR: Record<string, string> = {
@@ -45,6 +46,7 @@ const STATUS_AR: Record<string, string> = {
   approved: "تمت الموافقة",
   rejected: "تم الرفض",
   deferred: "مؤجل",
+  needs_changes: "يحتاج تعديل",
 };
 
 /** Internal audit / unknown — NEVER notify. */
@@ -146,7 +148,7 @@ function safeRenderOutbound(input: {
 
   if (mode === "status_changed") {
     if (audience !== "submitter") return null;
-    if (status !== "approved" && status !== "rejected" && status !== "deferred") return null;
+    if (status !== "approved" && status !== "rejected" && status !== "deferred" && status !== "needs_changes") return null;
     const statusLabel = STATUS_AR[status] || "";
     if (!statusLabel) return null;
     const lines = [
@@ -156,7 +158,7 @@ function safeRenderOutbound(input: {
     if (branch) lines.push(`الفرع: ${branch}`);
     if (person) lines.push(`الموضوع: ${person}`);
     lines.push(`الحالة: ${statusLabel}`);
-    if (status === "rejected" && reason) lines.push(`السبب: ${reason}`);
+    if ((status === "rejected" || status === "needs_changes") && reason) lines.push(`السبب: ${reason}`);
     lines.push("يمكنك المتابعة من قسم طلباتي.");
     const subject = `تحديث طلبك: ${statusLabel} — ${kindLabel}`;
     const body = lines.join("\n");

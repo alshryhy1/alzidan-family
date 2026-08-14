@@ -1318,6 +1318,313 @@ body.admin-review-enabled #review {
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
+.oi-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f7faf7 0%, #eef6f0 100%);
+  border: 1px solid #d5e7db;
+}
+.oi-title {
+  font-weight: 800;
+  color: #14532d;
+  margin-bottom: 4px;
+}
+.oi-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.oi-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.oi-track-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #065f46;
+  margin-top: 2px;
+}
+.oi-track-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.oi-chip {
+  border: 1px solid #86efac;
+  background: #fff;
+  color: #166534;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.oi-chip:hover {
+  background: #f0fdf4;
+}
+.oi-chip-active {
+  background: #166534;
+  color: #fff;
+  border-color: #166534;
+}
+.oi-status {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+.oi-status.oi-ok {
+  color: #166534;
+}
+.oi-status.oi-err {
+  color: #b91c1c;
+}
+.oi-message-wrap {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+.oi-message {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 8px 10px;
+  font: inherit;
+}
+#oi-inbox-section .section-title {
+  color: #064e3b;
+  letter-spacing: -0.01em;
+}
+.oi-inbox-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+.oi-inbox-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #064e3b;
+  background: linear-gradient(135deg, #ecfdf5, #fffbeb);
+  border: 1px solid rgba(212, 175, 106, 0.45);
+  box-shadow: 0 6px 14px rgba(6, 78, 59, 0.08);
+}
+#oi-inbox-root.card {
+  padding: 14px;
+  border: 1px solid rgba(6, 78, 59, 0.12);
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(212, 175, 106, 0.16), transparent 55%),
+    linear-gradient(165deg, #f7fbf8 0%, #eef7f1 48%, #f8fafc 100%);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+}
+.oi-inbox-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(6, 95, 70, 0.18);
+  border-radius: 18px;
+  padding: 16px 16px 14px;
+  margin-bottom: 12px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(236, 253, 245, 0.88)),
+    linear-gradient(160deg, #ecfdf5, #fffbeb);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 12px 28px rgba(6, 78, 59, 0.08);
+}
+.oi-inbox-card::before {
+  content: "";
+  position: absolute;
+  inset-block: 10px 10px;
+  inset-inline-start: 0;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #d4af6a 0%, #065f46 55%, #047857 100%);
+}
+.oi-inbox-card:last-child {
+  margin-bottom: 0;
+}
+.oi-inbox-toggle {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: inherit;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.oi-inbox-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding-inline-start: 8px;
+  margin-bottom: 8px;
+}
+.oi-inbox-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline-start: 8px;
+}
+.oi-inbox-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oi-inbox-chip {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #92400e;
+  background: rgba(253, 230, 138, 0.55);
+  border: 1px solid rgba(212, 175, 106, 0.45);
+}
+.oi-inbox-chevron {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, #065f46, #0f766e);
+  position: relative;
+  transition: transform 0.2s ease;
+}
+.oi-inbox-chevron::before {
+  content: "";
+  position: absolute;
+  inset: 5px 5px 6px;
+  border-inline-end: 2px solid #fff7ed;
+  border-bottom: 2px solid #fff7ed;
+  transform: rotate(45deg);
+}
+.oi-inbox-card.is-open .oi-inbox-chevron {
+  transform: rotate(180deg);
+}
+.oi-inbox-card.is-open .oi-inbox-preview {
+  display: none;
+}
+.oi-inbox-body {
+  display: none;
+  margin-top: 10px;
+}
+.oi-inbox-card.is-open .oi-inbox-body {
+  display: block;
+}
+.oi-inbox-card.is-open .oi-inbox-top {
+  margin-bottom: 0;
+}
+.oi-inbox-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #fff7ed;
+  background: linear-gradient(135deg, #065f46 0%, #047857 58%, #0f766e 100%);
+  box-shadow: 0 8px 16px rgba(6, 95, 70, 0.22);
+}
+.oi-inbox-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fde68a, #d4af6a);
+  box-shadow: 0 0 0 2px rgba(253, 230, 138, 0.28);
+}
+.oi-inbox-line {
+  margin: 0;
+  color: #334155;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.oi-inbox-verb {
+  color: #475569;
+  font-weight: 600;
+}
+.oi-inbox-occasion {
+  color: #064e3b;
+  font-weight: 900;
+  background: linear-gradient(180deg, transparent 62%, rgba(212, 175, 106, 0.35) 62%);
+  padding-inline: 2px;
+}
+.oi-inbox-summary {
+  padding-inline-start: 8px;
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.oi-inbox-msgs {
+  display: grid;
+  gap: 8px;
+  padding-inline-start: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+.oi-inbox-msg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(212, 175, 106, 0.28);
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.75), rgba(255, 255, 255, 0.92));
+  color: #1e293b;
+  line-height: 1.7;
+}
+.oi-inbox-sender {
+  color: #064e3b;
+  font-weight: 900;
+  font-size: 14.5px;
+}
+.oi-inbox-sep {
+  color: #d4af6a;
+  font-weight: 800;
+}
+.oi-inbox-text {
+  color: #334155;
+  font-weight: 550;
+  flex: 1 1 auto;
+  min-width: 12ch;
+}
+.oi-inbox-head {
+  font-weight: 800;
+  color: #14532d;
+}
+.oi-inbox-sub {
+  margin: 4px 0 8px;
+  color: #334155;
+}
+.oi-inbox-who {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
 .event-video {
   background: #111827;
   border-radius: 14px;

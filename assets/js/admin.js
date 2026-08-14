@@ -1345,6 +1345,26 @@ where c.id = matches.id; commit;
       marriage: "زواج",
       graduation: "حفل تخرج",
       promotion: "حفل ترقية",
+      promotion_notice: "تهنئة ترقية",
+      graduation_notice: "تخرج",
+      achievement: "تكريم وإنجاز",
+      appointment: "تعيين / منصب",
+      retirement_notice: "تقاعد",
+      certification: "شهادة / اعتماد",
+      family_news: "خبر عائلي",
+      healing: "شفاء",
+      safety: "سلامة",
+      condolence: "تعزية",
+      wedding: "حفل زواج",
+      aqiqa: "عقيقة",
+      feast: "وليمة",
+      family_meetup: "لقاء عائلي",
+      retirement: "حفل تقاعد",
+      dinner: "دعوة عشاء",
+      lunch: "دعوة غداء",
+
+      congratulation: "تهنئة عائلية",
+      invitation: "دعوة عائلية",
       new_house: "منزل جديد",
       gathering: "اجتماع عائلي",
       general: "مناسبة عامة",
@@ -4410,7 +4430,7 @@ where c.id = matches.id; commit;
     const mobileValue =
       adminTickerMobileSpeed && adminTickerMobileSpeed.value
         ? adminTickerMobileSpeed.value
-        : "3";
+        : "30";
     if (!sb || !token) return setBannerMessagesStatus("سجل الدخول أولاً.");
     setBannerMessagesStatus("جاري حفظ سرعة الشريط...");
     const { error } = await sb.rpc("admin_site_setting_set_v1", {

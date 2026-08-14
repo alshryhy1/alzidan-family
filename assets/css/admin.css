@@ -86,7 +86,7 @@ body.admin-authenticated #admin-action-buttons { order: 2;
 #admin-requests-section td:nth-child(9) { min-width: 95px;
 } #admin-requests-section th:nth-child(10),
 #admin-requests-section td:nth-child(10) { min-width: 230px;
-} #admin-requests-section .cell-actions { gap: 6px; flex-wrap: nowrap;
+} #admin-requests-section .cell-actions { gap: 6px; flex-wrap: wrap;
 } #admin-requests-section .cell-actions .btn,
 #admin-requests-section td .btn { padding: 6px 10px; font-size: 12px; min-height: 32px; white-space: nowrap;
 } /* admin requests pagination search */
@@ -826,6 +826,20 @@ body:not(.admin-authenticated) section.admin-only-section {
 
   #admin-requests-section .cell-actions {
     width: 100%;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  #admin-requests-section .cell-actions .btn {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #admin-requests-section .cell-actions .btn[disabled] {
+    display: flex;
+    opacity: 0.55;
   }
 
   #requests-toolbar,
