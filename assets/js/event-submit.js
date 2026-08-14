@@ -287,6 +287,10 @@
   }
 
   function normalizeEventPhone(v) {
+    if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.canonicalizePhone === "function") {
+      const e164 = window.AlzidanPhoneIntl.canonicalizePhone(v);
+      if (e164) return e164;
+    }
     return normalizeEventDigits(v)
       .replace(/[^\d+]/g, "")
       .trim();
@@ -640,9 +644,10 @@
         const text = normalizeEventText(
           form.querySelector('[name="text"]')?.value
         );
-        const phone = normalizeEventPhone(
-          form.querySelector('[name="phone"]')?.value
-        );
+        const phoneWrap = form.querySelector("[data-phone-intl]");
+        const phone = phoneWrap && window.AlzidanPhoneIntl
+          ? (window.AlzidanPhoneIntl.readE164(phoneWrap, true).e164 || "")
+          : normalizeEventPhone(form.querySelector('[name="phone"]')?.value);
         const branchRaw = normalizeEventText(
           form.querySelector('[name="branch"]')?.value
         );
@@ -782,8 +787,8 @@
             }
           }
         }
-        if (phone.length < 9) {
-          setAlert("error", "رقم الجوال غير صحيح.");
+        if (!(window.AlzidanPhoneIntl ? window.AlzidanPhoneIntl.isValidPhone(phone) : phone.length >= 9)) {
+          setAlert("error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
           return;
         }
         if (!isPatient && !isDeath && videoFile) {

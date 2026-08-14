@@ -10,7 +10,9 @@ const delegateRequestSecret = document.getElementById("delegate-request-secret")
 const delegateRequestSecret2 = document.getElementById("delegate-request-secret2");
 const sendDelegateRequestBtn = document.getElementById("send-delegate-request-btn"); const loginAlert = document.getElementById("login-alert"); const branchSelectLogin = document.getElementById("branch"); const phoneInput = document.getElementById("phone"); const emailInput = document.getElementById("email"); const codeInput = document.getElementById("code"); const dashboardCard = document.getElementById("dashboard-card"); const branchTitle = document.getElementById("branch-title"); const eventsCard = document.getElementById("events-card"); const familyManagementRoot = document.getElementById("family-management-root"); let familyMgmtPanel = null; const logoutBtn = document.getElementById("logout-btn"); const eventsManagementRoot = document.getElementById("events-management-root"); let eventsMgmtPanel = null; const memoryCard = document.getElementById("memory-card"); let memorySubmitMounted = false;
 function normalizeArabicDigitsToLatin(value) {
-  // Explicit map + code-point fallback (Arabic-Indic / Eastern / Fullwidth).
+  if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.normalizeArabicDigitsToLatin === "function") {
+    return window.AlzidanPhoneIntl.normalizeArabicDigitsToLatin(value);
+  }
   var map = {
     "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
     "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
@@ -30,31 +32,42 @@ function normalizeArabicDigitsToLatin(value) {
 }
 
 function digitsOnlyLatin(v) {
+  if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.digitsOnly === "function") {
+    return window.AlzidanPhoneIntl.digitsOnly(v);
+  }
   return normalizeArabicDigitsToLatin(String(v || ""))
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
     .replace(/[^0-9]/g, "");
 }
 
+/** Canonical storage: E.164 (+966… / +964…). Legacy 05… still accepted as input. */
 function normalizePhone(v) {
+  if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.canonicalizePhone === "function") {
+    var e164 = window.AlzidanPhoneIntl.canonicalizePhone(v);
+    if (e164) return e164;
+  }
   var digits = digitsOnlyLatin(v).trim();
   if (!digits) return "";
   if (digits.indexOf("00966") === 0 && digits.length === 14 && digits.charAt(5) === "5") {
-    return "0" + digits.slice(5);
+    return "+966" + digits.slice(5);
   }
   if (digits.indexOf("966") === 0 && digits.length === 12 && digits.charAt(3) === "5") {
-    return "0" + digits.slice(3);
+    return "+966" + digits.slice(3);
   }
   if (digits.charAt(0) === "5" && digits.length === 9) {
-    return "0" + digits;
+    return "+966" + digits;
   }
   if (digits.indexOf("05") === 0 && digits.length === 10) {
-    return digits;
+    return "+966" + digits.slice(1);
   }
   return digits;
 }
 
 function isValidSaudiMobile(v) {
-  return /^05[0-9]{8}$/.test(normalizePhone(v));
+  if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.isValidPhone === "function") {
+    return window.AlzidanPhoneIntl.isValidPhone(v);
+  }
+  return /^\+9665[0-9]{8}$/.test(normalizePhone(v)) || /^05[0-9]{8}$/.test(String(v || "").replace(/\D/g, ""));
 }
 
 function normalizeDelegateSecret(value) {
@@ -67,8 +80,30 @@ function isValidDelegateSecret(v) {
   return normalizeDelegateSecret(v).length >= 4;
 }
 
-/** Read phone from an input, rewrite field to Western digits, return normalized value. */
+function readLoginPhone() {
+  var wrap = document.querySelector('[data-phone-intl="login"]');
+  if (wrap && window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.readPhoneIntl === "function") {
+    return window.AlzidanPhoneIntl.readPhoneIntl(wrap);
+  }
+  var phone = normalizePhone(phoneInput ? phoneInput.value : "");
+  return { ok: isValidSaudiMobile(phone), countryId: "SA", national: "", e164: phone, phone: phone };
+}
+
+function readRequestPhone() {
+  var wrap = document.querySelector('[data-phone-intl="request"]');
+  if (wrap && window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.readPhoneIntl === "function") {
+    return window.AlzidanPhoneIntl.readPhoneIntl(wrap);
+  }
+  var phone = normalizePhone(delegateRequestPhone ? delegateRequestPhone.value : "");
+  return { ok: isValidSaudiMobile(phone), countryId: "SA", national: "", e164: phone, phone: phone };
+}
+
+/** Read phone from an input, rewrite field to Western digits, return normalized E.164. */
 function readNormalizedPhoneField(el) {
+  var wrap = el && el.closest ? el.closest("[data-phone-intl]") : null;
+  if (wrap && window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.readPhoneIntl === "function") {
+    return window.AlzidanPhoneIntl.readPhoneIntl(wrap).e164 || "";
+  }
   var raw = el ? String(el.value || "") : "";
   var phone = normalizePhone(raw);
   if (el) {
@@ -84,17 +119,22 @@ function readNormalizedPhoneField(el) {
  */
 function rejectUnlessValidSaudiMobile(rawOrNormalized, rewriteEl) {
   var phone = normalizePhone(rawOrNormalized);
-  if (rewriteEl) {
+  if (rewriteEl && rewriteEl.closest && rewriteEl.closest("[data-phone-intl]") && window.AlzidanPhoneIntl) {
+    // Country+national UI: do not dump E.164 into the national box.
+  } else if (rewriteEl) {
     var shown = phone || digitsOnlyLatin(rawOrNormalized);
     if (String(rewriteEl.value || "") !== shown) rewriteEl.value = shown;
   }
   if (isValidSaudiMobile(phone)) return { ok: true, phone: phone };
-  setLoginAlert("error", "يرجى إدخال رقم جوال صحيح.");
+  setLoginAlert("error", "يرجى إدخال رقم جوال صحيح مع اختيار الدولة.");
   return { ok: false, phone: phone };
 }
 
 function bindSilentDigitNormalize(el, mode) {
   if (!el || el.dataset.digitNormalizeBound === "1") return;
+  // phone-intl fields handle their own scrubbing
+  if (el.getAttribute && el.getAttribute("data-phone-national") != null) return;
+  if (el.closest && el.closest("[data-phone-intl]")) return;
   el.dataset.digitNormalizeBound = "1";
   // type=tel can drop Arabic-Indic digits on some mobile browsers before JS runs.
   if (mode === "phone" && el.tagName === "INPUT" && String(el.type || "").toLowerCase() === "tel") {
@@ -145,11 +185,29 @@ try {
   };
 } catch (e) {}
 
+(function initDelegatePhoneIntlUi() {
+  function run() {
+    try {
+      if (!window.AlzidanPhoneIntl) return;
+      var nodes = document.querySelectorAll("[data-phone-intl]");
+      for (var i = 0; i < nodes.length; i++) {
+        window.AlzidanPhoneIntl.bindPhoneIntl(nodes[i]);
+      }
+    } catch (e) {}
+  }
+  run();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run);
+  } else {
+    setTimeout(run, 0);
+  }
+})();
+
 function normalizePersonName(v) { const s = String(v || "") .replace(/\s+/g, " ") .trim(); if (!s) return ""; const parts = s.split(" ").map((p) =>p.trim()).filter(Boolean); if (parts.length >= 3 && parts.every((p) =>p.length === 1 && /^[\u0600-\u06FF]$/.test(p))) { return parts.join(""); } return s; } function parseTruthyValue(v) { if (v === true) return true; if (v === false || v == null) return false; if (typeof v === "number") return v === 1; const s = String(v).trim().toLowerCase(); if (!s) return false; if (s === "true" || s === "t" || s === "1" || s === "yes" || s === "y" || s === "on") return true; if (s === "نعم" || s === "متوفي" || s === "متوفى" || s === "متوفاة" || s === "متوفاه") return true; return false; } function getBranchRootName(branchKey) { const k = normalizePersonName(branchKey); if (!k) return ""; return k + " بن مطلق بن زيدان"; } function normalizeParentName(v, branchKey) { const raw = normalizePersonName(v || ""); const cleaned = raw.replace(/^أصل الفرع:\s*/i, "").trim(); if (!cleaned) return ""; if (/بن\s+مطلق\s+بن\s+زيدان/.test(cleaned)) return cleaned; if (Object.prototype.hasOwnProperty.call(parentsByBranch, cleaned)) return cleaned + " بن مطلق بن زيدان"; if (branchKey && normalizePersonName(branchKey) === cleaned) return cleaned + " بن مطلق بن زيدان"; return cleaned; } function resolveSelectedParentId(selectedParent, branchKey) { const s = normalizePersonName(selectedParent || ""); if (!s) return ""; if (s.includes("/")) return s; const b = normalizePersonName(branchKey || ""); const branchRoot = b ? getBranchRootName(b) : ""; if (branchRoot && (s === branchRoot || s === b)) return branchRoot; return branchRoot ? (branchRoot + "/" + s) : s; } function applyView(view) { const v = view === "delegate" ? "delegate" : "tree"; if (treeCard) treeCard.style.display = v === "tree" ? "block" : "none"; if (loginCard) loginCard.style.display = v === "delegate" ? "block" : "none"; if (dashboardCard) dashboardCard.style.display = "none"; if (eventsCard) eventsCard.style.display = "none"; if (memoryCard) memoryCard.style.display = "none"; } function renderPublicTree(branchKey, opts) { if (!treeList) return; treeList.innerHTML = ""; const key = String(branchKey || "").trim(); if (!key || !Object.prototype.hasOwnProperty.call(parentsByBranch, key)) { const empty = document.createElement("div"); empty.className = "hint"; empty.textContent = "اختر الفرع لعرض الشجرة."; treeList.appendChild(empty); if (treeTitleEl) treeTitleEl.textContent = "شجرة العائلة"; return; } const requestedFocus = normalizePersonName(opts && opts.focus ? String(opts.focus) : ""); if (treeTitleEl) treeTitleEl.textContent = "شجرة فرع " + key + " بن مطلق بن زيدان"; const staticParents = parentsByBranch[key] || []; const loading = document.createElement("div"); loading.className = "hint"; loading.textContent = "جاري تحميل بيانات الأبناء..."; treeList.appendChild(loading); loadChildrenForBranch(key, { applyToState: false }) .then((res) =>{ treeList.innerHTML = ""; if (!res.ok) { const err = document.createElement("div"); err.className = "alert alert-error"; if (res.reason === "not_configured") err.textContent = "تعذر تحميل البيانات لأن الربط غير مُعد."; else err.textContent = formatTreeChildrenDbError(res.error, "load"); treeList.appendChild(err); return; } if (res.capabilities && res.capabilities.deceased === false) { const warn = document.createElement("div"); warn.className = "alert alert-error"; const hint = res.capabilities && res.capabilities.deceased_hint ? String(res.capabilities.deceased_hint) : ""; if (hint === "schema_cache") { warn.textContent = "تعذر تحميل حالة الوفاة لأن الخدمة لم يُحدّث المخطط بعد. انتظر دقيقة ثم حدّث الصفحة، أو نفّذ Reload تحديث الخدمة من لوحة الخدمة."; } else if (hint === "rls") { warn.textContent = "تعذر تحميل حالة الوفاة لأن RLS تمنع القراءة من جدول tree_children. فعّل سياسة SELECT لدور anon ثم أعد المحاولة."; } else if (hint === "permission") { warn.textContent = "تعذر تحميل حالة الوفاة لأن دور anon لا يملك صلاحية SELECT على جدول tree_children. امنح الصلاحية ثم أعد المحاولة."; } else { warn.textContent = "تعذر تحميل حالة الوفاة (رحمه الله) من الخدمة. تحقق من الأعمدة/الصلاحيات ثم أعد المحاولة."; } treeList.appendChild(warn); } const byParent = res.map || {}; const branchRoot = getBranchRootName(key); const staticParentIds = []; const metaById = new Map(); Object.values(byParent || {}).forEach((list) =>{ const items = Array.isArray(list) ? list : []; items.forEach((c) =>{ const id = normalizePersonName(c && c.name ? c.name : ""); if (!id) return; const prev = metaById.get(id); if (!prev) { metaById.set(id, { ...(c || {}), name: id }); return; } const merged = { ...(prev || {}), name: id }; if (!merged.year && c && c.year) merged.year = String(c.year); if (!merged.gdate && c && c.gdate) merged.gdate = String(c.gdate); if (!merged.hdate && c && c.hdate) merged.hdate = String(c.hdate); if (!merged.city && c && c.city) merged.city = String(c.city); if (!merged.area && c && c.area) merged.area = String(c.area); if (!merged.deceased && c && c.deceased) merged.deceased = true; metaById.set(id, merged); }); }); const parentsFromData = Object.keys(byParent || {}).map(normalizePersonName).filter(Boolean); const allNodes = new Set(parentsFromData); const inDegree = new Map(); parentsFromData.forEach((p) =>inDegree.set(p, 0)); parentsFromData.forEach((p) =>{ const list = byParent[p] || []; (Array.isArray(list) ? list : []).forEach((c) =>{ const cn = normalizePersonName(c && c.name ? c.name : ""); if (!cn) return; allNodes.add(cn); inDegree.set(cn, (inDegree.get(cn) || 0) + 1); if (!inDegree.has(p)) inDegree.set(p, 0); }); }); const roots = []; const seenRoots = new Set(); const pushRoot = (n) =>{ const k = normalizePersonName(n); if (!k || seenRoots.has(k)) return; seenRoots.add(k); roots.push(k); }; if (branchRoot) pushRoot(branchRoot); parentsFromData.forEach((p) =>{ if ((inDegree.get(p) || 0) === 0) pushRoot(p); }); if (!roots.length) parentsFromData.forEach(pushRoot); if (!roots.length) { const empty = document.createElement("div"); empty.className = "hint"; empty.textContent = "لا توجد أسماء مسجلة في هذا الفرع بعد."; treeList.appendChild(empty); return; } const nodeExistsInTree = (nodeId) =>{ const n = normalizePersonName(nodeId); if (!n) return false; if (Object.prototype.hasOwnProperty.call(byParent, n)) return true; const lists = Object.values(byParent || {}); for (let i = 0; i< lists.length; i++) { const list = Array.isArray(lists[i]) ? lists[i] : []; for (let j = 0; j< list.length; j++) { const cid = normalizePersonName(list[j] && list[j].name ? list[j].name : ""); if (cid === n) return true; } } return false; }; const focusId = requestedFocus && nodeExistsInTree(requestedFocus) ? requestedFocus : ""; if (focusId && treeTitleEl) { const focusDisplay = getDisplayNameForNodeId(focusId, branchRoot); const focusIsBranchRoot = branchRoot && normalizePersonName(focusId) === normalizePersonName(branchRoot); const focusSuffix = focusIsBranchRoot ? " (رحمهم الله)" : getForcedRahmaSuffix(focusId, key); treeTitleEl.textContent = "شجرة " + focusDisplay + focusSuffix; } if (focusId) { const backWrap = document.createElement("div"); backWrap.style.marginBottom = "10px"; const backLink = document.createElement("a"); backLink.className = "btn btn-secondary btn-small"; backLink.href = "alzidan-tree.html?branch=" + encodeURIComponent(key); backLink.textContent = "عرض الفرع كامل"; backWrap.appendChild(backLink); treeList.appendChild(backWrap); } const makeAddLink = (personName) =>{ const a = document.createElement("a"); a.className = "btn btn-secondary btn-small"; a.textContent = "إضافة أبناء"; a.href = "alzidan-tree.html?view=delegate&branch=" + encodeURIComponent(key) + "&parent=" + encodeURIComponent(personName); return a; }; const renderNode = (nodeId, meta, depth, pathSet, mountEl) =>{ const person = normalizePersonName(nodeId); if (!person) return; const mount = mountEl || treeList; const depthPx = Math.min(56, Math.max(0, depth) * 18); const hasCycle = pathSet && pathSet.has(person); const children = byParent[person] || []; const canExpand = !hasCycle && Array.isArray(children) && children.length; const effectiveMeta = meta || metaById.get(person) || null; const host = canExpand ? document.createElement("details") : null; if (host) { host.className = "tree-node"; if (depthPx) host.style.marginRight = depthPx + "px"; if (depth === 0 && focusId && person === focusId) host.open = true; } const headerRow = document.createElement("div"); headerRow.className = "parent-row"; if (!host && depthPx) headerRow.style.marginRight = depthPx + "px"; headerRow.style.cursor = "pointer"; headerRow.addEventListener("click", (e) =>{ if (e && typeof e.preventDefault === "function") e.preventDefault(); if (e && typeof e.stopPropagation === "function") e.stopPropagation(); if (e && e.target && typeof e.target.closest === "function") { if (e.target.closest("a,button")) return; } window.location.href = "alzidan-tree.html?branch=" + encodeURIComponent(key) + "&focus=" + encodeURIComponent(person); }); const title = document.createElement("div"); title.className = "parent-name"; const displayName = getDisplayNameForNodeId(person, branchRoot); const isBranchRootNode = branchRoot && normalizePersonName(person) === normalizePersonName(branchRoot); const forcedSuffix = getForcedRahmaSuffix(person, key); const suffix = isBranchRootNode ? " (رحمهم الله)" : forcedSuffix ? forcedSuffix : (effectiveMeta && effectiveMeta.deceased) ? " (رحمه الله)" : ""; title.textContent = displayName + suffix; headerRow.appendChild(title); const actions = document.createElement("div"); actions.style.display = "inline-flex"; actions.style.alignItems = "center"; actions.style.gap = "6px"; const isDeceased = !!(effectiveMeta && effectiveMeta.deceased); if (!isDeceased) { const badge = document.createElement("span"); badge.className = "badge"; const ageText = calculateAge(effectiveMeta || {}); const parts = []; if (ageText) parts.push("العمر: " + ageText); parts.push("الأبناء: " + String(Array.isArray(children) ? children.length : 0)); badge.textContent = parts.join(" – "); actions.appendChild(badge); } actions.appendChild(makeAddLink(person)); headerRow.appendChild(actions); if (canExpand) { const summary = document.createElement("summary"); summary.appendChild(headerRow); host.appendChild(summary); const childrenWrap = document.createElement("div"); childrenWrap.className = "tree-node-children"; host.appendChild(childrenWrap); const nextPath = new Set(pathSet ? Array.from(pathSet) : []); nextPath.add(person); children.forEach((child) =>{ const childId = normalizePersonName(child && child.name ? child.name : ""); if (!childId) return; renderNode(childId, child, depth + 1, nextPath, childrenWrap); }); mount.appendChild(host); } else { mount.appendChild(headerRow); } }; const visited = new Set(); const orderedRoots = focusId ? [focusId] : roots; orderedRoots.forEach((r) =>{ const k = normalizePersonName(r); if (!k || visited.has(k)) return; visited.add(k); renderNode(k, null, 0, new Set(), treeList); }); if (!focusId) { parentsFromData.forEach((p) =>{ const k = normalizePersonName(p); if (!k || visited.has(k)) return; visited.add(k); renderNode(k, null, 0, new Set(), treeList); }); staticParentIds.forEach((p) =>{ const k = normalizePersonName(p); if (!k || visited.has(k)) return; visited.add(k); renderNode(k, null, 0, new Set(), treeList); }); } }) .catch(() =>{ treeList.innerHTML = ""; const err = document.createElement("div"); err.className = "alert alert-error"; err.textContent = "تعذر تحميل بيانات الأبناء."; treeList.appendChild(err); }); } (function initViewFromUrl() { const params = new URLSearchParams(window.location.search); const view = params.get("view") || "tree"; const branchKey = params.get("branch") || ""; desiredParentFromUrl = String(params.get("parent") || "").trim(); desiredFocusFromUrl = String(params.get("focus") || params.get("f") || "").trim(); desiredRequestIdFromUrl = String(params.get("request_id") || params.get("requestId") || "").trim(); applyView(view); if (treeBranchSelect && branchKey) { if (Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) { treeBranchSelect.value = branchKey; } } renderPublicTree(treeBranchSelect ? treeBranchSelect.value : "", { focus: desiredFocusFromUrl }); if (branchSelectLogin && branchKey) { if (Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) { branchSelectLogin.value = branchKey; } } })(); if (treeBranchSelect) { treeBranchSelect.addEventListener("change", () =>{ const key = String(treeBranchSelect.value || "").trim(); desiredFocusFromUrl = ""; renderPublicTree(key, { focus: "" }); }); } if (openDelegateBtn) { openDelegateBtn.addEventListener("click", () =>{ applyView("delegate"); if (loginCard && typeof loginCard.scrollIntoView === "function") { loginCard.scrollIntoView({ behavior: "smooth", block: "start" }); } }); } function normalizeEmail(v) { return String(v || "").trim().toLowerCase(); }
 function isLikelyEmail(v) {
   const s = normalizeEmail(v);
   return !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
-} const DELEGATE_SESSION_KEY = "alzidan_delegate_session_v1"; let delegateRuntimeAuth = null; function loadDelegateSession() { return delegateRuntimeAuth; } function saveDelegateSession(branchKey, phone, email, secretHash, name) { const branch = String(branchKey || "").trim(); const hash = String(secretHash || "").trim(); if (!branch || !hash) { delegateRuntimeAuth = null; return; } delegateRuntimeAuth = { branch, phone: normalizePhone(phone), email: normalizeEmail(email), secretHash: hash, name: String(name || "").replace(/\s+/g, " ").trim() }; } function clearDelegateSession() { delegateRuntimeAuth = null; try { localStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {} try { sessionStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {} } const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co"; const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c"; const FAMILY_TREE_CHILDREN_TABLE = "tree_children"; let sbClient = null; function getالخدمةClient() { if (sbClient) return sbClient; const url = String(SUPABASE_URL || "").trim(); const anonKey = String(SUPABASE_ANON_KEY || "").trim(); if (!url || !anonKey) return null; if (!window.supabase || typeof window.supabase.createClient !== "function") return null; sbClient = window.supabase.createClient(url, anonKey); return sbClient; } async function sha256Hex(text) { try { if (!window.crypto || !window.crypto.subtle) return null; const enc = new TextEncoder(); const buf = await window.crypto.subtle.digest("SHA-256", enc.encode(String(text || ""))); return Array.from(new Uint8Array(buf)) .map((b) =>b.toString(16).padStart(2, "0")) .join(""); } catch (e) { return null; } } function makeRequestId() { const part1 = Math.random().toString(36).slice(2, 6).toUpperCase(); const part2 = Math.random().toString(36).slice(2, 6).toUpperCase(); return "REQ-" + part1 + "-" + part2; } function duplicateFieldsText(fields) { const f = Array.isArray(fields) ? fields : []; const hasPhone = f.includes("phone"); const hasEmail = f.includes("email"); if (hasPhone && hasEmail) return "الجوال والإيميل مسجلين مسبقًا"; if (hasPhone) return "رقم الجوال مسجل مسبقًا"; if (hasEmail) return "الإيميل مسجل مسبقًا"; return "البيانات مسجلة مسبقًا"; } function phoneCandidates(phone) { const raw = normalizePhone(phone); if (!raw) return []; const digits = raw.replace(/[^0-9]/g, ""); if (!digits) return []; const set = new Set([digits, raw]); const add966 = (nine) =>{ if (!nine || nine.length !== 9) return; set.add("0" + nine); set.add(nine); set.add("966" + nine); set.add("+966" + nine); }; if (digits.startsWith("0") && digits.length === 10 && digits[1] === "5") { add966(digits.slice(1)); } else if (digits.startsWith("966") && digits.length === 12 && digits[3] === "5") { add966(digits.slice(3)); } else if (digits.startsWith("5") && digits.length === 9) { add966(digits); } return Array.from(set).filter(Boolean); } function fallbackCopyText(text) { const el = document.createElement("textarea"); el.value = text; el.setAttribute("readonly", ""); el.style.position = "fixed"; el.style.opacity = "0"; el.style.left = "-9999px"; document.body.appendChild(el); el.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(el); } async function copyText(text) { try { if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") { await navigator.clipboard.writeText(text); return true; } } catch (e) {} fallbackCopyText(text); return true; } const NOTIFY_EMAIL_TO = "info@alzidan.org"; function maybeOpenEmailDraft(subject, body) {
+} const DELEGATE_SESSION_KEY = "alzidan_delegate_session_v1"; let delegateRuntimeAuth = null; function loadDelegateSession() { return delegateRuntimeAuth; } function saveDelegateSession(branchKey, phone, email, secretHash, name) { const branch = String(branchKey || "").trim(); const hash = String(secretHash || "").trim(); if (!branch || !hash) { delegateRuntimeAuth = null; return; } delegateRuntimeAuth = { branch, phone: normalizePhone(phone), email: normalizeEmail(email), secretHash: hash, name: String(name || "").replace(/\s+/g, " ").trim() }; } function clearDelegateSession() { delegateRuntimeAuth = null; try { localStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {} try { sessionStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {} } const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co"; const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c"; const FAMILY_TREE_CHILDREN_TABLE = "tree_children"; let sbClient = null; function getالخدمةClient() { if (sbClient) return sbClient; const url = String(SUPABASE_URL || "").trim(); const anonKey = String(SUPABASE_ANON_KEY || "").trim(); if (!url || !anonKey) return null; if (!window.supabase || typeof window.supabase.createClient !== "function") return null; sbClient = window.supabase.createClient(url, anonKey); return sbClient; } async function sha256Hex(text) { try { if (!window.crypto || !window.crypto.subtle) return null; const enc = new TextEncoder(); const buf = await window.crypto.subtle.digest("SHA-256", enc.encode(String(text || ""))); return Array.from(new Uint8Array(buf)) .map((b) =>b.toString(16).padStart(2, "0")) .join(""); } catch (e) { return null; } } function makeRequestId() { const part1 = Math.random().toString(36).slice(2, 6).toUpperCase(); const part2 = Math.random().toString(36).slice(2, 6).toUpperCase(); return "REQ-" + part1 + "-" + part2; } function duplicateFieldsText(fields) { const f = Array.isArray(fields) ? fields : []; const hasPhone = f.includes("phone"); const hasEmail = f.includes("email"); if (hasPhone && hasEmail) return "الجوال والإيميل مسجلين مسبقًا"; if (hasPhone) return "رقم الجوال مسجل مسبقًا"; if (hasEmail) return "الإيميل مسجل مسبقًا"; return "البيانات مسجلة مسبقًا"; } function phoneCandidates(phone) { if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.phoneCandidates === "function") { return window.AlzidanPhoneIntl.phoneCandidates(phone); } const raw = normalizePhone(phone); if (!raw) return []; const digits = raw.replace(/[^0-9]/g, ""); if (!digits) return []; const set = new Set([digits, raw]); const add966 = (nine) =>{ if (!nine || nine.length !== 9) return; set.add("0" + nine); set.add(nine); set.add("966" + nine); set.add("+966" + nine); }; if (digits.startsWith("0") && digits.length === 10 && digits[1] === "5") { add966(digits.slice(1)); } else if (digits.startsWith("966") && digits.length === 12 && digits[3] === "5") { add966(digits.slice(3)); } else if (digits.startsWith("5") && digits.length === 9) { add966(digits); } return Array.from(set).filter(Boolean); } function fallbackCopyText(text) { const el = document.createElement("textarea"); el.value = text; el.setAttribute("readonly", ""); el.style.position = "fixed"; el.style.opacity = "0"; el.style.left = "-9999px"; document.body.appendChild(el); el.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(el); } async function copyText(text) { try { if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") { await navigator.clipboard.writeText(text); return true; } } catch (e) {} fallbackCopyText(text); return true; } const NOTIFY_EMAIL_TO = "info@alzidan.org"; function maybeOpenEmailDraft(subject, body) {
   try {
     const text = [String(subject || "").trim(), String(body || "").trim()].filter(Boolean).join("\\n\\n");
     if (text) copyText(text).catch(() => {});
@@ -219,11 +277,15 @@ function formatDelegateDeniedError(info, domain) {
 
 async function getDelegateRpcAuth() { const session = loadDelegateSession(); if (!session) return { ok: false, reason: "no_session" }; const secretHash = String(session.secretHash || "").trim(); if (!secretHash) return { ok: false, reason: "hash_failed" }; return { ok: true, branch: session.branch, phone: session.phone, email: session.email, secretHash }; }
 function normalizeMemberPhoneForDelegate(v) {
+  if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.normalizeMemberPhoneE164 === "function") {
+    return window.AlzidanPhoneIntl.normalizeMemberPhoneE164(v);
+  }
   var digits = normalizeArabicDigitsToLatin(String(v || "")).replace(/[^\d]/g, "").trim();
   if (!digits) return "";
-  if (digits.indexOf("966") === 0 && digits.length >= 12) digits = "0" + digits.slice(3);
-  if (digits.length === 9 && digits.charAt(0) === "5") digits = "0" + digits;
-  return digits.length === 10 && digits.indexOf("05") === 0 ? digits : "";
+  if (digits.indexOf("966") === 0 && digits.length >= 12) return "+" + digits;
+  if (digits.length === 9 && digits.charAt(0) === "5") return "+966" + digits;
+  if (digits.length === 10 && digits.indexOf("05") === 0) return "+966" + digits.slice(1);
+  return "";
 }
 
 async function findTreeRowForMemberProfile(sb, branchKey, childId, personId) {
@@ -1846,7 +1908,7 @@ async function requestDelegateSecretReset(branchKey, phone, email, secret) {
   return true;
 }
 
-async function requestDelegateAccess(branchKey, phone, email, secret, opts) { const options = opts || {}; phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const payload = { requestId: makeRequestId(), status: "pending", branch: branchKey, phone, email, secret, createdAt: new Date().toISOString() }; const msg = buildDelegateRequestMessage(payload); const secretHash = await sha256Hex(secret); const pushed = await pushDelegateRequestToالخدمة(payload, msg, secretHash); if (pushed.ok) { setLoginAlert("success", "تم إرسال طلبك بنجاح، وهو الآن قيد المراجعة."); return true; } if (pushed.reason === "conflict_check_unavailable") { setLoginAlert( "error", "التحقق من الطلبات السابقة غير متاح مؤقتًا. لم يتم إنشاء طلب جديد، حاول مرة أخرى لاحقًا." ); return false; } if (pushed.reason === "duplicate_pending") { const id = pushed.existing?.request_id || ""; const existingBranch = String(pushed.existing?.branch_key || "").trim(); const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "success", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}) (رقم الطلب: ${id}).` : `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}).` : id ? `${prefix}. طلبك قيد المراجعة بالفعل (رقم الطلب: ${id}).` : `${prefix}. طلبك قيد المراجعة بالفعل.` ); return false; } if (pushed.reason === "duplicate_approved") { const existingBranch = String(pushed.existing?.branch_key || "").trim(); if (options.forceNew === true) { if ( secretHash && (!pushed.existing?.secret_hash || pushed.existing.secret_hash !== secretHash) && existingBranch && existingBranch === branchKey ) { const sb = getالخدمةClient(); if (!sb) { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const existingId = pushed.existing?.request_id; if (!existingId) { setLoginAlert("error", "تعذر تحديث الطلب لأن رقم الطلب السابق غير متوفر."); return false; } const row = { secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").update(row).eq("request_id", existingId); if (!error) { setLoginAlert("success", `تم إرسال طلب تغيير الرقم السري للمراجعة (رقم الطلب: ${existingId}). سيظهر الطلب لدى الإدارة.`); return true; } } } const id = pushed.existing?.request_id || ""; const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "error", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}) (رقم الطلب: ${id}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : id ? `${prefix}. تم اعتمادك مسبقًا (رقم الطلب: ${id}). جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` : `${prefix}. تم اعتمادك مسبقًا. جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` ); return false; } if (pushed.reason === "not_configured") { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const raw = pushed.error || {}; const errMsg = String(raw.message || ""); if (String(raw.code || "") === "23505" || errMsg.toLowerCase().includes("duplicate")) { setLoginAlert("error", "البيانات مسجلة مسبقًا. تأكد من المعلومات وأعد التسجيل."); return false; } setLoginAlert("error", "تعذر إرسال طلب الدخول حاليًا."); return false; } async function tryالخدمةDelegateLogin(branchKey, phone, email, secret) { phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const secretHash = await sha256Hex(secret); if (!secretHash) return { ok: false, reason: "hash_failed" }; const { data, error } = await sb.rpc("check_tree_delegate_access", { p_branch_key: branchKey, p_phone: phone, p_email: email, p_secret_hash: secretHash }); if (error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } if (!data) return { ok: false, reason: "not_found" }; if (data.allowed === true) { const requestId = String(data.request_id || data.delegate_id || "").trim() || ("v2-" + String(branchKey || "").trim()); const storedEmail = normalizeEmail(data.email || email || ""); const storedPhone = normalizePhone(data.phone || phone || ""); return { ok: true, status: "approved", requestId, secretHash, email: storedEmail, phone: storedPhone, source: data.source || "", roleKey: data.role_key || "" }; } if (data.status === "pending") return { ok: false, reason: "pending", requestId: data.request_id || "" }; if (data.status === "rejected") return { ok: false, reason: "rejected", requestId: data.request_id || "" }; if (data.status === "disabled" || data.reason === "disabled") return { ok: false, reason: "disabled", requestId: data.request_id || "" }; if (data.status === "no_permission" || data.reason === "no_permission") return { ok: false, reason: "no_permission", roleKey: data.role_key || "", requestId: data.request_id || "" }; if (data.status === "approved") return { ok: false, reason: "wrong_secret", requestId: data.request_id || "" }; return { ok: false, reason: "not_found" }; }
+async function requestDelegateAccess(branchKey, phone, email, secret, opts) { const options = opts || {}; phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const payload = { requestId: makeRequestId(), status: "pending", branch: branchKey, phone, email, secret, createdAt: new Date().toISOString() }; const msg = buildDelegateRequestMessage(payload); const secretHash = await sha256Hex(secret); const pushed = await pushDelegateRequestToالخدمة(payload, msg, secretHash); if (pushed.ok) { setLoginAlert("success", "تم إرسال طلبك بنجاح، وهو الآن قيد المراجعة."); return true; } if (pushed.reason === "conflict_check_unavailable") { setLoginAlert( "error", "التحقق من الطلبات السابقة غير متاح مؤقتًا. لم يتم إنشاء طلب جديد، حاول مرة أخرى لاحقًا." ); return false; } if (pushed.reason === "duplicate_pending") { const id = pushed.existing?.request_id || ""; const existingBranch = String(pushed.existing?.branch_key || "").trim(); const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "success", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}) (رقم الطلب: ${id}).` : `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}).` : id ? `${prefix}. طلبك قيد المراجعة بالفعل (رقم الطلب: ${id}).` : `${prefix}. طلبك قيد المراجعة بالفعل.` ); return false; } if (pushed.reason === "duplicate_approved") { const existingBranch = String(pushed.existing?.branch_key || "").trim(); if (options.forceNew === true) { if ( secretHash && (!pushed.existing?.secret_hash || pushed.existing.secret_hash !== secretHash) && existingBranch && existingBranch === branchKey ) { const sb = getالخدمةClient(); if (!sb) { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const existingId = pushed.existing?.request_id; if (!existingId) { setLoginAlert("error", "تعذر تحديث الطلب لأن رقم الطلب السابق غير متوفر."); return false; } const row = { secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").update(row).eq("request_id", existingId); if (!error) { setLoginAlert("success", `تم إرسال طلب تغيير الرقم السري للمراجعة (رقم الطلب: ${existingId}). سيظهر الطلب لدى الإدارة.`); return true; } } } const id = pushed.existing?.request_id || ""; const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "error", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}) (رقم الطلب: ${id}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : id ? `${prefix}. تم اعتمادك مسبقًا (رقم الطلب: ${id}). جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` : `${prefix}. تم اعتمادك مسبقًا. جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` ); return false; } if (pushed.reason === "not_configured") { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const raw = pushed.error || {}; const errMsg = String(raw.message || ""); if (String(raw.code || "") === "23505" || errMsg.toLowerCase().includes("duplicate")) { setLoginAlert("error", "البيانات مسجلة مسبقًا. تأكد من المعلومات وأعد التسجيل."); return false; } setLoginAlert("error", "تعذر إرسال طلب الدخول حاليًا."); return false; } async function tryالخدمةDelegateLogin(branchKey, phone, email, secret) { phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const secretHash = await sha256Hex(secret); if (!secretHash) return { ok: false, reason: "hash_failed" }; const candidates = phoneCandidates(phone); const phonesToTry = candidates.length ? candidates : [phone]; let data = null; let error = null; let matchedPhone = phone; for (let i = 0; i < phonesToTry.length; i++) { const tryPhone = phonesToTry[i]; const res = await sb.rpc("check_tree_delegate_access", { p_branch_key: branchKey, p_phone: tryPhone, p_email: email, p_secret_hash: secretHash }); if (res.error) { error = res.error; continue; } if (res.data && (res.data.allowed === true || res.data.status || res.data.reason)) { data = res.data; matchedPhone = tryPhone; error = null; if (res.data.allowed === true) break; if (res.data.status === "pending" || res.data.status === "rejected" || res.data.status === "disabled" || res.data.reason === "disabled") break; } } if (!data && error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } phone = matchedPhone; if (error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } if (!data) return { ok: false, reason: "not_found" }; if (data.allowed === true) { const requestId = String(data.request_id || data.delegate_id || "").trim() || ("v2-" + String(branchKey || "").trim()); const storedEmail = normalizeEmail(data.email || email || ""); const storedPhone = normalizePhone(data.phone || phone || ""); return { ok: true, status: "approved", requestId, secretHash, email: storedEmail, phone: storedPhone, source: data.source || "", roleKey: data.role_key || "" }; } if (data.status === "pending") return { ok: false, reason: "pending", requestId: data.request_id || "" }; if (data.status === "rejected") return { ok: false, reason: "rejected", requestId: data.request_id || "" }; if (data.status === "disabled" || data.reason === "disabled") return { ok: false, reason: "disabled", requestId: data.request_id || "" }; if (data.status === "no_permission" || data.reason === "no_permission") return { ok: false, reason: "no_permission", roleKey: data.role_key || "", requestId: data.request_id || "" }; if (data.status === "approved") return { ok: false, reason: "wrong_secret", requestId: data.request_id || "" }; return { ok: false, reason: "not_found" }; }
 
 if (emailInput) {
   emailInput.value = "";
@@ -1875,7 +1937,10 @@ function ensureDelegateAccessRequestUi() {
         </div>
         <div class="field">
           <label>رقم الجوال</label>
-          <input name="phone" type="text" inputmode="numeric" autocomplete="tel" placeholder="05xxxxxxxx" required>
+          <div class="phone-intl" data-phone-intl="fallback-request">
+            <select name="phoneCountry" data-phone-country aria-label="الدولة"></select>
+            <input name="phone" data-phone-national type="text" inputmode="numeric" autocomplete="tel" placeholder="5XXXXXXXX" required>
+          </div>
         </div>
         <div class="field">
           <label>البريد الإلكتروني (إلزامي للإشعارات)</label>
@@ -1917,7 +1982,12 @@ function ensureDelegateAccessRequestUi() {
   const form = box.querySelector("[data-delegate-access-request-form]");
 
   openBtn.addEventListener("click", () => {
-    if (phoneInput && form.phone && !form.phone.value) form.phone.value = normalizePhone(phoneInput.value || "");
+    const fbWrap = form.querySelector('[data-phone-intl="fallback-request"]');
+    if (fbWrap && window.AlzidanPhoneIntl) {
+      window.AlzidanPhoneIntl.bindPhoneIntl(fbWrap);
+      const loginPhone = readLoginPhone();
+      if (loginPhone.e164) window.AlzidanPhoneIntl.setPhoneIntl(fbWrap, loginPhone.e164);
+    } else if (phoneInput && form.phone && !form.phone.value) form.phone.value = normalizePhone(phoneInput.value || "");
     if (branchSelectLogin && form.branch && !form.branch.value) form.branch.value = branchSelectLogin.value || "";
     if (codeInput && form.secret && !form.secret.value) form.secret.value = normalizeDelegateSecret(codeInput.value || "");
     form.style.display = form.style.display === "none" ? "block" : "none";
@@ -1933,7 +2003,9 @@ function ensureDelegateAccessRequestUi() {
     }
 
     const fullName = String(form.fullName.value || "").trim();
-    const phone = normalizePhone(form.phone.value || "");
+    const fbPhoneWrap = form.querySelector('[data-phone-intl="fallback-request"]');
+    const fbPhone = fbPhoneWrap && window.AlzidanPhoneIntl ? window.AlzidanPhoneIntl.readPhoneIntl(fbPhoneWrap) : null;
+    const phone = (fbPhone && fbPhone.e164) || normalizePhone(form.phone.value || "");
     const email = normalizeEmail(form.email ? form.email.value : "");
     const branch = String(form.branch.value || "").trim();
     const wantsTree = !!form.treeRole.checked;
@@ -1949,8 +2021,9 @@ function ensureDelegateAccessRequestUi() {
       setLoginAlert("error", "يرجى إدخال الاسم الرباعي.");
       return;
     }
-    // PHONE_GATE request path — normalize already applied; re-check via helper
-    if (!rejectUnlessValidSaudiMobile(phone, null).ok) {
+    // PHONE_GATE request path — E.164 from country picker
+    if (!(fbPhone && fbPhone.ok) && !isValidSaudiMobile(phone)) {
+      setLoginAlert("error", "يرجى إدخال رقم جوال صحيح مع اختيار الدولة.");
       return;
     }
     if (!isLikelyEmail(email)) {
@@ -2100,7 +2173,13 @@ function buildDelegateAccessRequestMessage(payload) {
 
 if (requestDelegateBtn && delegateRequestCard) {
   requestDelegateBtn.addEventListener("click", () => {
-    if (delegateRequestPhone && phoneInput) delegateRequestPhone.value = normalizePhone(phoneInput.value || "");
+    const loginPhone = readLoginPhone();
+    const requestWrap = document.querySelector('[data-phone-intl="request"]');
+    if (requestWrap && window.AlzidanPhoneIntl && loginPhone.e164) {
+      window.AlzidanPhoneIntl.setPhoneIntl(requestWrap, loginPhone.e164);
+    } else if (delegateRequestPhone && phoneInput) {
+      delegateRequestPhone.value = normalizePhone(phoneInput.value || "");
+    }
     if (delegateRequestBranch && branchSelectLogin) delegateRequestBranch.value = branchSelectLogin.value || "";
     if (delegateRequestSecret && codeInput) delegateRequestSecret.value = normalizeDelegateSecret(codeInput.value || "");
     const open = delegateRequestCard.style.display === "none";
@@ -2124,14 +2203,14 @@ if (sendDelegateRequestBtn) {
     }
 
     const name = normalizePersonName(delegateRequestName ? delegateRequestName.value : "");
-    const phone = normalizePhone(delegateRequestPhone ? delegateRequestPhone.value : "");
+    const phoneGate = readRequestPhone();
+    const phone = phoneGate.e164 || "";
     const email = normalizeEmail(delegateRequestEmail ? delegateRequestEmail.value : "");
     const branch = String(delegateRequestBranch ? delegateRequestBranch.value : "").trim();
     const wantsTree = !!(delegateRequestTree && delegateRequestTree.checked);
     const wantsEvents = !!(delegateRequestEvents && delegateRequestEvents.checked);
     const secret = normalizeDelegateSecret(delegateRequestSecret ? delegateRequestSecret.value : "");
     const secret2 = normalizeDelegateSecret(delegateRequestSecret2 ? delegateRequestSecret2.value : "");
-    if (delegateRequestPhone) delegateRequestPhone.value = phone;
     if (delegateRequestEmail) delegateRequestEmail.value = email;
     if (delegateRequestSecret) delegateRequestSecret.value = secret;
     if (delegateRequestSecret2) delegateRequestSecret2.value = secret2;
@@ -2140,8 +2219,9 @@ if (sendDelegateRequestBtn) {
       setLoginAlert("error", "يرجى إدخال الاسم الرباعي.");
       return;
     }
-    // PHONE_GATE request path — normalize already applied; re-check via helper
-    if (!rejectUnlessValidSaudiMobile(phone, null).ok) {
+    // PHONE_GATE request path — country + national → E.164
+    if (!phoneGate.ok || !phone) {
+      setLoginAlert("error", "يرجى إدخال رقم جوال صحيح مع اختيار الدولة.");
       return;
     }
     if (!isLikelyEmail(email)) {
@@ -2268,9 +2348,9 @@ if (sendDelegateRequestBtn) {
 
 loginBtn.addEventListener("click", async () =>{
   const branchKey = branchSelectLogin.value;
-  // PHONE_GATE login: normalize Arabic digits from #phone before any regex/length check.
-  const phoneGate = rejectUnlessValidSaudiMobile(phoneInput ? phoneInput.value : "", phoneInput);
-  const phone = phoneGate.phone;
+  // PHONE_GATE login: country + national → E.164 (candidates cover legacy 05…)
+  const phoneGate = readLoginPhone();
+  const phone = phoneGate.e164 || "";
   const email = "";
   const secret = normalizeDelegateSecret(codeInput ? codeInput.value : "");
   if (codeInput) codeInput.value = secret;
@@ -2279,7 +2359,8 @@ loginBtn.addEventListener("click", async () =>{
     setLoginAlert("error", "يرجى اختيار الفرع قبل المتابعة.");
     return;
   }
-  if (!phoneGate.ok) {
+  if (!phoneGate.ok || !phone) {
+    setLoginAlert("error", "يرجى إدخال رقم جوال صحيح مع اختيار الدولة.");
     return;
   }
   if (!isValidDelegateSecret(secret)) {
@@ -2360,9 +2441,9 @@ loginBtn.addEventListener("click", async () =>{
   setLoginAlert("error", "تعذر التحقق من بيانات الدخول حاليًا.");
 }); if (forgotBtn) { forgotBtn.addEventListener("click", async () =>{
   const branchKey = branchSelectLogin.value;
-  // PHONE_GATE forgot: same normalize-before-alert path as login.
-  const phoneGate = rejectUnlessValidSaudiMobile(phoneInput ? phoneInput.value : "", phoneInput);
-  const phone = phoneGate.phone;
+  // PHONE_GATE forgot: same country+national path as login.
+  const phoneGate = readLoginPhone();
+  const phone = phoneGate.e164 || "";
   const email = "";
   const secret = normalizeDelegateSecret(codeInput ? codeInput.value : "");
   if (codeInput) codeInput.value = secret;
@@ -2371,7 +2452,8 @@ loginBtn.addEventListener("click", async () =>{
     setLoginAlert("error", "يرجى اختيار الفرع قبل المتابعة.");
     return;
   }
-  if (!phoneGate.ok) {
+  if (!phoneGate.ok || !phone) {
+    setLoginAlert("error", "يرجى إدخال رقم جوال صحيح مع اختيار الدولة.");
     return;
   }
   if (!isValidDelegateSecret(secret)) {
@@ -2380,7 +2462,11 @@ loginBtn.addEventListener("click", async () =>{
   }
 
   await requestDelegateSecretReset(branchKey, phone, email, secret);
-}); } (async function () { const params = new URLSearchParams(window.location.search); const branchKey = params.get("branch"); if (!branchKey) return; if (!Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) return; branchSelectLogin.value = branchKey; const phone = normalizePhone(params.get("phone") || ""); const email = normalizeEmail(params.get("email") || ""); const secret = normalizeDelegateSecret(params.get("code") || ""); if (phoneInput && phone) phoneInput.value = phone; if (emailInput && email) emailInput.value = email; if (codeInput && secret) codeInput.value = secret; })(); clearDelegateSession(); logoutBtn.addEventListener("click", () =>{ state.branch = null; clearDelegateSession(); if (familyMgmtPanel && typeof familyMgmtPanel.destroy === "function") familyMgmtPanel.destroy(); familyMgmtPanel = null; if (window.AlzidanFamilyMgmt && typeof window.AlzidanFamilyMgmt.destroy === "function") window.AlzidanFamilyMgmt.destroy(); hideLoginAlert(); if (eventsCard) eventsCard.style.display = "none"; if (memoryCard) memoryCard.style.display = "none"; memorySubmitMounted = false; if (eventsMgmtPanel && typeof eventsMgmtPanel.destroy === "function") eventsMgmtPanel.destroy(); eventsMgmtPanel = null; if (window.DelegateEventsMgmtBridge && typeof window.DelegateEventsMgmtBridge.destroy === "function") window.DelegateEventsMgmtBridge.destroy(); state.happyEvents = []; state.sickEvents = []; state.deaths = []; branchSelectLogin.value = ""; if (phoneInput) phoneInput.value = ""; if (emailInput) emailInput.value = ""; if (codeInput) codeInput.value = ""; loginCard.style.display = "block"; dashboardCard.style.display = "none"; });
+}); } (async function () { const params = new URLSearchParams(window.location.search); const branchKey = params.get("branch"); if (!branchKey) return; if (!Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) return; branchSelectLogin.value = branchKey; const phone = normalizePhone(params.get("phone") || ""); const email = normalizeEmail(params.get("email") || ""); const secret = normalizeDelegateSecret(params.get("code") || ""); if (phone) {
+  const loginWrap = document.querySelector('[data-phone-intl="login"]');
+  if (loginWrap && window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.setPhoneIntl(loginWrap, phone);
+  else if (phoneInput) phoneInput.value = phone;
+} if (emailInput && email) emailInput.value = email; if (codeInput && secret) codeInput.value = secret; })(); clearDelegateSession(); logoutBtn.addEventListener("click", () =>{ state.branch = null; clearDelegateSession(); if (familyMgmtPanel && typeof familyMgmtPanel.destroy === "function") familyMgmtPanel.destroy(); familyMgmtPanel = null; if (window.AlzidanFamilyMgmt && typeof window.AlzidanFamilyMgmt.destroy === "function") window.AlzidanFamilyMgmt.destroy(); hideLoginAlert(); if (eventsCard) eventsCard.style.display = "none"; if (memoryCard) memoryCard.style.display = "none"; memorySubmitMounted = false; if (eventsMgmtPanel && typeof eventsMgmtPanel.destroy === "function") eventsMgmtPanel.destroy(); eventsMgmtPanel = null; if (window.DelegateEventsMgmtBridge && typeof window.DelegateEventsMgmtBridge.destroy === "function") window.DelegateEventsMgmtBridge.destroy(); state.happyEvents = []; state.sickEvents = []; state.deaths = []; branchSelectLogin.value = ""; if (phoneInput) phoneInput.value = ""; if (emailInput) emailInput.value = ""; if (codeInput) codeInput.value = ""; loginCard.style.display = "block"; dashboardCard.style.display = "none"; });
 function canonicalHelpers() {
   return {
     normalizePersonName,
@@ -3152,7 +3238,7 @@ async function familyApiSaveChild(payload) {
   const rawPhone = String(payload.phone || "").trim();
   const memberPhoneForChild = normalizeMemberPhoneForDelegate(rawPhone);
   if (rawPhone && !memberPhoneForChild) {
-    return { ok: false, message: "تم حفظ الابن لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+    return { ok: false, message: "تم حفظ الابن لكن رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط." };
   }
   if (memberPhoneForChild) {
     const memberProfileRes = await saveDelegateMemberProfile(sb, memberPhoneForChild, state.branch, childId, findStablePersonId(childId));
@@ -3264,7 +3350,7 @@ async function familyApiUpdateChild(payload) {
   const rawEditPhone = String(payload.phone || "").trim();
   const editPhoneValue = normalizeMemberPhoneForDelegate(rawEditPhone);
   if (rawEditPhone && !editPhoneValue) {
-    return { ok: false, message: "تم حفظ التعديل لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+    return { ok: false, message: "تم حفظ التعديل لكن رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط." };
   }
   if (editPhoneValue) {
     const memberProfileEditRes = await saveDelegateMemberProfile(

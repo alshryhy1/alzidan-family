@@ -5,8 +5,9 @@
 <title>مندوبو فروع عائلة الزيدان</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="../assets/js/delegate-head.js?v=delegattr1"></script>
-<link rel="stylesheet" href="../assets/css/delegate.css?v=20260812life3" />
-<link rel="stylesheet" href="../assets/css/family-management.css?v=20260810novid2" />
+<link rel="stylesheet" href="../assets/css/delegate.css?v=20260814phone4" />
+<link rel="stylesheet" href="../assets/css/phone-intl.css?v=20260814phone4" />
+<link rel="stylesheet" href="../assets/css/family-management.css?v=20260814phone4" />
 <link rel="stylesheet" href="../assets/css/events-management.css?v=20260810novid2" />
 <link rel="stylesheet" href="../assets/css/memory-submit.css?v=20260810novid2" />
 </head>
@@ -62,8 +63,20 @@
       </div>
       <div class="field">
         <label for="phone">رقم الجوال</label>
-        <input id="phone" type="text" inputmode="numeric" autocomplete="tel" placeholder="05xxxxxxxx" dir="ltr" />
-        <div class="hint">يُقبل إدخال الأرقام العربية (٠-٩) أو الإنجليزية.</div>
+        <div class="phone-intl" data-phone-intl="login">
+          <select id="phone-country" data-phone-country aria-label="الدولة">
+            <option value="SA" selected>🇸🇦 +966</option>
+            <option value="IQ">🇮🇶 +964</option>
+            <option value="AE">🇦🇪 +971</option>
+            <option value="KW">🇰🇼 +965</option>
+            <option value="BH">🇧🇭 +973</option>
+            <option value="OM">🇴🇲 +968</option>
+            <option value="JO">🇯🇴 +962</option>
+            <option value="EG">🇪🇬 +20</option>
+          </select>
+          <input id="phone" data-phone-national type="text" inputmode="numeric" autocomplete="tel" placeholder="5XXXXXXXX" dir="ltr" />
+        </div>
+        <div class="hint">اختر الدولة ثم اكتب الرقم المحلي فقط (بدون رمز الدولة). تُقبل الأرقام العربية أو الإنجليزية.</div>
       </div>
       <div class="field">
         <label for="code">الرقم السري</label>
@@ -81,7 +94,23 @@
       <div class="hint" style="margin-bottom:10px">البريد إلزامي لإشعارات طلبات فرعك — ليس جزءًا من مفتاح الدخول.</div>
       <div class="grid">
         <div class="field"><label for="delegate-request-name">الاسم الرباعي</label><input id="delegate-request-name" type="text" placeholder="الاسم الرباعي" autocomplete="name" /></div>
-        <div class="field"><label for="delegate-request-phone">رقم الجوال</label><input id="delegate-request-phone" type="text" inputmode="numeric" autocomplete="tel" placeholder="05xxxxxxxx" dir="ltr" /></div>
+        <div class="field">
+          <label for="delegate-request-phone">رقم الجوال</label>
+          <div class="phone-intl" data-phone-intl="request">
+            <select id="delegate-request-phone-country" data-phone-country aria-label="الدولة">
+              <option value="SA" selected>🇸🇦 +966</option>
+              <option value="IQ">🇮🇶 +964</option>
+              <option value="AE">🇦🇪 +971</option>
+              <option value="KW">🇰🇼 +965</option>
+              <option value="BH">🇧🇭 +973</option>
+              <option value="OM">🇴🇲 +968</option>
+              <option value="JO">🇯🇴 +962</option>
+              <option value="EG">🇪🇬 +20</option>
+            </select>
+            <input id="delegate-request-phone" data-phone-national type="text" inputmode="numeric" autocomplete="tel" placeholder="5XXXXXXXX" dir="ltr" />
+          </div>
+          <div class="hint">اختر الدولة ثم اكتب الرقم المحلي فقط.</div>
+        </div>
         <div class="field delegate-email-field" style="grid-column: 1 / -1;">
           <label for="delegate-request-email">البريد الإلكتروني (إلزامي للإشعارات)</label>
           <input id="delegate-request-email" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" required dir="ltr" />
@@ -258,10 +287,11 @@
 <script src="../assets/js/memory/submit.js?v=20260812safe2"></script>
 <script src="../assets/js/modules/spouses-core.js?v=20260810novid2"></script>
 <script src="../assets/js/modules/canonical-person.js?v=20260810novid2"></script>
+<script src="../assets/js/modules/phone-intl.js?v=20260814phone3"></script>
 <script src="../assets/js/modules/family-management/family-person-core.js?v=20260811search2"></script>
 <script src="../assets/js/modules/family-management/family-spouses-section.js?v=20260812login2"></script>
-<script src="../assets/js/modules/family-management/family-children-section.js?v=20260812phone1"></script>
-<script src="../assets/js/modules/family-management/family-add-sheet.js?v=20260812phone1"></script>
+<script src="../assets/js/modules/family-management/family-children-section.js?v=20260814phone3"></script>
+<script src="../assets/js/modules/family-management/family-add-sheet.js?v=20260814phone3"></script>
 <script src="../assets/js/modules/family-management/family-management-panel.js?v=20260812kids1"></script>
 <script src="../assets/js/modules/family-management/index.js?v=20260810novid2"></script>
 <script src="../assets/js/modules/events/event-types.js?v=20260814catalog1"></script>
@@ -274,6 +304,6 @@
 <script src="../assets/js/modules/events/events-management-panel.js?v=20260814catalog1"></script>
 <script src="../assets/js/delegate-events-mgmt.js?v=20260814catalog1"></script>
 <script src="../assets/js/modules/tree-engine.js?v=20260810novid2"></script>
-<script src="../assets/js/delegate.js?v=20260812acceptpush1"></script>
+<script src="../assets/js/delegate.js?v=20260814phone3"></script>
 </body>
 </html>

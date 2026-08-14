@@ -44,8 +44,11 @@
   }
 
   function cleanPhone(v) {
-    return normalizeDigits(v).replace(/[^\d]/g, "");
-  }
+      if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.canonicalizePhone === "function") {
+        return window.AlzidanPhoneIntl.canonicalizePhone(v) || "";
+      }
+      return String(v || "").replace(/[^\d+]/g, "");
+    }
 
   function getClient() {
     var cfg = global.__alzidanConfig || {};
@@ -170,7 +173,7 @@
 
     if (mode === "delegate" || mode === "public") {
       if (!text(payload.submitted_by_name)) return "اسم المرسل مطلوب.";
-      if (cleanPhone(payload.submitted_by_phone).length < 9) return "رقم جوال صحيح مطلوب (9 أرقام على الأقل).";
+      if (!(window.AlzidanPhoneIntl ? window.AlzidanPhoneIntl.isValidPhone(payload.submitted_by_phone) : cleanPhone(payload.submitted_by_phone).length >= 9)) return "رقم جوال صحيح مطلوب مع اختيار الدولة.";
     }
 
     if (mode === "admin" && !getAdminToken()) {
@@ -462,7 +465,14 @@
       memory_date: text(read("memory_date")) || null,
       memory_year: text(read("memory_year")) || null,
       submitted_by_name: text(read("submitted_by_name")),
-      submitted_by_phone: text(read("submitted_by_phone")),
+      submitted_by_phone: (function () {
+        var wrap = root.querySelector('[data-phone-intl="memory-submitter"]');
+        if (wrap && window.AlzidanPhoneIntl) {
+          var r = window.AlzidanPhoneIntl.readE164(wrap, true);
+          return r.e164 || "";
+        }
+        return text(read("submitted_by_phone"));
+      })(),
       submitted_by_relation: text(read("submitted_by_relation"))
     };
   }
@@ -524,6 +534,7 @@
   }
 
   function updateFileUi(root) {
+    if (window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.bindAllIn(root);
     var uiKind = root.querySelector('[data-f="ui_kind"]');
     var fileWrap = root.querySelector("[data-file-wrap]");
     var fileInput = root.querySelector('[data-f="media_file"]');
@@ -703,9 +714,18 @@
         '" /></div>' +
         '<div class="memory-submit-field"><label>' +
         (mode === "delegate" ? "جوال المندوب" : "جوال المرسل") +
-        '</label><input data-f="submitted_by_phone" type="tel" inputmode="tel" dir="ltr" value="' +
-        submitterPhone.replace(/"/g, "&quot;") +
-        '" placeholder="05xxxxxxxx" /><div class="memory-submit-field-hint">يمكنك كتابة الجوال بالأرقام العربية أو الإنجليزية</div></div>' +
+        "</label>" +
+        (window.AlzidanPhoneIntl
+          ? window.AlzidanPhoneIntl.fieldHtml({
+              key: "memory-submitter",
+              nationalAttr: 'data-f="submitted_by_phone"',
+              value: submitterPhone,
+              hint: "اختر الدولة ثم اكتب الرقم المحلي فقط.",
+            })
+          : '<input data-f="submitted_by_phone" type="tel" inputmode="tel" dir="ltr" value="' +
+            submitterPhone.replace(/"/g, "&quot;") +
+            '" placeholder="5XXXXXXXX" />') +
+        "</div>" +
         (mode === "public"
           ? '<div class="memory-submit-field"><label>الصفة</label><input data-f="submitted_by_relation" type="text" placeholder="ابن/ابنة..." /></div>'
           : "");

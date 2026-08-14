@@ -39,7 +39,10 @@ function reviewRowBranch(row, fallbackBranch) { return normalizePersonName((row 
 const MEMBER_PROFILE_PHONE_KEY = "alzidan_member_phone_v1";
 
 function normalizeMemberPhone(v) {
-  return String(v || "").replace(/[^\d]/g, "").trim();
+  if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.canonicalizePhone === "function") {
+    return window.AlzidanPhoneIntl.canonicalizePhone(v) || String(v || "").replace(/[^\d+]/g, "").trim();
+  }
+  return String(v || "").replace(/[^\d+]/g, "").trim();
 }
 
 function getCurrentMemberPhone() {

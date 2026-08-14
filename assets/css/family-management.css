@@ -276,3 +276,11 @@
 .fm-search-item.fm-highlight {
   background: #eff6ff;
 }
+
+
+/* phone intl full-width in tree grids */
+.fm-inline-edit .field:has(.phone-intl),
+.fm-add-sheet .field:has(.phone-intl),
+.field--phone {
+  grid-column: 1 / -1;
+}

@@ -433,9 +433,18 @@
       '<div class="field"><label>الاسم</label><input data-extra-child-name type="text" placeholder="اسم الابن" value="' +
       escapeHtml(value || sourceTreeLeaf(sourceTreeRowPath(data)) || "") +
       '"></div>' +
-      '<div class="field"><label>رقم الجوال</label><input data-extra-child-phone type="tel" inputmode="numeric" placeholder="05XXXXXXXX" value="' +
-      escapeHtml(data.phone || "") +
-      '"></div>' +
+      '<div class="field"><label>رقم الجوال</label>' +
+      (window.AlzidanPhoneIntl
+        ? window.AlzidanPhoneIntl.fieldHtml({
+            key: "admin-src-child",
+            nationalAttr: "data-extra-child-phone",
+            value: data.phone || "",
+            hint: "اختر الدولة ثم اكتب الرقم المحلي فقط.",
+          })
+        : '<input data-extra-child-phone type="tel" inputmode="numeric" placeholder="5XXXXXXXX" value="' +
+          escapeHtml(data.phone || "") +
+          '">') +
+      '</div>' +
       '<div class="field"><label>الترتيب</label><input data-extra-child-order type="number" min="1" inputmode="numeric" value="' +
       escapeHtml(nextOrder == null ? "" : String(nextOrder)) +
       '"></div>' +
@@ -469,6 +478,7 @@
     const remove = row.querySelector("[data-extra-child-remove]");
     if (remove) remove.addEventListener("click", () => deleteSourceTreeCard(row).catch(() => {}));
 
+        if (window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.bindAllIn(row);
     sourceTreeExtraChildren.appendChild(row);
     renumberSourceTreeChildCards();
     return row;
@@ -885,12 +895,23 @@
   }
 
   function normalizeMemberPhoneForAdmin(v) {
-    return String(v || "").replace(/[^\d]/g, "").trim();
+    if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.normalizeMemberPhoneE164 === "function") {
+      return window.AlzidanPhoneIntl.normalizeMemberPhoneE164(v);
+    }
+    return String(v || "").replace(/[^\d+]/g, "").trim();
   }
 
   async function upsertMemberProfileFromTreeCard(cardRow, payload, savedId) {
+    const phoneWrap = cardRow ? cardRow.querySelector("[data-phone-intl]") : null;
     const phoneInput = cardRow ? cardRow.querySelector("[data-extra-child-phone]") : null;
-    const phone = normalizeMemberPhoneForAdmin(phoneInput ? phoneInput.value : "");
+    let phone = "";
+    if (phoneWrap && window.AlzidanPhoneIntl) {
+      const r = window.AlzidanPhoneIntl.readE164(phoneWrap, false);
+      phone = r.ok ? r.e164 : "";
+      if (!r.empty && !r.ok) return { ok: false, error: { message: "رقم الجوال غير صحيح" } };
+    } else {
+      phone = normalizeMemberPhoneForAdmin(phoneInput ? phoneInput.value : "");
+    }
     if (!phone) return { ok: true, skipped: true };
 
     const sb = getClient();

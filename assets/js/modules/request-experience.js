@@ -191,24 +191,30 @@
   }
 
   function normalizePhone(v) {
+    if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.canonicalizePhone === "function") {
+      return window.AlzidanPhoneIntl.canonicalizePhone(v) || "";
+    }
     var digits = normalizeArabicDigitsToLatin(String(v || ""))
       .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
       .replace(/[^0-9]/g, "")
       .trim();
     if (!digits) return "";
     if (digits.indexOf("00966") === 0 && digits.length === 14 && digits.charAt(5) === "5") {
-      return "0" + digits.slice(5);
+      return "+966" + digits.slice(5);
     }
     if (digits.indexOf("966") === 0 && digits.length === 12 && digits.charAt(3) === "5") {
-      return "0" + digits.slice(3);
+      return "+966" + digits.slice(3);
     }
-    if (digits.charAt(0) === "5" && digits.length === 9) return "0" + digits;
-    if (digits.indexOf("05") === 0 && digits.length === 10) return digits;
+    if (digits.charAt(0) === "5" && digits.length === 9) return "+966" + digits;
+    if (digits.indexOf("05") === 0 && digits.length === 10) return "+966" + digits.slice(1);
     return digits;
   }
 
   function isValidSaudiMobile(v) {
-    return /^05[0-9]{8}$/.test(normalizePhone(v));
+    if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.isValidPhone === "function") {
+      return window.AlzidanPhoneIntl.isValidPhone(v);
+    }
+    return /^\+9665[0-9]{8}$/.test(normalizePhone(v));
   }
 
   function normalizeEmail(v) {
@@ -1914,9 +1920,13 @@
         form.querySelector('[name="submitterName"]') &&
           form.querySelector('[name="submitterName"]').value
       );
-      var phone = normalizePhone(
-        form.querySelector('[name="phone"]') && form.querySelector('[name="phone"]').value
-      );
+      var phoneWrap = form.querySelector("[data-phone-intl]");
+      var phone =
+        phoneWrap && window.AlzidanPhoneIntl
+          ? window.AlzidanPhoneIntl.readE164(phoneWrap, true).e164 || ""
+          : normalizePhone(
+              form.querySelector('[name="phone"]') && form.querySelector('[name="phone"]').value
+            );
       var notes = text(form.querySelector('[name="notes"]') && form.querySelector('[name="notes"]').value);
       var fieldDefs = [
         { key: "name", label: "الاسم" },
@@ -1940,7 +1950,7 @@
         return;
       }
       if (!isValidSaudiMobile(phone)) {
-        setFormAlert(form, "error", "رقم الجوال غير صحيح (مثال: 05xxxxxxxx).");
+        setFormAlert(form, "error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
         return;
       }
       if (!fields.length) {
@@ -2201,9 +2211,13 @@
         form.querySelector('[name="submitterName"]') &&
           form.querySelector('[name="submitterName"]').value
       );
-      var phone = normalizePhone(
-        form.querySelector('[name="phone"]') && form.querySelector('[name="phone"]').value
-      );
+      var phoneWrap = form.querySelector("[data-phone-intl]");
+      var phone =
+        phoneWrap && window.AlzidanPhoneIntl
+          ? window.AlzidanPhoneIntl.readE164(phoneWrap, true).e164 || ""
+          : normalizePhone(
+              form.querySelector('[name="phone"]') && form.querySelector('[name="phone"]').value
+            );
       var notes = text(form.querySelector('[name="notes"]') && form.querySelector('[name="notes"]').value);
       var imageInput = form.querySelector("[data-special-card-image]");
       var imageFile =
@@ -2219,7 +2233,7 @@
         return;
       }
       if (!isValidSaudiMobile(phone)) {
-        setFormAlert(form, "error", "رقم الجوال غير صحيح (مثال: 05xxxxxxxx).");
+        setFormAlert(form, "error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
         return;
       }
       if (imageFile) {
@@ -2882,9 +2896,18 @@
         escapeHtml(f.submitterName) +
         '" autocomplete="name" /></label>' +
         '<label class="rx-field"><span>رقم الجوال</span>' +
-        '<input name="submitterPhone" required type="text" inputmode="numeric" autocomplete="tel" dir="ltr" value="' +
-        escapeHtml(f.submitterPhone) +
-        '" placeholder="05xxxxxxxx" autocomplete="tel" /></label>' +
+        (window.AlzidanPhoneIntl
+          ? window.AlzidanPhoneIntl.fieldHtml({
+              key: "rx-submitter",
+              nationalName: "submitterPhone",
+              required: true,
+              value: f.submitterPhone,
+              hint: "اختر الدولة ثم اكتب الرقم المحلي فقط.",
+            })
+          : '<input name="submitterPhone" required type="text" inputmode="numeric" autocomplete="tel" dir="ltr" value="' +
+            escapeHtml(f.submitterPhone) +
+            '" placeholder="5XXXXXXXX" />') +
+        '</label>' +
         '<label class="rx-field"><span>البريد (اختياري)</span>' +
         '<input name="submitterEmail" type="email" value="' +
         escapeHtml(f.submitterEmail) +
@@ -2899,6 +2922,7 @@
 
     var form = root.querySelector("[data-rx-facts-form]");
     var searchBtn = root.querySelector("[data-rx-search]");
+    if (form && window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.bindAllIn(form);
 
     function readForm() {
       var fd = new FormData(form);
@@ -2908,7 +2932,13 @@
       state.facts.birthDate = text(fd.get("birthDate"));
       state.facts.parentQuery = text(fd.get("parentQuery"));
       state.facts.submitterName = text(fd.get("submitterName"));
-      state.facts.submitterPhone = normalizePhone(fd.get("submitterPhone"));
+      var phoneWrap = form.querySelector('[data-phone-intl="rx-submitter"]');
+      if (phoneWrap && window.AlzidanPhoneIntl) {
+        var pr = window.AlzidanPhoneIntl.readE164(phoneWrap, true);
+        state.facts.submitterPhone = pr.e164 || "";
+      } else {
+        state.facts.submitterPhone = normalizePhone(fd.get("submitterPhone"));
+      }
       state.facts.submitterEmail = text(fd.get("submitterEmail"));
       if (normalizeSearchText(prevName) !== normalizeSearchText(state.facts.personName)) {
         resetIdentityGate();

@@ -437,12 +437,16 @@
   }
 
   function normalizeMemberPhone(value) {
+    if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.normalizeMemberPhoneE164 === "function") {
+      return window.AlzidanPhoneIntl.normalizeMemberPhoneE164(value);
+    }
     const raw = normalizeArabicDigitsToLatin(String(value || "").trim());
     if (!raw) return "";
     let digits = raw.replace(/[^0-9]/g, "");
-    if (digits.startsWith("966")) digits = "0" + digits.slice(3);
-    if (digits.length === 9 && digits.startsWith("5")) digits = "0" + digits;
-    return digits.length === 10 && digits.startsWith("05") ? digits : "";
+    if (digits.startsWith("966") && digits.length >= 12) return "+" + digits;
+    if (digits.length === 9 && digits.startsWith("5")) return "+966" + digits;
+    if (digits.length === 10 && digits.startsWith("05")) return "+966" + digits.slice(1);
+    return "";
   }
 
   async function saveAdminMemberProfile(sb, phone, branchKey, childPath, personId) {
@@ -1222,7 +1226,7 @@
     const rawPhone = String(payload.phone || "").trim();
     const memberPhoneForChild = normalizeMemberPhone(rawPhone);
     if (rawPhone && !memberPhoneForChild) {
-      return { ok: false, message: "تم حفظ الابن لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+      return { ok: false, message: "تم حفظ الابن لكن رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط." };
     }
     if (memberPhoneForChild) {
       const memberProfileRes = await saveAdminMemberProfile(
@@ -1355,7 +1359,7 @@
     const rawEditPhone = String(payload.phone || "").trim();
     const editPhoneValue = normalizeMemberPhone(rawEditPhone);
     if (rawEditPhone && !editPhoneValue) {
-      return { ok: false, message: "تم حفظ التعديل لكن رقم الجوال غير صحيح. اكتب رقمًا بصيغة 05xxxxxxxx." };
+      return { ok: false, message: "تم حفظ التعديل لكن رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط." };
     }
     if (editPhoneValue) {
       const memberProfileEditRes = await saveAdminMemberProfile(

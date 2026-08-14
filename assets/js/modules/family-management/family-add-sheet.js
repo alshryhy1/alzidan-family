@@ -40,7 +40,15 @@
       "</div>" +
       '<div data-fm-form-child class="grid" style="display:none;">' +
       '<div class="field" style="grid-column:1/-1;"><label>اسم الابن/الابنة</label><input type="text" data-fm-child-name placeholder="الاسم الكامل أو اسم واحد" /></div>' +
-      '<div class="field"><label>رقم الجوال</label><input type="tel" data-fm-child-phone inputmode="numeric" placeholder="05XXXXXXXX" /></div>' +
+      '<div class="field"><label>رقم الجوال</label>' +
+      (window.AlzidanPhoneIntl
+        ? window.AlzidanPhoneIntl.fieldHtml({
+            key: "fm-add-child",
+            nationalAttr: "data-fm-child-phone",
+            hint: "اختر الدولة ثم اكتب الرقم المحلي فقط.",
+          })
+        : '<input type="tel" data-fm-child-phone inputmode="numeric" placeholder="5XXXXXXXX" />') +
+      "</div>" +
       '<div class="field"><label>ربط الأم (اختياري)</label><select data-fm-child-wife><option value="">بدون ربط أم الآن</option></select></div>' +
       '<div class="field"><label>تاريخ الميلاد (هجري)</label><input type="text" data-fm-child-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
       '<div class="field"><label>تاريخ الميلاد (ميلادي)</label><input type="date" data-fm-child-greg dir="ltr" lang="en" /></div>' +
@@ -76,6 +84,9 @@
     var childArea = sheet.querySelector("[data-fm-child-area]");
     bindDeceasedToggle(childDeceased, [childHijri, childGreg, childCity, childArea]);
     bindBirthDateSync(childHijri, childGreg, api);
+    if (window.AlzidanPhoneIntl) {
+      window.AlzidanPhoneIntl.bindAllIn(sheet);
+    }
 
     function clearChildFormFields() {
       sheet.querySelectorAll("[data-fm-form-child] input, [data-fm-form-child] select, [data-fm-form-child] textarea").forEach(function (el) {
@@ -227,12 +238,24 @@
       }
 
       if (typeof api.saveChild !== "function") return;
+      var childPhoneWrap = sheet.querySelector('[data-phone-intl="fm-add-child"]');
+      var childPhoneValue = "";
+      if (childPhoneWrap && window.AlzidanPhoneIntl) {
+        var childPhoneRead = window.AlzidanPhoneIntl.readE164(childPhoneWrap, false);
+        if (!childPhoneRead.empty && !childPhoneRead.ok) {
+          setAlert(alertEl, "error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
+          return;
+        }
+        childPhoneValue = childPhoneRead.e164 || "";
+      } else {
+        childPhoneValue = sheet.querySelector("[data-fm-child-phone]").value;
+      }
       var childRes = await api.saveChild({
         personId: personId,
         boundParentPath: personId,
         gender: currentType === "daughter" ? "daughter" : "son",
         name: sheet.querySelector("[data-fm-child-name]").value,
-        phone: sheet.querySelector("[data-fm-child-phone]").value,
+        phone: childPhoneValue,
         spouseId: sheet.querySelector("[data-fm-child-wife]").value,
         hijri: childHijri ? childHijri.value : "",
         greg: childGreg ? childGreg.value : "",

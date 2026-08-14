@@ -127,7 +127,15 @@
           ? '<div class="field"><label>person_id (UUID)</label><input type="text" data-fm-edit-person-id dir="ltr" lang="en" placeholder="اختياري — للإدارة فقط" /></div>'
           : "") +
         '<div class="field"><label for="fm-edit-child-name">تعديل الاسم</label><input id="fm-edit-child-name" type="text" data-fm-edit-name placeholder="اسم الابن/الابنة" /></div>' +
-        '<div class="field"><label>رقم الجوال</label><input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="05XXXXXXXX" maxlength="10" /><div class="hint">10 أرقام تبدأ بـ 05</div></div>' +
+        '<div class="field"><label>رقم الجوال</label>' +
+        (window.AlzidanPhoneIntl
+          ? window.AlzidanPhoneIntl.fieldHtml({
+              key: "fm-edit",
+              nationalAttr: 'data-fm-edit-phone',
+              hint: "اختر الدولة ثم اكتب الرقم المحلي فقط.",
+            })
+          : '<input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="5XXXXXXXX" /><div class="hint">اختر الدولة ثم الرقم المحلي</div>') +
+        "</div>" +
         '<div class="field"><label>تاريخ الميلاد (هجري)</label><input type="text" data-fm-edit-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
         '<div class="field"><label>تاريخ الميلاد (ميلادي)</label><input type="date" data-fm-edit-greg dir="ltr" lang="en" /></div>' +
         '<div class="field"><label>ترتيب الميلاد</label><input type="number" data-fm-edit-order min="1" step="1" inputmode="numeric" /></div>' +
@@ -176,9 +184,12 @@
       }
 
       var phoneEl = wrap.querySelector("[data-fm-edit-phone]");
+      var phoneWrap = wrap.querySelector('[data-phone-intl="fm-edit"]') || (phoneEl && phoneEl.closest ? phoneEl.closest("[data-phone-intl]") : null);
+      if (phoneWrap && window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.bindPhoneIntl(phoneWrap);
       if (phoneEl && typeof api.loadMemberPhone === "function") {
         api.loadMemberPhone(parentKey, child).then(function (v) {
-          phoneEl.value = v || "";
+          if (phoneWrap && window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.setPhoneIntl(phoneWrap, v || "");
+          else if (phoneEl) phoneEl.value = v || "";
         }).catch(function () {});
       }
 
@@ -224,13 +235,24 @@
       });
       wrap.querySelector("[data-fm-save-edit]").addEventListener("click", async function () {
         if (typeof api.updateChild !== "function") return;
+        var phoneValue = "";
+        if (phoneWrap && window.AlzidanPhoneIntl) {
+          var phoneRead = window.AlzidanPhoneIntl.readE164(phoneWrap, false);
+          if (!phoneRead.empty && !phoneRead.ok) {
+            setAlert(editAlert, "error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
+            return;
+          }
+          phoneValue = phoneRead.e164 || "";
+        } else {
+          phoneValue = phoneEl ? phoneEl.value : "";
+        }
         var res = await api.updateChild({
           parentId: parentKey,
           childId: childId,
           child: child,
           newName: nameEl ? nameEl.value : "",
           personId: personIdEl ? personIdEl.value : "",
-          phone: phoneEl ? phoneEl.value : "",
+          phone: phoneValue,
           hijri: hijriEl ? hijriEl.value : "",
           greg: gregEl ? gregEl.value : "",
           order: orderEl ? orderEl.value : "",

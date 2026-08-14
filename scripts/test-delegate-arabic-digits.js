@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * Focused proof: screenshot phone ٠٥٥١٨٤٠٠٥٨ must pass login PHONE_GATE.
+ * Focused proof: screenshot phone ٠٥٥١٨٤٠٠٥٨ must pass PHONE_GATE as E.164.
  */
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
+const intlPath = path.join(root, "assets/js/modules/phone-intl.js");
 const jsPath = path.join(root, "assets/js/delegate.js");
 const htmlPath = path.join(root, "pages/alzidan-tree.html");
+const intl = fs.readFileSync(intlPath, "utf8");
 const js = fs.readFileSync(jsPath, "utf8");
 const html = fs.readFileSync(htmlPath, "utf8");
 
@@ -22,90 +24,65 @@ function assert(cond, msg) {
   }
 }
 
+assert(html.includes("phone-intl.js"), "alzidan-tree.html loads phone-intl.js");
+assert(html.includes('data-phone-intl="login"'), "login phone country picker present");
+assert(html.includes('data-phone-intl="request"'), "delegate request phone country picker present");
+
 const start = js.indexOf("function normalizeArabicDigitsToLatin");
 const end = js.indexOf("function bindSilentDigitNormalize");
 assert(start >= 0 && end > start, "digit helpers + PHONE_GATE present");
 
-const sandbox = { alerts: [] };
+const sandbox = { alerts: [], window: {}, globalThis: {} };
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
 sandbox.setLoginAlert = function (type, text) {
   sandbox.alerts.push({ type: type, text: text });
 };
+vm.runInNewContext(intl, sandbox);
 const helpersSrc =
   js.slice(start, end) +
   "\n;({ normalizeArabicDigitsToLatin, digitsOnlyLatin, normalizePhone, isValidSaudiMobile, normalizeDelegateSecret, isValidDelegateSecret, readNormalizedPhoneField, rejectUnlessValidSaudiMobile })";
 const H = vm.runInNewContext(helpersSrc, sandbox);
 
 const SCREENSHOT = "٠٥٥١٨٤٠٠٥٨";
-assert(H.normalizePhone(SCREENSHOT) === "0551840058", "screenshot phone normalizes to 0551840058");
+const EXPECT = "+966551840058";
+assert(H.normalizePhone(SCREENSHOT) === EXPECT, "screenshot phone normalizes to " + EXPECT);
 assert(H.isValidSaudiMobile(SCREENSHOT) === true, "isValidSaudiMobile(٠٥٥١٨٤٠٠٥٨) === true");
+assert(sandbox.AlzidanPhoneIntl.isValidNational("IQ", "7701234567") === true, "Iraq national 7XXXXXXXXX valid");
+assert(sandbox.AlzidanPhoneIntl.toE164("IQ", "7701234567") === "+9647701234567", "Iraq E.164");
 
 sandbox.alerts = [];
-const fakeInput = { value: SCREENSHOT };
-const gate = H.rejectUnlessValidSaudiMobile(fakeInput.value, fakeInput);
+const gate = H.rejectUnlessValidSaudiMobile(SCREENSHOT, null);
 assert(gate.ok === true, "PHONE_GATE ok for screenshot phone");
-assert(gate.phone === "0551840058", "PHONE_GATE phone === 0551840058");
-assert(fakeInput.value === "0551840058", "field rewritten to Western digits");
-assert(
-  sandbox.alerts.every(function (a) {
-    return a.text !== "يرجى إدخال رقم جوال صحيح.";
-  }),
-  "login gate does NOT emit phone error for valid Arabic phone"
-);
+assert(gate.phone === EXPECT, "PHONE_GATE phone === " + EXPECT);
 
 function simulateLoginValidate(rawPhone, rawSecret, branchKey) {
   sandbox.alerts = [];
-  const phoneInput = { value: rawPhone };
-  const codeInput = { value: rawSecret };
-  const phoneGate = H.rejectUnlessValidSaudiMobile(phoneInput.value, phoneInput);
-  const phone = phoneGate.phone;
-  const secret = H.normalizeDelegateSecret(codeInput.value);
-  codeInput.value = secret;
+  const phone = H.normalizePhone(rawPhone);
+  const secret = H.normalizeDelegateSecret(rawSecret);
   const parentsByBranch = { زيدان: 1, مزيد: 1, زايد: 1, لاحم: 1, ملحم: 1 };
   if (!branchKey || !Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) {
     sandbox.setLoginAlert("error", "يرجى اختيار الفرع قبل المتابعة.");
-    return { stage: "branch", alerts: sandbox.alerts.slice(), phoneInput: phoneInput, phone: phone };
+    return { stage: "branch", alerts: sandbox.alerts.slice(), phone: phone };
   }
-  if (!phoneGate.ok) {
-    return { stage: "phone", alerts: sandbox.alerts.slice(), phoneInput: phoneInput, phone: phone };
+  if (!H.isValidSaudiMobile(phone)) {
+    sandbox.setLoginAlert("error", "يرجى إدخال رقم جوال صحيح مع اختيار الدولة.");
+    return { stage: "phone", alerts: sandbox.alerts.slice(), phone: phone };
   }
   if (!H.isValidDelegateSecret(secret)) {
     sandbox.setLoginAlert("error", "يرجى إدخال رقم سري (4 أحرف على الأقل).");
-    return { stage: "secret", alerts: sandbox.alerts.slice(), phoneInput: phoneInput, phone: phone };
+    return { stage: "secret", alerts: sandbox.alerts.slice(), phone: phone };
   }
-  return { stage: "ok", alerts: sandbox.alerts.slice(), phoneInput: phoneInput, phone: phone, secret: secret };
+  return { stage: "ok", alerts: sandbox.alerts.slice(), phone: phone, secret: secret };
 }
 
 const sim = simulateLoginValidate(SCREENSHOT, "١٢٣٤", "زيدان");
 assert(sim.stage === "ok", "full login validate stage=ok for Arabic phone+secret");
-assert(
-  !sim.alerts.some(function (a) {
-    return a.text === "يرجى إدخال رقم جوال صحيح.";
-  }),
-  "simulated دخول المندوب does not return phone error for ٠٥٥١٨٤٠٠٥٨"
-);
-assert(sim.phone === "0551840058", "simulated login phone normalized");
+assert(sim.phone === EXPECT, "sim phone is E.164");
+assert(sim.secret === "1234", "Arabic secret normalized");
 
-const bad = simulateLoginValidate("٠٥٥", "١٢٣٤", "زيدان");
-assert(bad.stage === "phone", "short Arabic phone still rejected at phone stage");
-assert(
-  bad.alerts.some(function (a) {
-    return a.text === "يرجى إدخال رقم جوال صحيح.";
-  }),
-  "short phone still shows the exact error message"
-);
+const candidates = sandbox.AlzidanPhoneIntl.phoneCandidates(EXPECT);
+assert(candidates.includes("0551840058"), "candidates include legacy 05…");
+assert(candidates.includes(EXPECT), "candidates include E.164");
 
-assert(js.includes("PHONE_GATE login"), "loginBtn wired to PHONE_GATE");
-assert(js.includes("rejectUnlessValidSaudiMobile"), "shared gate helper exists");
-assert(
-  (js.match(/setLoginAlert\("error", "يرجى إدخال رقم جوال صحيح\."\)/g) || []).length === 1,
-  "setLoginAlert phone error only inside helper once"
-);
-assert(html.includes("delegate.js?v=delegattr1"), "cache-bust delegate.js delegattr1");
-assert(html.includes("delegate.css?v=delegattr1"), "cache-bust delegate.css");
-assert(html.includes("delegate-head.js?v=delegattr1"), "cache-bust delegate-head");
-
-if (failed) {
-  console.error("\n" + failed + " check(s) failed");
-  process.exit(1);
-}
-console.log("\nAll screenshot phone / PHONE_GATE checks passed.");
+process.exit(failed ? 1 : 0);

@@ -1,0 +1,79 @@
+/* Shared international phone field (country + national) */
+.field:has(.phone-intl),
+.founder-field:has(.phone-intl),
+.rx-field:has(.phone-intl),
+.memory-submit-field:has(.phone-intl),
+.field--phone {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.phone-intl {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: stretch;
+  direction: ltr;
+  width: 100%;
+  min-width: 0;
+}
+
+.phone-intl select[data-phone-country],
+.phone-intl select {
+  flex: 0 0 auto;
+  width: 7.25rem !important;
+  max-width: 7.25rem;
+  min-width: 7.25rem;
+  padding: 8px 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #111827;
+  background: #fff;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  box-sizing: border-box;
+}
+
+.phone-intl input[data-phone-national],
+.phone-intl input {
+  flex: 1 1 auto;
+  min-width: 10rem;
+  width: 100% !important;
+  max-width: none;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  font-size: 15px;
+  direction: ltr;
+  text-align: left;
+}
+
+.phone-intl-hint,
+.field:has(.phone-intl) > .hint,
+.founder-field:has(.phone-intl) > .hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+@media (max-width: 420px) {
+  .phone-intl {
+    flex-wrap: wrap;
+  }
+  .phone-intl select[data-phone-country],
+  .phone-intl select {
+    width: 100% !important;
+    max-width: none;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .phone-intl input[data-phone-national],
+  .phone-intl input {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
