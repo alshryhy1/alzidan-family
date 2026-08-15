@@ -51,6 +51,7 @@
 - النوايا أعلاه هي النواة المعتمدة لـ Product Foundation و**نطاق RX v1** — [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md).
 - توسعات مرشّحة (إعلان مولود · إضافة زوجة · أضف أبناء كنية مستقلة) = **⬛ مؤجّلة** — تُضاف بنفس الجدول لا بمسارات جانبية · **لا شاشة RX حتى صف هنا** — انظر [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) §3.2 / §8.2.
 - تسمية العرض للمندوب/الإدارة قد تختلف قليلًا وفق [`PRODUCT-LANGUAGE.md`](./PRODUCT-LANGUAGE.md) مع الإبقاء على نفس `النوع الداخلي`.
+- **تصحيح الشجرة متعدد العمليات:** [`TREE-CORRECTION-OPERATIONS-MAP-v1.md`](./TREE-CORRECTION-OPERATIONS-MAP-v1.md) — تحت «صحح بيانات»، لا داخل `tree_card`. **نطاق التنفيذ الحالي:** ويب مصدرًا · إدارة+مندوب استقبالًا · الجوال خارج الشريحة. Cross-Client يُستكمل عند فتح الجوال لاحقًا.
 
 ---
 

@@ -23,7 +23,8 @@
 مرجع مرحلة مستقلة: [`VALIDATION-ENGINE.md`](./VALIDATION-ENGINE.md).  
 مراجعة رحلة الطلب كاملة (as-is → to-be · قبل أي RX/DW UI): [`REQUEST-JOURNEY-REVIEW-v1.md`](./REQUEST-JOURNEY-REVIEW-v1.md).  
 **رحلة الطلب + القرار لكل نوع:** [`REQUEST-DECISION-JOURNEY-v1.md`](./REQUEST-DECISION-JOURNEY-v1.md) — ✅ معتمدة («ابدا» 2026-08-09) · مرشّحات فهرس (زوجة/أبناء/ميلاد) ⬛ مؤجّلة.  
-**Request Experience:** [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) — 🟢 معتمدة («اعتمدوا Request Experience» 2026-08-09) · **RX-Build مفتوح على شرائح** · **لا كود DW**.
+**Request Experience:** [`REQUEST-EXPERIENCE-UX-v1.md`](./REQUEST-EXPERIENCE-UX-v1.md) — 🟢 معتمدة («اعتمدوا Request Experience» 2026-08-09) · **RX-Build مفتوح على شرائح** · **لا كود DW**.  
+**مساحة المناديب (منتج):** [`DELEGATE-SERVICE-SPACE-v1.md`](./DELEGATE-SERVICE-SPACE-v1.md) — ✅ معتمد · تنفيذ ❄️ حتى بعد VE/WF على السلّم.
 
 وثيقة التنفيذ الهندسية الرسمية لمشروع عائلة الزيدان. المنصة = **معرفة عائلية + سير اعتماد** — ليست شجرة فقط. تُدار كـ**برنامج مشاريع** بثلاثة مسارات + طبقات معمارية ثابتة + بنية تحتية مشتركة.
 

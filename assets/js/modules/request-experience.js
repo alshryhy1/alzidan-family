@@ -3427,6 +3427,58 @@
   }
 
   function buildTreeCardMessage(payload) {
+    var Contract =
+      (typeof window !== "undefined" && window.AlzidanTreeCardContract) || null;
+    if (Contract && typeof Contract.serializeTreeCardRequest === "function") {
+      var ancestors = Array.isArray(payload.ancestors) ? payload.ancestors : [];
+      var canonical = Contract.normalizeTreeCardPayload(
+        {
+          v: 1,
+          schema: Contract.SCHEMA || "tree_card.v1",
+          kind: "tree_card",
+          rx: "v1",
+          branch_key: payload.branch,
+          grandfather: ancestors[0] || "",
+          ancestors: ancestors,
+          father: payload.father,
+          father_path: payload.parentNodeId || payload.parentPath || "",
+          father_person_id: payload.parentPersonId || "",
+          parent_person_id: payload.parentPersonId || "",
+          parent_path: payload.parentPath || "",
+          parent_node_id: payload.parentNodeId || "",
+          name: payload.personName,
+          gender: payload.gender || "",
+          birth_date_g: payload.personDob,
+          city: "",
+          area: "",
+          children: [],
+          submitter: {
+            name: payload.submitterName,
+            phone: payload.submitterPhone,
+            email: payload.submitterEmail,
+          },
+          created_at: payload.createdAt,
+        },
+        {
+          row: {
+            request_id: payload.requestId,
+            branch_key: payload.branch,
+            name: payload.submitterName,
+            phone: payload.submitterPhone,
+            email: payload.submitterEmail,
+            created_at: payload.createdAt,
+          },
+        }
+      );
+      return Contract.serializeTreeCardRequest(canonical, {
+        request_id: payload.requestId,
+        branch_key: payload.branch,
+        name: payload.submitterName,
+        phone: payload.submitterPhone,
+        email: payload.submitterEmail,
+        created_at: payload.createdAt,
+      });
+    }
     var ancestors = Array.isArray(payload.ancestors) ? payload.ancestors : [];
     var lines = [];
     lines.push("طلب: أضف فردًا للعائلة");
@@ -3456,6 +3508,7 @@
       JSON.stringify(
         {
           v: 1,
+          schema: "tree_card.v1",
           kind: "tree_card",
           rx: "v1",
           branch_key: payload.branch,

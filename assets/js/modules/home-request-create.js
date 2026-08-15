@@ -1020,9 +1020,31 @@
   }
 
   async function insertApprovalRequest(client, row) {
-    var res = await client.from("approval_requests").insert(row);
+    var next = row || {};
+    if (String(next.kind || "").trim() === "tree_card") {
+      var Contract =
+        (typeof window !== "undefined" && window.AlzidanTreeCardContract) || null;
+      if (Contract && typeof Contract.assertCreatableEnvelope === "function") {
+        var gate = Contract.assertCreatableEnvelope(next.message, next);
+        if (!gate || !gate.ok) {
+          var err = new Error(
+            (gate && gate.message_ar) || "TREE_CARD_ENVELOPE_REQUIRED"
+          );
+          err.code = (gate && gate.code) || "TREE_CARD_ENVELOPE_REQUIRED";
+          throw err;
+        }
+        if (gate.message) {
+          next = Object.assign({}, next, { message: gate.message });
+        }
+      } else if (String(next.message || "").indexOf("__JSON__:") < 0) {
+        var err2 = new Error("TREE_CARD_ENVELOPE_REQUIRED");
+        err2.code = "TREE_CARD_ENVELOPE_REQUIRED";
+        throw err2;
+      }
+    }
+    var res = await client.from("approval_requests").insert(next);
     if (res.error) throw res.error;
-    return row;
+    return next;
   }
 
   async function insertMemory(client, item, media) {

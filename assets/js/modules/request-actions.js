@@ -59,7 +59,24 @@
       return null;
     }
   }
-  function extractTreeCardPayloadFromMessage(msg) {
+  function treeCardContract() {
+    return (
+      (typeof window !== "undefined" && window.AlzidanTreeCardContract) || null
+    );
+  }
+
+  /**
+   * Canonical parse+normalize for tree_card messages.
+   * Prefer Contract; fall back to legacy marker parse.
+   * Returns normalized payload or null only when Contract unavailable AND no JSON.
+   */
+  function extractTreeCardPayloadFromMessage(msg, row) {
+    const Contract = treeCardContract();
+    if (Contract && typeof Contract.parseTreeCardRequestMessage === "function") {
+      const parsed = Contract.parseTreeCardRequestMessage(msg, row || null);
+      if (parsed && parsed.payload) return parsed.payload;
+      return null;
+    }
     const text = String(msg || "");
     const marker = "__JSON__:";
     const idx = text.indexOf(marker);
@@ -69,17 +86,48 @@
     const parsed = safeParseJsonTextLoose(jsonText);
     return parsed && typeof parsed === "object" ? parsed : null;
   }
+
+  function parseTreeCardRequestForEditor(row) {
+    const Contract = treeCardContract();
+    const message = row && row.message ? row.message : "";
+    if (Contract && typeof Contract.parseTreeCardRequestMessage === "function") {
+      return Contract.parseTreeCardRequestMessage(message, row);
+    }
+    const payload = extractTreeCardPayloadFromMessage(message, row);
+    return {
+      ok: !!payload,
+      status: payload ? "complete" : "invalid",
+      hasMarker: String(message).indexOf("__JSON__:") >= 0,
+      jsonValid: !!payload,
+      payload: payload,
+      recovery: null,
+      reasons: payload ? [] : ["تعذر قراءة تفاصيل بطاقة الشجرة (لا يوجد JSON)."],
+      raw: String(message || ""),
+    };
+  }
   function updateBranchInRequestMessage(message, branchKey, kind) {
     const text = String(message || "");
     const branch = normalizeTreeCardText(branchKey);
     if (!text || !branch) return text;
     if (kind === "tree_card") {
-      const marker = "__JSON__:";
-      const idx = text.indexOf(marker);
-      const visiblePart = idx >= 0 ? text.slice(0, idx).trimEnd() : text;
-      const payload = extractTreeCardPayloadFromMessage(text);
+      const Contract = treeCardContract();
+      let payload = extractTreeCardPayloadFromMessage(text);
+      if (!payload && Contract) {
+        const parsed = Contract.parseTreeCardRequestMessage(text, {
+          branch_key: branch,
+        });
+        payload = parsed && parsed.payload ? parsed.payload : null;
+      }
       if (payload) {
         payload.branch_key = branch;
+        if (Contract && typeof Contract.serializeTreeCardRequest === "function") {
+          return Contract.serializeTreeCardRequest(payload, {
+            branch_key: branch,
+          });
+        }
+        const marker = "__JSON__:";
+        const idx = text.indexOf(marker);
+        const visiblePart = idx >= 0 ? text.slice(0, idx).trimEnd() : text;
         const updatedVisible = /^العائلة \(إجباري\):.*$/m.test(visiblePart)
           ? visiblePart.replace(
               /^العائلة \(إجباري\):.*$/m,
@@ -905,6 +953,14 @@
     };
   }
   function buildTreeCardMessageFromPayload(payload, reqRow) {
+    const Contract = treeCardContract();
+    if (Contract && typeof Contract.serializeTreeCardRequest === "function") {
+      const normalized =
+        typeof Contract.normalizeTreeCardPayload === "function"
+          ? Contract.normalizeTreeCardPayload(payload || {}, { row: reqRow })
+          : payload || {};
+      return Contract.serializeTreeCardRequest(normalized, reqRow || {});
+    }
     const ancestors = Array.isArray(payload.ancestors) ? payload.ancestors : [];
     const children = Array.isArray(payload.children) ? payload.children : [];
     const submitter = payload.submitter || {};
@@ -2009,15 +2065,19 @@
         document.getElementById("tree-card-edit-dialog") || treeCardEditDialog;
       const form =
         document.getElementById("tree-card-edit-form") || treeCardEditForm;
-      const payload = extractTreeCardPayloadFromMessage(
-        row && row.message ? row.message : "",
-      );
-      if (!payload) {
-        showAlert("error", "تعذر قراءة تفاصيل بطاقة الشجرة (لا يوجد JSON).");
-        return;
-      }
       if (!dialog || !form || typeof dialog.showModal !== "function") {
         showAlert("error", "نافذة التعديل غير متاحة في الصفحة. حدّث الصفحة بقوة.");
+        return;
+      }
+      const parsed = parseTreeCardRequestForEditor(row);
+      const payload = parsed && parsed.payload ? parsed.payload : null;
+      if (!payload) {
+        // Contract always returns a shell; legacy fallback only.
+        showAlert(
+          "error",
+          (parsed && parsed.reasons && parsed.reasons[0]) ||
+            "تعذر قراءة تفاصيل بطاقة الشجرة.",
+        );
         return;
       }
       treeCardEditRow = row;
@@ -2032,6 +2092,17 @@
       renderOriginalRequestReview(payload, row);
       fillCorrectionFieldsFromPayload(payload, row);
       setFatherSearchOpen(false);
+      const recoveryMode =
+        (payload.recovery && payload.recovery.mode) ||
+        (parsed && !parsed.jsonValid ? parsed.status : "");
+      if (recoveryMode && recoveryMode !== "complete") {
+        const reason =
+          (parsed.reasons && parsed.reasons[0]) ||
+          "الطلب بلا envelope كامل — وضع استعادة. أكمل الحقول واختر الأب من الشجرة ثم احفظ.";
+        showTreeCardEditError(
+          "وضع استعادة (" + String(recoveryMode) + "): " + reason,
+        );
+      }
       try {
         const first = form.querySelector("#edit-card-person-name");
         if (first && typeof first.focus === "function") first.focus();
@@ -2046,7 +2117,10 @@
             "",
         );
         if (treeCardFatherPersonIdValue()) {
-          showTreeCardEditError("");
+          return;
+        }
+        // Do not invent parent UUID during empty-shell recovery.
+        if (payload.recovery && payload.recovery.mode === "empty_shell") {
           return;
         }
         const resolved = await autoResolveAdminFatherFromPayload(payload, branch);
@@ -2054,7 +2128,6 @@
         // Admin may have picked a father while auto-resolve was in flight —
         // never overwrite/clear that bind (dispatchEvent("input") used to).
         if (treeCardFatherPersonIdValue()) {
-          showTreeCardEditError("");
           return;
         }
         if (resolved && resolved.ok && resolved.person_id) {
@@ -2068,7 +2141,6 @@
             inferAncestors: true,
             resolveIdentity: false,
           });
-          showTreeCardEditError("");
           return;
         }
         if (resolved && resolved.ambiguous) {
@@ -2078,6 +2150,18 @@
               "». اختر الأب الصحيح من البحث.",
           );
           await seedFatherSearchTerm(resolved.father || "");
+          return;
+        }
+        if (payload.recovery && payload.recovery.mode) {
+          showTreeCardEditError(
+            "وضع استعادة: اختر الأب من الشجرة ثم احفظ لبناء الحمولة canonical.",
+          );
+          const leafHint = normalizeTreeCardText(payload.father || "");
+          if (leafHint) {
+            await seedFatherSearchTerm(leafHint, {
+              placeholder: "ابحث عن الأب: " + leafHint,
+            });
+          }
           return;
         }
         const leaf = normalizeTreeCardText(payload.father || "");
@@ -2093,7 +2177,6 @@
         }
       })().catch(function () {
         if (treeCardFatherPersonIdValue()) {
-          showTreeCardEditError("");
           return;
         }
         showTreeCardEditError(
@@ -2117,15 +2200,32 @@
   }
 
   function buildTreeCardRows(reqRow, branchOverride) {
-    const payload = extractTreeCardPayloadFromMessage(
+    const Contract = treeCardContract();
+    let payload = extractTreeCardPayloadFromMessage(
       reqRow && reqRow.message ? reqRow.message : "",
+      reqRow,
     );
+    if (payload && Contract && typeof Contract.normalizeTreeCardPayload === "function") {
+      payload = Contract.normalizeTreeCardPayload(payload, { row: reqRow });
+    }
     if (!payload)
       return {
         ok: false,
         message: "تعذر قراءة بيانات البطاقة (JSON غير موجود).",
         rows: [],
       };
+    // Recovered empty shell must not invent tree edges.
+    if (
+      payload.recovery &&
+      payload.recovery.mode === "empty_shell" &&
+      !normalizeTreeCardText(payload.name || "")
+    ) {
+      return {
+        ok: false,
+        message: "الطلب في وضع استعادة — أكمل الاسم والأب من «تعديل كامل» أولًا.",
+        rows: [],
+      };
+    }
     const branchKey = normalizeTreeCardText(
       branchOverride || payload.branch_key || reqRow.branch_key || "",
     );
@@ -2497,7 +2597,7 @@
         showTreeCardEditError("البريد الإلكتروني غير صحيح.");
         return;
       }
-      const oldPayload = extractTreeCardPayloadFromMessage(row.message) || {};
+      const oldPayload = extractTreeCardPayloadFromMessage(row.message, row) || {};
       const core = window.AlzidanAdminCore || {};
       const sb =
         typeof getClient === "function"
@@ -3271,6 +3371,7 @@
     const CP = window.AlzidanCanonicalPerson;
     const payload = extractTreeCardPayloadFromMessage(
       reqRow && reqRow.message ? reqRow.message : "",
+      reqRow,
     );
     if (!payload) return { ok: true, row: reqRow, resolved: false };
     const existing = normalizeTreeCardText(

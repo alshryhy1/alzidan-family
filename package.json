@@ -38,6 +38,7 @@
     "verify:delegate-digits": "node scripts/test-delegate-arabic-digits.js",
     "verify:delegate-workspace": "node scripts/test-delegate-workspace-reorder.js",
     "verify:empty-video": "node scripts/test-empty-video-gate.js",
-    "prove:empty-video": "node scripts/prove-empty-video-render.mjs"
+    "prove:empty-video": "node scripts/prove-empty-video-render.mjs",
+    "verify:tree-card-contract": "node scripts/test-tree-card-contract.js"
   }
 }

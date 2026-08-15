@@ -680,6 +680,14 @@ function showAlert(kind, msg) {
     return lines.join("\n").trim() || "لا توجد تفاصيل إضافية.";
   }
   function buildRequestSourceText(row) {
+    const kind = String((row && row.kind) || "").trim();
+    if (kind === "tree_card") {
+      const Contract =
+        (typeof window !== "undefined" && window.AlzidanTreeCardContract) || null;
+      if (Contract && typeof Contract.formatAdminSourceDiagnostics === "function") {
+        return Contract.formatAdminSourceDiagnostics(row);
+      }
+    }
     const raw = String(row && row.message ? row.message : "").trim();
     return raw || "لا يوجد مصدر خام لهذا الطلب.";
   }
@@ -854,6 +862,21 @@ function showAlert(kind, msg) {
     }
 
     if (kind === "tree_card") {
+      const Contract =
+        (typeof window !== "undefined" && window.AlzidanTreeCardContract) || null;
+      if (Contract && typeof Contract.assessRequestQuality === "function") {
+        const assessed = Contract.assessRequestQuality(row);
+        if (assessed) {
+          // Map contract levels onto existing filter keys (complete/review/missing).
+          return {
+            key: assessed.key,
+            label: assessed.label,
+            reason: assessed.reason,
+            level: assessed.level,
+            parse: assessed.parse,
+          };
+        }
+      }
       if (env.hasMarker && !env.valid) {
         return { key: "review", label: "يحتاج مراجعة", reason: "بيانات الشجرة بصيغة JSON غير صالحة." };
       }
