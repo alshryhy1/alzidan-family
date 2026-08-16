@@ -215,6 +215,7 @@
         api.OPERATION_PHONE,
         api.OPERATION_BIRTH,
         api.OPERATION_PARENT,
+        api.OPERATION_CITY,
       ].indexOf(parsed.operation) < 0
     ) {
       window.alert("هذا الطلب ليس تصحيح شخص/أب منظم.");
@@ -235,7 +236,9 @@
             ? "تصحيح جوال"
             : parsed.operation === api.OPERATION_BIRTH
               ? "تصحيح ميلاد"
-              : "تصحيح أب";
+              : parsed.operation === api.OPERATION_CITY
+                ? "تصحيح مدينة"
+                : "تصحيح أب";
     }
     setStatus("جاري تحميل سجل الشخص…");
     if (typeof dlg.showModal === "function") dlg.showModal();
@@ -274,6 +277,15 @@
       }
       if (parsed.operation === api.OPERATION_BIRTH && !working.payload.birth_date_old) {
         working.payload.birth_date_old = text(treeRow.birth_date_g || "");
+        working.preview = api.buildPersonCorrectionPreview(working.payload);
+      }
+      if (parsed.operation === api.OPERATION_CITY) {
+        if (!working.payload.city_old) {
+          working.payload.city_old = text(treeRow.city || "");
+        }
+        if (!working.payload.area_old) {
+          working.payload.area_old = text(treeRow.area || "");
+        }
         working.preview = api.buildPersonCorrectionPreview(working.payload);
       }
       if (parsed.operation === api.OPERATION_PARENT) {
@@ -320,9 +332,21 @@
             ? '<p style="margin:0 0 8px"><strong>الميلاد الجديد:</strong> ' +
               escapeHtml(p.birth_date_new) +
               "</p>"
-            : '<p style="margin:0 0 8px"><strong>الأب الجديد:</strong> ' +
-              escapeHtml(p.new_parent_name || p.new_parent_person_id) +
-              "</p>") +
+            : p.operation === api.OPERATION_CITY
+              ? '<p style="margin:0 0 8px">' +
+                (p.city_new
+                  ? "<strong>المدينة الجديدة:</strong> " +
+                    escapeHtml(p.city_new) +
+                    "<br>"
+                  : "") +
+                (p.area_new
+                  ? "<strong>الحي/القرية الجديد:</strong> " +
+                    escapeHtml(p.area_new)
+                  : "") +
+                "</p>"
+              : '<p style="margin:0 0 8px"><strong>الأب الجديد:</strong> ' +
+                escapeHtml(p.new_parent_name || p.new_parent_person_id) +
+                "</p>") +
       '<div style="background:#f8fafc;border-radius:10px;padding:10px 12px;margin:10px 0">' +
       "<div><strong>يتغير</strong><ul style=\"margin:6px 0 0;padding-inline-start:18px\">" +
       (prev.changes || [])
@@ -791,6 +815,50 @@
           throw new Error("الحفظ لم يُثبَّت — الميلاد في الشجرة لا يطابق المطلوب.");
         }
         working.treeRow = againB;
+      } else if (p.operation === api.OPERATION_CITY) {
+        var cityPatch = {};
+        if (p.city_new) cityPatch.city = p.city_new;
+        if (p.area_new) cityPatch.area = p.area_new;
+        if (activeMode === "admin") {
+          var tokenC = getAdminToken();
+          if (!tokenC) throw new Error("يلزم تسجيل دخول الإدارة.");
+          var cityRes = await adminUpsertPersonRow(sb, tokenC, tree, cityPatch);
+          if (!cityRes.ok) {
+            throw new Error(
+              (cityRes.error && cityRes.error.message) || "فشل تحديث المدينة"
+            );
+          }
+        } else if (
+          window.AlzidanDelegateTreeWrite &&
+          typeof window.AlzidanDelegateTreeWrite.updateCity === "function"
+        ) {
+          var dCity = await window.AlzidanDelegateTreeWrite.updateCity(
+            tree,
+            cityPatch
+          );
+          if (!dCity || !dCity.ok) {
+            throw new Error(
+              (dCity && dCity.message) || "فشل تحديث المدينة من المندوب"
+            );
+          }
+        } else {
+          throw new Error(
+            "حفظ المدينة من المندوب غير متاح — حدّث الصفحة أو استخدم الإدارة."
+          );
+        }
+        var againC = await loadTreeRow(sb, p.person_id, p.branch_key);
+        if (!againC) {
+          throw new Error("الحفظ لم يُثبَّت — تعذر إعادة قراءة السجل.");
+        }
+        if (p.city_new && text(againC.city || "") !== p.city_new) {
+          throw new Error("الحفظ لم يُثبَّت — المدينة في الشجرة لا تطابق المطلوب.");
+        }
+        if (p.area_new && text(againC.area || "") !== p.area_new) {
+          throw new Error(
+            "الحفظ لم يُثبَّت — الحي/القرية في الشجرة لا يطابق المطلوب."
+          );
+        }
+        working.treeRow = againC;
       } else if (p.operation === api.OPERATION_PARENT) {
         var parentRow = await loadTreeRow(
           sb,

@@ -108,4 +108,27 @@ var routedPar = Corr.routeRequest({ kind: "tree_edit", message: gatePar.message 
 assert(routedPar.route === "parent_change", "router → parent_change");
 assert(routedPar.blockTreeCardApply, "parent blocks tree_card apply");
 
+var cityPayload = {
+  operation: "city_correction",
+  branch_key: "مزيد",
+  person_id: "pid-1",
+  person_name: "حسن",
+  city_new: "الرياض",
+  area_new: "النسيم",
+  source: "web_rx",
+};
+var gateC = Corr.assertCreatablePersonCorrection(cityPayload);
+assert(gateC.ok, "city_correction creatable");
+var routedC = Corr.routeRequest({ kind: "tree_edit", message: gateC.message });
+assert(routedC.route === "city_correction", "router → city_correction");
+assert(routedC.open === "city_editor", "opens city editor");
+assert(routedC.blockTreeCardApply, "city blocks tree_card apply");
+var prevC = Corr.buildPersonCorrectionPreview(cityPayload);
+assert(prevC.changes && prevC.changes.length >= 1, "city preview has changes");
+
+var badCity = Corr.assertCreatablePersonCorrection(
+  Object.assign({}, cityPayload, { city_new: "", area_new: "" })
+);
+assert(!badCity.ok, "city without city/area rejected");
+
 console.log("\nAll person correction contract tests passed.");

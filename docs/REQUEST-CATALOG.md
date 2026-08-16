@@ -57,7 +57,7 @@
 - **تصحيح الشجرة متعدد العمليات:** [`TREE-CORRECTION-OPERATIONS-MAP-v1.md`](./TREE-CORRECTION-OPERATIONS-MAP-v1.md) §2.0 — تحت نية «صحح بيانات»، لا داخل `tree_card`. **`operation` = مصدر الحقيقة**؛ نص العضو ملاحظة اختيارية فقط.
 - **نطاق التنفيذ الحالي:** ويب مصدرًا · إدارة+مندوب استقبالًا · الجوال خارج الشريحة. Cross-Client عند فتح الجوال لاحقًا.
 - **جاهزية العضو:** خيار إرسال في واجهة العضو فقط إذا كانت العملية **`live`** في جدول الجاهزية. `partial` / `missing_*` / `legacy_only` = كتالوج إدارة أو أرشيف — **ليست** خيارات عضو.
-- **Live اليوم (Family Engine ويب):** `add_person` · `reorder_children` · `name_correction` · `phone_correction` · `birth_date_correction` · `parent_change`. **أكبر فجوة متبقية:** `tree_edit` العام بلا `operation` (لا يُعرض للعضو).
+- **Live اليوم (Family Engine ويب):** `add_person` · `reorder_children` · `name_correction` · `phone_correction` · `birth_date_correction` · `parent_change` · `city_correction`. **`tree_edit` العام:** مغلق لإنشاء عضو جديد (2026-08-17) — التوجيه لعمليات live فقط؛ الأرشيف القديم → مراجعة آمنة.
 - **§2.0 مجمّد** ككتالوج؛ ترقية صف إلى `live` تتم بشريحة كاملة فقط.
 - **واجهة العضو:** تصحيح في الشجرة → ترتيب الأبناء · تصحيح بيانات شخص → اسم / جوال.
 

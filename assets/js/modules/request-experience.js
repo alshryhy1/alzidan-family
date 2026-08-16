@@ -2,8 +2,9 @@
  * Home request hub — visitor intent-first entry.
  * Paths: أضف فردًا · تصحيح في الشجرة (إعادة ترتيب أبناء live) · مناسبة · ذكرى · بطاقة · حالة صحية · وفاة.
  * Member home shows live correction ops only (TREE-CORRECTION-OPERATIONS-MAP §2.0 freeze).
- * Generic tree_edit is partial — not a home card; kept for exists-gate interim only.
- * No direct tree writes from these screens — requests go to review / طلباتي.
+ * Generic tree_edit (mixed fields, no operation) is CLOSED for new member creates.
+ * Exists-gate and deep links redirect to person_correction / tree_correction hubs.
+ * Live ops keep kind=tree_edit for DB compatibility but always carry operation.
  * Spec: docs/REQUEST-EXPERIENCE-UX-v1.md · docs/TREE-CORRECTION-OPERATIONS-MAP-v1.md §2.0.
  */
 (function () {
@@ -20,7 +21,7 @@
   /** Home «طلباتي» display cap — UI only; does not delete DB/local history. */
   var TRACK_DEFAULT_LIMIT = 10;
   var EXISTING_PERSON_MSG =
-    "هذا الشخص موجود مسبقًا في الشجرة. إذا أردت تعديل بياناته فاستخدم (تصحيح بيانات شخص).";
+    "هذا الشخص موجود مسبقًا في الشجرة. إذا أردت تعديل بياناته فاختر نوع التصحيح المحدد (اسم أو جوال أو ميلاد أو مدينة).";
   /** Retest note: father خميس must list حسن، حسين، عبدالعزيز، منصور، مزيد — same count as tree. */
 
   /** All known intents (including partial/internal). Home uses HOME_INTENTS only. */
@@ -51,9 +52,10 @@
     {
       id: "tree_edit",
       label: "صحح بيانات شخص (عام)",
-      blurb: "مسار partial — ليس خيارًا في الرئيسية.",
-      implemented: true,
+      blurb: "مغلق — استخدم خيارات التصحيح المحددة.",
+      implemented: false,
       home: false,
+      closed: true,
     },
     {
       id: "name_correction",
@@ -77,6 +79,15 @@
       id: "birth_date_correction",
       label: "تصحيح تاريخ الميلاد",
       blurb: "اختر الشخص واكتب تاريخ الميلاد الصحيح.",
+      implemented: true,
+      home: false,
+      readiness: "live",
+      correctionGroup: "person",
+    },
+    {
+      id: "city_correction",
+      label: "تصحيح المدينة/القرية",
+      blurb: "اختر الشخص واكتب المدينة أو الحي/القرية.",
       implemented: true,
       home: false,
       readiness: "live",
@@ -167,6 +178,11 @@
       id: "birth_date_correction",
       label: "تصحيح تاريخ الميلاد",
       blurb: "اختر الشخص واكتب تاريخ الميلاد الصحيح.",
+    },
+    {
+      id: "city_correction",
+      label: "تصحيح المدينة/القرية",
+      blurb: "اختر الشخص واكتب المدينة أو الحي/القرية.",
     },
   ];
 
@@ -2014,6 +2030,14 @@
     }
     try {
       setFormAlert(form, "error", "");
+      // Hard close: no new generic tree_edit without a live operation.
+      setFormAlert(
+        form,
+        "error",
+        "مسار التصحيح العام مغلق. اختر من الرئيسية: تصحيح الاسم أو الجوال أو الميلاد أو المدينة، أو تصحيح الأب/ترتيب الأبناء."
+      );
+      openTreeEdit();
+      return;
       var personName = text(form.querySelector('[name="person"]') && form.querySelector('[name="person"]').value);
       var personId = text(
         form.querySelector("[data-event-person-id]") &&
@@ -2548,13 +2572,10 @@
   }
 
   function renderTreeEdit() {
-    shell(
-      "صحح بيانات شخص",
-      '<p class="rx-lead">اختر الشخص وحدد الحقول التي تريد تصحيحها، ثم أرسل للمراجعة.</p>' +
-        '<div class="rx-tree-edit-mount" data-rx-tree-edit-mount></div>',
-      { sub: "يظهر في طلباتي — بدون حفظ مباشر في الشجرة." }
-    );
-    mountTreeEditForm();
+    // Closed path: never mount the mixed-fields form for new requests.
+    state.intentId = "person_correction";
+    state.view = "person_correction";
+    renderPersonCorrectionHub();
   }
 
   function renderReorderChildren() {
@@ -2633,7 +2654,8 @@
         if (
           id === "name_correction" ||
           id === "phone_correction" ||
-          id === "birth_date_correction"
+          id === "birth_date_correction" ||
+          id === "city_correction"
         ) {
           state.intentId = id;
           state.view = id;
@@ -2671,6 +2693,16 @@
       { sub: "يظهر طلبك في طلباتي بعد الإرسال." }
     );
     mountPersonCorrectionForm("birth_date_correction");
+  }
+
+  function renderCityCorrection() {
+    shell(
+      "تصحيح المدينة/القرية",
+      '<p class="rx-lead">اختر الشخص واكتب المدينة أو الحي/القرية، ثم أرسل للمراجعة.</p>' +
+        '<div class="rx-person-corr-mount" data-rx-person-corr-mount></div>',
+      { sub: "يظهر طلبك في طلباتي بعد الإرسال." }
+    );
+    mountPersonCorrectionForm("city_correction");
   }
 
   function renderParentChange() {
@@ -2711,6 +2743,10 @@
     } else if (operation === "birth_date_correction") {
       extraField =
         '<div class="founder-field"><label>تاريخ الميلاد الجديد</label><input name="birthDateNew" type="date" required /></div>';
+    } else if (operation === "city_correction") {
+      extraField =
+        '<div class="founder-field"><label>المدينة</label><input name="cityNew" maxlength="80" placeholder="مثال: الرياض" /></div>' +
+        '<div class="founder-field"><label>الحي/القرية (اختياري)</label><input name="areaNew" maxlength="80" placeholder="مثال: النسيم" /></div>';
     } else if (operation === "parent_change") {
       extraField =
         '<div class="founder-field" style="grid-column:1/-1"><label>الأب الصحيح</label>' +
@@ -3017,6 +3053,19 @@
           form.querySelector('[name="birthDateNew"]') &&
             form.querySelector('[name="birthDateNew"]').value
         );
+      } else if (operation === "city_correction") {
+        payload.city_new = text(
+          form.querySelector('[name="cityNew"]') &&
+            form.querySelector('[name="cityNew"]').value
+        );
+        payload.area_new = text(
+          form.querySelector('[name="areaNew"]') &&
+            form.querySelector('[name="areaNew"]').value
+        );
+        if (!payload.city_new && !payload.area_new) {
+          fail("أدخل المدينة أو الحي/القرية على الأقل.");
+          return;
+        }
       } else if (operation === "parent_change") {
         if (!ctx.newParentId) {
           fail("اختر الأب الصحيح من نتائج البحث.");
@@ -3098,7 +3147,9 @@
               ? "تصحيح الجوال"
               : operation === "birth_date_correction"
                 ? "تصحيح تاريخ الميلاد"
-                : "تصحيح الأب",
+                : operation === "city_correction"
+                  ? "تصحيح المدينة/القرية"
+                  : "تصحيح الأب",
         status: "submitted",
         summary: ctx.personName,
         person: ctx.personName,
@@ -3551,9 +3602,10 @@
   }
 
   function openTreeEdit() {
+    // Generic mixed tree_edit closed — send members to live correction hubs.
     clearError();
-    state.intentId = "tree_edit";
-    state.view = "tree_edit";
+    state.intentId = "person_correction";
+    state.view = "person_correction";
     render();
     try {
       if (root && typeof root.scrollIntoView === "function") {
@@ -3649,6 +3701,7 @@
     else if (state.view === "name_correction") renderNameCorrection();
     else if (state.view === "phone_correction") renderPhoneCorrection();
     else if (state.view === "birth_date_correction") renderBirthDateCorrection();
+    else if (state.view === "city_correction") renderCityCorrection();
     else if (state.view === "parent_change") renderParentChange();
     else if (state.view === "tree_edit") renderTreeEdit();
     else if (state.view === "reorder_children") renderReorderChildren();
@@ -3706,7 +3759,8 @@
         } else if (
           state.view === "name_correction" ||
           state.view === "phone_correction" ||
-          state.view === "birth_date_correction"
+          state.view === "birth_date_correction" ||
+          state.view === "city_correction"
         ) {
           state.intentId = "person_correction";
           state.view = "person_correction";
@@ -4377,7 +4431,7 @@
         '<p class="rx-lead">' +
         escapeHtml(EXISTING_PERSON_MSG) +
         "</p>" +
-        '<p class="rx-note"><strong>لن يُنشأ طلب إضافة</strong> — استخدم «صحح بيانات شخص» إن أردت تعديل بياناته.</p>' +
+        '<p class="rx-note"><strong>لن يُنشأ طلب إضافة</strong> — اختر نوع التصحيح المحدد (اسم / جوال / ميلاد / مدينة).</p>' +
         personBlock +
         "<p>ماذا تريد؟</p>" +
         '<div class="rx-actions rx-actions-stack">' +

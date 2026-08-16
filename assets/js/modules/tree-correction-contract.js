@@ -27,12 +27,14 @@
   var OPERATION_PHONE = "phone_correction";
   var OPERATION_BIRTH = "birth_date_correction";
   var OPERATION_PARENT = "parent_change";
+  var OPERATION_CITY = "city_correction";
   var KIND_EDIT = "tree_edit";
   var PERSON_OPS = [
     OPERATION_NAME,
     OPERATION_PHONE,
     OPERATION_BIRTH,
     OPERATION_PARENT,
+    OPERATION_CITY,
   ];
 
   function text(v) {
@@ -1139,6 +1141,16 @@
     var oldParentName = text(
       src.old_parent_name || src.oldParentName || ""
     );
+    var cityNew = text(src.city_new || src.cityNew || "");
+    var cityOld = text(src.city_old || src.cityOld || "");
+    var areaNew = text(src.area_new || src.areaNew || "");
+    var areaOld = text(src.area_old || src.areaOld || "");
+    if (!cityNew && operation === OPERATION_CITY) {
+      cityNew = text(src.city || "");
+    }
+    if (!areaNew && operation === OPERATION_CITY) {
+      areaNew = text(src.area || "");
+    }
     var notes = text(src.notes || "");
     var review = text(src.review_state || "");
     return {
@@ -1156,6 +1168,10 @@
       phone_old: phoneOld,
       birth_date_new: birthNew,
       birth_date_old: birthOld,
+      city_new: cityNew,
+      city_old: cityOld,
+      area_new: areaNew,
+      area_old: areaOld,
       new_parent_person_id: newParentId,
       new_parent_name: newParentName,
       new_parent_path: newParentPath,
@@ -1175,7 +1191,7 @@
     var reasons = [];
     if (PERSON_OPS.indexOf(p.operation) < 0) {
       reasons.push(
-        "operation يجب أن يكون name/phone/birth_date_correction أو parent_change"
+        "operation يجب أن يكون name/phone/birth_date/city_correction أو parent_change"
       );
     }
     if (!p.person_id) {
@@ -1222,6 +1238,33 @@
         reasons.push("الأب الجديد مطابق للحالي");
       }
     }
+    if (p.operation === OPERATION_CITY) {
+      if (!p.city_new && !p.area_new) {
+        reasons.push("المدينة أو الحي/القرية مطلوب");
+      }
+      if (p.city_new && p.city_new.length > 80) {
+        reasons.push("المدينة أطول من المسموح");
+      }
+      if (p.area_new && p.area_new.length > 80) {
+        reasons.push("الحي/القرية أطول من المسموح");
+      }
+      if (
+        p.city_old &&
+        p.city_new &&
+        p.city_new === p.city_old &&
+        (!p.area_new || p.area_new === p.area_old)
+      ) {
+        reasons.push("المدينة/الحي مطابق للحالي");
+      }
+      if (
+        !p.city_new &&
+        p.area_old &&
+        p.area_new &&
+        p.area_new === p.area_old
+      ) {
+        reasons.push("الحي/القرية مطابق للحالي");
+      }
+    }
     var ready = !reasons.length;
     return {
       ok: ready,
@@ -1266,6 +1309,14 @@
       lines.push(
         "الأب الجديد: " + (p.new_parent_name || p.new_parent_person_id)
       );
+    } else if (p.operation === OPERATION_CITY) {
+      lines.push("طلب تصحيح مدينة/قرية");
+      lines.push("العملية: " + OPERATION_CITY);
+      lines.push("الشخص: " + (p.person_name || p.person_id));
+      if (p.city_old) lines.push("المدينة الحالية: " + p.city_old);
+      if (p.city_new) lines.push("المدينة الجديدة: " + p.city_new);
+      if (p.area_old) lines.push("الحي/القرية الحالي: " + p.area_old);
+      if (p.area_new) lines.push("الحي/القرية الجديد: " + p.area_new);
     } else {
       lines.push("طلب تصحيح");
       lines.push("العملية: " + (p.operation || "—"));
@@ -1302,7 +1353,7 @@
         ok: false,
         code: "PERSON_OPERATION_REQUIRED",
         message_ar:
-          "طلب التصحيح يجب أن يحمل عملية مدعومة (اسم/جوال/ميلاد/أب)",
+          "طلب التصحيح يجب أن يحمل عملية مدعومة (اسم/جوال/ميلاد/أب/مدينة)",
       };
     }
     if (!parsed.creatable && parsed.reasons && parsed.reasons.length) {
@@ -1385,6 +1436,23 @@
           "الهوية",
           "أبناء هذا الشخص (مساراتهم لا تُحدَّث تلقائيًا)",
         ],
+      };
+    }
+    if (p.operation === OPERATION_CITY) {
+      var changes = [];
+      if (p.city_new) {
+        changes.push(
+          "المدينة: «" + (p.city_old || "—") + "» → «" + p.city_new + "»"
+        );
+      }
+      if (p.area_new) {
+        changes.push(
+          "الحي/القرية: «" + (p.area_old || "—") + "» → «" + p.area_new + "»"
+        );
+      }
+      return {
+        changes: changes,
+        unchanged: ["الاسم", "الأب", "الجوال", "تاريخ الميلاد", "الترتيب", "الهوية"],
       };
     }
     return { changes: [], unchanged: [] };
@@ -1487,6 +1555,19 @@
         reasons: parsed.reasons,
         payload: parsed.payload,
         operation: OPERATION_PARENT,
+      };
+    }
+    if (parsed.operation === OPERATION_CITY) {
+      return {
+        route: "city_correction",
+        open: "city_editor",
+        blockTreeCardApply: true,
+        blockTreeCardEditor: true,
+        label: "تصحيح مدينة",
+        review_state: parsed.review_state,
+        reasons: parsed.reasons,
+        payload: parsed.payload,
+        operation: OPERATION_CITY,
       };
     }
 
@@ -1597,6 +1678,7 @@
     OPERATION_PHONE: OPERATION_PHONE,
     OPERATION_BIRTH: OPERATION_BIRTH,
     OPERATION_PARENT: OPERATION_PARENT,
+    OPERATION_CITY: OPERATION_CITY,
     KIND_EDIT: KIND_EDIT,
     text: text,
     leafName: leafName,

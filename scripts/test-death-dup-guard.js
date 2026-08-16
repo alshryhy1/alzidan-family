@@ -312,7 +312,7 @@ async function runCreate(payload, client, extra) {
     "static: شارك ذكرى implemented"
   );
   assert(
-    /id:\s*"tree_edit"[\s\S]{0,120}implemented:\s*true/.test(rxSrc),
+    /id:\s*"tree_edit"[\s\S]{0,160}(implemented:\s*false|closed:\s*true)/.test(rxSrc),
     "static: صحح بيانات implemented"
   );
   assert(

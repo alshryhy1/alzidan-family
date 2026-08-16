@@ -394,6 +394,40 @@ window.AlzidanDelegateTreeWrite = {
     }
     return { ok: true };
   },
+  updateCity: async function (treeRow, patch) {
+    const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+    if (!sb) return { ok: false, message: "not_configured" };
+    const session = loadDelegateSession();
+    const branch =
+      (treeRow && treeRow.branch_key) || (session && session.branch) || "";
+    const parent = (treeRow && treeRow.parent_name) || "";
+    const childPath =
+      (treeRow && (treeRow.child_name || treeRow.name || treeRow.path)) || "";
+    const cityPatch = {};
+    if (patch && patch.city != null) cityPatch.city = patch.city;
+    if (patch && patch.area != null) cityPatch.area = patch.area;
+    if (!Object.keys(cityPatch).length) {
+      return { ok: false, message: "لا يوجد مدينة/حي للحفظ." };
+    }
+    const res = await rpcUpdateTreeChildRow(
+      sb,
+      branch,
+      parent,
+      childPath,
+      cityPatch,
+      (treeRow && treeRow.person_id) || ""
+    );
+    if (!res || !res.ok) {
+      return {
+        ok: false,
+        message:
+          (res && res.error && formatTreeChildrenDbError(res.error, "update")) ||
+          "فشل تحديث المدينة",
+        error: res && res.error,
+      };
+    }
+    return { ok: true };
+  },
   saveMemberPhone: async function (treeRow, phone) {
     const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
     if (!sb) return { ok: false, message: "not_configured" };
@@ -1253,6 +1287,7 @@ function classifyDelegateBranchRequest(req) {
       (routed.route === "name_correction" ||
         routed.route === "phone_correction" ||
         routed.route === "birth_date_correction" ||
+        routed.route === "city_correction" ||
         routed.route === "parent_change")
     ) {
       return {

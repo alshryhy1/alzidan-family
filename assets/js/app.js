@@ -45,6 +45,41 @@ function normalizeMemberPhone(v) {
   return String(v || "").replace(/[^\d+]/g, "").trim();
 }
 
+/** All plausible stored forms for one number (E.164 + legacy 05… / 966…). */
+function memberPhoneLookupCandidates(v) {
+  const out = [];
+  const seen = new Set();
+  function add(x) {
+    const s = String(x || "").trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  }
+  if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.phoneCandidates === "function") {
+    (window.AlzidanPhoneIntl.phoneCandidates(v) || []).forEach(add);
+  }
+  const one = normalizeMemberPhone(v);
+  add(one);
+  const digits = String(one || v || "").replace(/[^\d]/g, "");
+  if (digits) {
+    add(digits);
+    if (digits.length === 12 && digits.indexOf("966") === 0) {
+      add("0" + digits.slice(3));
+      add(digits.slice(3));
+      add("+" + digits);
+    } else if (digits.length === 10 && digits.indexOf("05") === 0) {
+      add("+966" + digits.slice(1));
+      add("966" + digits.slice(1));
+      add(digits.slice(1));
+    } else if (digits.length === 9 && digits.charAt(0) === "5") {
+      add("0" + digits);
+      add("966" + digits);
+      add("+966" + digits);
+    }
+  }
+  return out;
+}
+
 function getCurrentMemberPhone() {
   try {
     const params = new URLSearchParams(window.location.search || "");
@@ -65,18 +100,80 @@ async function loadCurrentMemberProfile() {
   const sb = getالخدمةClient();
   if (!sb) return null;
 
-  const { data, error } = await sb
-    .from("member_profiles")
-    .select("display_name,branch_key,tree_child_id,person_id,status,tree_children!member_profiles_tree_child_id_fkey(is_deceased,deceased,child_name,name)")
-    .eq("status", "active")
-    .eq("phone", phone)
-    .limit(1)
-    .maybeSingle();
+  const candidates = memberPhoneLookupCandidates(phone);
+  if (!candidates.length) return null;
 
-  if (error || !data) return null;
-  const treeRow = data.tree_children || {};
+  // Plain select first — embed join is fragile (FK/RLS) and must not block login.
+  let rows = null;
+  let q = await sb
+    .from("member_profiles")
+    .select("id,display_name,branch_key,tree_child_id,person_id,status,phone")
+    .eq("status", "active")
+    .in("phone", candidates)
+    .limit(8);
+  if (!q.error && Array.isArray(q.data) && q.data.length) {
+    rows = q.data;
+  } else {
+    // Soft fallback: any status (e.g. legacy rows), prefer active client-side.
+    q = await sb
+      .from("member_profiles")
+      .select("id,display_name,branch_key,tree_child_id,person_id,status,phone")
+      .in("phone", candidates)
+      .limit(8);
+    if (q.error || !Array.isArray(q.data) || !q.data.length) return null;
+    rows = q.data.slice().sort(function (a, b) {
+      const aa = String(a.status || "") === "active" ? 0 : 1;
+      const bb = String(b.status || "") === "active" ? 0 : 1;
+      return aa - bb;
+    });
+  }
+
+  const preferred =
+    rows.find(function (row) {
+      return String(row.phone || "") === phone && String(row.status || "") === "active";
+    }) ||
+    rows.find(function (row) {
+      return String(row.status || "") === "active";
+    }) ||
+    rows[0];
+  if (!preferred) return null;
+  if (String(preferred.status || "") && String(preferred.status || "") !== "active") {
+    return null;
+  }
+
+  let treeRow = {};
+  const childId = preferred.tree_child_id != null ? Number(preferred.tree_child_id) : 0;
+  const personId = String(preferred.person_id || "").trim();
+  if (childId > 0) {
+    const byId = await sb
+      .from("tree_children")
+      .select("is_deceased,deceased,child_name,name,branch_key,person_id")
+      .eq("id", childId)
+      .limit(1)
+      .maybeSingle();
+    if (!byId.error && byId.data) treeRow = byId.data;
+  }
+  if (!treeRow.child_name && !treeRow.name && personId) {
+    const byPid = await sb
+      .from("tree_children")
+      .select("is_deceased,deceased,child_name,name,branch_key,person_id")
+      .eq("person_id", personId)
+      .limit(1)
+      .maybeSingle();
+    if (!byPid.error && byPid.data) treeRow = byPid.data;
+  }
   if (treeRow.is_deceased === true || treeRow.deceased === true) return null;
-  return data;
+
+  try {
+    const canon = normalizeMemberPhone(preferred.phone || phone);
+    if (canon) localStorage.setItem(MEMBER_PROFILE_PHONE_KEY, canon);
+  } catch (e) {}
+
+  preferred.tree_children = treeRow;
+  if (!preferred.branch_key && treeRow.branch_key) {
+    preferred.branch_key = treeRow.branch_key;
+  }
+  return preferred;
 }
 
 function initMemberProfileEntry() {

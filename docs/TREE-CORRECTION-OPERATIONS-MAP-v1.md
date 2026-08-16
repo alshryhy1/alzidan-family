@@ -1,8 +1,8 @@
 # Tree Correction Operations Map v1
 
-**الحالة:** §2.0 **مجمّد** (كتالوج واقع + جاهزية) — شرائح live: `add_person` · `reorder_children` · `name_correction` · `phone_correction` · `birth_date_correction` · `parent_change`  
+**الحالة:** §2.0 **مجمّد** (كتالوج واقع + جاهزية) — شرائح live: `add_person` · `reorder_children` · `name_correction` · `phone_correction` · `birth_date_correction` · `parent_change` · `city_correction`  
 **التاريخ:** 2026-08-15  
-**آخر تحديث:** 2026-08-16 — شريحة تصحيح شخص (اسم + جوال) live على الويب  
+**آخر تحديث:** 2026-08-17 — إغلاق `tree_edit` العام للعضو + `city_correction` live  
 **العبارة:** `operation` مصدر الحقيقة؛ خيار عضو = `live` فقط؛ التجميد للكتالوج لا يمنع ترقية صف من missing→live بشريحة كاملة  
 **المراجع:** [`REQUEST-CATALOG.md`](./REQUEST-CATALOG.md) · [`PERSON-VISIBILITY-SPEC-v1.md`](./PERSON-VISIBILITY-SPEC-v1.md) · [`ENGINEERING-ROADMAP.md`](./ENGINEERING-ROADMAP.md) §Tree Engine v2 · تدقيق المرسل↔المستقبل (2026-08-15)
 
@@ -190,13 +190,13 @@ add_person   reorder_children   name_correction   phone_correction   tree_edit (
 |----------------------------|---------------------|-------------|-------------------------------|----------|---------|----------------|-------|----------|------------|----------|-----------|
 | أضف فردًا تحت أب | إضافة / شجرة | `add_person` (`kind=tree_card`) | حمولة `tree_card.v1` + هوية أب عند الإمكان | اختيارية | إدارة + مندوب فرع | محرر إضافة فرد | صف الشجرة الجديد | علاقات/حقول غير معاينة | `importTreeCardToTree` ثم اعتماد | `live` | نعم |
 | إعادة ترتيب أبناء تحت أب | تصحيح الشجرة | `reorder_children` (`kind=tree_edit`) | `parent_person_id` + `ordered_children: person_id[]` مرتبة | اختيارية | إدارة + مندوب (صلاحية شجرة) | `AlzidanTreeCorrectionReorder` | `birth_order` 1…N للمجموعة | أسماء، جوالات، ميلاد، آباء، هويات | clear→assign `birth_order` + تحقق + `admin_set_request_status_v2` | `live` | نعم |
-| «صحح بيانات» عام (اسم+جوال+ميلاد+… مختلط) | — | *(بلا operation)* `kind=tree_edit` | حقول حرّة / JSON حقول + notes | غالبًا هي الجسم | إدارة / مندوب | فرع الطلب أو قبول حالة فقط | **غير محدد** | غير محدد | **لا تطبيق حقول على الشجرة** | `partial` | **لا** |
+| «صحح بيانات» عام (اسم+جوال+ميلاد+… مختلط) | — | *(بلا operation)* `kind=tree_edit` | حقول حرّة / JSON حقول + notes | — | أرشيف قديم فقط | مراجعة آمنة | — | — | **مغلق لإنشاء عضو جديد** (توجيه لخيارات live) | `partial` → **مغلق للإرسال** | **لا** |
 | تصحيح الاسم فقط | تصحيح شخص | `name_correction` | `person_id`, `name_new` | اختيارية | إدارة (المندوب: استقبال؛ حفظ الاسم إدارة فقط) | `AlzidanTreeCorrectionPerson` | الاسم + مسار الصف | الجوال/الأب/الترتيب؛ مسارات الأبناء لا تُحدَّث تلقائيًا | `admin_tree_child_upsert_v1` + اعتماد | `live` | نعم |
 | تصحيح / إضافة جوال لشخص معروف | تصحيح شخص | `phone_correction` | `person_id`, `phone_new`, `phone_old?` | اختيارية | إدارة + مندوب | `AlzidanTreeCorrectionPerson` | الجوال في `member_profiles` | الاسم/الأب/الترتيب/الميلاد | حفظ ملف العضو + رفض تعارض رقم لشخص آخر | `live` | نعم |
 | ربط جوال حر بشخص | تصحيح شخص | `phone_link` | `person_id`, `phone` | اختيارية | إدارة | محرر ربط — غير مبني | ربط الهوية | بقية الحقول | غير مبني | `missing_*` | لا |
 | تعارض جوال مع شخص آخر | هوية | `phone_duplicate_conflict` | `phone`, أطراف الهوية | اختيارية | إدارة | محرر تعارض — غير مبني | قرار صريح فقط | لا حفظ صامت | إيقاف حتى الحسم | `missing_*` | لا |
 | تصحيح تاريخ الميلاد | تصحيح شخص | `birth_date_correction` | `person_id`, `birth_date_new` | اختيارية | إدارة (+ مندوب إن وُجد مسار) | `AlzidanTreeCorrectionPerson` | `birth_date_g` (+ سنة) | الاسم/الأب/الجوال/الترتيب | upsert شجرة + اعتماد | `live` | نعم |
-| تصحيح مدينة/قرية | تصحيح شخص | `city_correction` *(مرشّح)* | `person_id`, حقل مدينة مصرّح | اختيارية | إدارة + مندوب | غير مبني | المدينة إن وُجد عمود/عقد | غير المعاين | غير مبني | `missing_*` — يحتاج إثبات schema قبل التنفيذ | لا |
+| تصحيح مدينة/قرية | تصحيح شخص | `city_correction` | `person_id`, `city_new?`, `area_new?` (واحد على الأقل) | اختيارية | إدارة + مندوب | `AlzidanTreeCorrectionPerson` | `city` / `area` في `tree_children` | الاسم/الأب/الجوال/الميلاد/الترتيب | upsert شجرة أو `tree_children_update_v1` + اعتماد | `live` | نعم |
 | الأب خطأ / تصحيح الأب | تصحيح الشجرة | `parent_change` | `person_id`, `new_parent_person_id` | اختيارية | إدارة (حفظ الإدارة فقط في هذه الشريحة) | `AlzidanTreeCorrectionPerson` | `parent_person_id` + مسار الشخص | الاسم/الجوال/الميلاد؛ مسارات الأبناء لا تُحدَّث تلقائيًا | upsert شجرة + اعتماد | `live` | نعم |
 | نقل شخص إلى أب آخر | تصحيح الشجرة | `move_person` | `person_id`, `from_parent_id`, `to_parent_id` | اختيارية | إدارة (أدوات مباشرة اليوم) | محرر علاقة — غير كطلب عضو | العلاقة/المسار | غير المعاين | Move UUID + dry-run | `missing_create` (أدوات مباشرة ≠ طلب عضو) | لا |
 | إضافة عدة أبناء تحت أب | إضافة جماعية | `add_children_group` | `parent_person_id` + صفوف أبناء + قرارات per-row | اختيارية | إدارة + مندوب | جدول مطابقة — غير مبني | فقط الصفوف المحسومة | لا إنشاء/ربط لغير المحسوم | ممنوع حفظ مجموعة عمياء | `missing_*` | لا |
@@ -215,21 +215,21 @@ add_person   reorder_children   name_correction   phone_correction   tree_edit (
 | بطاقة خاصة | `special_card` | Cards / CMS |
 | جوال (تطبيق) | — | Cross-Client لاحقًا؛ لا شاشات جوال في هذه الخطوة |
 
-### أكبر فجوة — `tree_edit` العام
+### أكبر فجوة — `tree_edit` العام — **مُغلقة للإرسال الجديد (2026-08-17)**
 
-اليوم العضو يرسل «صحح بيانات هذا الشخص» وقد يخلط: اسم · جوال · ميلاد · مدينة · ملاحظة · وربما علاقة. **النظام لا يعرف العملية الحقيقية.**
+العضو **لا** يُنشئ بعد طلبًا مختلطًا بلا `operation`. الواجهة والـhash `#send-tree-edit` يوجّهان لخيارات live، و`AlzidanHomeRequestCreate` يرفض `tree_edit` بلا عملية منظمة.
 
 ```text
-tree_edit العام (partial)
+محاولة tree_edit العام
         ↓
-تفكيك عند المصدر إلى operations
+إعادة توجيه / رفض GENERIC_TREE_EDIT_CLOSED
         ↓
-name_correction · phone_correction · birth_date_correction · …
+name_correction · phone_correction · birth_date_correction · city_correction · parent_change · reorder_children
 ```
 
 - ممنوع إصلاح ذلك بـ parser أذكى على النص.
-- ممنوع إبقاء النص الحر مصدر تنفيذ للطلبات **الجديدة**.
-- حتى يُغلق التفكيك: نموذج «صحح بيانات» العام **لا يُوسَّع** كخيار محوري في واجهة «ماذا تريد؟».
+- الطلبات القديمة بلا operation تبقى `legacy_only` / مراجعة آمنة.
+- kind=`tree_edit` يبقى للتوافق مع DB للعمليات live التي تحمل `operation`.
 
 ### بعد إقفال الكتالوج — شريحة UX التالية (مجدولة · ليست الآن)
 
@@ -336,7 +336,7 @@ name_correction · phone_correction · birth_date_correction · …
 |------|-------|-----------------|
 | RX ويب | `add_person` / `tree_card` | **`live`** |
 | RX ويب | `reorder_children` عبر نموذج مرتّب + عقد | **`live`** — Web → مطابقة/أب → Preview → `birth_order` → حفظ → اعتماد |
-| RX ويب | `tree_edit` عام (حقول مختلطة بلا `operation`) | **`partial`** — أكبر فجوة؛ لا تطبيق حقول على الشجرة؛ لا يُعرض كخيار «ماذا تريد؟» |
+| RX ويب | `tree_edit` عام (حقول مختلطة بلا `operation`) | **مغلق للإرسال الجديد** — توجيه لعمليات live؛ الأرشيف → مراجعة آمنة |
 | جوال ≥ 2026-08-12 | غالبًا `tree_edit` نص/حقول | خارج الشريحة؛ نفس فجوة غياب `operation` |
 | جوال قديم | نص تصحيح + أحيانًا `tree_card` | **`legacy_only`** → Safe Review (مثل طلب عبدالرحمن قبل الاستعادة) |
 | مندوب | كتابة مباشرة + استقبال طلبات منظمة | `reorder_children` بنفس العقد عند الصلاحية؛ `tree_edit` العام بلا تطبيق شجرة |

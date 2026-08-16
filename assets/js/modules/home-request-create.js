@@ -1059,11 +1059,14 @@
         msg.indexOf('"operation":"phone_correction"') >= 0 ||
         msg.indexOf('"operation": "birth_date_correction"') >= 0 ||
         msg.indexOf('"operation":"birth_date_correction"') >= 0 ||
+        msg.indexOf('"operation": "city_correction"') >= 0 ||
+        msg.indexOf('"operation":"city_correction"') >= 0 ||
         msg.indexOf('"operation": "parent_change"') >= 0 ||
         msg.indexOf('"operation":"parent_change"') >= 0 ||
         /العملية:\s*name_correction/.test(msg) ||
         /العملية:\s*phone_correction/.test(msg) ||
         /العملية:\s*birth_date_correction/.test(msg) ||
+        /العملية:\s*city_correction/.test(msg) ||
         /العملية:\s*parent_change/.test(msg);
       if (isReorder) {
         if (!Corr || typeof Corr.assertCreatableReorder !== "function") {
@@ -1099,6 +1102,14 @@
         if (gateP.message) {
           next = Object.assign({}, next, { message: gateP.message });
         }
+      } else {
+        var errGeneric = new Error(
+          "مسار التصحيح العام مغلق — يلزم عملية محددة (اسم/جوال/ميلاد/مدينة/أب/ترتيب)."
+        );
+        errGeneric.code = "GENERIC_TREE_EDIT_CLOSED";
+        errGeneric.message_ar =
+          "مسار التصحيح العام مغلق — اختر نوع التصحيح المحدد من الرئيسية.";
+        throw errGeneric;
       }
     }
     var res = await client.from("approval_requests").insert(next);
