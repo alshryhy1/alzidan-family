@@ -1042,6 +1042,65 @@
         throw err2;
       }
     }
+    if (String(next.kind || "").trim() === "tree_edit") {
+      var Corr =
+        (typeof window !== "undefined" &&
+          window.AlzidanTreeCorrectionContract) ||
+        null;
+      var msg = String(next.message || "");
+      var isReorder =
+        msg.indexOf('"operation": "reorder_children"') >= 0 ||
+        msg.indexOf('"operation":"reorder_children"') >= 0 ||
+        /العملية:\s*reorder_children/.test(msg);
+      var isPersonCorr =
+        msg.indexOf('"operation": "name_correction"') >= 0 ||
+        msg.indexOf('"operation":"name_correction"') >= 0 ||
+        msg.indexOf('"operation": "phone_correction"') >= 0 ||
+        msg.indexOf('"operation":"phone_correction"') >= 0 ||
+        msg.indexOf('"operation": "birth_date_correction"') >= 0 ||
+        msg.indexOf('"operation":"birth_date_correction"') >= 0 ||
+        msg.indexOf('"operation": "parent_change"') >= 0 ||
+        msg.indexOf('"operation":"parent_change"') >= 0 ||
+        /العملية:\s*name_correction/.test(msg) ||
+        /العملية:\s*phone_correction/.test(msg) ||
+        /العملية:\s*birth_date_correction/.test(msg) ||
+        /العملية:\s*parent_change/.test(msg);
+      if (isReorder) {
+        if (!Corr || typeof Corr.assertCreatableReorder !== "function") {
+          var err3 = new Error("REORDER_CONTRACT_REQUIRED");
+          err3.code = "REORDER_CONTRACT_REQUIRED";
+          throw err3;
+        }
+        var gateR = Corr.assertCreatableReorder(msg, next);
+        if (!gateR || !gateR.ok) {
+          var err4 = new Error(
+            (gateR && gateR.message_ar) || "REORDER_PAYLOAD_INVALID"
+          );
+          err4.code = (gateR && gateR.code) || "REORDER_PAYLOAD_INVALID";
+          throw err4;
+        }
+        if (gateR.message) {
+          next = Object.assign({}, next, { message: gateR.message });
+        }
+      } else if (isPersonCorr) {
+        if (!Corr || typeof Corr.assertCreatablePersonCorrection !== "function") {
+          var errP1 = new Error("PERSON_CORRECTION_CONTRACT_REQUIRED");
+          errP1.code = "PERSON_CORRECTION_CONTRACT_REQUIRED";
+          throw errP1;
+        }
+        var gateP = Corr.assertCreatablePersonCorrection(msg, next);
+        if (!gateP || !gateP.ok) {
+          var errP2 = new Error(
+            (gateP && gateP.message_ar) || "PERSON_PAYLOAD_INVALID"
+          );
+          errP2.code = (gateP && gateP.code) || "PERSON_PAYLOAD_INVALID";
+          throw errP2;
+        }
+        if (gateP.message) {
+          next = Object.assign({}, next, { message: gateP.message });
+        }
+      }
+    }
     var res = await client.from("approval_requests").insert(next);
     if (res.error) throw res.error;
     return next;
@@ -1519,16 +1578,19 @@
       }
     }
     // Branch delegates handle branch requests except البطاقة (special_card → admin only).
-    var allowed = {
+    // Keep in sync with delegate.js isDelegateIncomingEventRequest + list RPC kinds.
+    var BRANCH_DELEGATE_INBOX_KINDS = {
       event_card: 1,
       family_event: 1,
       event_request: 1,
       tree_card: 1,
       tree_edit: 1,
       memory_card: 1,
+      memory: 1,
+      add_person: 1,
       tree_founder: 1,
     };
-    if (!allowed[kind]) return { ok: false, skipped: "kind" };
+    if (!BRANCH_DELEGATE_INBOX_KINDS[kind]) return { ok: false, skipped: "kind" };
     var emailResult = null;
     var pushResult = null;
     try {
@@ -1682,6 +1744,11 @@
   }
 
   root.AlzidanHomeRequestCreate = {
+    BRANCH_DELEGATE_INBOX_KINDS: {
+      event_card: 1, family_event: 1, event_request: 1,
+      tree_card: 1, tree_edit: 1, memory_card: 1, memory: 1,
+      add_person: 1, tree_founder: 1,
+    },
     notifyBranchDelegatesOfRequest: notifyBranchDelegatesOfRequest,
     notifyAdminOfRequest: notifyAdminOfRequest,
     create: create,

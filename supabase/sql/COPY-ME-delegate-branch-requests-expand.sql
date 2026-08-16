@@ -1,5 +1,5 @@
 -- COPY-ME: Expand branch-delegate request queue beyond events + keep history.
--- Preset id: maint.delegate_branch_requests_expand_v2
+-- Preset id: maint.delegate_branch_requests_expand_v3
 -- (v1 may be archived as «منفذ» while live body was still pending-only —
 --  the old probe only checked to_regprocedure IS NOT NULL.)
 -- Run manually in Supabase SQL Editor / SQL Workspace. Do NOT auto-execute from the app.
@@ -27,8 +27,8 @@
 -- Auth:
 --   List: tree OR events can_read (same gate as portal login read path)
 --   Status change:
---     event kinds  → events_delegate_allowed_v1
---     tree/memory  → tree_delegate_allowed_v1
+--     event kinds  → events write OR events read
+--     tree/memory  → tree write OR tree/events read (inbox parity with list)
 --   On status change: append internal review stamp with delegate display name.
 
 drop function if exists public.delegate_list_event_requests_v1(text, text, text, text);
@@ -153,13 +153,14 @@ declare
   v_stamp text;
   v_msg text;
   v_reviewer text;
+  v_branch text := public.delegates_v2_norm_branch(p_branch_key);
 begin
   v_status := case
     when lower(btrim(coalesce(p_status, ''))) = 'approved' then 'approved'
     when lower(btrim(coalesce(p_status, ''))) = 'rejected' then 'rejected'
     else null
   end;
-  if v_status is null then
+  if v_status is null or p_request_id is null or v_branch is null or v_branch = '' then
     return false;
   end if;
 
@@ -175,8 +176,7 @@ begin
       'tree_edit',
       'memory_card'
     )
-    and regexp_replace(btrim(coalesce(r.branch_key, '')), '\s+', ' ', 'g')
-      = regexp_replace(btrim(coalesce(p_branch_key, '')), '\s+', ' ', 'g')
+    and public.delegates_v2_norm_branch(r.branch_key) = v_branch
   limit 1;
 
   if v_row.id is null then
@@ -187,13 +187,14 @@ begin
 
   if p_phone is not null or p_email is not null or p_secret_hash is not null then
     if v_kind in ('event_card', 'family_event', 'event_request') then
-      v_auth_ok := public.events_delegate_allowed_v1(
-        p_branch_key, p_phone, p_email, p_secret_hash
-      );
+      v_auth_ok :=
+        public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+        or public.events_delegate_can_read_v1(p_branch_key, p_phone, p_email, p_secret_hash);
     elsif v_kind in ('tree_card', 'tree_edit', 'memory_card') then
-      v_auth_ok := public.tree_delegate_allowed_v1(
-        p_branch_key, p_phone, p_email, p_secret_hash
-      );
+      v_auth_ok :=
+        public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+        or public.tree_delegate_can_read_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+        or public.events_delegate_can_read_v1(p_branch_key, p_phone, p_email, p_secret_hash);
     else
       return false;
     end if;
@@ -209,8 +210,7 @@ begin
     select nullif(btrim(coalesce(d.name, '')), '')
       into v_reviewer
     from public.delegates_v2 d
-    where public.delegates_v2_norm_branch(d.branch_key)
-        = public.delegates_v2_norm_branch(p_branch_key)
+    where public.delegates_v2_norm_branch(d.branch_key) = v_branch
       and (
         nullif(btrim(coalesce(p_phone, '')), '') is null
         or public.delegates_v2_norm_phone(d.phone)
@@ -241,7 +241,8 @@ begin
   set
     status = v_status,
     message = v_msg
-  where id = p_request_id;
+  where id = p_request_id
+    and status = 'pending';
 
   return found;
 end;

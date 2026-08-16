@@ -826,6 +826,27 @@ function showAlert(kind, msg) {
 
     if (!msg.trim()) return { key: "missing", label: "ناقص", reason: "الرسالة فارغة." };
 
+    const Corr =
+      typeof window !== "undefined" && window.AlzidanTreeCorrectionContract
+        ? window.AlzidanTreeCorrectionContract
+        : null;
+    if (Corr && typeof Corr.assessReorderQuality === "function") {
+      const corrQ = Corr.assessReorderQuality(row);
+      if (corrQ) return corrQ;
+    }
+    if (Corr && typeof Corr.routeRequest === "function") {
+      const routed = Corr.routeRequest(row);
+      if (routed && routed.route === "safe_review") {
+        return {
+          key: "review",
+          label: "يحتاج مراجعة",
+          reason:
+            (routed.reasons && routed.reasons[0]) ||
+            "مراجعة آمنة — لا تطبيق كإضافة فرد.",
+        };
+      }
+    }
+
     if (kind === "event_card") {
       const parsed = parseEventPayloadFromRow(row);
       const missing = [];
@@ -1295,8 +1316,28 @@ function showAlert(kind, msg) {
     const editBranchBtn = document.createElement("button");
     editBranchBtn.type = "button";
     editBranchBtn.className = "btn btn-outline btn-sm";
-    editBranchBtn.textContent =
-      row.kind === "tree_card" ? "تعديل كامل" : "تعديل الفرع";
+    const CorrRoute =
+      typeof window !== "undefined" &&
+      window.AlzidanTreeCorrectionContract &&
+      typeof window.AlzidanTreeCorrectionContract.routeRequest === "function"
+        ? window.AlzidanTreeCorrectionContract.routeRequest(row)
+        : null;
+    if (CorrRoute && CorrRoute.route === "reorder_children") {
+      editBranchBtn.textContent = "ترتيب الأبناء";
+    } else if (CorrRoute && CorrRoute.route === "name_correction") {
+      editBranchBtn.textContent = "تصحيح الاسم";
+    } else if (CorrRoute && CorrRoute.route === "phone_correction") {
+      editBranchBtn.textContent = "تصحيح الجوال";
+    } else if (CorrRoute && CorrRoute.route === "birth_date_correction") {
+      editBranchBtn.textContent = "تصحيح الميلاد";
+    } else if (CorrRoute && CorrRoute.route === "parent_change") {
+      editBranchBtn.textContent = "تصحيح الأب";
+    } else if (CorrRoute && CorrRoute.route === "safe_review") {
+      editBranchBtn.textContent = "مراجعة آمنة";
+    } else {
+      editBranchBtn.textContent =
+        row.kind === "tree_card" ? "تعديل كامل" : "تعديل الفرع";
+    }
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "btn btn-outline btn-sm btn-danger";
@@ -1314,6 +1355,7 @@ function showAlert(kind, msg) {
     reapplyBtn.title = "إعادة تطبيق بطاقة الشجرة دون تغيير الحالة (إصلاح يتيم)";
     const canReapply =
       row.kind === "tree_card" &&
+      !(CorrRoute && CorrRoute.blockTreeCardApply) &&
       (row.status === "approved" || row.status === "pending");
     reapplyBtn.disabled = !canReapply;
     if (isSecretResetRequest(row)) {
@@ -1377,6 +1419,56 @@ function showAlert(kind, msg) {
     tr.appendChild(tdActions);
     editBranchBtn.addEventListener("click", async () => {
       hideAlert();
+      const routed =
+        typeof window !== "undefined" &&
+        window.AlzidanTreeCorrectionContract &&
+        typeof window.AlzidanTreeCorrectionContract.routeRequest === "function"
+          ? window.AlzidanTreeCorrectionContract.routeRequest(row)
+          : null;
+      const Reorder = window.AlzidanTreeCorrectionReorder;
+      if (
+        routed &&
+        (routed.route === "reorder_children" || routed.route === "safe_review") &&
+        Reorder
+      ) {
+        try {
+          if (routed.route === "safe_review") {
+            await Reorder.openSafeReview(row, { mode: "admin" });
+          } else {
+            await Reorder.openReorderChildrenEditor(row, { mode: "admin" });
+          }
+        } catch (err) {
+          console.error("correction router", err);
+          showAlert(
+            "error",
+            "تعذر فتح مسار التصحيح: " +
+              String((err && err.message) || err || ""),
+          );
+        }
+        return;
+      }
+      const Person = window.AlzidanTreeCorrectionPerson;
+      if (
+        routed &&
+        (routed.route === "name_correction" ||
+          routed.route === "phone_correction" ||
+          routed.route === "birth_date_correction" ||
+          routed.route === "parent_change") &&
+        Person &&
+        typeof Person.openPersonCorrectionEditor === "function"
+      ) {
+        try {
+          await Person.openPersonCorrectionEditor(row, { mode: "admin" });
+        } catch (err) {
+          console.error("person correction router", err);
+          showAlert(
+            "error",
+            "تعذر فتح تصحيح الشخص: " +
+              String((err && err.message) || err || ""),
+          );
+        }
+        return;
+      }
       if (row.kind === "tree_card") {
         try {
           if (
@@ -1713,6 +1805,25 @@ function showAlert(kind, msg) {
       // ADR-006 / Patch 2: verified apply BEFORE status becomes «قبول»
       // First network call is intentional (tree resolve/import) — then admin_set_request_status_v2.
       if (row.kind === "tree_card") {
+        const Corr =
+          typeof window !== "undefined"
+            ? window.AlzidanTreeCorrectionContract
+            : null;
+        const routed =
+          Corr && typeof Corr.routeRequest === "function"
+            ? Corr.routeRequest(row)
+            : null;
+        if (routed && routed.blockTreeCardApply) {
+          approveBtn.disabled = false;
+          const errMsg =
+            (routed.reasons && routed.reasons[0]) ||
+            "هذا الطلب ليس إضافة فرد — افتح «مراجعة آمنة» أو «ترتيب الأبناء» بدل القبول المباشر.";
+          showAlert("error", errMsg);
+          try {
+            window.alert(errMsg);
+          } catch (_) {}
+          return;
+        }
         const actions = requestActions();
         if (!actions || typeof actions.importTreeCardToTree !== "function") {
           approveBtn.disabled = false;
@@ -1738,6 +1849,57 @@ function showAlert(kind, msg) {
           return;
         }
         console.info("ADMIN_RPC approve tree_card apply ok", row.request_id);
+      } else if (row.kind === "tree_edit") {
+        const Corr =
+          typeof window !== "undefined"
+            ? window.AlzidanTreeCorrectionContract
+            : null;
+        const routed =
+          Corr && typeof Corr.routeRequest === "function"
+            ? Corr.routeRequest(row)
+            : null;
+        if (routed && routed.route === "reorder_children") {
+          approveBtn.disabled = false;
+          const errMsg =
+            "طلب ترتيب أبناء: افتح «ترتيب الأبناء» للمعاينة والحفظ في الشجرة قبل/بدل قبول الحالة فقط.";
+          showAlert("error", errMsg);
+          try {
+            window.alert(errMsg);
+          } catch (_) {}
+          return;
+        }
+        if (
+          routed &&
+          (routed.route === "name_correction" ||
+            routed.route === "phone_correction" ||
+            routed.route === "birth_date_correction" ||
+            routed.route === "parent_change")
+        ) {
+          approveBtn.disabled = false;
+          const errMsg =
+            routed.route === "name_correction"
+              ? "طلب تصحيح اسم: افتح «تصحيح الاسم» للمعاينة والحفظ قبل قبول الحالة فقط."
+              : routed.route === "phone_correction"
+                ? "طلب تصحيح جوال: افتح «تصحيح الجوال» للمعاينة والحفظ قبل قبول الحالة فقط."
+                : routed.route === "birth_date_correction"
+                  ? "طلب تصحيح ميلاد: افتح «تصحيح الميلاد» للمعاينة والحفظ قبل قبول الحالة فقط."
+                  : "طلب تصحيح أب: افتح «تصحيح الأب» للمعاينة والحفظ قبل قبول الحالة فقط.";
+          showAlert("error", errMsg);
+          try {
+            window.alert(errMsg);
+          } catch (_) {}
+          return;
+        }
+        if (routed && routed.route === "safe_review") {
+          approveBtn.disabled = false;
+          const errMsg =
+            "طلب يحتاج مراجعة آمنة — لا اعتماد أعمى. افتح «مراجعة آمنة».";
+          showAlert("error", errMsg);
+          try {
+            window.alert(errMsg);
+          } catch (_) {}
+          return;
+        }
       } else if (row.kind === "event_card") {
         publishedEvent = await requestActions().publishEventCardRequest(
           sb,

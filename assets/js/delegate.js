@@ -207,7 +207,69 @@ function normalizePersonName(v) { const s = String(v || "") .replace(/\s+/g, " "
 function isLikelyEmail(v) {
   const s = normalizeEmail(v);
   return !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
-} const DELEGATE_SESSION_KEY = "alzidan_delegate_session_v1"; let delegateRuntimeAuth = null; function loadDelegateSession() { return delegateRuntimeAuth; } function saveDelegateSession(branchKey, phone, email, secretHash, name) { const branch = String(branchKey || "").trim(); const hash = String(secretHash || "").trim(); if (!branch || !hash) { delegateRuntimeAuth = null; return; } delegateRuntimeAuth = { branch, phone: normalizePhone(phone), email: normalizeEmail(email), secretHash: hash, name: String(name || "").replace(/\s+/g, " ").trim() }; } function clearDelegateSession() { delegateRuntimeAuth = null; try { localStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {} try { sessionStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {} } const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co"; const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c"; const FAMILY_TREE_CHILDREN_TABLE = "tree_children"; let sbClient = null; function getالخدمةClient() { if (sbClient) return sbClient; const url = String(SUPABASE_URL || "").trim(); const anonKey = String(SUPABASE_ANON_KEY || "").trim(); if (!url || !anonKey) return null; if (!window.supabase || typeof window.supabase.createClient !== "function") return null; sbClient = window.supabase.createClient(url, anonKey); return sbClient; } async function sha256Hex(text) { try { if (!window.crypto || !window.crypto.subtle) return null; const enc = new TextEncoder(); const buf = await window.crypto.subtle.digest("SHA-256", enc.encode(String(text || ""))); return Array.from(new Uint8Array(buf)) .map((b) =>b.toString(16).padStart(2, "0")) .join(""); } catch (e) { return null; } } function makeRequestId() { const part1 = Math.random().toString(36).slice(2, 6).toUpperCase(); const part2 = Math.random().toString(36).slice(2, 6).toUpperCase(); return "REQ-" + part1 + "-" + part2; } function duplicateFieldsText(fields) { const f = Array.isArray(fields) ? fields : []; const hasPhone = f.includes("phone"); const hasEmail = f.includes("email"); if (hasPhone && hasEmail) return "الجوال والإيميل مسجلين مسبقًا"; if (hasPhone) return "رقم الجوال مسجل مسبقًا"; if (hasEmail) return "الإيميل مسجل مسبقًا"; return "البيانات مسجلة مسبقًا"; } function phoneCandidates(phone) { if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.phoneCandidates === "function") { return window.AlzidanPhoneIntl.phoneCandidates(phone); } const raw = normalizePhone(phone); if (!raw) return []; const digits = raw.replace(/[^0-9]/g, ""); if (!digits) return []; const set = new Set([digits, raw]); const add966 = (nine) =>{ if (!nine || nine.length !== 9) return; set.add("0" + nine); set.add(nine); set.add("966" + nine); set.add("+966" + nine); }; if (digits.startsWith("0") && digits.length === 10 && digits[1] === "5") { add966(digits.slice(1)); } else if (digits.startsWith("966") && digits.length === 12 && digits[3] === "5") { add966(digits.slice(3)); } else if (digits.startsWith("5") && digits.length === 9) { add966(digits); } return Array.from(set).filter(Boolean); } function fallbackCopyText(text) { const el = document.createElement("textarea"); el.value = text; el.setAttribute("readonly", ""); el.style.position = "fixed"; el.style.opacity = "0"; el.style.left = "-9999px"; document.body.appendChild(el); el.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(el); } async function copyText(text) { try { if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") { await navigator.clipboard.writeText(text); return true; } } catch (e) {} fallbackCopyText(text); return true; } const NOTIFY_EMAIL_TO = "info@alzidan.org"; function maybeOpenEmailDraft(subject, body) {
+} const DELEGATE_SESSION_KEY = "alzidan_delegate_session_v1"; let delegateRuntimeAuth = null;
+function readDelegateSessionFromStorage() {
+  try {
+    const raw = sessionStorage.getItem(DELEGATE_SESSION_KEY) || localStorage.getItem(DELEGATE_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.branch || !parsed.secretHash) return null;
+    return {
+      branch: String(parsed.branch || "").trim(),
+      phone: normalizePhone(parsed.phone || ""),
+      email: normalizeEmail(parsed.email || ""),
+      secretHash: String(parsed.secretHash || "").trim(),
+      name: String(parsed.name || "").replace(/\s+/g, " ").trim(),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+function writeDelegateSessionToStorage(session) {
+  if (!session || !session.branch || !session.secretHash) return;
+  const payload = JSON.stringify({
+    branch: session.branch,
+    phone: session.phone || "",
+    email: session.email || "",
+    secretHash: session.secretHash,
+    name: session.name || "",
+  });
+  try { sessionStorage.setItem(DELEGATE_SESSION_KEY, payload); } catch (e) {}
+  try { localStorage.setItem(DELEGATE_SESSION_KEY, payload); } catch (e) {}
+}
+function loadDelegateSession() {
+  if (delegateRuntimeAuth) return delegateRuntimeAuth;
+  const stored = readDelegateSessionFromStorage();
+  if (stored) delegateRuntimeAuth = stored;
+  return delegateRuntimeAuth;
+}
+function saveDelegateSession(branchKey, phone, email, secretHash, name) {
+  const branch = String(branchKey || "").trim();
+  const hash = String(secretHash || "").trim();
+  if (!branch || !hash) {
+    delegateRuntimeAuth = null;
+    return;
+  }
+  const prev = loadDelegateSession();
+  const nextName =
+    name != null && String(name).replace(/\s+/g, " ").trim()
+      ? String(name).replace(/\s+/g, " ").trim()
+      : String((prev && prev.name) || "").replace(/\s+/g, " ").trim();
+  delegateRuntimeAuth = {
+    branch,
+    phone: normalizePhone(phone),
+    email: normalizeEmail(email),
+    secretHash: hash,
+    name: nextName,
+  };
+  writeDelegateSessionToStorage(delegateRuntimeAuth);
+}
+function clearDelegateSession() {
+  delegateRuntimeAuth = null;
+  try { localStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {}
+  try { sessionStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {}
+}
+const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co"; const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c"; const FAMILY_TREE_CHILDREN_TABLE = "tree_children"; let sbClient = null; function getالخدمةClient() { if (sbClient) return sbClient; const url = String(SUPABASE_URL || "").trim(); const anonKey = String(SUPABASE_ANON_KEY || "").trim(); if (!url || !anonKey) return null; if (!window.supabase || typeof window.supabase.createClient !== "function") return null; sbClient = window.supabase.createClient(url, anonKey); return sbClient; } async function sha256Hex(text) { try { if (!window.crypto || !window.crypto.subtle) return null; const enc = new TextEncoder(); const buf = await window.crypto.subtle.digest("SHA-256", enc.encode(String(text || ""))); return Array.from(new Uint8Array(buf)) .map((b) =>b.toString(16).padStart(2, "0")) .join(""); } catch (e) { return null; } } function makeRequestId() { const part1 = Math.random().toString(36).slice(2, 6).toUpperCase(); const part2 = Math.random().toString(36).slice(2, 6).toUpperCase(); return "REQ-" + part1 + "-" + part2; } function duplicateFieldsText(fields) { const f = Array.isArray(fields) ? fields : []; const hasPhone = f.includes("phone"); const hasEmail = f.includes("email"); if (hasPhone && hasEmail) return "الجوال والإيميل مسجلين مسبقًا"; if (hasPhone) return "رقم الجوال مسجل مسبقًا"; if (hasEmail) return "الإيميل مسجل مسبقًا"; return "البيانات مسجلة مسبقًا"; } function phoneCandidates(phone) { if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.phoneCandidates === "function") { return window.AlzidanPhoneIntl.phoneCandidates(phone); } const raw = normalizePhone(phone); if (!raw) return []; const digits = raw.replace(/[^0-9]/g, ""); if (!digits) return []; const set = new Set([digits, raw]); const add966 = (nine) =>{ if (!nine || nine.length !== 9) return; set.add("0" + nine); set.add(nine); set.add("966" + nine); set.add("+966" + nine); }; if (digits.startsWith("0") && digits.length === 10 && digits[1] === "5") { add966(digits.slice(1)); } else if (digits.startsWith("966") && digits.length === 12 && digits[3] === "5") { add966(digits.slice(3)); } else if (digits.startsWith("5") && digits.length === 9) { add966(digits); } return Array.from(set).filter(Boolean); } function fallbackCopyText(text) { const el = document.createElement("textarea"); el.value = text; el.setAttribute("readonly", ""); el.style.position = "fixed"; el.style.opacity = "0"; el.style.left = "-9999px"; document.body.appendChild(el); el.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(el); } async function copyText(text) { try { if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") { await navigator.clipboard.writeText(text); return true; } } catch (e) {} fallbackCopyText(text); return true; } const NOTIFY_EMAIL_TO = "info@alzidan.org"; function maybeOpenEmailDraft(subject, body) {
   try {
     const text = [String(subject || "").trim(), String(body || "").trim()].filter(Boolean).join("\\n\\n");
     if (text) copyText(text).catch(() => {});
@@ -228,7 +290,7 @@ function isLikelyEmail(v) {
     if (reason === "no_permission") return "دورك الحالي لا يسمح بهذه العملية على الشجرة. اطلب من الإدارة تعديل الصلاحية.";
     if (reason === "bad_secret") return "بيانات الدخول لا تطابق اعتماد المندوب. سجّل الخروج ثم الدخول مجددًا.";
     return "غير مصرح لك بتنفيذ هذه العملية. تأكد أن طلبك كمندوب تم اعتماده وأن الصلاحية مفعّلة.";
-  } if (lowMsg.includes("birth_order_conflict")) { return "رقم ترتيب الميلاد مستخدم لابن آخر تحت الأب نفسه. اختر رقمًا مختلفًا."; } if (lowMsg.includes("tree_children_parent_birth_order_key")) { return "رقم ترتيب الميلاد مستخدم لابن آخر تحت الأب نفسه. اختر رقمًا مختلفًا."; } if (lowMsg.includes("birth_order_invalid")) { return "ترتيب الميلاد يجب أن يكون رقمًا صحيحًا يبدأ من 1."; } if (lowMsg.includes("child_already_exists")) { return "هذا الاسم مسجل مسبقًا تحت الأب نفسه. يمكن تسجيل الاسم نفسه فقط إذا كان الأب مختلفًا."; } if (lowMsg.includes("no unique or exclusion constraint matching the on conflict specification")) { return "تعذر الحفظ بسبب إعداد قديم في الخدمة يستخدم ON CONFLICT بدون مفتاح فريد. افتح صفحة الإدارة (admin.html) وانسخ أمر الصيانة الخاص بالشجرة ثم نفّذه في الخدمة ليتم تحديث الدوال."; } const isSchemaCache = lowMsg.includes("تحديث الخدمة") || lowMsg.includes("could not find the table") || lowDetails.includes("تحديث الخدمة"); if (isSchemaCache) { const hint = `إذا استمر الخطأ، فالغالب أن دور anon لا يملك صلاحيات على جدول ${tableName} أو أن RLS تمنع الوصول.`; const reloadHint = "انتظر دقيقة ثم حدّث الصفحة، أو نفّذ Reload تحديث الخدمة من إعدادات الخدمة (API)."; if (a === "save" || a === "update" || a === "delete") { return `تعذر تنفيذ العملية لأن الخدمة لم يُحدّث المخطط بعد. ${reloadHint} ${hint}`; } return `تعذر تحميل بيانات الأبناء لأن الخدمة لم يُحدّث المخطط بعد. ${reloadHint} ${hint}`; } const isMissingTable = lowCode === "42p01" || (lowMsg.includes("relation") && lowMsg.includes("does not exist")) || (lowDetails.includes("relation") && lowDetails.includes("does not exist")); if (isMissingTable) { if (a === "save") return `يلزم إنشاء جدول ${tableName} في الخدمة قبل حفظ الأبناء.`; return `يلزم إنشاء جدول ${tableName} في الخدمة لعرض الأبناء.`; } const isRls = lowMsg.includes("row-level security") || lowDetails.includes("row-level security") || lowMsg.includes("violates row-level security"); if (isRls) { if (a === "save") return `تعذر حفظ بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة INSERT على جدول ${tableName}.`; if (a === "update") return `تعذر تعديل بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة UPDATE على جدول ${tableName}.`; if (a === "delete") return `تعذر حذف بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة DELETE على جدول ${tableName}.`; return `تعذر تحميل بيانات الأبناء بسبب صلاحيات الجدول (RLS). تأكد من سياسات SELECT/INSERT/UPDATE/DELETE على جدول ${tableName}.`; } const isPermission = lowMsg.includes("permission denied") || lowDetails.includes("permission denied") || lowCode === "42501"; if (isPermission) { if (a === "save") return `تعذر حفظ بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}، حاول لاحقاً أو تواصل مع الإدارة.`; if (a === "update") return `تعذر تعديل بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}، حاول لاحقاً أو تواصل مع الإدارة.`; if (a === "delete") return `تعذر حذف بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}، حاول لاحقاً أو تواصل مع الإدارة.`; return `تعذر تحميل بيانات الأبناء بسبب عدم وجود صلاحية على جدول ${tableName}.`; } const isSchemaMismatch = lowMsg.includes("column") && lowMsg.includes("does not exist"); if (isSchemaMismatch) { const neededCore = wrapLTRText("branch_key + (parent_name أو parent) + (child_name أو name)"); const optional = wrapLTRText("birth_date_g, birth_date_h, birth_year, birth_order, city, area, is_deceased, created_at"); if (a === "save" || a === "update" || a === "delete") { return `تعذر تنفيذ العملية لأن أعمدة جدول ${tableName} غير مطابقة. المطلوب على الأقل: ${neededCore}. الأعمدة الإضافية اختيارية: ${optional}.`; } return `تعذر تحميل بيانات الأبناء لأن أعمدة جدول ${tableName} غير مطابقة. المطلوب على الأقل: ${neededCore}. الأعمدة الإضافية اختيارية: ${optional}.`; } if (a === "save") return `تعذر حفظ بيانات الابن: ${msgRaw || "خطأ غير معروف"}`; if (a === "update") return `تعذر تعديل بيانات الابن: ${msgRaw || "خطأ غير معروف"}`; if (a === "delete") return `تعذر حذف بيانات الابن: ${msgRaw || "خطأ غير معروف"}`; return `تعذر تحميل بيانات الأبناء: ${msgRaw || "خطأ غير معروف"}`; } function classifyTreeChildrenDbError(err) { const msgRaw = err && err.message != null ? String(err.message) : ""; const detailsRaw = err && err.details != null ? String(err.details) : ""; const lowMsg = msgRaw.trim().toLowerCase(); const lowDetails = detailsRaw.trim().toLowerCase(); const isSchemaCache = lowMsg.includes("تحديث الخدمة") || lowMsg.includes("could not find the table") || lowDetails.includes("تحديث الخدمة"); if (isSchemaCache) return "schema_cache"; const isRls = lowMsg.includes("row-level security") || lowDetails.includes("row-level security") || lowMsg.includes("violates row-level security"); if (isRls) return "rls"; const isPermission = lowMsg.includes("permission denied") || lowDetails.includes("permission denied"); if (isPermission) return "permission"; const isColumnMissing = lowMsg.includes("column") && lowMsg.includes("does not exist"); const isSchemaCacheMissingColumn = lowMsg.includes("تحديث الخدمة") && lowMsg.includes("could not find") && lowMsg.includes("column"); if (isColumnMissing || isSchemaCacheMissingColumn) return "missing_column"; return "other"; } function groupChildrenRows(rows, branchKey) { const key = normalizePersonName(branchKey || ""); const branchRoot = key ? getBranchRootName(key) : ""; const byParent = {}; const idsByBase = new Map(); const buildChildId = (parentId, baseName) =>{ const p = normalizePersonName(parentId || ""); const b = normalizePersonName(baseName || ""); if (!p || !b) return ""; return p + "/" + b; }; const indexKnownId = (nodeId) =>{ const id = normalizePersonName(nodeId || ""); if (!id) return; const parts = id.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); const base = parts.length ? parts[parts.length - 1] : id; if (!base) return; const existing = idsByBase.get(base); if (existing) { existing.add(id); return; } idsByBase.set(base, new Set([id])); }; const addOrMergeChildById = (parentId, child) =>{ const parent = normalizePersonName(parentId || ""); const name = normalizePersonName(child && child.name ? child.name : ""); if (!parent || !name) return; if (!byParent[parent]) byParent[parent] = []; const list = byParent[parent]; const idx = (Array.isArray(list) ? list : []).findIndex((c) =>normalizePersonName(c && c.name ? c.name : "") === name); const merged = { name, personId: child && child.personId ? String(child.personId) : "", parentPersonId: child && child.parentPersonId ? String(child.parentPersonId) : "", year: child && child.year ? String(child.year) : "", order: child && child.order ? String(child.order) : "", gdate: child && child.gdate ? String(child.gdate) : "", hdate: child && child.hdate ? String(child.hdate) : "", city: child && child.city ? String(child.city) : "", area: child && child.area ? String(child.area) : "", deceased: !!(child && child.deceased) }; if (idx< 0) { list.push(merged); return; } const prev = list[idx]; if (prev) { if (!prev.personId && merged.personId) prev.personId = merged.personId; if (!prev.parentPersonId && merged.parentPersonId) prev.parentPersonId = merged.parentPersonId; if (!prev.year && merged.year) prev.year = merged.year; if (!prev.order && merged.order) prev.order = merged.order; if (!prev.gdate && merged.gdate) prev.gdate = merged.gdate; if (!prev.hdate && merged.hdate) prev.hdate = merged.hdate; if (!prev.city && merged.city) prev.city = merged.city; if (!prev.area && merged.area) prev.area = merged.area; if (!prev.deceased && merged.deceased) prev.deceased = true; } }; const addOrMergeChildAndIndex = (parentId, child) =>{ addOrMergeChildById(parentId, child); const p = normalizePersonName(parentId || ""); if (p) indexKnownId(p); const n = normalizePersonName(child && child.name ? child.name : ""); if (n) indexKnownId(n); }; const ensureParentId = (rawParent, childRaw) =>{ const raw = normalizePersonName(rawParent || ""); if (!raw) return ""; if (raw.includes("/")) return raw; if (branchRoot && (raw === branchRoot || raw === key)) return branchRoot; const pathDerived = (function(){ const childFull = normalizePersonName(childRaw || ""); if (!childFull || !childFull.includes("/")) return ""; const parts = childFull.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); if (parts.length < 2) return ""; const derivedParent = parts.slice(0, -1).join("/"); const derivedLeaf = parts[parts.length - 2] || ""; if (derivedLeaf === raw || normalizePersonBaseName(derivedParent) === raw || derivedParent.endsWith("/" + raw)) return derivedParent; return ""; })(); if (pathDerived) return pathDerived; const candidates = idsByBase.get(raw); if (candidates && candidates.size === 1) return Array.from(candidates)[0]; if (candidates && candidates.size > 1) return raw; if (branchRoot) { const parentId = buildChildId(branchRoot, raw); if (parentId) addOrMergeChildAndIndex(branchRoot, { name: parentId, year: "", gdate: "", hdate: "", city: "", area: "" }); return parentId; } return raw; }; const stripBranchSuffix = (tokens) =>{ const t = Array.isArray(tokens) ? tokens.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!key) return t; if (t.length >= 3) { const a = normalizePersonName(t[t.length - 3] || ""); const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (a === key && b === "مطلق" && c === "زيدان") return t.slice(0, -3); } if (t.length >= 2) { const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (b === key && c === "مطلق") return t.slice(0, -2); } if (t.length >= 1 && normalizePersonName(t[t.length - 1] || "") === key) return t.slice(0, -1); return t; }; const normalizeChildId = (rawChildId, parentId) =>{ const c = normalizePersonName(rawChildId || ""); if (!c || !c.includes("/")) return c; const p = normalizePersonName(parentId || ""); if (!p) return c; if (c === p || c.startsWith(p + "/")) return c; if (branchRoot && (c === branchRoot || c.startsWith(branchRoot + "/"))) return c; const base = p.split("/").map((x) =>normalizePersonName(x)).filter(Boolean).slice(-1)[0] || ""; if (base && c.startsWith(base + "/")) return p + "/" + c.slice((base + "/").length); return c; }; const addChain = (anchorParentId, basesOldestToYoungest, leafMeta) =>{ const anchor = normalizePersonName(anchorParentId || ""); const chain = Array.isArray(basesOldestToYoungest) ? basesOldestToYoungest.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!anchor || !chain.length) return; let current = anchor; indexKnownId(current); for (let i = 0; i< chain.length; i++) { const base = chain[i]; const childId = buildChildId(current, base); if (!childId) return; const isLeaf = i === chain.length - 1; addOrMergeChildAndIndex( current, isLeaf ? { ...(leafMeta || {}), name: childId } : { name: childId, year: "", gdate: "", hdate: "", city: "", area: "", created_at: "" } ); current = childId; } }; (Array.isArray(rows) ? rows : []).forEach((r) =>{ let parentRaw = normalizeParentName(r.parent_name || r.parent || "", key); let childRaw = normalizePersonName(r.child_name || r.name || ""); if (!parentRaw || !childRaw) return; const meta = { name: "", personId: normalizePersonName(r.person_id || ""), parentPersonId: normalizePersonName(r.parent_person_id || ""), year: r.birth_year == null ? "" : String(r.birth_year), order: r.birth_order == null ? "" : String(r.birth_order), gdate: normalizePersonName(r.birth_date_g || r.birth_date || ""), hdate: normalizePersonName(r.birth_date_h || ""), city: normalizePersonName(r.city || ""), area: normalizePersonName(r.area || ""), deceased: parseTruthyValue(r.is_deceased) || parseTruthyValue(r.deceased) || parseTruthyValue(r.is_dead) || parseTruthyValue(r.dead) || parseTruthyValue(r.isDead) }; const parentId = ensureParentId(parentRaw, childRaw); if (!parentId) return; if (childRaw.includes("/")) { addOrMergeChildAndIndex(parentId, { ...meta, name: normalizeChildId(childRaw, parentId) }); return; } const rawTokens = tokenizeLineageInput(normalizePersonBaseName(childRaw)); const tokens = stripBranchSuffix(rawTokens); if (!tokens.length) return; const hadBranchSuffix = tokens.length !== rawTokens.length; if (hadBranchSuffix && branchRoot) { const chainOldest = tokens.slice().reverse(); addChain(branchRoot, chainOldest, meta); return; } if (tokens.length >1) { const chainOldest = tokens.slice().reverse(); const parentBase = normalizePersonBaseName(parentId); if (chainOldest.length && parentBase && chainOldest[0] === parentBase) chainOldest.shift(); addChain(parentId, chainOldest, meta); return; } addChain(parentId, [tokens[0]], meta); }); const forcedMap = {}; const forcedBases = Object.keys(FORCED_RAHMA_BY_BASE); if (forcedBases.length) { const pickBestId = (ids) =>{ const list = (Array.isArray(ids) ? ids : []).map((x) =>normalizePersonName(x)).filter(Boolean); if (!list.length) return ""; const root = normalizePersonName(branchRoot); list.sort((a, b) =>{ const aInRoot = root ? (a === root || a.startsWith(root + "/")) : false; const bInRoot = root ? (b === root || b.startsWith(root + "/")) : false; if (aInRoot !== bInRoot) return aInRoot ? -1 : 1; const aDepth = a.split("/").filter(Boolean).length; const bDepth = b.split("/").filter(Boolean).length; if (aDepth !== bDepth) return aDepth - bDepth; if (a.length !== b.length) return a.length - b.length; return a.localeCompare(b, "ar"); }); return list[0] || ""; }; forcedBases.forEach((base) =>{ const b = normalizePersonName(base); if (!b) return; const set = idsByBase.get(b); if (!set || !set.size) return; const picked = pickBestId(Array.from(set)); if (picked) forcedMap[b] = picked; }); } if (key) state.forcedRahmaByBranch[key] = forcedMap; return byParent; } async function loadChildrenQuery(sb, branchKey, fields) { const raw = String(fields || "*"); const parts = raw .split(",") .map((x) =>String(x || "").trim()) .filter(Boolean) .filter((x) =>x !== "created_at"); if (!parts.includes("id")) parts.unshift("id"); const cleaned = parts.join(","); return await sb .from(FAMILY_TREE_CHILDREN_TABLE) .select(cleaned || "*") .eq("branch_key", branchKey) .limit(5000); } const __treeChildrenInflight = new Map(); async function loadChildrenForBranch(branchKey, opts) { const options = opts || {}; const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const key = String(branchKey || "").trim(); if (!key) return { ok: false, reason: "missing_branch" }; const cacheKey = key + "|" + (options.applyToState === true ? "1" : "0"); if (__treeChildrenInflight.has(cacheKey)) return __treeChildrenInflight.get(cacheKey); const __loadPromise = (async () => { const fieldAttempts = [ "id,person_id,parent_person_id,parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_year,city,area,deceased,created_at", "parent_name,name,birth_year,city,area,deceased,created_at", "parent,name,birth_year,city,area,deceased,created_at", "parent,child_name,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,parent,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,birth_year,city,area,created_at", "parent_name,name,birth_year,city,area,created_at", "parent,name,birth_year,city,area,created_at", "parent,child_name,birth_year,city,area,created_at", "parent_name,parent,child_name,name,created_at", "parent_name,child_name,name,created_at", "parent_name,child_name,created_at", "parent_name,name,created_at", "parent,child_name,created_at", "parent,name,created_at", "parent_name,parent,child_name,name", "parent_name,child_name,name", "parent_name,child_name", "parent_name,name", "parent,child_name", "parent,name", "parent_name,parent,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,year,city,area,created_at", "parent_name,child_name,name,year,city,area,created_at", "parent_name,child_name,year,city,area,created_at", "parent_name,name,year,city,area,created_at", "parent,name,year,city,area,created_at", "parent,child_name,year,city,area,created_at" ]; let lastError = null; let deceasedFallbackHint = ""; for (let i = 0; i< fieldAttempts.length; i++) { const usedFields = fieldAttempts[i]; const res = await loadChildrenQuery(sb, key, usedFields); if (!res.error) { const map = groupChildrenRows(res.data, key); const supportsDeceased = usedFields.includes("is_deceased") || usedFields.includes("deceased"); if (options.applyToState === true) { const __FM = (typeof window !== "undefined" && window.AlzidanFamilyPersonCore) ? window.AlzidanFamilyPersonCore : {}; state.children = (typeof __FM.unionChildrenMapByParentPersonId === "function") ? __FM.unionChildrenMapByParentPersonId(map, normalizePersonName) : map; if (typeof __FM.isolateChildrenMapArrays === "function") __FM.isolateChildrenMapArrays(state.children); } return { ok: true, map, rows: Array.isArray(res.data) ? res.data : [], capabilities: { deceased: supportsDeceased, deceased_hint: supportsDeceased ? "" : deceasedFallbackHint } }; } if (!deceasedFallbackHint && (usedFields.includes("is_deceased") || usedFields.includes("deceased"))) { deceasedFallbackHint = classifyTreeChildrenDbError(res.error); } const msg = String(res.error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, reason: "error", error: res.error }; lastError = res.error; } return { ok: false, reason: "error", error: lastError };  })(); __treeChildrenInflight.set(cacheKey, __loadPromise); try { return await __loadPromise; } finally { __treeChildrenInflight.delete(cacheKey); } } async function insertTreeChildRow(sb, row) { const attempts = []; const deceasedValue = row && (row.is_deceased != null ? row.is_deceased : row.deceased); const full = { branch_key: row.branch_key, parent_name: row.parent_name, child_name: row.child_name, birth_date_g: row.birth_date_g, birth_date_h: row.birth_date_h, birth_year: row.birth_year, city: row.city, area: row.area }; const fullDeceased = { ...full, is_deceased: deceasedValue }; const fullDeceasedAlt = { ...full, deceased: deceasedValue }; const noDates = { branch_key: row.branch_key, parent_name: row.parent_name, child_name: row.child_name, birth_year: row.birth_year, city: row.city, area: row.area }; const noDatesDeceased = { ...noDates, is_deceased: deceasedValue }; const noDatesDeceasedAlt = { ...noDates, deceased: deceasedValue }; const fullName = { branch_key: row.branch_key, parent_name: row.parent_name, name: row.child_name, birth_date_g: row.birth_date_g, birth_date_h: row.birth_date_h, birth_year: row.birth_year, city: row.city, area: row.area }; const fullNameDeceased = { ...fullName, is_deceased: deceasedValue }; const fullNameDeceasedAlt = { ...fullName, deceased: deceasedValue }; const noDatesName = { branch_key: row.branch_key, parent_name: row.parent_name, name: row.child_name, birth_year: row.birth_year, city: row.city, area: row.area }; const noDatesNameDeceased = { ...noDatesName, is_deceased: deceasedValue }; const noDatesNameDeceasedAlt = { ...noDatesName, deceased: deceasedValue }; const fullParent = { branch_key: row.branch_key, parent: row.parent_name, name: row.child_name, birth_date_g: row.birth_date_g, birth_date_h: row.birth_date_h, birth_year: row.birth_year, city: row.city, area: row.area }; const fullParentDeceased = { ...fullParent, is_deceased: deceasedValue }; const fullParentDeceasedAlt = { ...fullParent, deceased: deceasedValue }; const noDatesParent = { branch_key: row.branch_key, parent: row.parent_name, name: row.child_name, birth_year: row.birth_year, city: row.city, area: row.area }; const noDatesParentDeceased = { ...noDatesParent, is_deceased: deceasedValue }; const noDatesParentDeceasedAlt = { ...noDatesParent, deceased: deceasedValue }; attempts.push({ row: fullDeceased }); attempts.push({ row: fullDeceasedAlt }); attempts.push({ row: full }); attempts.push({ row: noDatesDeceased }); attempts.push({ row: noDatesDeceasedAlt }); attempts.push({ row: noDates }); attempts.push({ row: fullNameDeceased }); attempts.push({ row: fullNameDeceasedAlt }); attempts.push({ row: fullName }); attempts.push({ row: noDatesNameDeceased }); attempts.push({ row: noDatesNameDeceasedAlt }); attempts.push({ row: noDatesName }); attempts.push({ row: fullParentDeceased }); attempts.push({ row: fullParentDeceasedAlt }); attempts.push({ row: fullParent }); attempts.push({ row: noDatesParentDeceased }); attempts.push({ row: noDatesParentDeceasedAlt }); attempts.push({ row: noDatesParent }); for (let i = 0; i< attempts.length; i++) { const { error } = await sb.from(FAMILY_TREE_CHILDREN_TABLE).insert(attempts[i].row); if (!error) { const used = attempts[i].row || {}; const degraded = deceasedValue != null && used.is_deceased == null && used.deceased == null; return { ok: true, degraded }; } const msg = String(error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const isNotNullName = msg.includes('column "name"') && msg.includes("null value"); const isNotNullChildName = msg.includes('column "child_name"') && msg.includes("null value"); if (!isColumnMissing && !isSchemaCacheMissingColumn && !isNotNullName && !isNotNullChildName) return { ok: false, error }; if (i === attempts.length - 1) return { ok: false, error }; } return { ok: false, error: { message: "unknown insert error" } }; } async function updateTreeChildRow(sb, branchKey, parentId, childId, patch) { const attempts = []; const key = normalizePersonName(branchKey || ""); const parent = normalizePersonName(parentId || ""); const id = normalizePersonName(childId || ""); if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } }; const p = patch || {}; const updateBase = { birth_date_g: p.birth_date_g, birth_date_h: p.birth_date_h, birth_year: p.birth_year, city: p.city, area: p.area }; const deceasedValue = p && (p.is_deceased != null ? p.is_deceased : p.deceased); const updateWithDeceased = { ...updateBase, is_deceased: deceasedValue }; const updateWithDeceasedAlt = { ...updateBase, deceased: deceasedValue }; const parentCols = ["parent_name", "parent"]; const childCols = ["child_name", "name"]; const updateRows = [updateWithDeceased, updateWithDeceasedAlt, updateBase]; parentCols.forEach((parentCol) =>{ childCols.forEach((childCol) =>{ updateRows.forEach((updateRow) =>{ attempts.push({ parentCol, childCol, updateRow }); }); }); }); for (let i = 0; i< attempts.length; i++) { const a = attempts[i]; const { data, error } = await sb .from(FAMILY_TREE_CHILDREN_TABLE) .update(a.updateRow) .eq("branch_key", key) .eq(a.parentCol, parent) .eq(a.childCol, id) .select(a.childCol); if (!error && Array.isArray(data) && data.length) { const used = a.updateRow || {}; const degraded = deceasedValue != null && used.is_deceased == null && used.deceased == null; return { ok: true, degraded }; } if (!error && Array.isArray(data) && data.length === 0) { if (i === attempts.length - 1) return { ok: false, error: { message: "row not found" } }; continue; } const msg = String(error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, error }; if (i === attempts.length - 1) return { ok: false, error }; } return { ok: false, error: { message: "unknown update error" } }; } async function deleteTreeChildRow(sb, branchKey, parentId, childId) { const attempts = []; const key = normalizePersonName(branchKey || ""); const parent = normalizePersonName(parentId || ""); const id = normalizePersonName(childId || ""); if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } }; const parentCols = ["parent_name", "parent"]; const childCols = ["child_name", "name"]; parentCols.forEach((parentCol) =>{ childCols.forEach((childCol) =>{ attempts.push({ parentCol, childCol }); }); }); for (let i = 0; i< attempts.length; i++) { const a = attempts[i]; const { data, error } = await sb .from(FAMILY_TREE_CHILDREN_TABLE) .delete() .eq("branch_key", key) .eq(a.parentCol, parent) .eq(a.childCol, id) .select(a.childCol); if (!error && Array.isArray(data) && data.length) return { ok: true }; if (!error && Array.isArray(data) && data.length === 0) { if (i === attempts.length - 1) return { ok: false, error: { message: "row not found" } }; continue; } const msg = String(error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, error }; if (i === attempts.length - 1) return { ok: false, error }; } return { ok: false, error: { message: "unknown delete error" } }; } function isRpcMissingError(err) { const msg = String(err && err.message ? err.message : "").toLowerCase(); const code = String(err && err.code ? err.code : "").toLowerCase(); if (code === "pgrst202") return true; if (msg.includes("could not find the function")) return true; if (msg.includes("function") && msg.includes("does not exist")) return true; if (msg.includes("تحديث الخدمة") && msg.includes("function")) return true; return false; } function isCaseTypesTextAndDateMismatchError(err) { const msg = String(err && err.message ? err.message : "").toLowerCase(); const details = String(err && err.details ? err.details : "").toLowerCase(); const low = (msg + " " + details).trim(); return low.includes("case types") && low.includes("text") && low.includes("date") && low.includes("cannot be matched"); } function confirmTypedText(expectedRaw, opts) { const options = opts || {}; const expected = normalizePersonName(expectedRaw || ""); if (!expected) return Promise.resolve(false); const title = String(options.title || "تأكيد").trim() || "تأكيد"; const body = String(options.body || "").trim(); const confirmLabel = String(options.confirmLabel || "تأكيد").trim() || "تأكيد"; const cancelLabel = String(options.cancelLabel || "إلغاء").trim() || "إلغاء"; return new Promise((resolve) =>{ const overlay = document.createElement("div"); overlay.style.position = "fixed"; overlay.style.inset = "0"; overlay.style.background = "rgba(0, 0, 0, 0.55)"; overlay.style.display = "flex"; overlay.style.alignItems = "center"; overlay.style.justifyContent = "center"; overlay.style.zIndex = "99999"; overlay.dir = "rtl"; const card = document.createElement("div"); card.style.width = "min(92vw, 520px)"; card.style.background = "#fff"; card.style.borderRadius = "14px"; card.style.padding = "14px 14px 12px"; card.style.boxShadow = "0 14px 40px rgba(0,0,0,0.25)"; card.style.border = "1px solid rgba(0,0,0,0.08)"; const h = document.createElement("div"); h.textContent = title; h.style.fontWeight = "700"; h.style.fontSize = "16px"; h.style.marginBottom = "8px"; const p = document.createElement("div"); p.style.marginBottom = "10px"; p.style.color = "#374151"; p.style.fontSize = "13px"; p.textContent = body || "اكتب النص التالي لتأكيد العملية:"; const expectedBox = document.createElement("div"); expectedBox.style.background = "#f3f4f6"; expectedBox.style.border = "1px solid #e5e7eb"; expectedBox.style.borderRadius = "10px"; expectedBox.style.padding = "10px 12px"; expectedBox.style.fontWeight = "700"; expectedBox.style.marginBottom = "10px"; expectedBox.style.userSelect = "text"; expectedBox.textContent = expected; const input = document.createElement("input"); input.type = "text"; input.autocomplete = "off"; input.inputMode = "text"; input.style.width = "100%"; input.style.padding = "10px 12px"; input.style.borderRadius = "10px"; input.style.border = "1px solid #d1d5db"; input.style.outline = "none"; input.style.fontSize = "14px"; input.placeholder = "اكتب هنا..."; const actions = document.createElement("div"); actions.style.display = "flex"; actions.style.gap = "8px"; actions.style.marginTop = "12px"; actions.style.justifyContent = "flex-start"; const cancelBtn = document.createElement("button"); cancelBtn.type = "button"; cancelBtn.className = "btn btn-secondary btn-small"; cancelBtn.textContent = cancelLabel; const okBtn = document.createElement("button"); okBtn.type = "button"; okBtn.className = "btn btn-primary btn-small"; okBtn.textContent = confirmLabel; okBtn.disabled = true; const cleanup = (v) =>{ try { document.removeEventListener("keydown", onKeyDown, true); } catch (e) {} try { overlay.remove(); } catch (e) {} resolve(!!v); }; const isMatch = () =>normalizePersonName(input.value || "") === expected; const refresh = () =>{ okBtn.disabled = !isMatch(); }; const onKeyDown = (e) =>{ if (!e) return; if (e.key === "Escape") { e.preventDefault(); cleanup(false); return; } if (e.key === "Enter") { if (isMatch()) { e.preventDefault(); cleanup(true); } } }; overlay.addEventListener("click", (e) =>{ if (e && e.target === overlay) cleanup(false); }); cancelBtn.addEventListener("click", () =>cleanup(false)); okBtn.addEventListener("click", () =>cleanup(true)); input.addEventListener("input", refresh); document.addEventListener("keydown", onKeyDown, true); card.appendChild(h); card.appendChild(p); card.appendChild(expectedBox); card.appendChild(input); actions.appendChild(cancelBtn); actions.appendChild(okBtn); card.appendChild(actions); overlay.appendChild(card); document.body.appendChild(overlay); setTimeout(() =>{ try { input.focus(); input.select(); } catch (e) {} }, 0); }); } function isOnConflictConstraintError(err) { const msg = String(err && err.message ? err.message : "").toLowerCase(); return msg.includes("no unique or exclusion constraint matching the on conflict specification"); }
+  } if (lowMsg.includes("birth_order_conflict")) { return "رقم ترتيب الميلاد مستخدم لابن آخر تحت الأب نفسه. اختر رقمًا مختلفًا."; } if (lowMsg.includes("tree_children_parent_birth_order_key")) { return "رقم ترتيب الميلاد مستخدم لابن آخر تحت الأب نفسه. اختر رقمًا مختلفًا."; } if (lowMsg.includes("birth_order_invalid")) { return "ترتيب الميلاد يجب أن يكون رقمًا صحيحًا يبدأ من 1."; } if (lowMsg.includes("name_correction_leaf_invalid")) { return "اسم الابن كلمة واحدة فقط (بدون نسب أو مسار)."; } if (lowMsg.includes("parent_change_self")) { return "لا يمكن جعل الشخص أبًا لنفسه."; } if (lowMsg.includes("parent_change_cycle")) { return "لا يمكن اختيار أب من نسل نفس الشخص (دورة في الشجرة)."; } if (lowMsg.includes("new_parent_not_found")) { return "تعذر إيجاد الأب الجديد في نفس الفرع."; } if (lowMsg.includes("parent_change_leaf_missing")) { return "تعذر تحديد اسم الابن من مسار الشجرة."; } if (lowMsg.includes("child_already_exists")) { return "هذا الاسم مسجل مسبقًا تحت الأب نفسه. يمكن تسجيل الاسم نفسه فقط إذا كان الأب مختلفًا."; } if (lowMsg.includes("no unique or exclusion constraint matching the on conflict specification")) { return "تعذر الحفظ بسبب إعداد قديم في الخدمة يستخدم ON CONFLICT بدون مفتاح فريد. افتح صفحة الإدارة (admin.html) وانسخ أمر الصيانة الخاص بالشجرة ثم نفّذه في الخدمة ليتم تحديث الدوال."; } const isSchemaCache = lowMsg.includes("تحديث الخدمة") || lowMsg.includes("could not find the table") || lowDetails.includes("تحديث الخدمة"); if (isSchemaCache) { const hint = `إذا استمر الخطأ، فالغالب أن دور anon لا يملك صلاحيات على جدول ${tableName} أو أن RLS تمنع الوصول.`; const reloadHint = "انتظر دقيقة ثم حدّث الصفحة، أو نفّذ Reload تحديث الخدمة من إعدادات الخدمة (API)."; if (a === "save" || a === "update" || a === "delete") { return `تعذر تنفيذ العملية لأن الخدمة لم يُحدّث المخطط بعد. ${reloadHint} ${hint}`; } return `تعذر تحميل بيانات الأبناء لأن الخدمة لم يُحدّث المخطط بعد. ${reloadHint} ${hint}`; } const isMissingTable = lowCode === "42p01" || (lowMsg.includes("relation") && lowMsg.includes("does not exist")) || (lowDetails.includes("relation") && lowDetails.includes("does not exist")); if (isMissingTable) { if (a === "save") return `يلزم إنشاء جدول ${tableName} في الخدمة قبل حفظ الأبناء.`; return `يلزم إنشاء جدول ${tableName} في الخدمة لعرض الأبناء.`; } const isRls = lowMsg.includes("row-level security") || lowDetails.includes("row-level security") || lowMsg.includes("violates row-level security"); if (isRls) { if (a === "save") return `تعذر حفظ بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة INSERT على جدول ${tableName}.`; if (a === "update") return `تعذر تعديل بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة UPDATE على جدول ${tableName}.`; if (a === "delete") return `تعذر حذف بيانات الابن بسبب صلاحيات الجدول (RLS). تأكد من سياسة DELETE على جدول ${tableName}.`; return `تعذر تحميل بيانات الأبناء بسبب صلاحيات الجدول (RLS). تأكد من سياسات SELECT/INSERT/UPDATE/DELETE على جدول ${tableName}.`; } const isPermission = lowMsg.includes("permission denied") || lowDetails.includes("permission denied") || lowCode === "42501"; if (isPermission) { if (a === "save") return `تعذر حفظ بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}، حاول لاحقاً أو تواصل مع الإدارة.`; if (a === "update") return `تعذر تعديل بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}، حاول لاحقاً أو تواصل مع الإدارة.`; if (a === "delete") return `تعذر حذف بيانات الابن بسبب عدم وجود صلاحية على جدول ${tableName}، حاول لاحقاً أو تواصل مع الإدارة.`; return `تعذر تحميل بيانات الأبناء بسبب عدم وجود صلاحية على جدول ${tableName}.`; } const isSchemaMismatch = lowMsg.includes("column") && lowMsg.includes("does not exist"); if (isSchemaMismatch) { const neededCore = wrapLTRText("branch_key + (parent_name أو parent) + (child_name أو name)"); const optional = wrapLTRText("birth_date_g, birth_date_h, birth_year, birth_order, city, area, is_deceased, created_at"); if (a === "save" || a === "update" || a === "delete") { return `تعذر تنفيذ العملية لأن أعمدة جدول ${tableName} غير مطابقة. المطلوب على الأقل: ${neededCore}. الأعمدة الإضافية اختيارية: ${optional}.`; } return `تعذر تحميل بيانات الأبناء لأن أعمدة جدول ${tableName} غير مطابقة. المطلوب على الأقل: ${neededCore}. الأعمدة الإضافية اختيارية: ${optional}.`; } if (a === "save") return `تعذر حفظ بيانات الابن: ${msgRaw || "خطأ غير معروف"}`; if (a === "update") return `تعذر تعديل بيانات الابن: ${msgRaw || "خطأ غير معروف"}`; if (a === "delete") return `تعذر حذف بيانات الابن: ${msgRaw || "خطأ غير معروف"}`; return `تعذر تحميل بيانات الأبناء: ${msgRaw || "خطأ غير معروف"}`; } function classifyTreeChildrenDbError(err) { const msgRaw = err && err.message != null ? String(err.message) : ""; const detailsRaw = err && err.details != null ? String(err.details) : ""; const lowMsg = msgRaw.trim().toLowerCase(); const lowDetails = detailsRaw.trim().toLowerCase(); const isSchemaCache = lowMsg.includes("تحديث الخدمة") || lowMsg.includes("could not find the table") || lowDetails.includes("تحديث الخدمة"); if (isSchemaCache) return "schema_cache"; const isRls = lowMsg.includes("row-level security") || lowDetails.includes("row-level security") || lowMsg.includes("violates row-level security"); if (isRls) return "rls"; const isPermission = lowMsg.includes("permission denied") || lowDetails.includes("permission denied"); if (isPermission) return "permission"; const isColumnMissing = lowMsg.includes("column") && lowMsg.includes("does not exist"); const isSchemaCacheMissingColumn = lowMsg.includes("تحديث الخدمة") && lowMsg.includes("could not find") && lowMsg.includes("column"); if (isColumnMissing || isSchemaCacheMissingColumn) return "missing_column"; return "other"; } function groupChildrenRows(rows, branchKey) { const key = normalizePersonName(branchKey || ""); const branchRoot = key ? getBranchRootName(key) : ""; const byParent = {}; const idsByBase = new Map(); const buildChildId = (parentId, baseName) =>{ const p = normalizePersonName(parentId || ""); const b = normalizePersonName(baseName || ""); if (!p || !b) return ""; return p + "/" + b; }; const indexKnownId = (nodeId) =>{ const id = normalizePersonName(nodeId || ""); if (!id) return; const parts = id.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); const base = parts.length ? parts[parts.length - 1] : id; if (!base) return; const existing = idsByBase.get(base); if (existing) { existing.add(id); return; } idsByBase.set(base, new Set([id])); }; const addOrMergeChildById = (parentId, child) =>{ const parent = normalizePersonName(parentId || ""); const name = normalizePersonName(child && child.name ? child.name : ""); if (!parent || !name) return; if (!byParent[parent]) byParent[parent] = []; const list = byParent[parent]; const idx = (Array.isArray(list) ? list : []).findIndex((c) =>normalizePersonName(c && c.name ? c.name : "") === name); const merged = { name, personId: child && child.personId ? String(child.personId) : "", parentPersonId: child && child.parentPersonId ? String(child.parentPersonId) : "", year: child && child.year ? String(child.year) : "", order: child && child.order ? String(child.order) : "", gdate: child && child.gdate ? String(child.gdate) : "", hdate: child && child.hdate ? String(child.hdate) : "", city: child && child.city ? String(child.city) : "", area: child && child.area ? String(child.area) : "", deceased: !!(child && child.deceased) }; if (idx< 0) { list.push(merged); return; } const prev = list[idx]; if (prev) { if (!prev.personId && merged.personId) prev.personId = merged.personId; if (!prev.parentPersonId && merged.parentPersonId) prev.parentPersonId = merged.parentPersonId; if (!prev.year && merged.year) prev.year = merged.year; if (!prev.order && merged.order) prev.order = merged.order; if (!prev.gdate && merged.gdate) prev.gdate = merged.gdate; if (!prev.hdate && merged.hdate) prev.hdate = merged.hdate; if (!prev.city && merged.city) prev.city = merged.city; if (!prev.area && merged.area) prev.area = merged.area; if (!prev.deceased && merged.deceased) prev.deceased = true; } }; const addOrMergeChildAndIndex = (parentId, child) =>{ addOrMergeChildById(parentId, child); const p = normalizePersonName(parentId || ""); if (p) indexKnownId(p); const n = normalizePersonName(child && child.name ? child.name : ""); if (n) indexKnownId(n); }; const ensureParentId = (rawParent, childRaw) =>{ const raw = normalizePersonName(rawParent || ""); if (!raw) return ""; if (raw.includes("/")) return raw; if (branchRoot && (raw === branchRoot || raw === key)) return branchRoot; const pathDerived = (function(){ const childFull = normalizePersonName(childRaw || ""); if (!childFull || !childFull.includes("/")) return ""; const parts = childFull.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); if (parts.length < 2) return ""; const derivedParent = parts.slice(0, -1).join("/"); const derivedLeaf = parts[parts.length - 2] || ""; if (derivedLeaf === raw || normalizePersonBaseName(derivedParent) === raw || derivedParent.endsWith("/" + raw)) return derivedParent; return ""; })(); if (pathDerived) return pathDerived; const candidates = idsByBase.get(raw); if (candidates && candidates.size === 1) return Array.from(candidates)[0]; if (candidates && candidates.size > 1) return raw; if (branchRoot) { const parentId = buildChildId(branchRoot, raw); if (parentId) addOrMergeChildAndIndex(branchRoot, { name: parentId, year: "", gdate: "", hdate: "", city: "", area: "" }); return parentId; } return raw; }; const stripBranchSuffix = (tokens) =>{ const t = Array.isArray(tokens) ? tokens.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!key) return t; if (t.length >= 3) { const a = normalizePersonName(t[t.length - 3] || ""); const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (a === key && b === "مطلق" && c === "زيدان") return t.slice(0, -3); } if (t.length >= 2) { const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (b === key && c === "مطلق") return t.slice(0, -2); } if (t.length >= 1 && normalizePersonName(t[t.length - 1] || "") === key) return t.slice(0, -1); return t; }; const normalizeChildId = (rawChildId, parentId) =>{ const c = normalizePersonName(rawChildId || ""); if (!c || !c.includes("/")) return c; const p = normalizePersonName(parentId || ""); if (!p) return c; if (c === p || c.startsWith(p + "/")) return c; if (branchRoot && (c === branchRoot || c.startsWith(branchRoot + "/"))) return c; const base = p.split("/").map((x) =>normalizePersonName(x)).filter(Boolean).slice(-1)[0] || ""; if (base && c.startsWith(base + "/")) return p + "/" + c.slice((base + "/").length); return c; }; const addChain = (anchorParentId, basesOldestToYoungest, leafMeta) =>{ const anchor = normalizePersonName(anchorParentId || ""); const chain = Array.isArray(basesOldestToYoungest) ? basesOldestToYoungest.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!anchor || !chain.length) return; let current = anchor; indexKnownId(current); for (let i = 0; i< chain.length; i++) { const base = chain[i]; const childId = buildChildId(current, base); if (!childId) return; const isLeaf = i === chain.length - 1; addOrMergeChildAndIndex( current, isLeaf ? { ...(leafMeta || {}), name: childId } : { name: childId, year: "", gdate: "", hdate: "", city: "", area: "", created_at: "" } ); current = childId; } }; (Array.isArray(rows) ? rows : []).forEach((r) =>{ let parentRaw = normalizeParentName(r.parent_name || r.parent || "", key); let childRaw = normalizePersonName(r.child_name || r.name || ""); if (!parentRaw || !childRaw) return; const meta = { name: "", personId: normalizePersonName(r.person_id || ""), parentPersonId: normalizePersonName(r.parent_person_id || ""), year: r.birth_year == null ? "" : String(r.birth_year), order: r.birth_order == null ? "" : String(r.birth_order), gdate: normalizePersonName(r.birth_date_g || r.birth_date || ""), hdate: normalizePersonName(r.birth_date_h || ""), city: normalizePersonName(r.city || ""), area: normalizePersonName(r.area || ""), deceased: parseTruthyValue(r.is_deceased) || parseTruthyValue(r.deceased) || parseTruthyValue(r.is_dead) || parseTruthyValue(r.dead) || parseTruthyValue(r.isDead) }; const parentId = ensureParentId(parentRaw, childRaw); if (!parentId) return; if (childRaw.includes("/")) { addOrMergeChildAndIndex(parentId, { ...meta, name: normalizeChildId(childRaw, parentId) }); return; } const rawTokens = tokenizeLineageInput(normalizePersonBaseName(childRaw)); const tokens = stripBranchSuffix(rawTokens); if (!tokens.length) return; const hadBranchSuffix = tokens.length !== rawTokens.length; if (hadBranchSuffix && branchRoot) { const chainOldest = tokens.slice().reverse(); addChain(branchRoot, chainOldest, meta); return; } if (tokens.length >1) { const chainOldest = tokens.slice().reverse(); const parentBase = normalizePersonBaseName(parentId); if (chainOldest.length && parentBase && chainOldest[0] === parentBase) chainOldest.shift(); addChain(parentId, chainOldest, meta); return; } addChain(parentId, [tokens[0]], meta); }); const forcedMap = {}; const forcedBases = Object.keys(FORCED_RAHMA_BY_BASE); if (forcedBases.length) { const pickBestId = (ids) =>{ const list = (Array.isArray(ids) ? ids : []).map((x) =>normalizePersonName(x)).filter(Boolean); if (!list.length) return ""; const root = normalizePersonName(branchRoot); list.sort((a, b) =>{ const aInRoot = root ? (a === root || a.startsWith(root + "/")) : false; const bInRoot = root ? (b === root || b.startsWith(root + "/")) : false; if (aInRoot !== bInRoot) return aInRoot ? -1 : 1; const aDepth = a.split("/").filter(Boolean).length; const bDepth = b.split("/").filter(Boolean).length; if (aDepth !== bDepth) return aDepth - bDepth; if (a.length !== b.length) return a.length - b.length; return a.localeCompare(b, "ar"); }); return list[0] || ""; }; forcedBases.forEach((base) =>{ const b = normalizePersonName(base); if (!b) return; const set = idsByBase.get(b); if (!set || !set.size) return; const picked = pickBestId(Array.from(set)); if (picked) forcedMap[b] = picked; }); } if (key) state.forcedRahmaByBranch[key] = forcedMap; return byParent; } async function loadChildrenQuery(sb, branchKey, fields) { const raw = String(fields || "*"); const parts = raw .split(",") .map((x) =>String(x || "").trim()) .filter(Boolean) .filter((x) =>x !== "created_at"); if (!parts.includes("id")) parts.unshift("id"); const cleaned = parts.join(","); return await sb .from(FAMILY_TREE_CHILDREN_TABLE) .select(cleaned || "*") .eq("branch_key", branchKey) .limit(5000); } const __treeChildrenInflight = new Map(); async function loadChildrenForBranch(branchKey, opts) { const options = opts || {}; const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const key = String(branchKey || "").trim(); if (!key) return { ok: false, reason: "missing_branch" }; const cacheKey = key + "|" + (options.applyToState === true ? "1" : "0"); if (__treeChildrenInflight.has(cacheKey)) return __treeChildrenInflight.get(cacheKey); const __loadPromise = (async () => { const fieldAttempts = [ "id,person_id,parent_person_id,parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_year,city,area,deceased,created_at", "parent_name,name,birth_year,city,area,deceased,created_at", "parent,name,birth_year,city,area,deceased,created_at", "parent,child_name,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,parent,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,birth_year,city,area,created_at", "parent_name,name,birth_year,city,area,created_at", "parent,name,birth_year,city,area,created_at", "parent,child_name,birth_year,city,area,created_at", "parent_name,parent,child_name,name,created_at", "parent_name,child_name,name,created_at", "parent_name,child_name,created_at", "parent_name,name,created_at", "parent,child_name,created_at", "parent,name,created_at", "parent_name,parent,child_name,name", "parent_name,child_name,name", "parent_name,child_name", "parent_name,name", "parent,child_name", "parent,name", "parent_name,parent,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,year,city,area,created_at", "parent_name,child_name,name,year,city,area,created_at", "parent_name,child_name,year,city,area,created_at", "parent_name,name,year,city,area,created_at", "parent,name,year,city,area,created_at", "parent,child_name,year,city,area,created_at" ]; let lastError = null; let deceasedFallbackHint = ""; for (let i = 0; i< fieldAttempts.length; i++) { const usedFields = fieldAttempts[i]; const res = await loadChildrenQuery(sb, key, usedFields); if (!res.error) { const map = groupChildrenRows(res.data, key); const supportsDeceased = usedFields.includes("is_deceased") || usedFields.includes("deceased"); if (options.applyToState === true) { const __FM = (typeof window !== "undefined" && window.AlzidanFamilyPersonCore) ? window.AlzidanFamilyPersonCore : {}; state.children = (typeof __FM.unionChildrenMapByParentPersonId === "function") ? __FM.unionChildrenMapByParentPersonId(map, normalizePersonName) : map; if (typeof __FM.isolateChildrenMapArrays === "function") __FM.isolateChildrenMapArrays(state.children); } return { ok: true, map, rows: Array.isArray(res.data) ? res.data : [], capabilities: { deceased: supportsDeceased, deceased_hint: supportsDeceased ? "" : deceasedFallbackHint } }; } if (!deceasedFallbackHint && (usedFields.includes("is_deceased") || usedFields.includes("deceased"))) { deceasedFallbackHint = classifyTreeChildrenDbError(res.error); } const msg = String(res.error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, reason: "error", error: res.error }; lastError = res.error; } return { ok: false, reason: "error", error: lastError };  })(); __treeChildrenInflight.set(cacheKey, __loadPromise); try { return await __loadPromise; } finally { __treeChildrenInflight.delete(cacheKey); } } async function insertTreeChildRow(sb, row) { const attempts = []; const deceasedValue = row && (row.is_deceased != null ? row.is_deceased : row.deceased); const full = { branch_key: row.branch_key, parent_name: row.parent_name, child_name: row.child_name, birth_date_g: row.birth_date_g, birth_date_h: row.birth_date_h, birth_year: row.birth_year, city: row.city, area: row.area }; const fullDeceased = { ...full, is_deceased: deceasedValue }; const fullDeceasedAlt = { ...full, deceased: deceasedValue }; const noDates = { branch_key: row.branch_key, parent_name: row.parent_name, child_name: row.child_name, birth_year: row.birth_year, city: row.city, area: row.area }; const noDatesDeceased = { ...noDates, is_deceased: deceasedValue }; const noDatesDeceasedAlt = { ...noDates, deceased: deceasedValue }; const fullName = { branch_key: row.branch_key, parent_name: row.parent_name, name: row.child_name, birth_date_g: row.birth_date_g, birth_date_h: row.birth_date_h, birth_year: row.birth_year, city: row.city, area: row.area }; const fullNameDeceased = { ...fullName, is_deceased: deceasedValue }; const fullNameDeceasedAlt = { ...fullName, deceased: deceasedValue }; const noDatesName = { branch_key: row.branch_key, parent_name: row.parent_name, name: row.child_name, birth_year: row.birth_year, city: row.city, area: row.area }; const noDatesNameDeceased = { ...noDatesName, is_deceased: deceasedValue }; const noDatesNameDeceasedAlt = { ...noDatesName, deceased: deceasedValue }; const fullParent = { branch_key: row.branch_key, parent: row.parent_name, name: row.child_name, birth_date_g: row.birth_date_g, birth_date_h: row.birth_date_h, birth_year: row.birth_year, city: row.city, area: row.area }; const fullParentDeceased = { ...fullParent, is_deceased: deceasedValue }; const fullParentDeceasedAlt = { ...fullParent, deceased: deceasedValue }; const noDatesParent = { branch_key: row.branch_key, parent: row.parent_name, name: row.child_name, birth_year: row.birth_year, city: row.city, area: row.area }; const noDatesParentDeceased = { ...noDatesParent, is_deceased: deceasedValue }; const noDatesParentDeceasedAlt = { ...noDatesParent, deceased: deceasedValue }; attempts.push({ row: fullDeceased }); attempts.push({ row: fullDeceasedAlt }); attempts.push({ row: full }); attempts.push({ row: noDatesDeceased }); attempts.push({ row: noDatesDeceasedAlt }); attempts.push({ row: noDates }); attempts.push({ row: fullNameDeceased }); attempts.push({ row: fullNameDeceasedAlt }); attempts.push({ row: fullName }); attempts.push({ row: noDatesNameDeceased }); attempts.push({ row: noDatesNameDeceasedAlt }); attempts.push({ row: noDatesName }); attempts.push({ row: fullParentDeceased }); attempts.push({ row: fullParentDeceasedAlt }); attempts.push({ row: fullParent }); attempts.push({ row: noDatesParentDeceased }); attempts.push({ row: noDatesParentDeceasedAlt }); attempts.push({ row: noDatesParent }); for (let i = 0; i< attempts.length; i++) { const { error } = await sb.from(FAMILY_TREE_CHILDREN_TABLE).insert(attempts[i].row); if (!error) { const used = attempts[i].row || {}; const degraded = deceasedValue != null && used.is_deceased == null && used.deceased == null; return { ok: true, degraded }; } const msg = String(error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const isNotNullName = msg.includes('column "name"') && msg.includes("null value"); const isNotNullChildName = msg.includes('column "child_name"') && msg.includes("null value"); if (!isColumnMissing && !isSchemaCacheMissingColumn && !isNotNullName && !isNotNullChildName) return { ok: false, error }; if (i === attempts.length - 1) return { ok: false, error }; } return { ok: false, error: { message: "unknown insert error" } }; } async function updateTreeChildRow(sb, branchKey, parentId, childId, patch) { const attempts = []; const key = normalizePersonName(branchKey || ""); const parent = normalizePersonName(parentId || ""); const id = normalizePersonName(childId || ""); if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } }; const p = patch || {}; const updateBase = { birth_date_g: p.birth_date_g, birth_date_h: p.birth_date_h, birth_year: p.birth_year, city: p.city, area: p.area }; const deceasedValue = p && (p.is_deceased != null ? p.is_deceased : p.deceased); const updateWithDeceased = { ...updateBase, is_deceased: deceasedValue }; const updateWithDeceasedAlt = { ...updateBase, deceased: deceasedValue }; const parentCols = ["parent_name", "parent"]; const childCols = ["child_name", "name"]; const updateRows = [updateWithDeceased, updateWithDeceasedAlt, updateBase]; parentCols.forEach((parentCol) =>{ childCols.forEach((childCol) =>{ updateRows.forEach((updateRow) =>{ attempts.push({ parentCol, childCol, updateRow }); }); }); }); for (let i = 0; i< attempts.length; i++) { const a = attempts[i]; const { data, error } = await sb .from(FAMILY_TREE_CHILDREN_TABLE) .update(a.updateRow) .eq("branch_key", key) .eq(a.parentCol, parent) .eq(a.childCol, id) .select(a.childCol); if (!error && Array.isArray(data) && data.length) { const used = a.updateRow || {}; const degraded = deceasedValue != null && used.is_deceased == null && used.deceased == null; return { ok: true, degraded }; } if (!error && Array.isArray(data) && data.length === 0) { if (i === attempts.length - 1) return { ok: false, error: { message: "row not found" } }; continue; } const msg = String(error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, error }; if (i === attempts.length - 1) return { ok: false, error }; } return { ok: false, error: { message: "unknown update error" } }; } async function deleteTreeChildRow(sb, branchKey, parentId, childId) { const attempts = []; const key = normalizePersonName(branchKey || ""); const parent = normalizePersonName(parentId || ""); const id = normalizePersonName(childId || ""); if (!key || !parent || !id) return { ok: false, error: { message: "missing key" } }; const parentCols = ["parent_name", "parent"]; const childCols = ["child_name", "name"]; parentCols.forEach((parentCol) =>{ childCols.forEach((childCol) =>{ attempts.push({ parentCol, childCol }); }); }); for (let i = 0; i< attempts.length; i++) { const a = attempts[i]; const { data, error } = await sb .from(FAMILY_TREE_CHILDREN_TABLE) .delete() .eq("branch_key", key) .eq(a.parentCol, parent) .eq(a.childCol, id) .select(a.childCol); if (!error && Array.isArray(data) && data.length) return { ok: true }; if (!error && Array.isArray(data) && data.length === 0) { if (i === attempts.length - 1) return { ok: false, error: { message: "row not found" } }; continue; } const msg = String(error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, error }; if (i === attempts.length - 1) return { ok: false, error }; } return { ok: false, error: { message: "unknown delete error" } }; } function isRpcMissingError(err) { const msg = String(err && err.message ? err.message : "").toLowerCase(); const code = String(err && err.code ? err.code : "").toLowerCase(); if (code === "pgrst202") return true; if (msg.includes("could not find the function")) return true; if (msg.includes("function") && msg.includes("does not exist")) return true; if (msg.includes("تحديث الخدمة") && msg.includes("function")) return true; return false; } function isCaseTypesTextAndDateMismatchError(err) { const msg = String(err && err.message ? err.message : "").toLowerCase(); const details = String(err && err.details ? err.details : "").toLowerCase(); const low = (msg + " " + details).trim(); return low.includes("case types") && low.includes("text") && low.includes("date") && low.includes("cannot be matched"); } function confirmTypedText(expectedRaw, opts) { const options = opts || {}; const expected = normalizePersonName(expectedRaw || ""); if (!expected) return Promise.resolve(false); const title = String(options.title || "تأكيد").trim() || "تأكيد"; const body = String(options.body || "").trim(); const confirmLabel = String(options.confirmLabel || "تأكيد").trim() || "تأكيد"; const cancelLabel = String(options.cancelLabel || "إلغاء").trim() || "إلغاء"; return new Promise((resolve) =>{ const overlay = document.createElement("div"); overlay.style.position = "fixed"; overlay.style.inset = "0"; overlay.style.background = "rgba(0, 0, 0, 0.55)"; overlay.style.display = "flex"; overlay.style.alignItems = "center"; overlay.style.justifyContent = "center"; overlay.style.zIndex = "99999"; overlay.dir = "rtl"; const card = document.createElement("div"); card.style.width = "min(92vw, 520px)"; card.style.background = "#fff"; card.style.borderRadius = "14px"; card.style.padding = "14px 14px 12px"; card.style.boxShadow = "0 14px 40px rgba(0,0,0,0.25)"; card.style.border = "1px solid rgba(0,0,0,0.08)"; const h = document.createElement("div"); h.textContent = title; h.style.fontWeight = "700"; h.style.fontSize = "16px"; h.style.marginBottom = "8px"; const p = document.createElement("div"); p.style.marginBottom = "10px"; p.style.color = "#374151"; p.style.fontSize = "13px"; p.textContent = body || "اكتب النص التالي لتأكيد العملية:"; const expectedBox = document.createElement("div"); expectedBox.style.background = "#f3f4f6"; expectedBox.style.border = "1px solid #e5e7eb"; expectedBox.style.borderRadius = "10px"; expectedBox.style.padding = "10px 12px"; expectedBox.style.fontWeight = "700"; expectedBox.style.marginBottom = "10px"; expectedBox.style.userSelect = "text"; expectedBox.textContent = expected; const input = document.createElement("input"); input.type = "text"; input.autocomplete = "off"; input.inputMode = "text"; input.style.width = "100%"; input.style.padding = "10px 12px"; input.style.borderRadius = "10px"; input.style.border = "1px solid #d1d5db"; input.style.outline = "none"; input.style.fontSize = "14px"; input.placeholder = "اكتب هنا..."; const actions = document.createElement("div"); actions.style.display = "flex"; actions.style.gap = "8px"; actions.style.marginTop = "12px"; actions.style.justifyContent = "flex-start"; const cancelBtn = document.createElement("button"); cancelBtn.type = "button"; cancelBtn.className = "btn btn-secondary btn-small"; cancelBtn.textContent = cancelLabel; const okBtn = document.createElement("button"); okBtn.type = "button"; okBtn.className = "btn btn-primary btn-small"; okBtn.textContent = confirmLabel; okBtn.disabled = true; const cleanup = (v) =>{ try { document.removeEventListener("keydown", onKeyDown, true); } catch (e) {} try { overlay.remove(); } catch (e) {} resolve(!!v); }; const isMatch = () =>normalizePersonName(input.value || "") === expected; const refresh = () =>{ okBtn.disabled = !isMatch(); }; const onKeyDown = (e) =>{ if (!e) return; if (e.key === "Escape") { e.preventDefault(); cleanup(false); return; } if (e.key === "Enter") { if (isMatch()) { e.preventDefault(); cleanup(true); } } }; overlay.addEventListener("click", (e) =>{ if (e && e.target === overlay) cleanup(false); }); cancelBtn.addEventListener("click", () =>cleanup(false)); okBtn.addEventListener("click", () =>cleanup(true)); input.addEventListener("input", refresh); document.addEventListener("keydown", onKeyDown, true); card.appendChild(h); card.appendChild(p); card.appendChild(expectedBox); card.appendChild(input); actions.appendChild(cancelBtn); actions.appendChild(okBtn); card.appendChild(actions); overlay.appendChild(card); document.body.appendChild(overlay); setTimeout(() =>{ try { input.focus(); input.select(); } catch (e) {} }, 0); }); } function isOnConflictConstraintError(err) { const msg = String(err && err.message ? err.message : "").toLowerCase(); return msg.includes("no unique or exclusion constraint matching the on conflict specification"); }
 function formatDelegateDeniedError(info, domain) {
   const d = domain === "events" ? "events" : "tree";
   const data = info && typeof info === "object" ? info : {};
@@ -276,6 +338,207 @@ function formatDelegateDeniedError(info, domain) {
 }
 
 async function getDelegateRpcAuth() { const session = loadDelegateSession(); if (!session) return { ok: false, reason: "no_session" }; const secretHash = String(session.secretHash || "").trim(); if (!secretHash) return { ok: false, reason: "hash_failed" }; return { ok: true, branch: session.branch, phone: session.phone, email: session.email, secretHash }; }
+window.AlzidanDelegateTreeWrite = {
+  getClient: function () {
+    return typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+  },
+  getRpcAuth: getDelegateRpcAuth,
+  updateBirthOrder: async function (child, birthOrder) {
+    const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+    if (!sb) return { ok: false, error: { message: "not_configured" } };
+    const patch = { birth_order: birthOrder };
+    const session = loadDelegateSession();
+    return rpcUpdateTreeChildRow(
+      sb,
+      (child && child.branch_key) || (session && session.branch) || "",
+      (child && child.parent_name) || "",
+      (child && (child.path || child.child_name)) || "",
+      patch,
+      (child && child.person_id) || ""
+    );
+  },
+  updateBirthDate: async function (treeRow, birthDateG) {
+    const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+    if (!sb) return { ok: false, message: "not_configured" };
+    const session = loadDelegateSession();
+    const branch =
+      (treeRow && treeRow.branch_key) || (session && session.branch) || "";
+    const parent =
+      (treeRow && treeRow.parent_name) ||
+      "";
+    const childPath =
+      (treeRow && (treeRow.child_name || treeRow.name || treeRow.path)) || "";
+    const year =
+      birthDateG && /^\d{4}/.test(String(birthDateG))
+        ? parseInt(String(birthDateG).slice(0, 4), 10)
+        : null;
+    const res = await rpcUpdateTreeChildRow(
+      sb,
+      branch,
+      parent,
+      childPath,
+      {
+        birth_date_g: birthDateG || null,
+        birth_year: Number.isFinite(year) ? year : null,
+      },
+      (treeRow && treeRow.person_id) || ""
+    );
+    if (!res || !res.ok) {
+      return {
+        ok: false,
+        message:
+          (res && res.error && formatTreeChildrenDbError(res.error, "update")) ||
+          "فشل تحديث الميلاد",
+        error: res && res.error,
+      };
+    }
+    return { ok: true };
+  },
+  saveMemberPhone: async function (treeRow, phone) {
+    const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+    if (!sb) return { ok: false, message: "not_configured" };
+    const session = loadDelegateSession();
+    const branch =
+      (treeRow && treeRow.branch_key) || (session && session.branch) || "";
+    const childPath =
+      (treeRow && (treeRow.child_name || treeRow.name || treeRow.path)) || "";
+    const res = await saveDelegateMemberProfile(
+      sb,
+      phone,
+      branch,
+      childPath,
+      (treeRow && treeRow.person_id) || ""
+    );
+    if (!res || !res.ok) {
+      return {
+        ok: false,
+        message:
+          (res && res.error && res.error.message) || "فشل حفظ الجوال",
+        error: res && res.error,
+      };
+    }
+    return { ok: true };
+  },
+  changeParent: async function (treeRow, newParent) {
+    const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+    if (!sb) return { ok: false, message: "not_configured" };
+    const auth = await getDelegateRpcAuth();
+    if (!auth.ok) {
+      return { ok: false, message: auth.reason || "تعذر التحقق من صلاحية المندوب." };
+    }
+    const session = loadDelegateSession();
+    const branch = normalizePersonName(
+      (treeRow && treeRow.branch_key) ||
+        (session && session.branch) ||
+        auth.branch ||
+        ""
+    );
+    const personId = normalizePersonName(
+      (treeRow && treeRow.person_id) || ""
+    );
+    const newParentId = normalizePersonName(
+      (newParent && (newParent.person_id || newParent.personId)) ||
+        newParent ||
+        ""
+    );
+    if (!branch || !personId || !newParentId) {
+      return { ok: false, message: "بيانات الشخص/الأب ناقصة." };
+    }
+    const { data, error } = await sb.rpc("tree_children_change_parent_v1", {
+      p_branch_key: branch,
+      p_person_id: personId,
+      p_new_parent_person_id: newParentId,
+      p_phone: auth.phone,
+      p_email: auth.email,
+      p_secret_hash: auth.secretHash,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) {
+        return {
+          ok: false,
+          message:
+            "أمر تغيير الأب غير مثبّت في الخدمة — نفّذ بطاقة SQL «تغيير الأب من المندوب» من الإدارة ثم أعد المحاولة.",
+          error,
+        };
+      }
+      return {
+        ok: false,
+        message: formatTreeChildrenDbError(error, "update"),
+        error,
+      };
+    }
+    if (data !== true) {
+      return {
+        ok: false,
+        message: "تعذر تغيير الأب (صلاحية أو سجل غير موجود).",
+      };
+    }
+    return { ok: true };
+  },
+  renamePerson: async function (treeRow, nameNew) {
+    const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+    if (!sb) return { ok: false, message: "not_configured" };
+    const auth = await getDelegateRpcAuth();
+    if (!auth.ok) {
+      return { ok: false, message: auth.reason || "تعذر التحقق من صلاحية المندوب." };
+    }
+    const session = loadDelegateSession();
+    const branch = normalizePersonName(
+      (treeRow && treeRow.branch_key) ||
+        (session && session.branch) ||
+        auth.branch ||
+        ""
+    );
+    const personId = normalizePersonName(
+      (treeRow && treeRow.person_id) || ""
+    );
+    const leaf = normalizePersonName(nameNew || "");
+    if (!branch || !personId || !leaf) {
+      return { ok: false, message: "بيانات الشخص/الاسم ناقصة." };
+    }
+    if (/\s/.test(leaf) || leaf.indexOf("/") >= 0) {
+      return { ok: false, message: "اسم الابن كلمة واحدة فقط (بدون نسب)." };
+    }
+    const { data, error } = await sb.rpc("tree_children_rename_v1", {
+      p_branch_key: branch,
+      p_person_id: personId,
+      p_name_new: leaf,
+      p_phone: auth.phone,
+      p_email: auth.email,
+      p_secret_hash: auth.secretHash,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) {
+        return {
+          ok: false,
+          message:
+            "أمر تصحيح الاسم غير مثبّت في الخدمة — نفّذ بطاقة SQL «تصحيح الاسم من المندوب» من الإدارة ثم أعد المحاولة.",
+          error,
+        };
+      }
+      return {
+        ok: false,
+        message: formatTreeChildrenDbError(error, "update"),
+        error,
+      };
+    }
+    if (data !== true) {
+      return {
+        ok: false,
+        message: "تعذر تصحيح الاسم (صلاحية أو سجل غير موجود).",
+      };
+    }
+    return { ok: true };
+  },
+  setRequestApproved: async function (req) {
+    const sb = typeof getالخدمةClient === "function" ? getالخدمةClient() : null;
+    if (!sb || !req) return { ok: false };
+    const session = loadDelegateSession();
+    const branch =
+      (req && req.branch_key) || (session && session.branch) || "";
+    return rpcSetDelegateApprovalRequestStatus(sb, branch, req.id, "approved");
+  },
+};
 function normalizeMemberPhoneForDelegate(v) {
   if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.normalizeMemberPhoneE164 === "function") {
     return window.AlzidanPhoneIntl.normalizeMemberPhoneE164(v);
@@ -392,6 +655,12 @@ function findStablePersonId(nodeId) { const wanted = normalizePersonName(nodeId 
   const msg = String(row && row.message ? row.message : "");
   // البطاقة / special_card — الإدارة المركزية فقط
   if (kind === "special_card") return false;
+  const Create = window.AlzidanHomeRequestCreate;
+  const kindMap =
+    Create && Create.BRANCH_DELEGATE_INBOX_KINDS
+      ? Create.BRANCH_DELEGATE_INBOX_KINDS
+      : null;
+  if (kindMap && kindMap[kind]) return true;
   if (
     kind === "event_card" ||
     kind === "family_event" ||
@@ -400,7 +669,8 @@ function findStablePersonId(nodeId) { const wanted = normalizePersonName(nodeId 
     kind === "tree_edit" ||
     kind === "memory_card" ||
     kind === "add_person" ||
-    kind === "memory"
+    kind === "memory" ||
+    kind === "tree_founder"
   ) {
     return true;
   }
@@ -566,34 +836,74 @@ function paintDelegateWelcomeAndSummary(branchKey, rows) {
 async function refreshDelegateProfileName(branchKey) {
   const session = loadDelegateSession();
   if (!session) return "";
+  const branch = normalizePersonName(branchKey || session.branch || "");
   if (session.name) {
-    paintDelegateWelcomeAndSummary(branchKey || session.branch, delegateBranchRequestsCache);
+    paintDelegateWelcomeAndSummary(branch || session.branch, delegateBranchRequestsCache);
     return session.name;
   }
   const sb = getالخدمةClient();
-  const branch = normalizePersonName(branchKey || session.branch || "");
-  const phone = normalizePhone(session.phone || "");
   const secretHash = String(session.secretHash || "").trim();
-  if (!sb || !branch || !phone || !secretHash) return "";
+  if (!sb || !branch || !secretHash) return "";
+
+  const phones = [];
+  const seen = {};
+  const pushPhone = (p) => {
+    const s = String(p || "").trim();
+    if (!s || seen[s]) return;
+    seen[s] = true;
+    phones.push(s);
+  };
+  pushPhone(session.phone);
   try {
-    // delegates_v2 is RLS-blocked for anon SELECT — use security-definer find RPC.
-    const { data, error } = await sb.rpc("delegates_v2_find_v1", {
-      p_branch_key: branch,
-      p_phone: phone,
-      p_email: session.email || "",
-      p_secret_hash: secretHash,
-    });
-    if (error) return "";
-    const row = data && typeof data === "object" ? data : null;
-    const name = String((row && row.name) || "").replace(/\s+/g, " ").trim();
-    if (name) {
-      saveDelegateSession(session.branch, session.phone, session.email, session.secretHash, name);
-      paintDelegateWelcomeAndSummary(branch, delegateBranchRequestsCache);
-    }
-    return name;
-  } catch (_) {
-    return "";
+    const cands = typeof phoneCandidates === "function" ? phoneCandidates(session.phone) : [];
+    (Array.isArray(cands) ? cands : []).forEach(pushPhone);
+  } catch (_) {}
+
+  let name = "";
+  for (let i = 0; i < phones.length && !name; i++) {
+    try {
+      const { data, error } = await sb.rpc("delegates_v2_find_v1", {
+        p_branch_key: branch,
+        p_phone: phones[i],
+        p_email: "",
+        p_secret_hash: secretHash,
+      });
+      if (error) continue;
+      const row = data && typeof data === "object" ? data : null;
+      name = String((row && row.name) || "").replace(/\s+/g, " ").trim();
+      if (name) {
+        saveDelegateSession(session.branch, phones[i], session.email, secretHash, name);
+        break;
+      }
+    } catch (_) {}
   }
+
+  // Fallback: list RPC envelope often resolves name from approval_requests.
+  if (!name) {
+    try {
+      const { data } = await sb.rpc("delegate_list_branch_requests_v2", {
+        p_branch_key: branch,
+        p_phone: session.phone || phones[0] || "",
+        p_email: session.email || "",
+        p_secret_hash: secretHash,
+      });
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        name = String(data.delegate_name || "").replace(/\s+/g, " ").trim();
+        if (name) {
+          saveDelegateSession(
+            session.branch,
+            session.phone,
+            session.email,
+            secretHash,
+            name
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  paintDelegateWelcomeAndSummary(branch || session.branch, delegateBranchRequestsCache);
+  return name || "";
 }
 
 function setDelegateBranchBadge(branchKey) {
@@ -780,35 +1090,87 @@ function ensureDelegateIncomingEventRequestsCard() {
 async function rpcSetDelegateApprovalRequestStatus(sb, branchKey, requestId, status) {
   const auth = await getDelegateRpcAuth();
   if (!auth.ok) return { ok: false, error: { message: auth.reason || "no_session" } };
-  const branch = normalizePersonName(branchKey || auth.branch || state.branch || "");
-  const reqId = Number(requestId);
   const st = String(status || "").trim();
-  if (!branch || !Number.isFinite(reqId)) {
-    return { ok: false, error: { message: "missing params" } };
+  const reqId = Number(requestId);
+  if (!Number.isFinite(reqId) || reqId <= 0) {
+    return {
+      ok: false,
+      error: {
+        message: "missing params",
+        arabic:
+          "تعذر تحديد رقم صف الطلب. حدّث قائمة «طلبات فرعي» ثم أعد المحاولة.",
+      },
+    };
   }
 
-  const withAuth = await sb.rpc("delegate_set_approval_request_status_v1", {
-    p_branch_key: branch,
-    p_request_id: reqId,
-    p_status: st,
-    p_phone: auth.phone,
-    p_email: auth.email,
-    p_secret_hash: auth.secretHash,
-  });
-  if (!withAuth.error) {
-    return { ok: withAuth.data === true, data: withAuth.data, error: withAuth.data === false ? { message: "not allowed" } : null };
-  }
-  if (!isRpcMissingError(withAuth.error)) {
-    return { ok: false, error: withAuth.error };
+  const branches = [];
+  const pushBranch = function (b) {
+    const n = normalizePersonName(b || "");
+    if (!n) return;
+    if (branches.indexOf(n) < 0) branches.push(n);
+  };
+  pushBranch(branchKey);
+  pushBranch(auth.branch);
+  pushBranch(state.branch);
+  if (!branches.length) {
+    return {
+      ok: false,
+      error: {
+        message: "missing params",
+        arabic: "تعذر تحديد فرع المندوب لهذا الإجراء.",
+      },
+    };
   }
 
-  const legacy = await sb.rpc("delegate_set_approval_request_status_v1", {
-    p_branch_key: branch,
-    p_request_id: reqId,
-    p_status: st,
-  });
-  if (legacy.error) return { ok: false, error: legacy.error };
-  return { ok: legacy.data === true, data: legacy.data, error: legacy.data === false ? { message: "not allowed" } : null };
+  async function callOnce(branch) {
+    const withAuth = await sb.rpc("delegate_set_approval_request_status_v1", {
+      p_branch_key: branch,
+      p_request_id: reqId,
+      p_status: st,
+      p_phone: auth.phone,
+      p_email: auth.email,
+      p_secret_hash: auth.secretHash,
+    });
+    if (!withAuth.error) {
+      if (withAuth.data === true) return { ok: true, data: true, error: null };
+      return { ok: false, data: false, error: { message: "not allowed" } };
+    }
+    if (!isRpcMissingError(withAuth.error)) {
+      return { ok: false, error: withAuth.error };
+    }
+    const legacy = await sb.rpc("delegate_set_approval_request_status_v1", {
+      p_branch_key: branch,
+      p_request_id: reqId,
+      p_status: st,
+    });
+    if (legacy.error) return { ok: false, error: legacy.error };
+    if (legacy.data === true) return { ok: true, data: true, error: null };
+    return { ok: false, data: false, error: { message: "not allowed" } };
+  }
+
+  let last = null;
+  for (let i = 0; i < branches.length; i++) {
+    last = await callOnce(branches[i]);
+    if (last && last.ok) return last;
+  }
+
+  const hint =
+    st === "rejected"
+      ? "تعذر رفض الطلب — نفّذ بطاقة «إصلاح رفض/قبول v2» من الإدارة ثم سجّل خروجاً ودخولاً."
+      : "تعذر قبول الطلب — نفّذ بطاقة «إصلاح رفض/قبول v2» من الإدارة ثم سجّل خروجاً ودخولاً.";
+  if (last && last.error && last.error.message && last.error.message !== "not allowed") {
+    return {
+      ok: false,
+      error: Object.assign({}, last.error, {
+        arabic: last.error.arabic || hint,
+      }),
+    };
+  }
+  return {
+    ok: false,
+    data: false,
+    error: { message: "not allowed", arabic: hint },
+  };
 }
 
 const Core = window.AlzidanAdminCore || {};
@@ -863,6 +1225,46 @@ function classifyDelegateBranchRequest(req) {
   const Events = window.AlzidanEvents || {};
   const kind = String(req && req.kind ? req.kind : "").trim();
   const msg = String(req && req.message ? req.message : "");
+
+  const Corr = window.AlzidanTreeCorrectionContract;
+  if (Corr && typeof Corr.routeRequest === "function") {
+    const routed = Corr.routeRequest(req);
+    if (routed && routed.route === "reorder_children") {
+      return {
+        intent: "correction",
+        intentLabel: "ترتيب أبناء",
+        canAct: true,
+        operation: "reorder_children",
+        route: routed,
+      };
+    }
+    if (routed && routed.route === "safe_review") {
+      return {
+        intent: "correction",
+        intentLabel: routed.label || "مراجعة آمنة",
+        canAct: true,
+        operation: routed.operation || "",
+        route: routed,
+        safeReview: true,
+      };
+    }
+    if (
+      routed &&
+      (routed.route === "name_correction" ||
+        routed.route === "phone_correction" ||
+        routed.route === "birth_date_correction" ||
+        routed.route === "parent_change")
+    ) {
+      return {
+        intent: "correction",
+        intentLabel: routed.label || "تصحيح",
+        canAct: true,
+        operation: routed.operation || routed.route,
+        route: routed,
+        personCorrection: true,
+      };
+    }
+  }
 
   // البطاقة — إدارة مركزية فقط
   if (
@@ -1011,8 +1413,9 @@ function reviewerStatusChipKey(requestRow) {
 
 function normalizeDelegateListPayload(data) {
   if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.requests)) return data.requests;
   if (data && Array.isArray(data.rows)) return data.rows;
+  if (data && Array.isArray(data.requests)) return data.requests;
+  if (data && Array.isArray(data.data)) return data.data;
   if (typeof data === "string") {
     try {
       const parsed = JSON.parse(data);
@@ -1022,6 +1425,22 @@ function normalizeDelegateListPayload(data) {
     }
   }
   return [];
+}
+
+function applyDelegateListMeta(meta) {
+  if (!meta || typeof meta !== "object") return;
+  const name = String(meta.delegate_name || meta.name || "").replace(/\s+/g, " ").trim();
+  if (!name) return;
+  const session = loadDelegateSession();
+  if (!session) return;
+  saveDelegateSession(
+    session.branch,
+    session.phone,
+    session.email,
+    session.secretHash,
+    name
+  );
+  paintDelegateWelcomeAndSummary(session.branch, delegateBranchRequestsCache);
 }
 
 function toAsciiDigitsLocal(v) {
@@ -1127,7 +1546,18 @@ function paintDelegateBranchRequestsList() {
     } else if (delegateBranchRequestsStatusFilter === "rejected") {
       emptyMsg = "لا توجد طلبات مرفوضة ضمن التصفية الحالية.";
     }
-    list.innerHTML = '<div class="dw-empty">' + escapeHtml(emptyMsg) + "</div>";
+    const cacheEmpty =
+      !Array.isArray(delegateBranchRequestsCache) ||
+      !delegateBranchRequestsCache.length;
+    const adminHint =
+      cacheEmpty &&
+      delegateBranchRequestsFilter === "all" &&
+      delegateBranchRequestsStatusFilter === "all" &&
+      !normalizeDelegateRequestSearch(delegateBranchRequestsSearch)
+        ? '<div class="dw-empty-hint" style="margin-top:10px;padding:10px 12px;border:1px solid #f59e0b;background:#fffbeb;border-radius:10px;color:#92400e;font-size:13px;line-height:1.55">إذا ظهر التصحيح في <strong>الإدارة → الطلبات</strong> ولم يظهر هنا: من أدوات الصيانة شغّل بالضبط<br><strong>«إصلاح عاجل: قائمة طلبات المندوب (تصحيح+شجرة)»</strong><br>وليس «منفّذ SQL Workspace» ولا «full_delegate».</div>'
+        : "";
+    list.innerHTML =
+      '<div class="dw-empty">' + escapeHtml(emptyMsg) + "</div>" + adminHint;
     return;
   }
 
@@ -1276,12 +1706,28 @@ function paintDelegateBranchRequestsList() {
       '<div class="req-inline-alert" style="margin-top:6px;"></div>' +
       (classified.canAct && statusKey === "pending"
         ? '<div class="dw-req-actions">' +
+          (classified.operation === "reorder_children" ||
+          (classified.route && classified.route.route === "reorder_children")
+            ? '<button class="btn btn-outline btn-small btn-reorder-req" type="button">ترتيب الأبناء</button>'
+            : "") +
+          (classified.personCorrection
+            ? '<button class="btn btn-outline btn-small btn-person-corr-req" type="button">' +
+              escapeHtml(classified.intentLabel || "فتح التصحيح") +
+              "</button>"
+            : "") +
+          (classified.safeReview
+            ? '<button class="btn btn-outline btn-small btn-safe-review-req" type="button">مراجعة آمنة</button>'
+            : "") +
           '<button class="btn btn-primary btn-small btn-pub-req" type="button">' +
           (classified.intent === "event"
             ? "قبول (مع جدولة الظهور)"
             : classified.intent === "health" || classified.intent === "death"
               ? "قبول وحفظ"
-              : "قبول") +
+              : classified.operation === "reorder_children" ||
+                  classified.safeReview ||
+                  classified.personCorrection
+                ? "قبول (حالة فقط — بعد الحفظ من المحرر)"
+                : "قبول") +
           "</button>" +
           '<button class="btn btn-outline btn-small btn-rej-req" type="button" style="border-color:#dc2626;color:#dc2626;">رفض</button>' +
           "</div>"
@@ -1294,9 +1740,69 @@ function paintDelegateBranchRequestsList() {
       const inlineAlert = item.querySelector(".req-inline-alert");
       const pubBtn = item.querySelector(".btn-pub-req");
       const rejBtn = item.querySelector(".btn-rej-req");
+      const reorderBtn = item.querySelector(".btn-reorder-req");
+      const safeBtn = item.querySelector(".btn-safe-review-req");
+      if (reorderBtn) {
+        reorderBtn.addEventListener("click", async () => {
+          const Reorder = window.AlzidanTreeCorrectionReorder;
+          if (!Reorder) {
+            showAlert(inlineAlert, "error", "محرر الترتيب غير محمّل.");
+            return;
+          }
+          try {
+            await Reorder.openReorderChildrenEditor(req, { mode: "delegate" });
+          } catch (e) {
+            showAlert(
+              inlineAlert,
+              "error",
+              "تعذر فتح الترتيب: " + String((e && e.message) || e || "")
+            );
+          }
+        });
+      }
+      if (safeBtn) {
+        safeBtn.addEventListener("click", async () => {
+          const Reorder = window.AlzidanTreeCorrectionReorder;
+          if (!Reorder) {
+            showAlert(inlineAlert, "error", "محرر المراجعة غير محمّل.");
+            return;
+          }
+          try {
+            await Reorder.openSafeReview(req, { mode: "delegate" });
+          } catch (e) {
+            showAlert(
+              inlineAlert,
+              "error",
+              "تعذر فتح المراجعة: " + String((e && e.message) || e || "")
+            );
+          }
+        });
+      }
+      const personCorrBtn = item.querySelector(".btn-person-corr-req");
+      if (personCorrBtn) {
+        personCorrBtn.addEventListener("click", async () => {
+          const Person = window.AlzidanTreeCorrectionPerson;
+          if (!Person || typeof Person.openPersonCorrectionEditor !== "function") {
+            showAlert(inlineAlert, "error", "محرر التصحيح غير محمّل. حدّث الصفحة.");
+            return;
+          }
+          try {
+            await Person.openPersonCorrectionEditor(req, { mode: "delegate" });
+          } catch (e) {
+            showAlert(
+              inlineAlert,
+              "error",
+              "تعذر فتح التصحيح: " + String((e && e.message) || e || "")
+            );
+          }
+        });
+      }
       function lock(on) {
         if (pubBtn) pubBtn.disabled = on;
         if (rejBtn) rejBtn.disabled = on;
+        if (reorderBtn) reorderBtn.disabled = on;
+        if (safeBtn) safeBtn.disabled = on;
+        if (personCorrBtn) personCorrBtn.disabled = on;
       }
       async function notifySubmitterOnly(sbClient, decisionStatus) {
         try {
@@ -1456,6 +1962,16 @@ function paintDelegateBranchRequestsList() {
             // Family broadcast deferred until AFTER submitter status push
             // (broadcast to all tokens can disable a stale token before acceptance notify).
           } else if (classified.intent === "tree") {
+            if (classified.route && classified.route.blockTreeCardApply) {
+              showAlert(
+                inlineAlert,
+                "error",
+                (classified.route.reasons && classified.route.reasons[0]) ||
+                  "هذا الطلب ليس إضافة فرد — افتح مراجعة آمنة / ترتيب الأبناء."
+              );
+              lock(false);
+              return;
+            }
             const applyRes = await applyDelegateTreeCardRequest(sb, req);
             if (!applyRes || !applyRes.ok) {
               showAlert(
@@ -1466,6 +1982,45 @@ function paintDelegateBranchRequestsList() {
               lock(false);
               return;
             }
+          } else if (
+            classified.intent === "correction" &&
+            (classified.operation === "reorder_children" ||
+              (classified.route && classified.route.route === "reorder_children"))
+          ) {
+            const Reorder = window.AlzidanTreeCorrectionReorder;
+            if (!Reorder || typeof Reorder.openReorderChildrenEditor !== "function") {
+              showAlert(
+                inlineAlert,
+                "error",
+                "محرر ترتيب الأبناء غير محمّل. حدّث الصفحة."
+              );
+              lock(false);
+              return;
+            }
+            showAlert(
+              inlineAlert,
+              "error",
+              "افتح «ترتيب الأبناء» من زر المعالجة لمعاينة الأثر ثم الحفظ — القبول المباشر لا يغيّر الترتيب."
+            );
+            try {
+              await Reorder.openReorderChildrenEditor(req, { mode: "delegate" });
+            } catch (_) {}
+            lock(false);
+            return;
+          } else if (classified.safeReview) {
+            const Reorder = window.AlzidanTreeCorrectionReorder;
+            if (Reorder && typeof Reorder.openSafeReview === "function") {
+              try {
+                await Reorder.openSafeReview(req, { mode: "delegate" });
+              } catch (_) {}
+            }
+            showAlert(
+              inlineAlert,
+              "error",
+              "طلب يحتاج مراجعة آمنة — لن يُعتمد تلقائيًا ولن يُعاد كتابته كنص حر."
+            );
+            lock(false);
+            return;
           }
 
           const statusResult = await rpcSetDelegateApprovalRequestStatus(
@@ -1475,13 +2030,17 @@ function paintDelegateBranchRequestsList() {
             "approved"
           );
           if (!statusResult.ok || statusResult.error) {
-            const raw =
-              (statusResult.error && statusResult.error.message) || "";
             const U = window.AlzidanUserFacingRequestMessages;
+            const raw =
+              (statusResult.error &&
+                (statusResult.error.arabic || statusResult.error.message)) ||
+              "";
             const safe =
+              (statusResult.error && statusResult.error.arabic) ||
               (U && typeof U.mapTechnicalErrorToArabic === "function"
                 ? U.mapTechnicalErrorToArabic(raw, "تعذر قبول الطلب.")
-                : null) || "تعذر قبول الطلب. تحقق من الصلاحية أو طبّق SQL توسيع طلبات المندوب.";
+                : null) ||
+              "تعذر قبول الطلب. تحقق من الصلاحية أو طبّق SQL توسيع طلبات المندوب.";
             showAlert(inlineAlert, "error", safe);
             lock(false);
             return;
@@ -1555,13 +2114,17 @@ function paintDelegateBranchRequestsList() {
           if (!statusResult.ok || statusResult.error) {
             const U = window.AlzidanUserFacingRequestMessages;
             const raw =
-              (statusResult.error && statusResult.error.message) || "";
+              (statusResult.error &&
+                (statusResult.error.arabic || statusResult.error.message)) ||
+              "";
             showAlert(
               inlineAlert,
               "error",
-              (U && typeof U.mapTechnicalErrorToArabic === "function"
-                ? U.mapTechnicalErrorToArabic(raw, "تعذر رفض الطلب.")
-                : null) || "تعذر رفض الطلب."
+              (statusResult.error && statusResult.error.arabic) ||
+                (U && typeof U.mapTechnicalErrorToArabic === "function"
+                  ? U.mapTechnicalErrorToArabic(raw, "تعذر رفض الطلب.")
+                  : null) ||
+                "تعذر رفض الطلب."
             );
             lock(false);
             return;
@@ -1634,12 +2197,100 @@ async function loadDelegateIncomingEventRequests(branchKey) {
     return;
   }
 
-  const { data, error } = await sb.rpc("delegate_list_event_requests_v1", {
-    p_branch_key: branch,
-    p_phone: auth.phone,
-    p_email: auth.email,
-    p_secret_hash: auth.secretHash
-  });
+  let data = null;
+  let error = null;
+  let meta = null;
+
+  // Prefer v2 envelope (auth + name + rows). Retry phone variants like login.
+  {
+    const phones = [];
+    const seen = {};
+    const pushPhone = (p) => {
+      const s = String(p || "").trim();
+      if (!s || seen[s]) return;
+      seen[s] = true;
+      phones.push(s);
+    };
+    pushPhone(auth.phone);
+    try {
+      const cands =
+        typeof phoneCandidates === "function" ? phoneCandidates(auth.phone) : [];
+      (Array.isArray(cands) ? cands : []).forEach(pushPhone);
+    } catch (_) {}
+
+    let lastMeta = null;
+    let lastErr = null;
+    for (let i = 0; i < phones.length; i++) {
+      const tryPhone = phones[i];
+      const v2 = await sb.rpc("delegate_list_branch_requests_v2", {
+        p_branch_key: branch,
+        p_phone: tryPhone,
+        p_email: auth.email || "",
+        p_secret_hash: auth.secretHash,
+      });
+      if (v2.error) {
+        lastErr = v2.error;
+        if (
+          /could not find|PGRST202|schema cache|function/i.test(
+            String(v2.error.message || "")
+          )
+        ) {
+          break;
+        }
+        continue;
+      }
+      if (v2.data && typeof v2.data === "object" && !Array.isArray(v2.data)) {
+        lastMeta = v2.data;
+        if (v2.data.auth === true) {
+          meta = v2.data;
+          data = v2.data.rows != null ? v2.data.rows : [];
+          if (tryPhone && tryPhone !== auth.phone) {
+            saveDelegateSession(
+              auth.branch,
+              tryPhone,
+              auth.email,
+              auth.secretHash,
+              (meta && meta.delegate_name) || auth.name || ""
+            );
+          } else {
+            applyDelegateListMeta(meta);
+          }
+          if (!(meta && meta.delegate_name)) {
+            refreshDelegateProfileName(branch).catch(function () {});
+          }
+          lastErr = null;
+          break;
+        }
+        continue;
+      }
+      if (Array.isArray(v2.data)) {
+        data = v2.data;
+        lastErr = null;
+        break;
+      }
+    }
+
+    if (data == null && lastMeta && lastMeta.auth === false) {
+      if (list) list.innerHTML = "";
+      showAlert(
+        alertEl,
+        "error",
+        "دخول البوابة نجح لكن قائمة الطلبات رفضت الجلسة. من الصيانة شغّل «إصلاح مصادقة قائمة المندوب» ثم سجّل خروجاً ودخولاً."
+      );
+      return;
+    }
+
+    if (data == null) {
+      const v1 = await sb.rpc("delegate_list_event_requests_v1", {
+        p_branch_key: branch,
+        p_phone: auth.phone,
+        p_email: auth.email || "",
+        p_secret_hash: auth.secretHash,
+      });
+      data = v1.data;
+      error = v1.error || lastErr;
+    }
+  }
 
   if (error) {
     if (list) list.innerHTML = "";
@@ -1647,7 +2298,22 @@ async function loadDelegateIncomingEventRequests(branchKey) {
     return;
   }
 
-  renderDelegateIncomingEventRequests(data || []);
+  const rows = normalizeDelegateListPayload(data || []);
+  window.__delegateListDebug = {
+    branch: branch,
+    rawCount: rows.length,
+    meta: meta,
+  };
+  renderDelegateIncomingEventRequests(rows);
+  if (
+    list &&
+    (!rows.length) &&
+    meta &&
+    meta.auth === true &&
+    Number(meta.count || 0) === 0
+  ) {
+    // Keep empty UI; hint already covers admin expand case.
+  }
 }
 
 function reloadDelegateIncomingEventRequests() {
@@ -1728,7 +2394,7 @@ function bindDelegateProfileEmailCard() {
       const res = await rpcUpdateDelegateEmail(sb, email);
       if (res.ok) {
         const auth = loadDelegateSession();
-        if (auth) saveDelegateSession(auth.branch, auth.phone, res.email || email, auth.secretHash);
+        if (auth) saveDelegateSession(auth.branch, auth.phone, res.email || email, auth.secretHash, auth.name || "");
         paintDelegateEmailStatus(res.email || email);
         showDelegateEmailAlert("success", "تم حفظ بريد الإشعارات. ستصلك إشعارات طلبات فرعك على هذا العنوان.");
         return;
@@ -1800,7 +2466,44 @@ function mountDelegateProfileEmailCard() {
 
 function startBranch(branchKey) { if (!branchKey || !Object.prototype.hasOwnProperty.call(parentsByBranch, branchKey)) { setLoginAlert("error", "يرجى اختيار الفرع بشكل صحيح."); return false; } applyView("delegate"); hideLoginAlert(); state.branch = branchKey; ensureDelegateSessionTodayStats(); setDelegateBranchBadge(branchKey); paintDelegateWelcomeAndSummary(branchKey, delegateBranchRequestsCache); refreshDelegateProfileName(branchKey).catch(function () {}); mountDelegateProfileEmailCard(); ensureDelegateIncomingEventRequestsCard(); mountDelegateTreeTool(branchKey); loadDelegateIncomingEventRequests(branchKey).catch(() =>{}); refreshDelegateLastActivity(branchKey).catch(() =>{}); loginCard.style.display = "none"; dashboardCard.style.display = "block"; if (eventsCard) eventsCard.style.display = ""; if (memoryCard) memoryCard.style.display = ""; loadChildrenForBranchDelegate(branchKey, { applyToState: true }) .then(() => {
       mountDelegateFamilyManagement(desiredParentFromUrl || "");
-    }) .catch(() =>{}); mountDelegateEventsManagement(); mountDelegateMemorySubmit(); return true; } async function pushDelegateRequestToالخدمة(payload, msg, secretHash) { const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const statusesToBlock = ["pending", "approved"]; const branchKey = payload.branch; const phone = String(payload.phone || "").trim(); const email = String(payload.email || "").trim(); const pickNewer = (a, b) =>{ if (!a) return b || null; if (!b) return a || null; const at = String(a.created_at || ""); const bt = String(b.created_at || ""); return bt >at ? b : a; }; const matches = { phone: null, email: null }; try { const { data, error } = await sb.rpc("tree_delegate_find_conflict_v1", { p_phone: phone || null, p_email: email || null }); if (error) return { ok: false, reason: "conflict_check_unavailable", error }; const row = Array.isArray(data) ? data[0] : data; if (row) { const status = String(row.status || "").trim(); const conflict = { status, branch_key: String(row.branch_key || "").trim(), request_id: String(row.request_id || "").trim(), created_at: row.created_at || "", secret_hash: String(row.secret_hash || "").trim() }; if (statusesToBlock.includes(status)) { matches.phone = conflict; matches.email = conflict; } } } catch (error) { return { ok: false, reason: "conflict_check_unavailable", error }; } const pendingFields = []; const approvedFields = []; let pendingMatch = null; let approvedMatch = null; if (matches.phone?.status === "pending") { pendingFields.push("phone"); pendingMatch = pickNewer(pendingMatch, matches.phone); } if (matches.email?.status === "pending") { pendingFields.push("email"); pendingMatch = pickNewer(pendingMatch, matches.email); } if (matches.phone?.status === "approved") { approvedFields.push("phone"); approvedMatch = pickNewer(approvedMatch, matches.phone); } if (matches.email?.status === "approved") { approvedFields.push("email"); approvedMatch = pickNewer(approvedMatch, matches.email); } if (pendingMatch) return { ok: false, reason: "duplicate_pending", fields: pendingFields, existing: pendingMatch, matches }; if (approvedMatch) return { ok: false, reason: "duplicate_approved", fields: approvedFields, existing: approvedMatch, matches }; const row = { request_id: payload.requestId, kind: "tree_delegate", branch_key: payload.branch, phone: payload.phone, email: payload.email, secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").insert(row); if (error) return { ok: false, reason: "error", error }; return { ok: true }; }
+    }) .catch(() =>{}); mountDelegateEventsManagement(); mountDelegateMemorySubmit(); return true; }
+
+(function restoreDelegateSessionFromStorage() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const view = params.get("view") || "tree";
+    if (view !== "delegate") return;
+    const session = loadDelegateSession();
+    if (!session || !session.branch || !session.secretHash) return;
+    if (!Object.prototype.hasOwnProperty.call(parentsByBranch, session.branch)) return;
+    startBranch(session.branch);
+  } catch (e) {}
+})();
+
+(function bindDelegateInboxAutoRefresh() {
+  if (window.delegateInboxAutoRefreshBound) return;
+  window.delegateInboxAutoRefreshBound = true;
+  let last = 0;
+  function maybeReload() {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      if ((params.get("view") || "tree") !== "delegate") return;
+      if (!loadDelegateSession()) return;
+      const now = Date.now();
+      if (now - last < 8000) return;
+      last = now;
+      if (typeof reloadDelegateIncomingEventRequests === "function") {
+        reloadDelegateIncomingEventRequests();
+      }
+    } catch (_) {}
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") maybeReload();
+  });
+  window.addEventListener("focus", maybeReload);
+})();
+
+ async function pushDelegateRequestToالخدمة(payload, msg, secretHash) { const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const statusesToBlock = ["pending", "approved"]; const branchKey = payload.branch; const phone = String(payload.phone || "").trim(); const email = String(payload.email || "").trim(); const pickNewer = (a, b) =>{ if (!a) return b || null; if (!b) return a || null; const at = String(a.created_at || ""); const bt = String(b.created_at || ""); return bt >at ? b : a; }; const matches = { phone: null, email: null }; try { const { data, error } = await sb.rpc("tree_delegate_find_conflict_v1", { p_phone: phone || null, p_email: email || null }); if (error) return { ok: false, reason: "conflict_check_unavailable", error }; const row = Array.isArray(data) ? data[0] : data; if (row) { const status = String(row.status || "").trim(); const conflict = { status, branch_key: String(row.branch_key || "").trim(), request_id: String(row.request_id || "").trim(), created_at: row.created_at || "", secret_hash: String(row.secret_hash || "").trim() }; if (statusesToBlock.includes(status)) { matches.phone = conflict; matches.email = conflict; } } } catch (error) { return { ok: false, reason: "conflict_check_unavailable", error }; } const pendingFields = []; const approvedFields = []; let pendingMatch = null; let approvedMatch = null; if (matches.phone?.status === "pending") { pendingFields.push("phone"); pendingMatch = pickNewer(pendingMatch, matches.phone); } if (matches.email?.status === "pending") { pendingFields.push("email"); pendingMatch = pickNewer(pendingMatch, matches.email); } if (matches.phone?.status === "approved") { approvedFields.push("phone"); approvedMatch = pickNewer(approvedMatch, matches.phone); } if (matches.email?.status === "approved") { approvedFields.push("email"); approvedMatch = pickNewer(approvedMatch, matches.email); } if (pendingMatch) return { ok: false, reason: "duplicate_pending", fields: pendingFields, existing: pendingMatch, matches }; if (approvedMatch) return { ok: false, reason: "duplicate_approved", fields: approvedFields, existing: approvedMatch, matches }; const row = { request_id: payload.requestId, kind: "tree_delegate", branch_key: payload.branch, phone: payload.phone, email: payload.email, secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").insert(row); if (error) return { ok: false, reason: "error", error }; return { ok: true }; }
 function buildSecretResetRequestMessage(payload) {
   const lines = [];
   lines.push("طلب إعادة تعيين الرقم السري للمندوب");
@@ -1908,7 +2611,7 @@ async function requestDelegateSecretReset(branchKey, phone, email, secret) {
   return true;
 }
 
-async function requestDelegateAccess(branchKey, phone, email, secret, opts) { const options = opts || {}; phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const payload = { requestId: makeRequestId(), status: "pending", branch: branchKey, phone, email, secret, createdAt: new Date().toISOString() }; const msg = buildDelegateRequestMessage(payload); const secretHash = await sha256Hex(secret); const pushed = await pushDelegateRequestToالخدمة(payload, msg, secretHash); if (pushed.ok) { setLoginAlert("success", "تم إرسال طلبك بنجاح، وهو الآن قيد المراجعة."); return true; } if (pushed.reason === "conflict_check_unavailable") { setLoginAlert( "error", "التحقق من الطلبات السابقة غير متاح مؤقتًا. لم يتم إنشاء طلب جديد، حاول مرة أخرى لاحقًا." ); return false; } if (pushed.reason === "duplicate_pending") { const id = pushed.existing?.request_id || ""; const existingBranch = String(pushed.existing?.branch_key || "").trim(); const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "success", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}) (رقم الطلب: ${id}).` : `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}).` : id ? `${prefix}. طلبك قيد المراجعة بالفعل (رقم الطلب: ${id}).` : `${prefix}. طلبك قيد المراجعة بالفعل.` ); return false; } if (pushed.reason === "duplicate_approved") { const existingBranch = String(pushed.existing?.branch_key || "").trim(); if (options.forceNew === true) { if ( secretHash && (!pushed.existing?.secret_hash || pushed.existing.secret_hash !== secretHash) && existingBranch && existingBranch === branchKey ) { const sb = getالخدمةClient(); if (!sb) { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const existingId = pushed.existing?.request_id; if (!existingId) { setLoginAlert("error", "تعذر تحديث الطلب لأن رقم الطلب السابق غير متوفر."); return false; } const row = { secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").update(row).eq("request_id", existingId); if (!error) { setLoginAlert("success", `تم إرسال طلب تغيير الرقم السري للمراجعة (رقم الطلب: ${existingId}). سيظهر الطلب لدى الإدارة.`); return true; } } } const id = pushed.existing?.request_id || ""; const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "error", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}) (رقم الطلب: ${id}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : id ? `${prefix}. تم اعتمادك مسبقًا (رقم الطلب: ${id}). جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` : `${prefix}. تم اعتمادك مسبقًا. جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` ); return false; } if (pushed.reason === "not_configured") { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const raw = pushed.error || {}; const errMsg = String(raw.message || ""); if (String(raw.code || "") === "23505" || errMsg.toLowerCase().includes("duplicate")) { setLoginAlert("error", "البيانات مسجلة مسبقًا. تأكد من المعلومات وأعد التسجيل."); return false; } setLoginAlert("error", "تعذر إرسال طلب الدخول حاليًا."); return false; } async function tryالخدمةDelegateLogin(branchKey, phone, email, secret) { phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const secretHash = await sha256Hex(secret); if (!secretHash) return { ok: false, reason: "hash_failed" }; const candidates = phoneCandidates(phone); const phonesToTry = candidates.length ? candidates : [phone]; let data = null; let error = null; let matchedPhone = phone; for (let i = 0; i < phonesToTry.length; i++) { const tryPhone = phonesToTry[i]; const res = await sb.rpc("check_tree_delegate_access", { p_branch_key: branchKey, p_phone: tryPhone, p_email: email, p_secret_hash: secretHash }); if (res.error) { error = res.error; continue; } if (res.data && (res.data.allowed === true || res.data.status || res.data.reason)) { data = res.data; matchedPhone = tryPhone; error = null; if (res.data.allowed === true) break; if (res.data.status === "pending" || res.data.status === "rejected" || res.data.status === "disabled" || res.data.reason === "disabled") break; } } if (!data && error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } phone = matchedPhone; if (error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } if (!data) return { ok: false, reason: "not_found" }; if (data.allowed === true) { const requestId = String(data.request_id || data.delegate_id || "").trim() || ("v2-" + String(branchKey || "").trim()); const storedEmail = normalizeEmail(data.email || email || ""); const storedPhone = normalizePhone(data.phone || phone || ""); return { ok: true, status: "approved", requestId, secretHash, email: storedEmail, phone: storedPhone, source: data.source || "", roleKey: data.role_key || "" }; } if (data.status === "pending") return { ok: false, reason: "pending", requestId: data.request_id || "" }; if (data.status === "rejected") return { ok: false, reason: "rejected", requestId: data.request_id || "" }; if (data.status === "disabled" || data.reason === "disabled") return { ok: false, reason: "disabled", requestId: data.request_id || "" }; if (data.status === "no_permission" || data.reason === "no_permission") return { ok: false, reason: "no_permission", roleKey: data.role_key || "", requestId: data.request_id || "" }; if (data.status === "approved") return { ok: false, reason: "wrong_secret", requestId: data.request_id || "" }; return { ok: false, reason: "not_found" }; }
+async function requestDelegateAccess(branchKey, phone, email, secret, opts) { const options = opts || {}; phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const payload = { requestId: makeRequestId(), status: "pending", branch: branchKey, phone, email, secret, createdAt: new Date().toISOString() }; const msg = buildDelegateRequestMessage(payload); const secretHash = await sha256Hex(secret); const pushed = await pushDelegateRequestToالخدمة(payload, msg, secretHash); if (pushed.ok) { setLoginAlert("success", "تم إرسال طلبك بنجاح، وهو الآن قيد المراجعة."); return true; } if (pushed.reason === "conflict_check_unavailable") { setLoginAlert( "error", "التحقق من الطلبات السابقة غير متاح مؤقتًا. لم يتم إنشاء طلب جديد، حاول مرة أخرى لاحقًا." ); return false; } if (pushed.reason === "duplicate_pending") { const id = pushed.existing?.request_id || ""; const existingBranch = String(pushed.existing?.branch_key || "").trim(); const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "success", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}) (رقم الطلب: ${id}).` : `${prefix}. يوجد طلب قيد المراجعة بالفعل لفرع (${existingBranch}).` : id ? `${prefix}. طلبك قيد المراجعة بالفعل (رقم الطلب: ${id}).` : `${prefix}. طلبك قيد المراجعة بالفعل.` ); return false; } if (pushed.reason === "duplicate_approved") { const existingBranch = String(pushed.existing?.branch_key || "").trim(); if (options.forceNew === true) { if ( secretHash && (!pushed.existing?.secret_hash || pushed.existing.secret_hash !== secretHash) && existingBranch && existingBranch === branchKey ) { const sb = getالخدمةClient(); if (!sb) { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const existingId = pushed.existing?.request_id; if (!existingId) { setLoginAlert("error", "تعذر تحديث الطلب لأن رقم الطلب السابق غير متوفر."); return false; } const row = { secret_hash: secretHash || null, message: msg, status: "pending", created_at: payload.createdAt }; const { error } = await sb.from("approval_requests").update(row).eq("request_id", existingId); if (!error) { setLoginAlert("success", `تم إرسال طلب تغيير الرقم السري للمراجعة (رقم الطلب: ${existingId}). سيظهر الطلب لدى الإدارة.`); return true; } } } const id = pushed.existing?.request_id || ""; const prefix = duplicateFieldsText(pushed.fields); setLoginAlert( "error", existingBranch && existingBranch !== branchKey ? id ? `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}) (رقم الطلب: ${id}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : `${prefix}. أنت مسجل/معتمد مسبقًا كمندوب لفرع (${existingBranch}). لا يمكن التسجيل بهذه البيانات لفرع آخر.` : id ? `${prefix}. تم اعتمادك مسبقًا (رقم الطلب: ${id}). جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` : `${prefix}. تم اعتمادك مسبقًا. جرّب الدخول بنفس البيانات، أو استخدم (نسيت الرقم السري) لإرسال طلب جديد برقم سري مختلف.` ); return false; } if (pushed.reason === "not_configured") { setLoginAlert("error", "تعذر إرسال طلب الدخول لأن الربط غير مُعد."); return false; } const raw = pushed.error || {}; const errMsg = String(raw.message || ""); if (String(raw.code || "") === "23505" || errMsg.toLowerCase().includes("duplicate")) { setLoginAlert("error", "البيانات مسجلة مسبقًا. تأكد من المعلومات وأعد التسجيل."); return false; } setLoginAlert("error", "تعذر إرسال طلب الدخول حاليًا."); return false; } async function tryالخدمةDelegateLogin(branchKey, phone, email, secret) { phone = normalizePhone(phone); email = normalizeEmail(email); secret = normalizeDelegateSecret(secret); const sb = getالخدمةClient(); if (!sb) return { ok: false, reason: "not_configured" }; const secretHash = await sha256Hex(secret); if (!secretHash) return { ok: false, reason: "hash_failed" }; const candidates = phoneCandidates(phone); const phonesToTry = candidates.length ? candidates : [phone]; let data = null; let error = null; let matchedPhone = phone; for (let i = 0; i < phonesToTry.length; i++) { const tryPhone = phonesToTry[i]; const res = await sb.rpc("check_tree_delegate_access", { p_branch_key: branchKey, p_phone: tryPhone, p_email: email, p_secret_hash: secretHash }); if (res.error) { error = res.error; continue; } if (res.data && (res.data.allowed === true || res.data.status || res.data.reason)) { data = res.data; matchedPhone = tryPhone; error = null; if (res.data.allowed === true) break; if (res.data.status === "pending" || res.data.status === "rejected" || res.data.status === "disabled" || res.data.reason === "disabled") break; } } if (!data && error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } phone = matchedPhone; if (error) { const msg = String(error.message || ""); if (msg.toLowerCase().includes("check_tree_delegate_access")) { return { ok: false, reason: "rpc_missing", error }; } return { ok: false, reason: "error", error }; } if (!data) return { ok: false, reason: "not_found" }; if (data.allowed === true) { const requestId = String(data.request_id || data.delegate_id || "").trim() || ("v2-" + String(branchKey || "").trim()); const storedEmail = normalizeEmail(data.email || email || ""); const storedPhone = normalizePhone(data.phone || phone || ""); return { ok: true, status: "approved", requestId, secretHash, email: storedEmail, phone: storedPhone, source: data.source || "", roleKey: data.role_key || "", name: String(data.name || data.delegate_name || "").replace(/\s+/g, " ").trim() }; } if (data.status === "pending") return { ok: false, reason: "pending", requestId: data.request_id || "" }; if (data.status === "rejected") return { ok: false, reason: "rejected", requestId: data.request_id || "" }; if (data.status === "disabled" || data.reason === "disabled") return { ok: false, reason: "disabled", requestId: data.request_id || "" }; if (data.status === "no_permission" || data.reason === "no_permission") return { ok: false, reason: "no_permission", roleKey: data.role_key || "", requestId: data.request_id || "" }; if (data.status === "approved") return { ok: false, reason: "wrong_secret", requestId: data.request_id || "" }; return { ok: false, reason: "not_found" }; }
 
 if (emailInput) {
   emailInput.value = "";
@@ -2371,7 +3074,11 @@ loginBtn.addEventListener("click", async () =>{
   const sbResult = await tryالخدمةDelegateLogin(branchKey, phone, email, secret);
 
   if (sbResult.ok && sbResult.status === "approved") {
-    let loginName = "";
+    let loginName = String(
+      (sbResult && (sbResult.name || sbResult.delegate_name || sbResult.display_name)) || ""
+    )
+      .replace(/\s+/g, " ")
+      .trim();
     try {
       const sb = getالخدمةClient();
       if (sb && sbResult.secretHash) {
@@ -3534,6 +4241,7 @@ window.DelegateEventsHost = {
   todayGregorianISO,
   confirmTypedText,
   touchEventsRefresh,
+  reloadDelegateIncomingEventRequests,
   maybeOpenEmailDraft,
   getEventPk,
   getEventVisibilityDays,

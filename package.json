@@ -39,6 +39,9 @@
     "verify:delegate-workspace": "node scripts/test-delegate-workspace-reorder.js",
     "verify:empty-video": "node scripts/test-empty-video-gate.js",
     "prove:empty-video": "node scripts/prove-empty-video-render.mjs",
-    "verify:tree-card-contract": "node scripts/test-tree-card-contract.js"
+    "verify:tree-card-contract": "node scripts/test-tree-card-contract.js",
+    "verify:reorder-children": "node scripts/test-tree-correction-reorder.js",
+    "verify:legacy-correction-recovery": "node scripts/test-legacy-correction-recovery.js",
+    "verify:person-correction": "node scripts/test-tree-correction-person.js"
   }
 }

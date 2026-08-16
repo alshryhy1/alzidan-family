@@ -557,13 +557,33 @@
         if (!res || !res.ok) {
           const err = (res && res.error) || {};
           const msg = String(err && err.message ? err.message : "");
-          if (msg.toLowerCase().includes("not allowed")) {
-            return { ok: false, message: (res.error && res.error.arabic) ? String(res.error.arabic) : "دورك الحالي لا يسمح بحذف المناسبات. اطلب من الإدارة تعديل الصلاحية." };
+          const low = msg.toLowerCase();
+          if (msg.toLowerCase().includes("not allowed") || low.includes("permission")) {
+            return { ok: false, message: (res.error && res.error.arabic) ? String(res.error.arabic) : "دورك الحالي لا يسمح بحذف المناسبات. اطلب من الإدارة تفعيل صلاحية المناسبات (events.write)." };
           }
-          return { ok: false, message: "تعذر الحذف حالياً، حاول لاحقاً أو تواصل مع الإدارة." };
+          if (
+            /could not find the function|function .* does not exist|PGRST202|schema cache|42883/i.test(
+              msg
+            )
+          ) {
+            return {
+              ok: false,
+              message:
+                "دالة الحذف غير محدّثة في القاعدة. من أدوات الصيانة شغّل «حذف المناسبة يلغي طلب المندوب».",
+            };
+          }
+          return {
+            ok: false,
+            message:
+              "تعذر الحذف. إن بقي الطلب في «طلبات فرعي» بعد حذف الشريط، شغّل من الصيانة «حذف المناسبة يلغي طلب المندوب» ثم أعد المحاولة.",
+          };
         }
         if (touchEventsRefresh) touchEventsRefresh();
-        return { ok: true, message: "تم الحذف." };
+        try {
+          const reloadInbox = h("reloadDelegateIncomingEventRequests");
+          if (reloadInbox) await reloadInbox();
+        } catch (e) {}
+        return { ok: true, message: "تم الحذف من الشريط وطلبات الفرع." };
       },
     };
   }

@@ -24,6 +24,14 @@
   }
 
   let reloadRequests = async function () {};
+  function setReloadRequests(fn) {
+    reloadRequests = typeof fn === "function" ? fn : async function () {};
+    try {
+      if (window.AlzidanRequestActions) {
+        window.AlzidanRequestActions._reloadRequests = reloadRequests;
+      }
+    } catch (_) {}
+  }
   const treeCardEditDialog = document.getElementById("tree-card-edit-dialog");
   const treeCardEditForm = document.getElementById("tree-card-edit-form");
   let treeCardEditError = document.getElementById("tree-card-edit-error");
@@ -39,10 +47,6 @@
   const TREE_CARD_FATHER_SEARCH_DEBOUNCE_MS = 220;
   const TREE_CARD_RELATION_MISMATCH_AR =
     "العلاقة المختارة لا تتوافق مع الشجرة الحالية. راجع الأب المختار.";
-
-  function setReloadRequests(fn) {
-    if (typeof fn === "function") reloadRequests = fn;
-  }
 
   function normalizeTreeCardText(v) {
     return String(v || "")
@@ -2061,6 +2065,30 @@
   }
   function openTreeCardEditor(row) {
     try {
+      const Corr = window.AlzidanTreeCorrectionContract;
+      const Reorder = window.AlzidanTreeCorrectionReorder;
+      if (Corr && typeof Corr.routeRequest === "function") {
+        const routed = Corr.routeRequest(row);
+        if (routed && routed.blockTreeCardEditor) {
+          if (
+            Reorder &&
+            (routed.open === "reorder_editor" || routed.open === "safe_review")
+          ) {
+            if (routed.open === "safe_review") {
+              Reorder.openSafeReview(row, { mode: "admin" });
+            } else {
+              Reorder.openReorderChildrenEditor(row, { mode: "admin" });
+            }
+            return;
+          }
+          showAlert(
+            "error",
+            (routed.reasons && routed.reasons[0]) ||
+              "هذا الطلب ليس بطاقة إضافة فرد — افتح مسار التصحيح المناسب.",
+          );
+          return;
+        }
+      }
       const dialog =
         document.getElementById("tree-card-edit-dialog") || treeCardEditDialog;
       const form =

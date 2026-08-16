@@ -434,6 +434,30 @@
    * If v2 RPC is absent, reverse false «تعليم كمُنفذ» archive marks and
    * force a single blocking install card.
    */
+  function forceResurfaceDelegateInboxExpand() {
+    const api = presetsApi();
+    if (!api || typeof api.clearDone !== "function") return;
+    // Old expand cards often archived as «منفذ» while live RPC still events-only.
+    ["maint.delegate_branch_requests_expand_v1",
+     "maint.delegate_branch_requests_expand_v2",
+     "maint.delegate_list_branch_requests_v2"].forEach(function (id) {
+      try { api.clearDone(id); } catch (e) {}
+      try { if (typeof api.clearFail === "function") api.clearFail(id); } catch (e) {}
+    });
+    // Drop false archive rows for those ids
+    try {
+      const arch = loadJsonArray(ARCHIVE_KEY, localStorage).filter(function (raw) {
+        const it = normalizeEntry(raw);
+        const id = String(it.presetId || "");
+        return (
+          id !== "maint.delegate_branch_requests_expand_v1" &&
+          id !== "maint.delegate_branch_requests_expand_v2"
+        );
+      });
+      saveJsonArray(ARCHIVE_KEY, localStorage, arch, ARCHIVE_MAX);
+    } catch (e) {}
+  }
+
   function reconcileArchiveWithExecutorReady() {
     const api = presetsApi();
     if (!api) return { cleared: [] };
@@ -4481,13 +4505,13 @@ order by updated_at desc nulls last;
       supabaseOnce: true,
     },
     {
-      id: "maint.delegate_branch_requests_expand_v2",
-      title: "توسيع طلبات الفرع للمندوب v2 (سجل الحالات + اسم المراجع)",
+      id: "maint.delegate_branch_requests_expand_v3",
+      title: "إلزامي: إظهار التصحيحات وطلبات الشجرة عند المندوب",
       desc:
         "إعادة تطبيق إلزامية: القائمة تُرجع pending+approved+rejected بـ can_read + حقول الجدولة + ختم اسم المندوب. v1 قد تُؤرشف كمنفّذ رغم أن الجسم ما زال pending فقط — شغّل هذه البطاقة ثم بطاقة التحقق.",
       file: "../supabase/sql/COPY-ME-delegate-branch-requests-expand.sql",
       sql: `-- COPY-ME: Expand branch-delegate request queue beyond events + keep history.
--- Preset id: maint.delegate_branch_requests_expand_v2
+-- Preset id: maint.delegate_branch_requests_expand_v3
 -- (v1 may be archived as «منفذ» while live body was still pending-only —
 --  the old probe only checked to_regprocedure IS NOT NULL.)
 -- Run manually in Supabase SQL Editor / SQL Workspace. Do NOT auto-execute from the app.
@@ -4758,7 +4782,7 @@ select
     select pg_typeof(public.delegate_list_event_requests_v1('__probe__', '', '', ''))::text
   ) as list_return_type;
 `,
-      order: 34.1,
+      order: 11,
       supabaseOnce: true,
     },
     {
@@ -6740,6 +6764,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
           v2InstallRequiredBanner = false;
           clearMultiFailNoise();
         } else {
+          forceResurfaceDelegateInboxExpand();
           reconcileArchiveWithExecutorReady();
         }
       } catch (_) {}
@@ -6768,6 +6793,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
                 v2InstallRequiredBanner = false;
                 clearMultiFailNoise();
               } else {
+                forceResurfaceDelegateInboxExpand();
                 reconcileArchiveWithExecutorReady();
               }
             } catch (_) {}

@@ -2668,13 +2668,1045 @@ order by updated_at desc nulls last;
       supabaseOnce: true,
     },
     {
-      id: "maint.delegate_branch_requests_expand_v2",
-      title: "توسيع طلبات الفرع للمندوب v2 (سجل الحالات + اسم المراجع)",
+      id: "maint.delegate_list_branch_requests_v2c",
+      title: "إظهار اسم المندوب في الترحيب + تثبيت القائمة",
       desc:
-        "إعادة تطبيق إلزامية: القائمة تُرجع pending+approved+rejected بـ can_read + حقول الجدولة + ختم اسم المندوب. v1 قد تُؤرشف كمنفّذ رغم أن الجسم ما زال pending فقط — شغّل هذه البطاقة ثم بطاقة التحقق.",
+        "يملأ الاسم الفارغ من طلب اعتماد المندوب، ويحسّن إرجاع delegate_name مع قائمة الطلبات. شغّله مرة ثم أعد دخول المندوب.",
+      file: "../supabase/sql/COPY-ME-delegate-list-branch-requests-v2.sql",
+      sql: `-- COPY-ME: Delegate branch inbox v2b — auth mirrors login (check_*_delegate_access)
+-- Preset id: maint.delegate_list_branch_requests_v2b
+-- Fixes: auth=false while portal login succeeds (phone/email find mismatch).
+-- Safe to re-run.
+
+-- Backfill empty delegates_v2.name from approved delegate requests (same branch+phone).
+update public.delegates_v2 d
+set
+  name = s.req_name,
+  updated_at = now()
+from (
+  select
+    public.delegates_v2_norm_branch(r.branch_key) as bkey,
+    public.delegates_v2_norm_phone(r.phone) as pkey,
+    nullif(btrim(coalesce(r.name, '')), '') as req_name
+  from public.approval_requests r
+  where r.kind in ('tree_delegate', 'events_delegate')
+    and r.status = 'approved'
+    and nullif(btrim(coalesce(r.name, '')), '') is not null
+) s
+where public.delegates_v2_norm_branch(d.branch_key) = s.bkey
+  and public.delegates_v2_norm_phone(d.phone) = s.pkey
+  and nullif(btrim(coalesce(d.name, '')), '') is null
+  and s.req_name is not null;
+
+create or replace function public.delegate_list_branch_requests_v2(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_branch text := public.delegates_v2_norm_branch(p_branch_key);
+  v_hash text := nullif(btrim(coalesce(p_secret_hash, '')), '');
+  v_email text := public.delegates_v2_norm_email(p_email);
+  v_phone_raw text := nullif(btrim(coalesce(p_phone, '')), '');
+  v_digits text := public.delegates_v2_norm_phone(p_phone);
+  v_auth boolean := false;
+  v_name text := null;
+  v_rows jsonb := '[]'::jsonb;
+  v_count int := 0;
+  v_try_phone text;
+  v_check jsonb;
+  v_del public.delegates_v2%rowtype;
+  v_phones text[];
+  i int;
+begin
+  if v_branch is null or v_branch = '' or v_hash is null then
+    return jsonb_build_object(
+      'ok', true, 'auth', false, 'count', 0, 'delegate_name', null, 'rows', '[]'::jsonb,
+      'reason', 'missing_credentials'
+    );
+  end if;
+
+  -- Same phone variants the portal login tries (E.164 / local / 966).
+  v_phones := array[]::text[];
+  if v_phone_raw is not null then
+    v_phones := array_append(v_phones, v_phone_raw);
+  end if;
+  if v_digits is not null and v_digits <> '' then
+    v_phones := array_append(v_phones, v_digits);
+    if length(v_digits) = 9 and left(v_digits, 1) = '5' then
+      v_phones := v_phones || array['0' || v_digits, '966' || v_digits, '+966' || v_digits];
+    elsif length(v_digits) = 10 and left(v_digits, 2) = '05' then
+      v_phones := v_phones || array[substr(v_digits, 2), '966' || substr(v_digits, 2), '+966' || substr(v_digits, 2)];
+    elsif length(v_digits) = 12 and left(v_digits, 3) = '966' then
+      v_phones := v_phones || array['0' || substr(v_digits, 4), substr(v_digits, 4), '+' || v_digits];
+    elsif length(v_digits) = 13 and left(v_digits, 4) = '9665' then
+      v_phones := v_phones || array['0' || substr(v_digits, 4), substr(v_digits, 4)];
+    end if;
+  end if;
+
+  -- Dedupe while preserving order
+  select coalesce(array_agg(x order by ord), array[]::text[])
+    into v_phones
+  from (
+    select x, min(ord) as ord
+    from unnest(v_phones) with ordinality as u(x, ord)
+    where nullif(btrim(x), '') is not null
+    group by x
+  ) s;
+
+  for i in 1 .. coalesce(array_length(v_phones, 1), 0) loop
+    v_try_phone := v_phones[i];
+
+    -- Mirror portal login: check_tree_delegate_access / check_events_delegate_access
+    begin
+      v_check := public.check_tree_delegate_access(
+        p_branch_key, v_try_phone, coalesce(p_email, ''), v_hash
+      );
+      if coalesce((v_check->>'allowed')::boolean, false) is true then
+        v_auth := true;
+        exit;
+      end if;
+    exception when others then
+      null;
+    end;
+
+    begin
+      v_check := public.check_events_delegate_access(
+        p_branch_key, v_try_phone, coalesce(p_email, ''), v_hash
+      );
+      if coalesce((v_check->>'allowed')::boolean, false) is true then
+        v_auth := true;
+        exit;
+      end if;
+    exception when others then
+      null;
+    end;
+
+    -- Soft find (ignore email mismatch): phone+branch+hash
+    begin
+      select d.*
+        into v_del
+      from public.delegates_v2 d
+      where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+        and public.delegates_v2_norm_phone(d.phone) = public.delegates_v2_norm_phone(v_try_phone)
+        and nullif(btrim(coalesce(d.secret_hash, '')), '') is not null
+        and d.secret_hash = v_hash
+        and coalesce(d.is_enabled, false) is true
+      order by d.updated_at desc nulls last
+      limit 1;
+      if found then
+        v_auth := true;
+        v_name := nullif(btrim(coalesce(v_del.name, '')), '');
+        exit;
+      end if;
+    exception when others then
+      null;
+    end;
+  end loop;
+
+  if not v_auth then
+    return jsonb_build_object(
+      'ok', true, 'auth', false, 'count', 0, 'delegate_name', null, 'rows', '[]'::jsonb,
+      'reason', 'not_allowed',
+      'hint', 'login_ok_but_list_auth_failed_try_relogin'
+    );
+  end if;
+
+  -- Resolve display name aggressively (secret → phone → branch request).
+  if v_name is null then
+    begin
+      select nullif(btrim(coalesce(d.name, '')), '')
+        into v_name
+      from public.delegates_v2 d
+      where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+        and d.secret_hash = v_hash
+        and coalesce(d.is_enabled, false) is true
+      order by d.updated_at desc nulls last
+      limit 1;
+    exception when others then
+      v_name := null;
+    end;
+  end if;
+
+  if v_name is null then
+    begin
+      select nullif(btrim(coalesce(d.name, '')), '')
+        into v_name
+      from public.delegates_v2 d
+      where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+        and public.delegates_v2_norm_phone(d.phone) = any (
+          select public.delegates_v2_norm_phone(x) from unnest(v_phones) as x
+        )
+        and coalesce(d.is_enabled, false) is true
+      order by d.updated_at desc nulls last
+      limit 1;
+    exception when others then
+      v_name := null;
+    end;
+  end if;
+
+  if v_name is null then
+    begin
+      select nullif(btrim(coalesce(r.name, '')), '')
+        into v_name
+      from public.approval_requests r
+      where r.kind in ('tree_delegate', 'events_delegate')
+        and r.status = 'approved'
+        and public.delegates_v2_norm_branch(r.branch_key) = v_branch
+        and (
+          v_digits = ''
+          or public.delegates_v2_norm_phone(r.phone) = v_digits
+          or public.delegates_v2_norm_phone(r.phone) = any (
+            select public.delegates_v2_norm_phone(x) from unnest(v_phones) as x
+          )
+        )
+      order by r.created_at desc nulls last
+      limit 1;
+    exception when others then
+      v_name := null;
+    end;
+  end if;
+
+  -- Last resort: latest approved delegate request for this branch (any phone).
+  if v_name is null then
+    begin
+      select nullif(btrim(coalesce(r.name, '')), '')
+        into v_name
+      from public.approval_requests r
+      where r.kind in ('tree_delegate', 'events_delegate')
+        and r.status = 'approved'
+        and public.delegates_v2_norm_branch(r.branch_key) = v_branch
+        and nullif(btrim(coalesce(r.name, '')), '') is not null
+      order by r.created_at desc nulls last
+      limit 1;
+    exception when others then
+      v_name := null;
+    end;
+  end if;
+
+  -- Persist name onto delegates_v2 when missing so next login shows it.
+  if v_name is not null then
+    begin
+      update public.delegates_v2 d
+      set name = v_name, updated_at = now()
+      where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+        and d.secret_hash = v_hash
+        and coalesce(d.is_enabled, false) is true
+        and nullif(btrim(coalesce(d.name, '')), '') is null;
+    exception when others then
+      null;
+    end;
+  end if;
+
+  select coalesce(jsonb_agg(row_payload order by sort_status, created_at desc), '[]'::jsonb)
+    into v_rows
+  from (
+    select
+      to_jsonb(r) as row_payload,
+      case lower(coalesce(r.status, ''))
+        when 'pending' then 0
+        when 'approved' then 1
+        when 'rejected' then 2
+        else 3
+      end as sort_status,
+      r.created_at
+    from public.approval_requests r
+    where r.status in ('pending', 'approved', 'rejected')
+      and r.kind in (
+        'event_card', 'family_event', 'event_request',
+        'tree_card', 'tree_edit', 'memory_card'
+      )
+      and public.delegates_v2_norm_branch(r.branch_key) = v_branch
+    order by sort_status, r.created_at desc
+    limit 200
+  ) q;
+
+  v_count := coalesce(jsonb_array_length(v_rows), 0);
+
+  return jsonb_build_object(
+    'ok', true,
+    'auth', true,
+    'count', v_count,
+    'delegate_name', v_name,
+    'rows', coalesce(v_rows, '[]'::jsonb),
+    'branch', v_branch
+  );
+end;
+$$;
+
+revoke all on function public.delegate_list_branch_requests_v2(text, text, text, text) from public;
+grant execute on function public.delegate_list_branch_requests_v2(text, text, text, text) to anon, authenticated;
+
+-- Keep legacy name in sync
+create or replace function public.delegate_list_event_requests_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_wrap jsonb;
+begin
+  v_wrap := public.delegate_list_branch_requests_v2(
+    p_branch_key, p_phone, p_email, p_secret_hash
+  );
+  return coalesce(v_wrap->'rows', '[]'::jsonb);
+end;
+$$;
+
+grant execute on function public.delegate_list_event_requests_v1(text, text, text, text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+select
+  (select to_regprocedure('public.delegate_list_branch_requests_v2(text,text,text,text)') is not null)
+    as has_list_v2,
+  (select pg_get_functiondef('public.delegate_list_branch_requests_v2(text,text,text,text)'::regprocedure)
+     like '%check_tree_delegate_access%') as auth_mirrors_login;
+`,
+      order: 10.3,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_children_change_parent_v1",
+      title: "تغيير الأب من المندوب (تصحيح الأب)",
+      desc:
+        "يثبّت RPC tree_children_change_parent_v1 حتى يستطيع مندوب الفرع حفظ طلبات تصحيح الأب من «طلبات فرعي». شغّله مرة في SQL Workspace ثم أعد تحميل صفحة الشجرة.",
+      file: "../supabase/sql/COPY-ME-tree-children-change-parent-v1.sql",
+      sql: `-- COPY-ME: run in Supabase SQL Editor / SQL Workspace
+-- Preset id: maint.tree_children_change_parent_v1
+--
+-- Enables branch delegates to apply parent_change corrections.
+-- tree_children_update_v1 does NOT write parent_person_id / path fields.
+-- This RPC mirrors admin_tree_child_upsert_v1 parent-move + descendant path rewrite.
+--
+-- Safe to re-run (CREATE OR REPLACE only — no data DELETE).
+
+create or replace function public.tree_children_change_parent_v1(
+  p_branch_key text,
+  p_person_id uuid,
+  p_new_parent_person_id uuid,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_branch text := nullif(btrim(coalesce(p_branch_key, '')), '');
+  v_id bigint;
+  v_old_child text;
+  v_old_parent text;
+  v_leaf text;
+  v_new_parent_path text;
+  v_new_child text;
+  v_parent_exists boolean := false;
+  v_clash boolean := false;
+begin
+  if p_person_id is null or p_new_parent_person_id is null or v_branch is null then
+    return false;
+  end if;
+  if p_person_id = p_new_parent_person_id then
+    raise exception 'parent_change_self';
+  end if;
+  if not public.tree_delegate_allowed_v1(v_branch, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  select
+    c.id,
+    coalesce(c.child_name, c.name),
+    coalesce(c.parent_name, c.parent)
+  into v_id, v_old_child, v_old_parent
+  from public.tree_children c
+  where c.branch_key = v_branch
+    and c.person_id = p_person_id
+  order by c.id desc
+  limit 1;
+
+  if v_id is null or v_old_child is null then
+    return false;
+  end if;
+
+  select coalesce(c.child_name, c.name)
+  into v_new_parent_path
+  from public.tree_children c
+  where c.branch_key = v_branch
+    and c.person_id = p_new_parent_person_id
+  order by c.id desc
+  limit 1;
+
+  if v_new_parent_path is null or btrim(v_new_parent_path) = '' then
+    raise exception 'new_parent_not_found';
+  end if;
+  v_parent_exists := true;
+
+  if v_new_parent_path = v_old_child
+     or v_new_parent_path like v_old_child || '/%' then
+    raise exception 'parent_change_cycle';
+  end if;
+
+  v_leaf := nullif(btrim(regexp_replace(v_old_child, '^.*/', '')), '');
+  if v_leaf is null then
+    raise exception 'parent_change_leaf_missing';
+  end if;
+
+  v_new_child := v_new_parent_path || '/' || v_leaf;
+
+  select exists (
+    select 1
+    from public.tree_children c
+    where c.branch_key = v_branch
+      and c.id <> v_id
+      and coalesce(c.parent_name, c.parent) = v_new_parent_path
+      and nullif(btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', '')), '') = v_leaf
+  ) into v_clash;
+  if v_clash then
+    raise exception 'child_already_exists';
+  end if;
+
+  update public.tree_children c
+  set
+    parent_name = v_new_parent_path,
+    parent = v_new_parent_path,
+    child_name = v_new_child,
+    name = v_new_child,
+    parent_person_id = p_new_parent_person_id
+  where c.id = v_id
+    and c.branch_key = v_branch;
+
+  if not found then
+    return false;
+  end if;
+
+  if v_old_child is distinct from v_new_child then
+    update public.tree_children c
+    set
+      parent_name = case
+        when coalesce(c.parent_name, c.parent, '') = v_old_child then v_new_child
+        when coalesce(c.parent_name, c.parent, '') like v_old_child || '/%'
+          then v_new_child || substr(coalesce(c.parent_name, c.parent), length(v_old_child) + 1)
+        else c.parent_name
+      end,
+      parent = case
+        when coalesce(c.parent, c.parent_name, '') = v_old_child then v_new_child
+        when coalesce(c.parent, c.parent_name, '') like v_old_child || '/%'
+          then v_new_child || substr(coalesce(c.parent, c.parent_name), length(v_old_child) + 1)
+        else c.parent
+      end,
+      child_name = case
+        when coalesce(c.child_name, c.name, '') like v_old_child || '/%'
+          then v_new_child || substr(coalesce(c.child_name, c.name), length(v_old_child) + 1)
+        else c.child_name
+      end,
+      name = case
+        when coalesce(c.name, c.child_name, '') like v_old_child || '/%'
+          then v_new_child || substr(coalesce(c.name, c.child_name), length(v_old_child) + 1)
+        else c.name
+      end
+    where c.branch_key = v_branch
+      and c.id <> v_id
+      and (
+        coalesce(c.parent_name, c.parent, '') = v_old_child
+        or coalesce(c.parent_name, c.parent, '') like v_old_child || '/%'
+        or coalesce(c.child_name, c.name, '') like v_old_child || '/%'
+      );
+  end if;
+
+  perform public.tree_audit_log_v1(
+    v_branch,
+    p_phone,
+    p_email,
+    p_secret_hash,
+    jsonb_build_object(
+      'v', 1,
+      'kind', 'tree_audit',
+      'op', 'change_parent',
+      'branch_key', v_branch,
+      'person_id', p_person_id,
+      'old_parent_name', v_old_parent,
+      'old_child_name', v_old_child,
+      'new_parent_person_id', p_new_parent_person_id,
+      'new_parent_name', v_new_parent_path,
+      'new_child_name', v_new_child,
+      'parent_exists', v_parent_exists,
+      'at', now()::timestamptz
+    )
+  );
+
+  return true;
+end;
+$$;
+
+revoke all on function public.tree_children_change_parent_v1(text, uuid, uuid, text, text, text) from public;
+grant execute on function public.tree_children_change_parent_v1(text, uuid, uuid, text, text, text) to anon, authenticated;
+
+select
+  (select to_regprocedure(
+    'public.tree_children_change_parent_v1(text,uuid,uuid,text,text,text)'
+  ) is not null) as change_parent_rpc_ready;
+`,
+      order: 10.35,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_children_rename_v1",
+      title: "تصحيح الاسم من المندوب",
+      desc:
+        "يثبّت RPC tree_children_rename_v1 حتى يستطيع مندوب الفرع حفظ طلبات تصحيح الاسم من «طلبات فرعي». شغّله مرة ثم أعد تحميل صفحة الشجرة.",
+      file: "../supabase/sql/COPY-ME-tree-children-rename-v1.sql",
+      sql: `-- COPY-ME: run in Supabase SQL Editor / SQL Workspace
+-- Preset id: maint.tree_children_rename_v1
+--
+-- Enables branch delegates to apply name_correction.
+-- tree_children_update_v1 does NOT rewrite name/child_name/parent paths.
+-- Mirrors admin_tree_child_upsert_v1 rename + descendant path rewrite.
+--
+-- Safe to re-run (CREATE OR REPLACE only — no data DELETE).
+
+create or replace function public.tree_children_rename_v1(
+  p_branch_key text,
+  p_person_id uuid,
+  p_name_new text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_branch text := nullif(btrim(coalesce(p_branch_key, '')), '');
+  v_name_new text := nullif(btrim(coalesce(p_name_new, '')), '');
+  v_id bigint;
+  v_old_child text;
+  v_old_parent text;
+  v_new_child text;
+  v_clash boolean := false;
+begin
+  if p_person_id is null or v_branch is null or v_name_new is null then
+    return false;
+  end if;
+  if position('/' in v_name_new) > 0 or position(' ' in v_name_new) > 0 then
+    raise exception 'name_correction_leaf_invalid';
+  end if;
+  if not public.tree_delegate_allowed_v1(v_branch, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  select
+    c.id,
+    coalesce(c.child_name, c.name),
+    coalesce(c.parent_name, c.parent)
+  into v_id, v_old_child, v_old_parent
+  from public.tree_children c
+  where c.branch_key = v_branch
+    and c.person_id = p_person_id
+  order by c.id desc
+  limit 1;
+
+  if v_id is null or v_old_child is null then
+    return false;
+  end if;
+
+  if v_old_parent is null or btrim(v_old_parent) = '' then
+    v_new_child := v_name_new;
+  else
+    v_new_child := v_old_parent || '/' || v_name_new;
+  end if;
+
+  if v_new_child = v_old_child then
+    return true;
+  end if;
+
+  select exists (
+    select 1
+    from public.tree_children c
+    where c.branch_key = v_branch
+      and c.id <> v_id
+      and coalesce(c.parent_name, c.parent) = coalesce(v_old_parent, '')
+      and nullif(btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', '')), '') = v_name_new
+  ) into v_clash;
+  if v_clash then
+    raise exception 'child_already_exists';
+  end if;
+
+  update public.tree_children c
+  set
+    child_name = v_new_child,
+    name = v_new_child
+  where c.id = v_id
+    and c.branch_key = v_branch;
+
+  if not found then
+    return false;
+  end if;
+
+  update public.tree_children c
+  set
+    parent_name = case
+      when coalesce(c.parent_name, c.parent, '') = v_old_child then v_new_child
+      when coalesce(c.parent_name, c.parent, '') like v_old_child || '/%'
+        then v_new_child || substr(coalesce(c.parent_name, c.parent), length(v_old_child) + 1)
+      else c.parent_name
+    end,
+    parent = case
+      when coalesce(c.parent, c.parent_name, '') = v_old_child then v_new_child
+      when coalesce(c.parent, c.parent_name, '') like v_old_child || '/%'
+        then v_new_child || substr(coalesce(c.parent, c.parent_name), length(v_old_child) + 1)
+      else c.parent
+    end,
+    child_name = case
+      when coalesce(c.child_name, c.name, '') like v_old_child || '/%'
+        then v_new_child || substr(coalesce(c.child_name, c.name), length(v_old_child) + 1)
+      else c.child_name
+    end,
+    name = case
+      when coalesce(c.name, c.child_name, '') like v_old_child || '/%'
+        then v_new_child || substr(coalesce(c.name, c.child_name), length(v_old_child) + 1)
+      else c.name
+    end
+  where c.branch_key = v_branch
+    and c.id <> v_id
+    and (
+      coalesce(c.parent_name, c.parent, '') = v_old_child
+      or coalesce(c.parent_name, c.parent, '') like v_old_child || '/%'
+      or coalesce(c.child_name, c.name, '') like v_old_child || '/%'
+    );
+
+  perform public.tree_audit_log_v1(
+    v_branch,
+    p_phone,
+    p_email,
+    p_secret_hash,
+    jsonb_build_object(
+      'v', 1,
+      'kind', 'tree_audit',
+      'op', 'rename',
+      'branch_key', v_branch,
+      'person_id', p_person_id,
+      'old_child_name', v_old_child,
+      'new_child_name', v_new_child,
+      'name_new', v_name_new,
+      'at', now()::timestamptz
+    )
+  );
+
+  return true;
+end;
+$$;
+
+revoke all on function public.tree_children_rename_v1(text, uuid, text, text, text, text) from public;
+grant execute on function public.tree_children_rename_v1(text, uuid, text, text, text, text) to anon, authenticated;
+
+select
+  (select to_regprocedure(
+    'public.tree_children_rename_v1(text,uuid,text,text,text,text)'
+  ) is not null) as rename_rpc_ready;
+`,
+      order: 10.36,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.delegate_set_status_tree_inbox_v1",
+      title: "إصلاح رفض/قبول طلبات الشجرة عند المندوب",
+      desc:
+        "يصلح «تعذر رفض/قبول الطلب» لتصحيح الأب/الاسم والجوال. القائمة كانت تظهر الطلبات بينما تحديث الحالة يرفض بصلاحية write فقط. شغّله مرة ثم أعد المحاولة من طلبات فرعي.",
+      file: "../supabase/sql/COPY-ME-delegate-set-status-tree-inbox.sql",
+      sql: `-- COPY-ME: run in Supabase SQL Editor / SQL Workspace
+-- Preset id: maint.delegate_set_status_tree_inbox_v1
+--
+-- Fixes: «تعذر رفض الطلب» for tree_edit / tree_card / memory while the same
+-- requests appear in «طلبات فرعي».
+--
+-- Root cause: list uses tree/events can_read, but status change required
+-- tree_delegate_allowed_v1 (tree.write only). Events-read or tree-read
+-- delegates saw buttons but RPC returned false.
+--
+-- Also aligns branch match with delegates_v2_norm_branch (same as list v2).
+-- Safe to re-run.
+
+drop function if exists public.delegate_set_approval_request_status_v1(text, bigint, text);
+drop function if exists public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text);
+
+create or replace function public.delegate_set_approval_request_status_v1(
+  p_branch_key text,
+  p_request_id bigint,
+  p_status text,
+  p_phone text default null,
+  p_email text default null,
+  p_secret_hash text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.approval_requests%rowtype;
+  v_status text;
+  v_kind text;
+  v_auth_ok boolean := false;
+  v_stamp text;
+  v_msg text;
+  v_reviewer text;
+  v_branch text := public.delegates_v2_norm_branch(p_branch_key);
+begin
+  v_status := case
+    when lower(btrim(coalesce(p_status, ''))) = 'approved' then 'approved'
+    when lower(btrim(coalesce(p_status, ''))) = 'rejected' then 'rejected'
+    else null
+  end;
+  if v_status is null or p_request_id is null or v_branch is null or v_branch = '' then
+    return false;
+  end if;
+
+  select * into v_row
+  from public.approval_requests r
+  where r.id = p_request_id
+    and r.status = 'pending'
+    and r.kind in (
+      'event_card',
+      'family_event',
+      'event_request',
+      'tree_card',
+      'tree_edit',
+      'memory_card'
+    )
+    and public.delegates_v2_norm_branch(r.branch_key) = v_branch
+  limit 1;
+
+  if v_row.id is null then
+    return false;
+  end if;
+
+  v_kind := coalesce(v_row.kind, '');
+
+  if p_phone is not null or p_email is not null or p_secret_hash is not null then
+    if v_kind in ('event_card', 'family_event', 'event_request') then
+      v_auth_ok :=
+        public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+        or public.events_delegate_can_read_v1(p_branch_key, p_phone, p_email, p_secret_hash);
+    elsif v_kind in ('tree_card', 'tree_edit', 'memory_card') then
+      v_auth_ok :=
+        public.tree_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+        or public.tree_delegate_can_read_v1(p_branch_key, p_phone, p_email, p_secret_hash)
+        or public.events_delegate_can_read_v1(p_branch_key, p_phone, p_email, p_secret_hash);
+    else
+      return false;
+    end if;
+
+    if not v_auth_ok then
+      return false;
+    end if;
+  end if;
+
+  v_reviewer := null;
+  begin
+    select nullif(btrim(coalesce(d.name, '')), '')
+      into v_reviewer
+    from public.delegates_v2 d
+    where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+      and (
+        nullif(btrim(coalesce(p_phone, '')), '') is null
+        or public.delegates_v2_norm_phone(d.phone)
+           = public.delegates_v2_norm_phone(p_phone)
+      )
+      and coalesce(d.is_enabled, false) is true
+    order by d.updated_at desc nulls last
+    limit 1;
+  exception when others then
+    v_reviewer := null;
+  end;
+
+  if v_reviewer is not null then
+    v_stamp := E'\n---\nتمت مراجعة الطلب بواسطة المندوب: ' || v_reviewer || '.';
+  elsif nullif(btrim(coalesce(p_phone, '')), '') is not null
+     or nullif(btrim(coalesce(p_email, '')), '') is not null then
+    v_stamp := E'\n---\nتمت مراجعة الطلب بواسطة مندوب الفرع.';
+  else
+    v_stamp := E'\n---\nتمت مراجعة الطلب بواسطة أحد المراجعين المعتمدين.';
+  end if;
+
+  v_msg := coalesce(v_row.message, '');
+  if position('تمت مراجعة الطلب بواسطة' in v_msg) = 0 then
+    v_msg := v_msg || v_stamp;
+  end if;
+
+  update public.approval_requests
+  set
+    status = v_status,
+    message = v_msg
+  where id = p_request_id
+    and status = 'pending';
+
+  return found;
+end;
+$$;
+
+revoke all on function public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text) from public;
+grant execute on function public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+select
+  (select to_regprocedure(
+    'public.delegate_set_approval_request_status_v1(text,bigint,text,text,text,text)'
+  ) is not null) as set_status_ready,
+  (
+    select pg_get_functiondef(
+      'public.delegate_set_approval_request_status_v1(text,bigint,text,text,text,text)'::regprocedure
+    ) like '%tree_delegate_can_read_v1%'
+  ) as inbox_allows_tree_read;
+`,
+      order: 10.37,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.delegate_set_status_tree_inbox_v2",
+      title: "إصلاح رفض/قبول v2 (نفس مصادقة القائمة)",
+      desc:
+        "v1 لم تكفِ: القائمة تنجح بمتغيرات الجوال بينما الرفض يفشل. هذه البطاقة تجعل قبول/رفض الطلب يستخدم نفس بوابة المصادقة التي تفتح «طلبات فرعي». شغّلها مرة ثم حدّث الصفحة وأعد رفض/قبول.",
+      file: "../supabase/sql/COPY-ME-delegate-set-status-tree-inbox-v2.sql",
+      sql: `-- COPY-ME: maint.delegate_set_status_tree_inbox_v2
+-- Align set-status auth with list/login (phone variants + check_* + secret soft-find).
+
+create or replace function public.delegate_inbox_actor_ok_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_branch text := public.delegates_v2_norm_branch(p_branch_key);
+  v_hash text := nullif(btrim(coalesce(p_secret_hash, '')), '');
+  v_phone_raw text := nullif(btrim(coalesce(p_phone, '')), '');
+  v_digits text := public.delegates_v2_norm_phone(p_phone);
+  v_phones text[];
+  v_try_phone text;
+  v_check jsonb;
+  i int;
+begin
+  if v_branch is null or v_branch = '' or v_hash is null then
+    return false;
+  end if;
+
+  v_phones := array[]::text[];
+  if v_phone_raw is not null then
+    v_phones := array_append(v_phones, v_phone_raw);
+  end if;
+  if v_digits is not null and v_digits <> '' then
+    v_phones := array_append(v_phones, v_digits);
+    if length(v_digits) = 9 and left(v_digits, 1) = '5' then
+      v_phones := v_phones || array['0' || v_digits, '966' || v_digits, '+966' || v_digits];
+    elsif length(v_digits) = 10 and left(v_digits, 2) = '05' then
+      v_phones := v_phones || array[substr(v_digits, 2), '966' || substr(v_digits, 2), '+966' || substr(v_digits, 2)];
+    elsif length(v_digits) >= 12 and left(v_digits, 3) = '966' then
+      v_phones := v_phones || array['0' || substr(v_digits, 4), substr(v_digits, 4), '+' || v_digits];
+    end if;
+  end if;
+
+  select coalesce(array_agg(x order by ord), array[]::text[])
+    into v_phones
+  from (
+    select x, min(ord) as ord
+    from unnest(v_phones) with ordinality as u(x, ord)
+    where nullif(btrim(x), '') is not null
+    group by x
+  ) s;
+
+  for i in 1 .. coalesce(array_length(v_phones, 1), 0) loop
+    v_try_phone := v_phones[i];
+
+    begin
+      v_check := public.check_tree_delegate_access(
+        p_branch_key, v_try_phone, coalesce(p_email, ''), v_hash
+      );
+      if coalesce((v_check->>'allowed')::boolean, false) is true then
+        return true;
+      end if;
+    exception when others then null;
+    end;
+
+    begin
+      v_check := public.check_events_delegate_access(
+        p_branch_key, v_try_phone, coalesce(p_email, ''), v_hash
+      );
+      if coalesce((v_check->>'allowed')::boolean, false) is true then
+        return true;
+      end if;
+    exception when others then null;
+    end;
+
+    begin
+      if exists (
+        select 1 from public.delegates_v2 d
+        where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+          and public.delegates_v2_norm_phone(d.phone)
+            = public.delegates_v2_norm_phone(v_try_phone)
+          and nullif(btrim(coalesce(d.secret_hash, '')), '') is not null
+          and d.secret_hash = v_hash
+          and coalesce(d.is_enabled, false) is true
+      ) then
+        return true;
+      end if;
+    exception when others then null;
+    end;
+  end loop;
+
+  begin
+    if exists (
+      select 1 from public.delegates_v2 d
+      where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+        and d.secret_hash = v_hash
+        and coalesce(d.is_enabled, false) is true
+    ) then
+      return true;
+    end if;
+  exception when others then null;
+  end;
+
+  return false;
+end;
+$$;
+
+revoke all on function public.delegate_inbox_actor_ok_v1(text, text, text, text) from public;
+grant execute on function public.delegate_inbox_actor_ok_v1(text, text, text, text) to anon, authenticated;
+
+drop function if exists public.delegate_set_approval_request_status_v1(text, bigint, text);
+drop function if exists public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text);
+
+create or replace function public.delegate_set_approval_request_status_v1(
+  p_branch_key text,
+  p_request_id bigint,
+  p_status text,
+  p_phone text default null,
+  p_email text default null,
+  p_secret_hash text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.approval_requests%rowtype;
+  v_status text;
+  v_stamp text;
+  v_msg text;
+  v_reviewer text;
+  v_branch text := public.delegates_v2_norm_branch(p_branch_key);
+begin
+  v_status := case
+    when lower(btrim(coalesce(p_status, ''))) = 'approved' then 'approved'
+    when lower(btrim(coalesce(p_status, ''))) = 'rejected' then 'rejected'
+    else null
+  end;
+  if v_status is null or p_request_id is null or v_branch is null or v_branch = '' then
+    return false;
+  end if;
+
+  select * into v_row
+  from public.approval_requests r
+  where r.id = p_request_id
+    and r.status = 'pending'
+    and r.kind in (
+      'event_card', 'family_event', 'event_request',
+      'tree_card', 'tree_edit', 'memory_card'
+    )
+    and public.delegates_v2_norm_branch(r.branch_key) = v_branch
+  limit 1;
+
+  if v_row.id is null then
+    return false;
+  end if;
+
+  if p_phone is not null or p_email is not null or p_secret_hash is not null then
+    if not public.delegate_inbox_actor_ok_v1(
+      p_branch_key, p_phone, p_email, p_secret_hash
+    ) then
+      return false;
+    end if;
+  end if;
+
+  v_reviewer := null;
+  begin
+    select nullif(btrim(coalesce(d.name, '')), '') into v_reviewer
+    from public.delegates_v2 d
+    where public.delegates_v2_norm_branch(d.branch_key) = v_branch
+      and d.secret_hash = nullif(btrim(coalesce(p_secret_hash, '')), '')
+      and coalesce(d.is_enabled, false) is true
+    order by d.updated_at desc nulls last
+    limit 1;
+  exception when others then v_reviewer := null;
+  end;
+
+  if v_reviewer is not null then
+    v_stamp := E'\n---\nتمت مراجعة الطلب بواسطة المندوب: ' || v_reviewer || '.';
+  else
+    v_stamp := E'\n---\nتمت مراجعة الطلب بواسطة مندوب الفرع.';
+  end if;
+
+  v_msg := coalesce(v_row.message, '');
+  if position('تمت مراجعة الطلب بواسطة' in v_msg) = 0 then
+    v_msg := v_msg || v_stamp;
+  end if;
+
+  update public.approval_requests
+  set status = v_status, message = v_msg
+  where id = p_request_id and status = 'pending';
+
+  return found;
+end;
+$$;
+
+revoke all on function public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text) from public;
+grant execute on function public.delegate_set_approval_request_status_v1(text, bigint, text, text, text, text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+select
+  (select to_regprocedure('public.delegate_inbox_actor_ok_v1(text,text,text,text)') is not null)
+    as actor_ok_ready,
+  (
+    select pg_get_functiondef(
+      'public.delegate_set_approval_request_status_v1(text,bigint,text,text,text,text)'::regprocedure
+    ) like '%delegate_inbox_actor_ok_v1%'
+  ) as set_status_uses_list_auth;
+`,
+      order: 10.38,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.delegate_branch_requests_expand_v3",
+      title: "إلزامي: إظهار التصحيحات وطلبات الشجرة عند المندوب",
+      desc:
+        "هذا الأمر الذي يُظهر تصحيح الأب/الاسم/الجوال في «طلبات فرعي». ليس منفّذ Workspace وليس dual_role. يعيد بناء delegate_list لتشمل tree_edit + tree_card + memory. شغّله ثم بطاقة التحقق. إن بقي الأرشيف يقول إن v2 منفّذ فتجاهله — نفّذ هذه البطاقة v3.",
       file: "../supabase/sql/COPY-ME-delegate-branch-requests-expand.sql",
       sql: `-- COPY-ME: Expand branch-delegate request queue beyond events + keep history.
--- Preset id: maint.delegate_branch_requests_expand_v2
+-- Preset id: maint.delegate_branch_requests_expand_v3
 -- (v1 may be archived as «منفذ» while live body was still pending-only —
 --  the old probe only checked to_regprocedure IS NOT NULL.)
 -- Run manually in Supabase SQL Editor / SQL Workspace. Do NOT auto-execute from the app.
@@ -2945,7 +3977,7 @@ select
     select pg_typeof(public.delegate_list_event_requests_v1('__probe__', '', '', ''))::text
   ) as list_return_type;
 `,
-      order: 34.1,
+      order: 11,
       supabaseOnce: true,
     },
     {
@@ -4018,7 +5050,7 @@ grant execute on function public.admin_delete_request_v1(text, text) to anon, au
       id: "maint.admin_family_event_delete_unlink_request_v1",
       title: "حذف المناسبة يلغي طلب المندوب",
       desc:
-        "CREATE OR REPLACE لـ admin_family_event_delete_v1: عند حذف صف من «إدارة الأخبار والمناسبات» يُحذف أيضاً approval_request المرتبط (event_card) حتى يختفي من طلبات فرعي. شغّله مرة ثم احذف من اللوحة.",
+        "إلزامي: admin_family_event_delete_v1 + family_events_delete_v1. حذف المناسبة من الإدارة أو لوحة المندوب يُزيل أيضاً طلب event_card من «طلبات فرعي». شغّله مرة ثم أعد الحذف.",
       file: "../supabase/sql/COPY-ME-admin-family-event-delete-unlink-request.sql",
       sql: `-- COPY-ME: run in Supabase SQL Editor / SQL Workspace
 -- Preset id: maint.admin_family_event_delete_unlink_request_v1
@@ -4026,6 +5058,7 @@ grant execute on function public.admin_delete_request_v1(text, text) to anon, au
 -- Admin delete of a family_events row must also remove the linked
 -- approval_requests (event_card / family_event / event_request) so the item
 -- disappears from homepage AND delegate «طلبات فرعي» (not left as «منشور»).
+-- Also replaces family_events_delete_v1 so delegate panel delete unlinks the same way.
 --
 -- Safe to re-run (CREATE OR REPLACE only — no data DELETE).
 
@@ -4083,6 +5116,7 @@ begin
       btrim(
         coalesce(
           (regexp_match(v_details, '("requestId"|"request_id")\\s*:\\s*"([^"]+)"'))[2],
+          (regexp_match(v_details, '(EVN-[A-Z0-9]+-[A-Z0-9]+)'))[1],
           ''
         )
       ),
@@ -4181,11 +5215,141 @@ $$;
 revoke all on function public.admin_delete_request_v1(text, text) from public;
 grant execute on function public.admin_delete_request_v1(text, text) to anon, authenticated;
 
+
+-- =============================================================================
+-- Delegate delete: family_events_delete_v1 also unlinks approval_requests
+-- so «طلبات فرعي» لا تبقى بعد حذف المناسبة من لوحة المندوب.
+-- Branch-scoped delete by id (was previously unscoped).
+-- =============================================================================
+
+create or replace function public.family_events_delete_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text,
+  p_pk_col text,
+  p_pk_value text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted boolean := false;
+  v_details text := null;
+  v_request_id text := null;
+  v_branch text := regexp_replace(btrim(coalesce(p_branch_key, '')), '\\s+', ' ', 'g');
+begin
+  if not public.events_delegate_allowed_v1(p_branch_key, p_phone, p_email, p_secret_hash) then
+    return false;
+  end if;
+
+  if nullif(btrim(coalesce(p_pk_col, '')), '') is null
+     or nullif(btrim(coalesce(p_pk_value, '')), '') is null then
+    return false;
+  end if;
+
+  if p_pk_col = 'id' then
+    select e.details into v_details
+    from public.family_events e
+    where e.id = p_pk_value::bigint
+      and regexp_replace(btrim(coalesce(e.branch_key, '')), '\\s+', ' ', 'g') = v_branch
+    limit 1;
+  else
+    select e.details into v_details
+    from public.family_events e
+    where e.created_at = p_pk_value::timestamptz
+      and regexp_replace(btrim(coalesce(e.branch_key, '')), '\\s+', ' ', 'g') = v_branch
+    limit 1;
+  end if;
+
+  begin
+    if nullif(btrim(coalesce(v_details, '')), '') is not null then
+      v_request_id := nullif(btrim(coalesce(
+        (v_details::jsonb)->>'requestId',
+        (v_details::jsonb)->>'request_id',
+        ((v_details::jsonb)->'event')->>'requestId',
+        ((v_details::jsonb)->'event')->>'request_id',
+        ''
+      )), '');
+    end if;
+  exception
+    when others then
+      v_request_id := null;
+  end;
+
+  if v_request_id is null and nullif(btrim(coalesce(v_details, '')), '') is not null then
+    v_request_id := nullif(
+      btrim(
+        coalesce(
+          (regexp_match(v_details, '("requestId"|"request_id")\\s*:\\s*"([^"]+)"'))[2],
+          (regexp_match(v_details, '(EVN-[A-Z0-9]+-[A-Z0-9]+)'))[1],
+          ''
+        )
+      ),
+      ''
+    );
+  end if;
+
+  if p_pk_col = 'id' then
+    delete from public.family_events e
+    where e.id = p_pk_value::bigint
+      and regexp_replace(btrim(coalesce(e.branch_key, '')), '\\s+', ' ', 'g') = v_branch;
+    v_deleted := found;
+  else
+    delete from public.family_events e
+    where e.created_at = p_pk_value::timestamptz
+      and regexp_replace(btrim(coalesce(e.branch_key, '')), '\\s+', ' ', 'g') = v_branch;
+    v_deleted := found;
+  end if;
+
+  if not v_deleted then
+    return false;
+  end if;
+
+  if v_request_id is not null then
+    delete from public.approval_requests r
+    where r.request_id = v_request_id
+      and r.kind in ('event_card', 'family_event', 'event_request')
+      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\\s+', ' ', 'g') = v_branch;
+  end if;
+
+  perform public.events_audit_log_v1(
+    p_branch_key,
+    p_phone,
+    p_email,
+    p_secret_hash,
+    jsonb_build_object(
+      'v', 1,
+      'kind', 'events_audit',
+      'op', 'delete',
+      'branch_key', p_branch_key,
+      'pk_col', p_pk_col,
+      'pk_value', p_pk_value,
+      'request_id', v_request_id,
+      'at', now()::timestamptz
+    )
+  );
+
+  return true;
+end;
+$$;
+
+grant execute on function public.family_events_delete_v1(text, text, text, text, text, text) to anon, authenticated;
+
+comment on function public.family_events_delete_v1(text, text, text, text, text, text) is
+  'Delegate hard-delete family_events (branch-scoped) and unlink matching event approval_requests.';
+
 select
   (select to_regprocedure('public.admin_family_event_delete_v1(text,bigint)') is not null)
     as has_family_event_delete,
   (select pg_get_functiondef('public.admin_family_event_delete_v1(text,bigint)'::regprocedure)
      like '%approval_requests%') as delete_unlinks_requests,
+  (select to_regprocedure('public.family_events_delete_v1(text,text,text,text,text,text)') is not null)
+    as has_delegate_family_event_delete,
+  (select pg_get_functiondef('public.family_events_delete_v1(text,text,text,text,text,text)'::regprocedure)
+     like '%approval_requests%') as delegate_delete_unlinks_requests,
   (select to_regprocedure('public.admin_delete_request_v1(text,text)') is not null)
     as has_delete_request;
 `,
