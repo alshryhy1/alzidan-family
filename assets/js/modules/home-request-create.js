@@ -27,6 +27,30 @@
       .trim();
   }
 
+  /** Every home request kind that must reach branch delegates (all five branches). */
+  var BRANCH_DELEGATE_INBOX_KINDS = {
+    event_card: 1,
+    family_event: 1,
+    event_request: 1,
+    occasion: 1,
+    patient: 1,
+    health: 1,
+    event_death: 1,
+    tree_card: 1,
+    tree_edit: 1,
+    memory_card: 1,
+    memory: 1,
+    add_person: 1,
+    tree_founder: 1,
+  };
+
+  var ADMIN_ONLY_NOTIFY_KINDS = {
+    special_card: 1,
+    tree_delegate: 1,
+    events_delegate: 1,
+    org_role: 1,
+  };
+
   function getGuard() {
     return root.AlzidanDupIdentityGuard || Guard;
   }
@@ -988,7 +1012,7 @@
   function mapTypeFromEventPayload(payload) {
     var G = getGuard();
     var type = text(payload.type || payload.case_type || "").toLowerCase();
-    if (type === "death") return G.TYPE.DEATH;
+    if (type === "death" || type === "condolence") return G.TYPE.DEATH;
     if (G.isHealthType(type)) return G.TYPE.HEALTH;
     return G.TYPE.EVENT;
   }
@@ -1493,11 +1517,20 @@
       }
 
       clearInflight(fp, true);
+      var notifyResult = null;
+      if (options.skipNotify !== true && mode === "approval" && options.row && client) {
+        try {
+          notifyResult = await notifyAfterHomeRequest(client, options.row);
+        } catch (ne) {
+          notifyResult = { ok: false, error: ne };
+        }
+      }
       return {
         ok: true,
         guard: guardResult,
         result: inserted,
         fingerprint: fp,
+        notify: notifyResult,
       };
     } catch (err) {
       clearInflight(fp, false);
@@ -1588,20 +1621,10 @@
         return { ok: false, skipped: "safe_render_blocked" };
       }
     }
-    // Branch delegates handle branch requests except البطاقة (special_card → admin only).
-    // Keep in sync with delegate.js isDelegateIncomingEventRequest + list RPC kinds.
-    var BRANCH_DELEGATE_INBOX_KINDS = {
-      event_card: 1,
-      family_event: 1,
-      event_request: 1,
-      tree_card: 1,
-      tree_edit: 1,
-      memory_card: 1,
-      memory: 1,
-      add_person: 1,
-      tree_founder: 1,
-    };
-    if (!BRANCH_DELEGATE_INBOX_KINDS[kind]) return { ok: false, skipped: "kind" };
+    // Branch delegates handle every home request except البطاقة (special_card → admin only).
+    if (ADMIN_ONLY_NOTIFY_KINDS[kind] || !BRANCH_DELEGATE_INBOX_KINDS[kind]) {
+      return { ok: false, skipped: "kind" };
+    }
     var emailResult = null;
     var pushResult = null;
     try {
@@ -1658,8 +1681,32 @@
     };
   }
 
+  /**
+   * After every successful homepage approval insert: Expo to branch delegates
+   * (all branches) plus admin app push so outbound notifications match the
+   * original family-app path. special_card stays admin-only.
+   */
+  async function notifyAfterHomeRequest(client, row) {
+    var kind = String((row && row.kind) || "").trim();
+    if (ADMIN_ONLY_NOTIFY_KINDS[kind]) {
+      return notifyAdminOfRequest(client, row);
+    }
+    var branchRes = await notifyBranchDelegatesOfRequest(client, row);
+    var adminRes = null;
+    try {
+      adminRes = await notifyAdminOfRequest(client, row, { force: true });
+    } catch (_) {}
+    return {
+      ok: !!(branchRes && branchRes.ok) || !!(adminRes && adminRes.ok),
+      emailOk: !!(branchRes && branchRes.emailOk) || !!(adminRes && adminRes.emailOk),
+      pushOk: !!(branchRes && branchRes.pushOk) || !!(adminRes && adminRes.pushOk),
+      branch: branchRes,
+      admin: adminRes,
+    };
+  }
+
   /** Central admin notify for admin-only kinds (e.g. special_card). No branch delegates. */
-  async function notifyAdminOfRequest(client, row) {
+  async function notifyAdminOfRequest(client, row, opts) {
     var sb = client;
     var Safe =
       (typeof window !== "undefined" && window.AlzidanSafeRequestNotify) || null;
@@ -1703,7 +1750,9 @@
       events_delegate: 1,
       org_role: 1,
     };
-    if (!adminKinds[kind]) return { ok: false, skipped: "kind" };
+    var force = !!(opts && opts.force);
+    if (!force && !adminKinds[kind]) return { ok: false, skipped: "kind" };
+    if (!kind) return { ok: false, skipped: "kind" };
     var emailResult = null;
     var pushResult = null;
     try {
@@ -1755,13 +1804,10 @@
   }
 
   root.AlzidanHomeRequestCreate = {
-    BRANCH_DELEGATE_INBOX_KINDS: {
-      event_card: 1, family_event: 1, event_request: 1,
-      tree_card: 1, tree_edit: 1, memory_card: 1, memory: 1,
-      add_person: 1, tree_founder: 1,
-    },
+    BRANCH_DELEGATE_INBOX_KINDS: BRANCH_DELEGATE_INBOX_KINDS,
     notifyBranchDelegatesOfRequest: notifyBranchDelegatesOfRequest,
     notifyAdminOfRequest: notifyAdminOfRequest,
+    notifyAfterHomeRequest: notifyAfterHomeRequest,
     create: create,
     evaluateOnly: evaluateOnly,
     fetchCatalog: fetchCatalog,

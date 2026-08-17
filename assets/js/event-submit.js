@@ -455,7 +455,7 @@
     lines.push("رقم الطلب: " + payload.requestId);
     lines.push("الفرع: " + (payload.branch || ""));
     if (isDeath) {
-      lines.push("النوع: وفاة");
+      lines.push("النوع: " + (payload.typeLabel || "وفاة"));
       lines.push("اسم المتوفى: " + payload.person);
     } else {
       lines.push(
@@ -558,22 +558,28 @@
       syncOccasionTypeSelect(form);
     } else if (isPatient && typeof FormCore.fillSelectOptions === "function") {
       const typeEl = form.querySelector('[name="type"]');
-      FormCore.fillSelectOptions(
-        typeEl,
+      const healthOpts =
         typeof FormCore.healthOptions === "function"
           ? FormCore.healthOptions()
-          : FormCore.SICK_TYPE_OPTIONS || [],
-        { selected: (typeEl && typeEl.value) || "sick", placeholder: "اختر الحالة" },
-      );
+          : FormCore.SICK_TYPE_OPTIONS || [];
+      if (typeEl && healthOpts.length) {
+        FormCore.fillSelectOptions(typeEl, healthOpts, {
+          selected: (typeEl && typeEl.value) || "sick",
+          placeholder: "اختر الحالة",
+        });
+      }
     } else if (isDeath && typeof FormCore.fillSelectOptions === "function") {
       const typeEl = form.querySelector('[name="type"]');
-      FormCore.fillSelectOptions(
-        typeEl,
+      const deathOpts =
         typeof FormCore.deathOptions === "function"
           ? FormCore.deathOptions()
-          : FormCore.DEATH_TYPE_OPTIONS || [],
-        { selected: (typeEl && typeEl.value) || "death", placeholder: "اختر النوع" },
-      );
+          : FormCore.DEATH_TYPE_OPTIONS || [];
+      if (typeEl && deathOpts.length) {
+        FormCore.fillSelectOptions(typeEl, deathOpts, {
+          selected: (typeEl && typeEl.value) || "death",
+          placeholder: "اختر النوع",
+        });
+      }
     }
     const alertEl = form.querySelector(alertSelector(mode));
     const submitBtn = form.querySelector('button[type="submit"]');
@@ -622,8 +628,19 @@
           isPatient = fam === "health";
           isDeath = fam === "death";
         }
+        if (isDeath && !type) {
+          type = "death";
+        }
         if (typeof EventsApi.normalizeEventType === "function" && type) {
           type = EventsApi.normalizeEventType(type);
+        }
+        if (isDeath && !typeLabel) {
+          typeLabel =
+            type === "condolence"
+              ? "تعزية"
+              : typeof EventsApi.eventTypeArabicLabel === "function"
+                ? EventsApi.eventTypeArabicLabel(type || "death")
+                : "إعلان وفاة";
         }
         if (!typeLabel && typeof EventsApi.eventTypeArabicLabel === "function") {
           typeLabel = EventsApi.eventTypeArabicLabel(type);

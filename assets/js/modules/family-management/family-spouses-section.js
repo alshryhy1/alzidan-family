@@ -178,6 +178,7 @@
           '<div class="fm-row-actions">' +
           '<button type="button" class="btn btn-secondary btn-small" data-fm-manage-wife>إدارة أبناء الزوجة</button>' +
           '<button type="button" class="btn btn-secondary btn-small" data-fm-edit-wife>تعديل الزوجة</button>' +
+          '<button type="button" class="btn btn-secondary btn-small" data-fm-delete-wife style="border-color:rgba(239,68,68,0.55);color:#991b1b;">حذف الزوجة</button>' +
           "</div>";
 
         item.querySelector("[data-fm-manage-wife]").addEventListener("click", function () {
@@ -186,6 +187,12 @@
         item.querySelector("[data-fm-edit-wife]").addEventListener("click", function () {
           if (typeof opts.onEditWife === "function") opts.onEditWife(row);
         });
+        var deleteBtn = item.querySelector("[data-fm-delete-wife]");
+        if (deleteBtn) {
+          deleteBtn.addEventListener("click", function () {
+            deleteWife(row);
+          });
+        }
         listEl.appendChild(item);
       });
     }
@@ -212,6 +219,29 @@
       }
       wivesRows = loaded && Array.isArray(loaded.data) ? loaded.data : [];
       renderRows(wivesRows);
+    }
+
+    async function deleteWife(row) {
+      if (typeof api.deleteWife !== "function") {
+        setAlert(alertEl, "error", "حذف الزوجة غير متاح حالياً.");
+        return;
+      }
+      var res = await api.deleteWife({
+        personId: getSelectedPersonId(),
+        spouse: row,
+        spouseId: row && row.id,
+        wifeName: row && row.wife_name,
+        linkedChildrenCount: row && row.linked_children_count,
+      });
+      if (!res || !res.ok) {
+        setAlert(alertEl, "error", (res && res.message) || "تعذر حذف الزوجة.");
+        return;
+      }
+      setAlert(alertEl, "success", res.message || "تم حذف الزوجة.");
+      managerState = { spouse: null, children: [], linked: new Set() };
+      renderManager();
+      await refresh();
+      onRefreshChildren();
     }
 
     async function confirmLinkAll() {

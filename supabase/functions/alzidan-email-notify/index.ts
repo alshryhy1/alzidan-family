@@ -27,11 +27,13 @@ const KNOWN_KINDS: Record<string, { label: string; family: "content" | "privileg
   event_request: { label: "إضافة مناسبة", family: "content" },
   occasion: { label: "إضافة مناسبة", family: "content" },
   patient: { label: "حالة صحية", family: "content" },
+  health: { label: "حالة صحية", family: "content" },
   event_death: { label: "إشعار وفاة", family: "content" },
   tree_card: { label: "إضافة فرد", family: "content" },
   add_person: { label: "إضافة فرد", family: "content" },
   tree_edit: { label: "تصحيح بيانات", family: "content" },
   memory_card: { label: "ذكرى", family: "content" },
+  memory: { label: "ذكرى", family: "content" },
   special_card: { label: "طلب بطاقة", family: "content" },
   tree_founder: { label: "مؤسس في الشجرة", family: "content" },
   org_role: { label: "عضوية/دور", family: "privilege" },
@@ -432,9 +434,15 @@ function isBranchNotifyKind(kind: string) {
     k === "event_card" ||
     k === "family_event" ||
     k === "event_request" ||
+    k === "occasion" ||
+    k === "patient" ||
+    k === "health" ||
+    k === "event_death" ||
     k === "tree_card" ||
+    k === "add_person" ||
     k === "tree_edit" ||
     k === "memory_card" ||
+    k === "memory" ||
     k === "tree_founder"
   );
 }

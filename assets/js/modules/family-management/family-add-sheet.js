@@ -60,6 +60,7 @@
       '<div class="fm-toolbar" style="margin-top:12px;">' +
       '<button type="button" class="btn btn-primary" data-fm-save-sheet>حفظ</button>' +
       '<button type="button" class="btn btn-secondary" data-fm-close-sheet2>إلغاء</button>' +
+      '<button type="button" class="btn btn-secondary" data-fm-delete-wife style="display:none;border-color:rgba(239,68,68,0.55);color:#991b1b;">حذف الزوجة</button>' +
       "</div>";
 
     backdrop.appendChild(sheet);
@@ -68,8 +69,19 @@
     var alertEl = sheet.querySelector("[data-fm-sheet-alert]");
     var currentType = "wife";
     var editingWifeId = null;
+    var editingWifeLinkedCount = 0;
     /** Bound at open — save must not follow a later father selection (TREE-004). */
     var boundPersonId = "";
+    var titleEl = sheet.querySelector(".fm-sheet-title");
+    var typeTabsEl = sheet.querySelector(".fm-type-tabs");
+    var deleteWifeBtn = sheet.querySelector("[data-fm-delete-wife]");
+
+    function syncWifeEditChrome() {
+      var editing = currentType === "wife" && !!editingWifeId;
+      if (titleEl) titleEl.textContent = editing ? "تعديل الزوجة" : "إضافة";
+      if (typeTabsEl) typeTabsEl.style.display = editing ? "none" : "";
+      if (deleteWifeBtn) deleteWifeBtn.style.display = editing ? "" : "none";
+    }
 
     var wifeForm = sheet.querySelector("[data-fm-form-wife]");
     var childForm = sheet.querySelector("[data-fm-form-child]");
@@ -136,9 +148,11 @@
     function close() {
       backdrop.classList.remove("fm-open");
       editingWifeId = null;
+      editingWifeLinkedCount = 0;
       boundPersonId = "";
       clearChildFormFields();
       hideAlert(alertEl);
+      syncWifeEditChrome();
     }
 
     function open(type, payload) {
@@ -147,6 +161,7 @@
       boundPersonId = typeof getSelectedPersonId === "function" ? String(getSelectedPersonId() || "").trim() : "";
       if (payload && payload.wifeRow) {
         editingWifeId = payload.wifeRow.id;
+        editingWifeLinkedCount = Number(payload.wifeRow.linked_children_count || 0) || 0;
         var row = payload.wifeRow;
         var nameEl = sheet.querySelector("[data-fm-wife-name]");
         if (nameEl) nameEl.value = row.wife_name || "";
@@ -165,6 +180,7 @@
         setAlert(alertEl, "success", "عدّل بيانات الزوجة ثم اضغط حفظ.");
       } else {
         editingWifeId = null;
+        editingWifeLinkedCount = 0;
         sheet.querySelectorAll("input,select,textarea").forEach(function (el) {
           if (el.type === "checkbox") el.checked = false;
           else if (el.tagName === "SELECT") el.selectedIndex = 0;
@@ -173,6 +189,7 @@
         updateWifeFieldsVisibility();
       }
       populateWifeOptions(payload && payload.wives ? payload.wives : []);
+      syncWifeEditChrome();
       backdrop.classList.add("fm-open");
     }
 
@@ -197,6 +214,35 @@
     });
     sheet.querySelector("[data-fm-close-sheet]").addEventListener("click", close);
     sheet.querySelector("[data-fm-close-sheet2]").addEventListener("click", close);
+
+    if (deleteWifeBtn) {
+      deleteWifeBtn.addEventListener("click", async function () {
+        hideAlert(alertEl);
+        if (!editingWifeId) {
+          setAlert(alertEl, "error", "افتح تعديل الزوجة أولاً ثم احذف.");
+          return;
+        }
+        if (typeof api.deleteWife !== "function") {
+          setAlert(alertEl, "error", "حذف الزوجة غير متاح حالياً.");
+          return;
+        }
+        var personId = boundPersonId || (typeof getSelectedPersonId === "function" ? getSelectedPersonId() : "");
+        var nameEl = sheet.querySelector("[data-fm-wife-name]");
+        var res = await api.deleteWife({
+          personId: personId,
+          spouseId: editingWifeId,
+          wifeName: nameEl ? nameEl.value : "",
+          linkedChildrenCount: editingWifeLinkedCount,
+        });
+        if (!res || !res.ok) {
+          setAlert(alertEl, "error", (res && res.message) || "تعذر حذف الزوجة.");
+          return;
+        }
+        setAlert(alertEl, "success", res.message || "تم حذف الزوجة.");
+        onSaved({ kind: "wife" });
+        close();
+      });
+    }
 
     sheet.querySelector("[data-fm-save-sheet]").addEventListener("click", async function () {
       hideAlert(alertEl);

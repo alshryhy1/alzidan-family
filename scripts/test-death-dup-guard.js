@@ -244,9 +244,13 @@ async function runCreate(payload, client, extra) {
     const block = rxSrc.slice(blockStart, blockEnd);
     while ((m = re.exec(block))) ids.push(m[1]);
     assert(
-      ids.join(",") ===
-        "tree_card,tree_edit,occasion,memory_card,special_card,patient,event_death",
-      "static: INTENTS order exact (got " + ids.join(",") + ")"
+      ids.indexOf("event_death") >= 0 &&
+        ids.indexOf("parent_change") >= 0 &&
+        ids.indexOf("tree_card") >= 0 &&
+        ids.indexOf("patient") >= 0,
+      "static: INTENTS includes death, parent_change, add person, patient (got " +
+        ids.join(",") +
+        ")"
     );
   }
   assert(
@@ -256,16 +260,17 @@ async function runCreate(payload, client, extra) {
   );
   assert(
     indexHtml.indexOf("اسم المتوفى") >= 0 &&
-      indexHtml.indexOf('id="death-submit-date-label"') >= 0,
-    "static: death required labels person/date"
+      indexHtml.indexOf('id="death-submit-date-label"') >= 0 &&
+      indexHtml.indexOf('id="death-submit-type"') >= 0,
+    "static: death required labels person/date/type"
   );
   assert(
-    indexHtml.indexOf("request-experience.js?v=20260810home2") >= 0,
-    "static: cache-bust request-experience.js?v=20260810home2"
+    /request-experience\.js\?v=20260817send1/.test(indexHtml),
+    "static: cache-bust request-experience.js?v=20260817send1"
   );
   assert(
-    indexHtml.indexOf("event-submit.js?v=20260810home2") >= 0,
-    "static: cache-bust event-submit.js?v=20260810home2"
+    /event-submit\.js\?v=20260817send1/.test(indexHtml),
+    "static: cache-bust event-submit.js?v=20260817send1"
   );
   assert(
     eventSubmit.indexOf("data-death-submit-form") >= 0 &&

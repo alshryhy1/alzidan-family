@@ -42,6 +42,7 @@
     "verify:tree-card-contract": "node scripts/test-tree-card-contract.js",
     "verify:reorder-children": "node scripts/test-tree-correction-reorder.js",
     "verify:legacy-correction-recovery": "node scripts/test-legacy-correction-recovery.js",
-    "verify:person-correction": "node scripts/test-tree-correction-person.js"
+    "verify:person-correction": "node scripts/test-tree-correction-person.js",
+    "verify:home-send": "node scripts/test-home-send-fixes.js"
   }
 }

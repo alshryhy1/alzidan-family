@@ -426,9 +426,21 @@
   }
 
   function branchOptions(selected) {
-    return BRANCHES.map(function (b) {
-      return '<option value="' + b + '"' + (selected === b ? " selected" : "") + ">" + b + "</option>";
-    }).join("");
+    var sel = text(selected);
+    return (
+      (sel ? "" : '<option value="">اختر الفرع</option>') +
+      BRANCHES.map(function (b) {
+        return (
+          '<option value="' +
+          b +
+          '"' +
+          (sel === b ? " selected" : "") +
+          ">" +
+          b +
+          "</option>"
+        );
+      }).join("")
+    );
   }
 
   function kindOptions() {
@@ -745,7 +757,7 @@
       "</p></div></div>" +
       '<div class="memory-submit-grid">' +
       '<div class="memory-submit-field"><label>الفرع</label><select data-f="branch"' +
-      (mode === "delegate" ? " disabled" : "") +
+      (mode === "delegate" ? " disabled" : " required") +
       ">" +
       branchOptions(branch) +
       "</select></div>" +

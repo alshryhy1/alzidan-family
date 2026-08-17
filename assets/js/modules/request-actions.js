@@ -2296,6 +2296,10 @@
         created_at: createdAt,
       };
       if (extra && typeof extra === "object") Object.assign(row, extra);
+      if (!row.gender && personName && relationLeafName(c) === personName) {
+        const g = normalizeTreeCardText(payload.gender || "");
+        if (g) row.gender = g;
+      }
       const TE = treeEngineApi();
       if (TE && typeof TE.prepareChildWriteRow === "function") {
         const prepared = TE.prepareChildWriteRow(row);

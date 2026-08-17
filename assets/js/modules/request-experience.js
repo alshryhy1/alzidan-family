@@ -264,6 +264,69 @@
     return String(v == null ? "" : v).replace(/\s+/g, " ").trim();
   }
 
+  function preferredMemberBranch() {
+    var found = "";
+    try {
+      var params = new URLSearchParams(String(location.search || ""));
+      found = text(params.get("branch"));
+    } catch (_) {}
+    if (BRANCHES.indexOf(found) >= 0) return found;
+    try {
+      var hash = String(location.hash || "");
+      var m = hash.match(/(?:^|#|&)branch=([^&]+)/);
+      if (m) {
+        found = text(decodeURIComponent(String(m[1] || "").replace(/\+/g, " ")));
+      }
+    } catch (_) {}
+    if (BRANCHES.indexOf(found) >= 0) return found;
+    return "";
+  }
+
+  function branchSelectOptionsHtml() {
+    var sel = preferredMemberBranch();
+    return (
+      '<option value="">اختر الفرع</option>' +
+      BRANCHES.map(function (b) {
+        return (
+          '<option value="' +
+          b +
+          '"' +
+          (b === sel ? " selected" : "") +
+          ">" +
+          b +
+          "</option>"
+        );
+      }).join("")
+    );
+  }
+
+  function filterHitsByBranch(hits, branch) {
+    var br = text(branch);
+    if (!br) return hits || [];
+    return (hits || []).filter(function (h) {
+      return !h.branch || text(h.branch) === br;
+    });
+  }
+
+  function suggestPersonButtonHtml(h) {
+    var leaf = text(h.leaf || h.display_name || "");
+    var branch = text(h.branch || "");
+    return (
+      '<button type="button" class="rx-suggest-item" data-pid="' +
+      escapeHtml(h.personId || h.person_id || "") +
+      '" data-path="' +
+      escapeHtml(h.id || h.path || "") +
+      '" data-leaf="' +
+      escapeHtml(leaf) +
+      '" data-branch="' +
+      escapeHtml(branch) +
+      '">' +
+      escapeHtml(leaf) +
+      (branch ? " · " + escapeHtml(branch) : "") +
+      "</button>"
+    );
+  }
+
   function escapeHtml(v) {
     return String(v == null ? "" : v)
       .replace(/&/g, "&amp;")
@@ -697,6 +760,62 @@
     });
   }
 
+  async function searchPeopleLive(query, branchKey) {
+    var sb = getClient();
+    var q = text(query);
+    if (!sb || q.length < 2) return [];
+    try {
+      var req = sb
+        .from("tree_children")
+        .select(
+          "person_id,parent_person_id,branch_key,child_name,name,parent_name,parent"
+        )
+        .or("child_name.ilike.*" + q + "*,name.ilike.*" + q + "*")
+        .limit(24);
+      var br = normalizePersonName(branchKey);
+      if (br) req = req.eq("branch_key", br);
+      var res = await req;
+      if (res.error || !Array.isArray(res.data)) return [];
+      return res.data
+        .map(function (r) {
+          var path = normalizePersonName(r.child_name || r.name || "");
+          var branch = normalizePersonName(r.branch_key || "");
+          var leaf = getDisplayNameForNodeId(path, getBranchRootName(branch));
+          return {
+            branch: branch,
+            id: path,
+            leaf: leaf || path,
+            path: path,
+            personId: normalizePersonName(r.person_id || ""),
+            parentPersonId: normalizePersonName(r.parent_person_id || ""),
+            parentId: normalizePersonName(r.parent_name || r.parent || ""),
+            searchText: normalizeSearchText([leaf, path, branch].join(" ")),
+          };
+        })
+        .filter(function (item) {
+          return item.personId || item.leaf;
+        });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function resolveUniquePersonHit(query, branch) {
+    var q = text(query);
+    if (q.length < 2) return null;
+    var hits = filterHitsByBranch(await searchParents(q), branch);
+    var withId = (hits || []).filter(function (h) {
+      return text(h.personId || h.person_id);
+    });
+    if (withId.length === 1) return withId[0];
+    var live = filterHitsByBranch(await searchPeopleLive(q, branch), branch);
+    var liveWithId = (live || []).filter(function (h) {
+      return text(h.personId || h.person_id);
+    });
+    if (liveWithId.length === 1) return liveWithId[0];
+    return null;
+  }
+
   /**
    * Father / context search: leaf matches first (no descendant LIMIT flood).
    * Children-under-father are loaded separately via parent_person_id — never via this cap.
@@ -704,7 +823,9 @@
   async function searchParents(query) {
     var leafHits = await searchPeople(query, { leafOnly: true, limit: 0 });
     if (leafHits.length) return leafHits;
-    return searchPeople(query, { limit: 40 });
+    var pathHits = await searchPeople(query, { limit: 40 });
+    if (pathHits.length) return pathHits;
+    return searchPeopleLive(query, "");
   }
 
   /**
@@ -2761,9 +2882,7 @@
       '<div class="founder-grid">' +
       '<div class="founder-field"><label>الفرع</label>' +
       '<select name="branch" required data-rx-pc-branch>' +
-      BRANCHES.map(function (b) {
-        return '<option value="' + b + '">' + b + "</option>";
-      }).join("") +
+      branchSelectOptionsHtml() +
       "</select></div>" +
       '<div class="founder-field"><label>الشخص</label>' +
       '<input type="text" name="person" required autocomplete="off" placeholder="ابحث عن الشخص" data-rx-pc-person />' +
@@ -2828,30 +2947,10 @@
           }
           try {
             var hits = await searchParents(q);
-            if (text(branchEl && branchEl.value)) {
-              var br = text(branchEl.value);
-              hits = (hits || []).filter(function (h) {
-                return !h.branch || text(h.branch) === br;
-              });
-            }
+            hits = filterHitsByBranch(hits, branchEl && branchEl.value);
             suggest.innerHTML = (hits || [])
               .slice(0, 8)
-              .map(function (h) {
-                return (
-                  '<button type="button" class="rx-suggest-item" data-pid="' +
-                  escapeHtml(h.personId || h.person_id || "") +
-                  '" data-path="' +
-                  escapeHtml(h.id || h.path || "") +
-                  '" data-leaf="' +
-                  escapeHtml(h.leaf || h.display_name || "") +
-                  '" data-branch="' +
-                  escapeHtml(h.branch || "") +
-                  '">' +
-                  escapeHtml(h.leaf || h.display_name || "") +
-                  (h.branch ? " · " + escapeHtml(h.branch) : "") +
-                  "</button>"
-                );
-              })
+              .map(suggestPersonButtonHtml)
               .join("");
             suggest.hidden = !hits || !hits.length;
             suggest.querySelectorAll("[data-pid]").forEach(function (btn) {
@@ -2895,27 +2994,10 @@
             }
             try {
               var hits = await searchParents(q);
-              if (text(branchEl && branchEl.value)) {
-                var br = text(branchEl.value);
-                hits = (hits || []).filter(function (h) {
-                  return !h.branch || text(h.branch) === br;
-                });
-              }
+              hits = filterHitsByBranch(hits, branchEl && branchEl.value);
               newSuggest.innerHTML = (hits || [])
                 .slice(0, 8)
-                .map(function (h) {
-                  return (
-                    '<button type="button" class="rx-suggest-item" data-pid="' +
-                    escapeHtml(h.personId || h.person_id || "") +
-                    '" data-path="' +
-                    escapeHtml(h.id || h.path || "") +
-                    '" data-leaf="' +
-                    escapeHtml(h.leaf || h.display_name || "") +
-                    '">' +
-                    escapeHtml(h.leaf || h.display_name || "") +
-                    "</button>"
-                  );
-                })
+                .map(suggestPersonButtonHtml)
                 .join("");
               newSuggest.hidden = !hits || !hits.length;
               newSuggest.querySelectorAll("[data-pid]").forEach(function (btn) {
@@ -2925,6 +3007,10 @@
                     newParentIdEl.value = text(btn.getAttribute("data-pid"));
                   if (newParentPathEl)
                     newParentPathEl.value = text(btn.getAttribute("data-path"));
+                  var hitBranch = text(btn.getAttribute("data-branch"));
+                  if (hitBranch && branchEl && !text(branchEl.value)) {
+                    branchEl.value = hitBranch;
+                  }
                   newSuggest.hidden = true;
                 });
               });
@@ -3001,6 +3087,30 @@
         form.querySelector('[name="notes"]') &&
           form.querySelector('[name="notes"]').value
       );
+      if (!ctx.personId && ctx.personName) {
+        var personHit = await resolveUniquePersonHit(ctx.personName, ctx.branch);
+        if (personHit) {
+          ctx.personId = text(personHit.personId || personHit.person_id);
+          ctx.personPath = text(personHit.id || personHit.path || ctx.personPath);
+          if (!ctx.branch && personHit.branch) ctx.branch = text(personHit.branch);
+        }
+      }
+      if (
+        operation === "parent_change" &&
+        !ctx.newParentId &&
+        ctx.newParentName
+      ) {
+        var parentHit = await resolveUniquePersonHit(
+          ctx.newParentName,
+          ctx.branch
+        );
+        if (parentHit) {
+          ctx.newParentId = text(parentHit.personId || parentHit.person_id);
+          ctx.newParentPath = text(
+            parentHit.id || parentHit.path || ctx.newParentPath
+          );
+        }
+      }
       if (!ctx.personId) {
         fail("اختر الشخص من نتائج البحث بهوية موثوقة — لا إرسال بالاسم وحده.");
         return;
@@ -3195,9 +3305,7 @@
       '<div class="founder-grid">' +
       '<div class="founder-field"><label>الفرع</label>' +
       '<select name="branch" required data-rx-reorder-branch>' +
-      BRANCHES.map(function (b) {
-        return '<option value="' + b + '">' + b + "</option>";
-      }).join("") +
+      branchSelectOptionsHtml() +
       "</select></div>" +
       '<div class="founder-field"><label>الأب</label>' +
       '<input type="text" name="parent" required autocomplete="off" placeholder="ابحث عن الأب" data-rx-reorder-parent />' +
@@ -3351,27 +3459,10 @@
           }
           try {
             var hits = await searchParents(q);
-            if (text(branchEl && branchEl.value)) {
-              var br = text(branchEl.value);
-              hits = (hits || []).filter(function (h) {
-                return !h.branch || text(h.branch) === br;
-              });
-            }
+            hits = filterHitsByBranch(hits, branchEl && branchEl.value);
             suggest.innerHTML = (hits || [])
               .slice(0, 8)
-              .map(function (h) {
-                return (
-                  '<button type="button" class="rx-suggest-item" data-pid="' +
-                  escapeHtml(h.personId || h.person_id || "") +
-                  '" data-path="' +
-                  escapeHtml(h.id || h.path || "") +
-                  '" data-leaf="' +
-                  escapeHtml(h.leaf || h.display_name || "") +
-                  '">' +
-                  escapeHtml(h.leaf || h.display_name || "") +
-                  "</button>"
-                );
-              })
+              .map(suggestPersonButtonHtml)
               .join("");
             suggest.hidden = !hits || !hits.length;
             suggest.querySelectorAll("[data-pid]").forEach(function (btn) {
@@ -3379,6 +3470,8 @@
                 parentInput.value = text(btn.getAttribute("data-leaf"));
                 if (parentIdEl) parentIdEl.value = text(btn.getAttribute("data-pid"));
                 if (parentPathEl) parentPathEl.value = text(btn.getAttribute("data-path"));
+                var hitBranch = text(btn.getAttribute("data-branch"));
+                if (hitBranch && branchEl) branchEl.value = hitBranch;
                 suggest.hidden = true;
                 loadChildrenForSelectedParent();
               });
@@ -3456,6 +3549,14 @@
           var al = form.querySelector("[data-rx-reorder-alert]");
           if (al) al.scrollIntoView({ behavior: "smooth", block: "center" });
         } catch (_) {}
+      }
+      if (!ctx.parentId && ctx.parentName) {
+        var parentHit = await resolveUniquePersonHit(ctx.parentName, ctx.branch);
+        if (parentHit) {
+          ctx.parentId = text(parentHit.personId || parentHit.person_id);
+          ctx.parentPath = text(parentHit.id || parentHit.path || ctx.parentPath);
+          if (!ctx.branch && parentHit.branch) ctx.branch = text(parentHit.branch);
+        }
       }
       if (!ctx.parentId) {
         fail("اختر الأب من نتائج البحث بهوية موثوقة — لا إرسال بالاسم وحده.");

@@ -110,6 +110,51 @@
     return { data: spouses, error: null };
   }
 
+  /**
+   * Unlink mother rows then delete the spouse. Children stay on the tree.
+   */
+  async function deleteSpouseById(client, spouseId) {
+    var id = Number(spouseId || 0);
+    if (!client || !id) {
+      return { ok: false, message: "تعذر تحديد الزوجة للحذف." };
+    }
+
+    var links = await client.from("tree_mother_links").delete().eq("spouse_id", id);
+    if (links.error) {
+      return {
+        ok: false,
+        message: "تعذر فك روابط الأبناء: " + (links.error.message || "خطأ"),
+      };
+    }
+
+    var del = await client.from("tree_spouses").delete().eq("id", id);
+    if (del.error) {
+      return {
+        ok: false,
+        message: "تعذر حذف الزوجة: " + (del.error.message || "خطأ"),
+      };
+    }
+
+    var check = await client
+      .from("tree_spouses")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+    if (check.error) {
+      return {
+        ok: false,
+        message: "تعذر التحقق من الحذف: " + (check.error.message || "خطأ"),
+      };
+    }
+    if (check.data && check.data.id) {
+      return {
+        ok: false,
+        message: "لم يتم حذف الزوجة فعلياً. تحقق من صلاحيات الحذف.",
+      };
+    }
+    return { ok: true, message: "تم حذف الزوجة." };
+  }
+
   window.AlzidanSpousesCore = Object.assign(window.AlzidanSpousesCore || {}, {
     normalizeSearchText: normalizeSearchText,
     matchesOrderedSubstring: matchesOrderedSubstring,
@@ -117,5 +162,6 @@
     hasThreePartWifeName: hasThreePartWifeName,
     findDuplicateWife: findDuplicateWife,
     loadSpousesByHusband: loadSpousesByHusband,
+    deleteSpouseById: deleteSpouseById,
   });
 })();
