@@ -56,10 +56,14 @@
     var personCard = document.createElement("div");
     personCard.className = "fm-person-card";
     personCard.innerHTML =
+      '<div class="fm-person-identity">' +
+      '<img class="fm-person-photo" data-fm-person-photo alt="" hidden />' +
       '<div><div class="fm-person-card-title" data-fm-person-title>—</div><div class="fm-person-card-meta" data-fm-person-meta></div></div>' +
+      "</div>" +
       '<div class="fm-toolbar"><button type="button" class="btn btn-primary btn-small" data-fm-open-add>+ إضافة</button>' +
       (mode === "admin"
-        ? '<button type="button" class="btn btn-secondary btn-small" data-fm-delete-subtree style="border-color:rgba(239,68,68,0.5);color:#991b1b;">حذف الشجرة الفرعية</button>'
+        ? '<button type="button" class="btn btn-secondary btn-small" data-fm-clear-photo hidden>حذف الصورة المخالفة</button>' +
+          '<button type="button" class="btn btn-secondary btn-small" data-fm-delete-subtree style="border-color:rgba(239,68,68,0.5);color:#991b1b;">حذف الشجرة الفرعية</button>'
         : "") +
       "</div>";
     panel.appendChild(personCard);
@@ -154,6 +158,24 @@
       });
     }
 
+    var clearPhotoBtn = personCard.querySelector("[data-fm-clear-photo]");
+    if (clearPhotoBtn) {
+      clearPhotoBtn.addEventListener("click", async function () {
+        if (!selectedPersonId || typeof api.clearPersonPhoto !== "function") return;
+        var res = await api.clearPersonPhoto(selectedPersonId);
+        if (!res || !res.ok) {
+          if (childrenSection && typeof childrenSection.setAlert === "function") {
+            childrenSection.setAlert("error", (res && res.message) || "تعذر حذف الصورة.");
+          }
+          return;
+        }
+        updatePersonCard();
+        if (childrenSection && typeof childrenSection.setAlert === "function") {
+          childrenSection.setAlert("success", res.message || "تم حذف الصورة.");
+        }
+      });
+    }
+
     var personSelect = hub.querySelector("#fm-person-select");
     var searchInput = hub.querySelector("#fm-person-search");
     var searchResults = hub.querySelector("#fm-person-search-results");
@@ -204,6 +226,23 @@
       if (titleEl) titleEl.textContent = display || "—";
       var metaEl = personCard.querySelector("[data-fm-person-meta]");
       if (metaEl) metaEl.textContent = selectedPersonId ? "محور إدارة العائلة" : "اختر شخصاً من القائمة أو البحث";
+      var photoEl = personCard.querySelector("[data-fm-person-photo]");
+      var clearPhotoBtn = personCard.querySelector("[data-fm-clear-photo]");
+      var photoUrl = "";
+      if (selectedPersonId && typeof api.getPersonRowMeta === "function") {
+        var personMeta = api.getPersonRowMeta(selectedPersonId);
+        photoUrl = String((personMeta && (personMeta.photo_url || personMeta.photoUrl)) || "").trim();
+      }
+      if (photoEl) {
+        if (/^https?:\/\//i.test(photoUrl)) {
+          photoEl.src = photoUrl;
+          photoEl.hidden = false;
+        } else {
+          photoEl.removeAttribute("src");
+          photoEl.hidden = true;
+        }
+      }
+      if (clearPhotoBtn) clearPhotoBtn.hidden = !photoUrl;
       var idEl = personDataBody.querySelector("[data-fm-stat-id]");
       if (idEl) idEl.textContent = selectedPersonId || "—";
       var wivesCount = spousesSection ? spousesSection.getWivesRows().length : 0;

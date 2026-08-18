@@ -258,14 +258,22 @@
 
 		const key = wifeDuplicateKey(candidate);
 		const { data, error } = await c.from("tree_spouses")
-			.select("id,husband_id,wife_name,wife_lineage")
+			.select("id,husband_id,wife_name,wife_lineage,status")
 			.limit(1000);
 
 		if (error) throw error;
 
+		const isActive = SpousesCore && typeof SpousesCore.isActiveSpouse === "function"
+			? SpousesCore.isActiveSpouse.bind(SpousesCore)
+			: function (status) {
+				const value = String(status || "active").trim().toLowerCase();
+				return !value || value === "active";
+			};
+
 		return (Array.isArray(data) ? data : []).find((item) => {
 			if (editingSpouseId && Number(item.id) === Number(editingSpouseId)) return false;
 			if (Number(item.husband_id) === Number(husbandId)) return false;
+			if (!isActive(item.status)) return false;
 			const other = item.wife_lineage && hasThreePartWifeName(item.wife_lineage)
 				? item.wife_lineage
 				: item.wife_name;
@@ -323,16 +331,46 @@
 
 		let res = editingSpouseId
 			? await c.from("tree_spouses").update(row).eq("id", editingSpouseId)
-			: await c.from("tree_spouses").insert(row);
+			: await c.from("tree_spouses").insert(row).select("id").single();
 		if (res.error && /husband_person_id/i.test(String(res.error.message || ""))) {
 			const fallback = Object.assign({}, row);
 			delete fallback.husband_person_id;
 			res = editingSpouseId
 				? await c.from("tree_spouses").update(fallback).eq("id", editingSpouseId)
-				: await c.from("tree_spouses").insert(fallback);
+				: await c.from("tree_spouses").insert(fallback).select("id").single();
 		}
 
 		if (res.error) return status("تعذر حفظ الزوجة: " + (res.error.message || "خطأ"));
+		const savedSpouseId = editingSpouseId || Number((res.data && res.data.id) || 0);
+		const SpousesCore = window.AlzidanSpousesCore || {};
+		if (
+			savedSpouseId &&
+			row.wife_is_family_member &&
+			SpousesCore.autoLinkHusbandSonsToSpouse
+		) {
+			const husbandOpt = e.husband && e.husband.selectedOptions && e.husband.selectedOptions[0]
+				? e.husband.selectedOptions[0]
+				: null;
+			const husbandPath = clean(husbandOpt && husbandOpt.dataset ? husbandOpt.dataset.path : "");
+			const branch = selectedBranch();
+			const linkRes = await SpousesCore.autoLinkHusbandSonsToSpouse(c, {
+				spouseId: savedSpouseId,
+				spouse: Object.assign({ id: savedSpouseId }, row),
+				husbandPath: husbandPath,
+				branchKey: branch,
+			});
+			if (linkRes && linkRes.ok && linkRes.linked > 0) {
+				status(
+					(editingSpouseId ? "تم تعديل الزوجة." : "تم حفظ الزوجة.") +
+						" — رُبط " +
+						linkRes.linked +
+						" ابن/أبناء بالأم تلقائياً.",
+				);
+				clearForm();
+				await loadSpouses();
+				return;
+			}
+		}
 		clearForm();
 		status(editingSpouseId ? "تم تعديل الزوجة." : "تم حفظ الزوجة.");
 		await loadSpouses();

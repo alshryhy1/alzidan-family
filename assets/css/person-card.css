@@ -29,15 +29,68 @@
   padding: 18px;
   border-bottom: 1px solid rgba(4, 120, 87, 0.12);
 }
+.person-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.person-card-photo-wrap {
+  flex: 0 0 auto;
+}
+.person-card-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  object-fit: cover;
+  object-position: center 18%;
+  border: 3px solid #d7b56d;
+  display: block;
+}
 .person-card-title {
   font-size: 20px;
   font-weight: 900;
   color: #064e3b;
 }
+.person-card-kinship {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 10px;
+}
+.person-card-kinship[hidden] {
+  display: none;
+}
+.person-card-kinship-line {
+  width: 36px;
+  height: 1px;
+  background: #c4a35a;
+  opacity: 0.55;
+}
+.person-card-kinship-text {
+  color: #c4a35a;
+  font-size: 16px;
+  font-weight: 900;
+}
 .person-card-sub {
   margin-top: 4px;
   font-size: 13px;
   color: #64748b;
+}
+.person-card-path-badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #c4a35a;
+  background: rgba(15, 42, 36, 0.08);
+  color: #173f35;
+  font-size: 12px;
+  font-weight: 800;
+}
+.person-card-path-badge[hidden] {
+  display: none;
 }
 .person-card-close {
   width: 36px;
@@ -106,6 +159,23 @@
   padding: 6px 10px;
   background: #f8fafc;
   cursor: pointer;
+}
+.person-card-chip.is-maternal-kin {
+  border-color: rgba(124, 58, 237, 0.28);
+  background: #f5f3ff;
+}
+.person-card-chip.is-full-kin {
+  border-color: rgba(5, 150, 105, 0.35);
+  background: #ecfdf5;
+}
+.person-card-chip.is-paternal-kin {
+  border-color: rgba(14, 116, 144, 0.28);
+  background: #ecfeff;
+}
+.person-card-chip.is-grandson-kin,
+.person-card-chip.is-nephew-kin {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: #fff7ed;
 }
 .person-card-lineage-sep {
   color: #94a3b8;

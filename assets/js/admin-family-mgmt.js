@@ -248,9 +248,9 @@
 
   function todayGregorianISO() { const now = new Date(); const y = String(now.getFullYear()).padStart(4, "0"); const m = String(now.getMonth() + 1).padStart(2, "0"); const d = String(now.getDate()).padStart(2, "0"); return y + "-" + m + "-" + d; }
 
-  function groupChildrenRows(rows, branchKey) { const key = normalizePersonName(branchKey || ""); const branchRoot = key ? getBranchRootName(key) : ""; const byParent = {}; const idsByBase = new Map(); const buildChildId = (parentId, baseName) =>{ const p = normalizePersonName(parentId || ""); const b = normalizePersonName(baseName || ""); if (!p || !b) return ""; return p + "/" + b; }; const indexKnownId = (nodeId) =>{ const id = normalizePersonName(nodeId || ""); if (!id) return; const parts = id.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); const base = parts.length ? parts[parts.length - 1] : id; if (!base) return; const existing = idsByBase.get(base); if (existing) { existing.add(id); return; } idsByBase.set(base, new Set([id])); }; const addOrMergeChildById = (parentId, child) =>{ const parent = normalizePersonName(parentId || ""); const name = normalizePersonName(child && child.name ? child.name : ""); if (!parent || !name) return; if (!byParent[parent]) byParent[parent] = []; const list = byParent[parent]; const idx = (Array.isArray(list) ? list : []).findIndex((c) =>normalizePersonName(c && c.name ? c.name : "") === name); const merged = { name, personId: child && child.personId ? String(child.personId) : "", parentPersonId: child && child.parentPersonId ? String(child.parentPersonId) : "", year: child && child.year ? String(child.year) : "", order: child && child.order ? String(child.order) : "", gdate: child && child.gdate ? String(child.gdate) : "", hdate: child && child.hdate ? String(child.hdate) : "", city: child && child.city ? String(child.city) : "", area: child && child.area ? String(child.area) : "", deceased: !!(child && child.deceased) }; if (idx< 0) { list.push(merged); return; } const prev = list[idx]; if (prev) { if (!prev.personId && merged.personId) prev.personId = merged.personId; if (!prev.parentPersonId && merged.parentPersonId) prev.parentPersonId = merged.parentPersonId; if (!prev.year && merged.year) prev.year = merged.year; if (!prev.order && merged.order) prev.order = merged.order; if (!prev.gdate && merged.gdate) prev.gdate = merged.gdate; if (!prev.hdate && merged.hdate) prev.hdate = merged.hdate; if (!prev.city && merged.city) prev.city = merged.city; if (!prev.area && merged.area) prev.area = merged.area; if (!prev.deceased && merged.deceased) prev.deceased = true; } }; const addOrMergeChildAndIndex = (parentId, child) =>{ addOrMergeChildById(parentId, child); const p = normalizePersonName(parentId || ""); if (p) indexKnownId(p); const n = normalizePersonName(child && child.name ? child.name : ""); if (n) indexKnownId(n); }; const ensureParentId = (rawParent, childRaw) =>{ const raw = normalizePersonName(rawParent || ""); if (!raw) return ""; if (raw.includes("/")) return raw; if (branchRoot && (raw === branchRoot || raw === key)) return branchRoot; const pathDerived = (function(){ const childFull = normalizePersonName(childRaw || ""); if (!childFull || !childFull.includes("/")) return ""; const parts = childFull.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); if (parts.length < 2) return ""; const derivedParent = parts.slice(0, -1).join("/"); const derivedLeaf = parts[parts.length - 2] || ""; if (derivedLeaf === raw || normalizePersonBaseName(derivedParent) === raw || derivedParent.endsWith("/" + raw)) return derivedParent; return ""; })(); if (pathDerived) return pathDerived; const candidates = idsByBase.get(raw); if (candidates && candidates.size === 1) return Array.from(candidates)[0]; if (candidates && candidates.size > 1) return raw; if (branchRoot) { const parentId = buildChildId(branchRoot, raw); if (parentId) addOrMergeChildAndIndex(branchRoot, { name: parentId, year: "", gdate: "", hdate: "", city: "", area: "" }); return parentId; } return raw; }; const stripBranchSuffix = (tokens) =>{ const t = Array.isArray(tokens) ? tokens.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!key) return t; if (t.length >= 3) { const a = normalizePersonName(t[t.length - 3] || ""); const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (a === key && b === "مطلق" && c === "زيدان") return t.slice(0, -3); } if (t.length >= 2) { const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (b === key && c === "مطلق") return t.slice(0, -2); } if (t.length >= 1 && normalizePersonName(t[t.length - 1] || "") === key) return t.slice(0, -1); return t; }; const normalizeChildId = (rawChildId, parentId) =>{ const c = normalizePersonName(rawChildId || ""); if (!c || !c.includes("/")) return c; const p = normalizePersonName(parentId || ""); if (!p) return c; if (c === p || c.startsWith(p + "/")) return c; if (branchRoot && (c === branchRoot || c.startsWith(branchRoot + "/"))) return c; const base = p.split("/").map((x) =>normalizePersonName(x)).filter(Boolean).slice(-1)[0] || ""; if (base && c.startsWith(base + "/")) return p + "/" + c.slice((base + "/").length); return c; }; const addChain = (anchorParentId, basesOldestToYoungest, leafMeta) =>{ const anchor = normalizePersonName(anchorParentId || ""); const chain = Array.isArray(basesOldestToYoungest) ? basesOldestToYoungest.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!anchor || !chain.length) return; let current = anchor; indexKnownId(current); for (let i = 0; i< chain.length; i++) { const base = chain[i]; const childId = buildChildId(current, base); if (!childId) return; const isLeaf = i === chain.length - 1; addOrMergeChildAndIndex( current, isLeaf ? { ...(leafMeta || {}), name: childId } : { name: childId, year: "", gdate: "", hdate: "", city: "", area: "", created_at: "" } ); current = childId; } }; (Array.isArray(rows) ? rows : []).forEach((r) =>{ let parentRaw = normalizeParentName(r.parent_name || r.parent || "", key); let childRaw = normalizePersonName(r.child_name || r.name || ""); if (!parentRaw || !childRaw) return; const meta = { name: "", personId: normalizePersonName(r.person_id || ""), parentPersonId: normalizePersonName(r.parent_person_id || ""), year: r.birth_year == null ? "" : String(r.birth_year), order: r.birth_order == null ? "" : String(r.birth_order), gdate: normalizePersonName(r.birth_date_g || r.birth_date || ""), hdate: normalizePersonName(r.birth_date_h || ""), city: normalizePersonName(r.city || ""), area: normalizePersonName(r.area || ""), deceased: parseTruthyValue(r.is_deceased) || parseTruthyValue(r.deceased) || parseTruthyValue(r.is_dead) || parseTruthyValue(r.dead) || parseTruthyValue(r.isDead) }; const parentId = ensureParentId(parentRaw, childRaw); if (!parentId) return; if (childRaw.includes("/")) { addOrMergeChildAndIndex(parentId, { ...meta, name: normalizeChildId(childRaw, parentId) }); return; } const rawTokens = tokenizeLineageInput(normalizePersonBaseName(childRaw)); const tokens = stripBranchSuffix(rawTokens); if (!tokens.length) return; const hadBranchSuffix = tokens.length !== rawTokens.length; if (hadBranchSuffix && branchRoot) { const chainOldest = tokens.slice().reverse(); addChain(branchRoot, chainOldest, meta); return; } if (tokens.length >1) { const chainOldest = tokens.slice().reverse(); const parentBase = normalizePersonBaseName(parentId); if (chainOldest.length && parentBase && chainOldest[0] === parentBase) chainOldest.shift(); addChain(parentId, chainOldest, meta); return; } addChain(parentId, [tokens[0]], meta); }); const forcedMap = {}; const forcedBases = Object.keys(FORCED_RAHMA_BY_BASE); if (forcedBases.length) { const pickBestId = (ids) =>{ const list = (Array.isArray(ids) ? ids : []).map((x) =>normalizePersonName(x)).filter(Boolean); if (!list.length) return ""; const root = normalizePersonName(branchRoot); list.sort((a, b) =>{ const aInRoot = root ? (a === root || a.startsWith(root + "/")) : false; const bInRoot = root ? (b === root || b.startsWith(root + "/")) : false; if (aInRoot !== bInRoot) return aInRoot ? -1 : 1; const aDepth = a.split("/").filter(Boolean).length; const bDepth = b.split("/").filter(Boolean).length; if (aDepth !== bDepth) return aDepth - bDepth; if (a.length !== b.length) return a.length - b.length; return a.localeCompare(b, "ar"); }); return list[0] || ""; }; forcedBases.forEach((base) =>{ const b = normalizePersonName(base); if (!b) return; const set = idsByBase.get(b); if (!set || !set.size) return; const picked = pickBestId(Array.from(set)); if (picked) forcedMap[b] = picked; }); } if (key) state.forcedRahmaByBranch[key] = forcedMap; return byParent; }
+  function groupChildrenRows(rows, branchKey) { const key = normalizePersonName(branchKey || ""); const branchRoot = key ? getBranchRootName(key) : ""; const byParent = {}; const idsByBase = new Map(); const buildChildId = (parentId, baseName) =>{ const p = normalizePersonName(parentId || ""); const b = normalizePersonName(baseName || ""); if (!p || !b) return ""; return p + "/" + b; }; const indexKnownId = (nodeId) =>{ const id = normalizePersonName(nodeId || ""); if (!id) return; const parts = id.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); const base = parts.length ? parts[parts.length - 1] : id; if (!base) return; const existing = idsByBase.get(base); if (existing) { existing.add(id); return; } idsByBase.set(base, new Set([id])); }; const addOrMergeChildById = (parentId, child) =>{ const parent = normalizePersonName(parentId || ""); const name = normalizePersonName(child && child.name ? child.name : ""); if (!parent || !name) return; if (!byParent[parent]) byParent[parent] = []; const list = byParent[parent]; const idx = (Array.isArray(list) ? list : []).findIndex((c) =>normalizePersonName(c && c.name ? c.name : "") === name); const merged = { name, personId: child && child.personId ? String(child.personId) : "", parentPersonId: child && child.parentPersonId ? String(child.parentPersonId) : "", year: child && child.year ? String(child.year) : "", order: child && child.order ? String(child.order) : "", gdate: child && child.gdate ? String(child.gdate) : "", hdate: child && child.hdate ? String(child.hdate) : "", city: child && child.city ? String(child.city) : "", area: child && child.area ? String(child.area) : "", photoUrl: child && child.photoUrl ? String(child.photoUrl) : "", deceased: !!(child && child.deceased) }; if (idx< 0) { list.push(merged); return; } const prev = list[idx]; if (prev) { if (!prev.personId && merged.personId) prev.personId = merged.personId; if (!prev.parentPersonId && merged.parentPersonId) prev.parentPersonId = merged.parentPersonId; if (!prev.year && merged.year) prev.year = merged.year; if (!prev.order && merged.order) prev.order = merged.order; if (!prev.gdate && merged.gdate) prev.gdate = merged.gdate; if (!prev.hdate && merged.hdate) prev.hdate = merged.hdate; if (!prev.city && merged.city) prev.city = merged.city; if (!prev.area && merged.area) prev.area = merged.area; if (!prev.photoUrl && merged.photoUrl) prev.photoUrl = merged.photoUrl; if (!prev.deceased && merged.deceased) prev.deceased = true; } }; const addOrMergeChildAndIndex = (parentId, child) =>{ addOrMergeChildById(parentId, child); const p = normalizePersonName(parentId || ""); if (p) indexKnownId(p); const n = normalizePersonName(child && child.name ? child.name : ""); if (n) indexKnownId(n); }; const ensureParentId = (rawParent, childRaw) =>{ const raw = normalizePersonName(rawParent || ""); if (!raw) return ""; if (raw.includes("/")) return raw; if (branchRoot && (raw === branchRoot || raw === key)) return branchRoot; const pathDerived = (function(){ const childFull = normalizePersonName(childRaw || ""); if (!childFull || !childFull.includes("/")) return ""; const parts = childFull.split("/").map((p) =>normalizePersonName(p)).filter(Boolean); if (parts.length < 2) return ""; const derivedParent = parts.slice(0, -1).join("/"); const derivedLeaf = parts[parts.length - 2] || ""; if (derivedLeaf === raw || normalizePersonBaseName(derivedParent) === raw || derivedParent.endsWith("/" + raw)) return derivedParent; return ""; })(); if (pathDerived) return pathDerived; const candidates = idsByBase.get(raw); if (candidates && candidates.size === 1) return Array.from(candidates)[0]; if (candidates && candidates.size > 1) return raw; if (branchRoot) { const parentId = buildChildId(branchRoot, raw); if (parentId) addOrMergeChildAndIndex(branchRoot, { name: parentId, year: "", gdate: "", hdate: "", city: "", area: "" }); return parentId; } return raw; }; const stripBranchSuffix = (tokens) =>{ const t = Array.isArray(tokens) ? tokens.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!key) return t; if (t.length >= 3) { const a = normalizePersonName(t[t.length - 3] || ""); const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (a === key && b === "مطلق" && c === "زيدان") return t.slice(0, -3); } if (t.length >= 2) { const b = normalizePersonName(t[t.length - 2] || ""); const c = normalizePersonName(t[t.length - 1] || ""); if (b === key && c === "مطلق") return t.slice(0, -2); } if (t.length >= 1 && normalizePersonName(t[t.length - 1] || "") === key) return t.slice(0, -1); return t; }; const normalizeChildId = (rawChildId, parentId) =>{ const c = normalizePersonName(rawChildId || ""); if (!c || !c.includes("/")) return c; const p = normalizePersonName(parentId || ""); if (!p) return c; if (c === p || c.startsWith(p + "/")) return c; if (branchRoot && (c === branchRoot || c.startsWith(branchRoot + "/"))) return c; const base = p.split("/").map((x) =>normalizePersonName(x)).filter(Boolean).slice(-1)[0] || ""; if (base && c.startsWith(base + "/")) return p + "/" + c.slice((base + "/").length); return c; }; const addChain = (anchorParentId, basesOldestToYoungest, leafMeta) =>{ const anchor = normalizePersonName(anchorParentId || ""); const chain = Array.isArray(basesOldestToYoungest) ? basesOldestToYoungest.map((x) =>normalizePersonName(x)).filter(Boolean) : []; if (!anchor || !chain.length) return; let current = anchor; indexKnownId(current); for (let i = 0; i< chain.length; i++) { const base = chain[i]; const childId = buildChildId(current, base); if (!childId) return; const isLeaf = i === chain.length - 1; addOrMergeChildAndIndex( current, isLeaf ? { ...(leafMeta || {}), name: childId } : { name: childId, year: "", gdate: "", hdate: "", city: "", area: "", created_at: "" } ); current = childId; } }; (Array.isArray(rows) ? rows : []).forEach((r) =>{ let parentRaw = normalizeParentName(r.parent_name || r.parent || "", key); let childRaw = normalizePersonName(r.child_name || r.name || ""); if (!parentRaw || !childRaw) return; const meta = { name: "", personId: normalizePersonName(r.person_id || ""), parentPersonId: normalizePersonName(r.parent_person_id || ""), year: r.birth_year == null ? "" : String(r.birth_year), order: r.birth_order == null ? "" : String(r.birth_order), gdate: normalizePersonName(r.birth_date_g || r.birth_date || ""), hdate: normalizePersonName(r.birth_date_h || ""), city: normalizePersonName(r.city || ""), area: normalizePersonName(r.area || ""), photoUrl: String(r.photo_url || r.photoUrl || "").trim(), deceased: parseTruthyValue(r.is_deceased) || parseTruthyValue(r.deceased) || parseTruthyValue(r.is_dead) || parseTruthyValue(r.dead) || parseTruthyValue(r.isDead) }; const parentId = ensureParentId(parentRaw, childRaw); if (!parentId) return; if (childRaw.includes("/")) { addOrMergeChildAndIndex(parentId, { ...meta, name: normalizeChildId(childRaw, parentId) }); return; } const rawTokens = tokenizeLineageInput(normalizePersonBaseName(childRaw)); const tokens = stripBranchSuffix(rawTokens); if (!tokens.length) return; const hadBranchSuffix = tokens.length !== rawTokens.length; if (hadBranchSuffix && branchRoot) { const chainOldest = tokens.slice().reverse(); addChain(branchRoot, chainOldest, meta); return; } if (tokens.length >1) { const chainOldest = tokens.slice().reverse(); const parentBase = normalizePersonBaseName(parentId); if (chainOldest.length && parentBase && chainOldest[0] === parentBase) chainOldest.shift(); addChain(parentId, chainOldest, meta); return; } addChain(parentId, [tokens[0]], meta); }); const forcedMap = {}; const forcedBases = Object.keys(FORCED_RAHMA_BY_BASE); if (forcedBases.length) { const pickBestId = (ids) =>{ const list = (Array.isArray(ids) ? ids : []).map((x) =>normalizePersonName(x)).filter(Boolean); if (!list.length) return ""; const root = normalizePersonName(branchRoot); list.sort((a, b) =>{ const aInRoot = root ? (a === root || a.startsWith(root + "/")) : false; const bInRoot = root ? (b === root || b.startsWith(root + "/")) : false; if (aInRoot !== bInRoot) return aInRoot ? -1 : 1; const aDepth = a.split("/").filter(Boolean).length; const bDepth = b.split("/").filter(Boolean).length; if (aDepth !== bDepth) return aDepth - bDepth; if (a.length !== b.length) return a.length - b.length; return a.localeCompare(b, "ar"); }); return list[0] || ""; }; forcedBases.forEach((base) =>{ const b = normalizePersonName(base); if (!b) return; const set = idsByBase.get(b); if (!set || !set.size) return; const picked = pickBestId(Array.from(set)); if (picked) forcedMap[b] = picked; }); } if (key) state.forcedRahmaByBranch[key] = forcedMap; return byParent; }
 
-  const __treeChildrenInflight = new Map(); async function loadChildrenForBranch(branchKey, opts) { const options = opts || {}; const sb = getSupabaseClient(); if (!sb) return { ok: false, reason: "not_configured" }; const key = String(branchKey || "").trim(); if (!key) return { ok: false, reason: "missing_branch" }; const cacheKey = key + "|" + (options.applyToState === true ? "1" : "0"); if (__treeChildrenInflight.has(cacheKey)) return __treeChildrenInflight.get(cacheKey); const __loadPromise = (async () => { const fieldAttempts = [ "id,person_id,parent_person_id,parent_name,parent,child_name,name,gender,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_year,city,area,deceased,created_at", "parent_name,name,birth_year,city,area,deceased,created_at", "parent,name,birth_year,city,area,deceased,created_at", "parent,child_name,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,parent,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,birth_year,city,area,created_at", "parent_name,name,birth_year,city,area,created_at", "parent,name,birth_year,city,area,created_at", "parent,child_name,birth_year,city,area,created_at", "parent_name,parent,child_name,name,created_at", "parent_name,child_name,name,created_at", "parent_name,child_name,created_at", "parent_name,name,created_at", "parent,child_name,created_at", "parent,name,created_at", "parent_name,parent,child_name,name", "parent_name,child_name,name", "parent_name,child_name", "parent_name,name", "parent,child_name", "parent,name", "parent_name,parent,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,year,city,area,created_at", "parent_name,child_name,name,year,city,area,created_at", "parent_name,child_name,year,city,area,created_at", "parent_name,name,year,city,area,created_at", "parent,name,year,city,area,created_at", "parent,child_name,year,city,area,created_at" ]; let lastError = null; let deceasedFallbackHint = ""; for (let i = 0; i< fieldAttempts.length; i++) { const usedFields = fieldAttempts[i]; const res = await loadChildrenQuery(sb, key, usedFields); if (!res.error) { const map = groupChildrenRows(res.data, key); const supportsDeceased = usedFields.includes("is_deceased") || usedFields.includes("deceased"); if (options.applyToState === true) { const __FM = (typeof window !== "undefined" && window.AlzidanFamilyPersonCore) ? window.AlzidanFamilyPersonCore : {}; state.children = (typeof __FM.unionChildrenMapByParentPersonId === "function") ? __FM.unionChildrenMapByParentPersonId(map, normalizePersonName) : map; if (typeof __FM.isolateChildrenMapArrays === "function") __FM.isolateChildrenMapArrays(state.children); } return { ok: true, map, rows: Array.isArray(res.data) ? res.data : [], capabilities: { deceased: supportsDeceased, deceased_hint: supportsDeceased ? "" : deceasedFallbackHint } }; } if (!deceasedFallbackHint && (usedFields.includes("is_deceased") || usedFields.includes("deceased"))) { deceasedFallbackHint = classifyTreeChildrenDbError(res.error); } const msg = String(res.error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, reason: "error", error: res.error }; lastError = res.error; } return { ok: false, reason: "error", error: lastError };  })(); __treeChildrenInflight.set(cacheKey, __loadPromise); try { return await __loadPromise; } finally { __treeChildrenInflight.delete(cacheKey); } }
+  const __treeChildrenInflight = new Map(); async function loadChildrenForBranch(branchKey, opts) { const options = opts || {}; const sb = getSupabaseClient(); if (!sb) return { ok: false, reason: "not_configured" }; const key = String(branchKey || "").trim(); if (!key) return { ok: false, reason: "missing_branch" }; const cacheKey = key + "|" + (options.applyToState === true ? "1" : "0"); if (__treeChildrenInflight.has(cacheKey)) return __treeChildrenInflight.get(cacheKey); const __loadPromise = (async () => { const fieldAttempts = [ "id,person_id,parent_person_id,parent_name,parent,child_name,name,gender,photo_url,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,name,birth_year,city,area,is_deceased,deceased,created_at", "parent,child_name,birth_year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,name,birth_year,city,area,deceased,created_at", "parent_name,child_name,birth_year,city,area,deceased,created_at", "parent_name,name,birth_year,city,area,deceased,created_at", "parent,name,birth_year,city,area,deceased,created_at", "parent,child_name,birth_year,city,area,deceased,created_at", "parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent,child_name,birth_date_g,birth_date_h,birth_year,city,area,created_at", "parent_name,parent,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,name,birth_year,city,area,created_at", "parent_name,child_name,birth_year,city,area,created_at", "parent_name,name,birth_year,city,area,created_at", "parent,name,birth_year,city,area,created_at", "parent,child_name,birth_year,city,area,created_at", "parent_name,parent,child_name,name,created_at", "parent_name,child_name,name,created_at", "parent_name,child_name,created_at", "parent_name,name,created_at", "parent,child_name,created_at", "parent,name,created_at", "parent_name,parent,child_name,name", "parent_name,child_name,name", "parent_name,child_name", "parent_name,name", "parent,child_name", "parent,name", "parent_name,parent,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent,child_name,gdate,hdate,year,city,area,is_deceased,deceased,created_at", "parent_name,parent,child_name,name,year,city,area,created_at", "parent_name,child_name,name,year,city,area,created_at", "parent_name,child_name,year,city,area,created_at", "parent_name,name,year,city,area,created_at", "parent,name,year,city,area,created_at", "parent,child_name,year,city,area,created_at" ]; let lastError = null; let deceasedFallbackHint = ""; for (let i = 0; i< fieldAttempts.length; i++) { const usedFields = fieldAttempts[i]; const res = await loadChildrenQuery(sb, key, usedFields); if (!res.error) { const map = groupChildrenRows(res.data, key); const supportsDeceased = usedFields.includes("is_deceased") || usedFields.includes("deceased"); if (options.applyToState === true) { const __FM = (typeof window !== "undefined" && window.AlzidanFamilyPersonCore) ? window.AlzidanFamilyPersonCore : {}; state.children = (typeof __FM.unionChildrenMapByParentPersonId === "function") ? __FM.unionChildrenMapByParentPersonId(map, normalizePersonName) : map; if (typeof __FM.isolateChildrenMapArrays === "function") __FM.isolateChildrenMapArrays(state.children); } return { ok: true, map, rows: Array.isArray(res.data) ? res.data : [], capabilities: { deceased: supportsDeceased, deceased_hint: supportsDeceased ? "" : deceasedFallbackHint } }; } if (!deceasedFallbackHint && (usedFields.includes("is_deceased") || usedFields.includes("deceased"))) { deceasedFallbackHint = classifyTreeChildrenDbError(res.error); } const msg = String(res.error.message || "").toLowerCase(); const isColumnMissing = msg.includes("column") && msg.includes("does not exist"); const isSchemaCacheMissingColumn = msg.includes("تحديث الخدمة") && msg.includes("could not find") && msg.includes("column"); const canRetry = isColumnMissing || isSchemaCacheMissingColumn; if (!canRetry) return { ok: false, reason: "error", error: res.error }; lastError = res.error; } return { ok: false, reason: "error", error: lastError };  })(); __treeChildrenInflight.set(cacheKey, __loadPromise); try { return await __loadPromise; } finally { __treeChildrenInflight.delete(cacheKey); } }
 
   async function loadChildrenQuery(sb, branchKey, fields) {
     const token = getAdminToken();
@@ -781,6 +781,7 @@
       parent_person_id: prev.parent_person_id || "",
       db_parent_name: prev.db_parent_name || "",
       db_child_name: prev.db_child_name || n,
+      photo_url: prev.photo_url || "",
     };
     state.pathToRow[n] = row;
     if (row.person_id) {
@@ -794,6 +795,45 @@
     if (v === "true") return true;
     if (v === "false") return false;
     return null;
+  }
+
+  function parseWifeMarriageStatus(raw) {
+    const v = String(raw || "active").trim().toLowerCase();
+    if (v === "divorced" || v === "مطلقة") return "divorced";
+    return "active";
+  }
+
+  function formatSpouseSaveError(error) {
+    const msg = String((error && error.message) || "");
+    if (/مسجلة مسبق|زوج آخر|duplicate.*wife/i.test(msg)) {
+      return "قاعدة البيانات ما زالت تمنع الزواج الثاني. نفّذ مرة واحدة في Supabase → SQL Editor الملف: supabase/sql/COPY-ME-tree-spouses-divorced-remarriage-v1.sql ثم حدّث الصفحة وأعد الحفظ.";
+    }
+    return msg || "خطأ غير معروف";
+  }
+
+  function spouseRowForRpc(row) {
+    const out = Object.assign({}, row || {});
+    if (out.updated_at instanceof Date) out.updated_at = out.updated_at.toISOString();
+    return out;
+  }
+
+  async function formatDuplicateWifeMessage(sb, dup) {
+    let suffix = "";
+    if (sb && dup && dup.husband_id) {
+      try {
+        const h = await sb
+          .from("tree_children")
+          .select("child_name,name")
+          .eq("id", Number(dup.husband_id))
+          .maybeSingle();
+        const path = h && h.data ? String(h.data.child_name || h.data.name || "").trim() : "";
+        if (path) {
+          const leaf = path.includes("/") ? path.split("/").filter(Boolean).slice(-1)[0] : path;
+          suffix = " (مسجلة حالياً مع: " + leaf + ")";
+        }
+      } catch (e) {}
+    }
+    return "هذه الزوجة مسجلة نشطة مع زوج آخر" + suffix + ". افتح ذلك الزوج → تعديل الزوجة → غيّر الحالة إلى «مطلقة»، ثم أعد الإضافة هنا.";
   }
   
 
@@ -822,11 +862,19 @@
     const candidate = row.wife_lineage && hasThreePartWifeName(row.wife_lineage) ? row.wife_lineage : row.wife_name;
     if (!hasThreePartWifeName(candidate)) return null;
     const key = wifeDuplicateKey(candidate);
-    const { data, error } = await sb.from("tree_spouses").select("id,husband_id,wife_name,wife_lineage").limit(1000);
+    const { data, error } = await sb.from("tree_spouses").select("id,husband_id,wife_name,wife_lineage,status").limit(1000);
     if (error) throw error;
+    const SpousesCoreActive = window.AlzidanSpousesCore || {};
+    const isActive = SpousesCoreActive && typeof SpousesCoreActive.isActiveSpouse === "function"
+      ? SpousesCoreActive.isActiveSpouse.bind(SpousesCoreActive)
+      : function (status) {
+          const value = String(status || "active").trim().toLowerCase();
+          return !value || value === "active";
+        };
     return (Array.isArray(data) ? data : []).find((item) => {
       if (editingSpouseId && Number(item.id) === Number(editingSpouseId)) return false;
       if (Number(item.husband_id) === Number(husbandId)) return false;
+      if (!isActive(item.status)) return false;
       const other = item.wife_lineage && hasThreePartWifeName(item.wife_lineage) ? item.wife_lineage : item.wife_name;
       return hasThreePartWifeName(other) && wifeDuplicateKey(other) === key;
     }) || null;
@@ -861,6 +909,25 @@
   }
 
   async function insertOrUpdateSpouseRow(sb, row, editingId) {
+    const token = getAdminToken();
+    if (token && sb && typeof sb.rpc === "function") {
+      try {
+        const rpc = await sb.rpc("admin_tree_spouse_upsert_v1", {
+          p_token: token,
+          p_spouse_id: editingId ? Number(editingId) : null,
+          p_row: spouseRowForRpc(row),
+        });
+        if (!rpc.error && rpc.data && rpc.data.ok) {
+          return { data: { id: rpc.data.id }, error: null };
+        }
+        const rpcMsg = String((rpc.error && rpc.error.message) || "");
+        if (rpc.error && !/admin_tree_spouse_upsert_v1|could not find the function|schema cache/i.test(rpcMsg)) {
+          return { data: null, error: rpc.error };
+        }
+      } catch (e) {
+        // fall through to direct table write
+      }
+    }
     const withPerson = Object.assign({}, row);
     const withoutPerson = Object.assign({}, row);
     delete withoutPerson.husband_person_id;
@@ -876,6 +943,14 @@
       res = await sb.from("tree_spouses").insert(withoutPerson).select("id").single();
     }
     return res;
+  }
+
+  async function prepareWifeRemarriageInsert(sb, husbandId, row) {
+    const SpousesCore = window.AlzidanSpousesCore || {};
+    if (SpousesCore && typeof SpousesCore.endActiveSpouseMatchesElsewhere === "function") {
+      return SpousesCore.endActiveSpouseMatchesElsewhere(sb, husbandId, row, 0);
+    }
+    return { ended: 0, matches: [] };
   }
 
   async function familyApiSaveWife(payload) {
@@ -906,28 +981,112 @@
       wife_family_name: familyVal === false && payload.familyName ? normalizePersonName(payload.familyName) : null,
       wife_lineage: payload.lineage ? normalizePersonName(payload.lineage) : null,
       marriage_order: order,
-      status: "active",
+      status: parseWifeMarriageStatus(payload.status),
       confidence: "confirmed",
       data_source: "admin",
       updated_at: new Date().toISOString(),
     };
     const editingId = Number(payload.editingSpouseId || 0);
     if (editingId) {
-      const { error } = await insertOrUpdateSpouseRow(sb, row, editingId);
-      if (error) return { ok: false, message: "تعذر تعديل الزوجة: " + (error.message || "خطأ غير معروف") };
-      return { ok: true, message: "تم تعديل بيانات الزوجة." };
+      const res = await insertOrUpdateSpouseRow(sb, row, editingId);
+      if (res.error) return { ok: false, message: "تعذر تعديل الزوجة: " + (res.error.message || "خطأ غير معروف") };
+      const wantedStatus = parseWifeMarriageStatus(payload.status);
+      if (wantedStatus === "divorced") {
+        const check = await sb.from("tree_spouses").select("status").eq("id", editingId).maybeSingle();
+        const SpousesCore = window.AlzidanSpousesCore || {};
+        const stillActive = SpousesCore && typeof SpousesCore.isActiveSpouse === "function"
+          ? SpousesCore.isActiveSpouse(check.data && check.data.status)
+          : String((check.data && check.data.status) || "active").toLowerCase() === "active";
+        if (stillActive) {
+          return {
+            ok: false,
+            message: "لم تُحفظ حالة «مطلقة» في قاعدة البيانات. نفّذ SQL: supabase/sql/COPY-ME-tree-spouses-divorced-remarriage-v1.sql في Supabase ثم أعد المحاولة.",
+          };
+        }
+      }
+      let linkNote = "";
+      if (familyVal !== false) {
+        const SpousesCore = window.AlzidanSpousesCore || {};
+        if (SpousesCore.autoLinkHusbandSonsToSpouse) {
+          const husbandPath = normalizePersonName(payload.personId || "");
+          const branchKey = normalizePersonName(payload.branch || state.branch || "");
+          const linkRes = await SpousesCore.autoLinkHusbandSonsToSpouse(sb, {
+            spouseId: editingId,
+            spouse: Object.assign({ id: editingId }, row),
+            husbandPath: husbandPath,
+            branchKey: branchKey,
+          });
+          if (linkRes && !linkRes.ok && linkRes.message) {
+            return { ok: false, message: linkRes.message };
+          }
+          if (linkRes && linkRes.linked > 0) {
+            linkNote = " — رُبط " + linkRes.linked + " ابن/أبناء بالأم تلقائياً.";
+          }
+        }
+      }
+      return {
+        ok: true,
+        message:
+          (wantedStatus === "divorced" ? "تم تسجيل الزوجة كمطلقة." : "تم تعديل بيانات الزوجة.") +
+          linkNote,
+      };
     }
+    let endedPrior = 0;
     try {
+      const endedPrep = await prepareWifeRemarriageInsert(sb, husbandId, row);
+      endedPrior = Number(endedPrep && endedPrep.ended) || 0;
       const dup = await findDuplicateWifeForAdmin(sb, husbandId, row, 0);
       if (dup) {
-        return { ok: false, message: "هذه الزوجة مسجلة مسبقًا مع زوج آخر. راجع الاسم الثلاثي أو سلسلة النسب قبل الحفظ." };
+        const retryEnd = await prepareWifeRemarriageInsert(sb, husbandId, row);
+        endedPrior += Number(retryEnd && retryEnd.ended) || 0;
+        const dupAfter = await findDuplicateWifeForAdmin(sb, husbandId, row, 0);
+        if (dupAfter) {
+          return {
+            ok: false,
+            message: await formatDuplicateWifeMessage(sb, dupAfter),
+          };
+        }
       }
     } catch (err) {
       return { ok: false, message: "تعذر التحقق من تكرار اسم الزوجة، حاول لاحقًا." };
     }
-    const r = await insertOrUpdateSpouseRow(sb, row, 0);
-    if (r.error) return { ok: false, message: "تعذر حفظ الزوجة: " + (r.error.message || "خطأ غير معروف") };
-    return { ok: true, message: "تم حفظ الزوجة." };
+    let r = await insertOrUpdateSpouseRow(sb, row, 0);
+    if (r.error && /مسجلة|زوج آخر/i.test(String(r.error.message || ""))) {
+      try {
+        const retryEnd = await prepareWifeRemarriageInsert(sb, husbandId, row);
+        endedPrior += Number(retryEnd && retryEnd.ended) || 0;
+      } catch (e) {}
+      r = await insertOrUpdateSpouseRow(sb, row, 0);
+    }
+    if (r.error) return { ok: false, message: "تعذر حفظ الزوجة: " + formatSpouseSaveError(r.error) };
+    const savedSpouseId = Number((r.data && r.data.id) || editingId || 0);
+    let linkNote = "";
+    if (savedSpouseId && familyVal !== false) {
+      const SpousesCore = window.AlzidanSpousesCore || {};
+      if (SpousesCore.autoLinkHusbandSonsToSpouse) {
+        const husbandPath = normalizePersonName(payload.personId || "");
+        const branchKey = normalizePersonName(payload.branch || state.branch || "");
+        const linkRes = await SpousesCore.autoLinkHusbandSonsToSpouse(sb, {
+          spouseId: savedSpouseId,
+          spouse: Object.assign({ id: savedSpouseId }, row),
+          husbandPath: husbandPath,
+          branchKey: branchKey,
+        });
+        if (linkRes && !linkRes.ok && linkRes.message) {
+          return { ok: false, message: linkRes.message };
+        }
+        if (linkRes && linkRes.linked > 0) {
+          linkNote = " — رُبط " + linkRes.linked + " ابن/أبناء بالأم تلقائياً.";
+        }
+      }
+    }
+    return {
+      ok: true,
+      message:
+        (endedPrior > 0
+          ? "تم حفظ الزوجة (وُسمت " + endedPrior + " زوجية سابقة مطلقة تلقائياً)."
+          : "تم حفظ الزوجة.") + linkNote,
+    };
   }
 
   async function familyApiDeleteWife(payload) {
@@ -1381,6 +1540,35 @@
   }
   
 
+  async function familyApiClearPersonPhoto(personPath) {
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    const meta = getPersonRowMeta(personPath);
+    const rowId = meta && meta.id ? Number(meta.id) : 0;
+    if (!rowId) return { ok: false, message: "تعذر تحديد سجل الشخص." };
+    const { data, error } = await sb.rpc("admin_tree_child_clear_photo_v1", {
+      p_token: token,
+      p_id: rowId,
+    });
+    if (error) return { ok: false, message: error.message || "تعذر حذف الصورة." };
+    if (data === false) return { ok: false, message: "تعذر حذف الصورة." };
+    if (state.pathToRow) {
+      Object.keys(state.pathToRow).forEach(function (key) {
+        const row = state.pathToRow[key];
+        if (row && Number(row.id) === rowId) row.photo_url = "";
+      });
+    }
+    const lists = Object.values(state.children || {});
+    lists.forEach(function (list) {
+      if (!Array.isArray(list)) return;
+      list.forEach(function (child) {
+        if (child && Number(child.rowId) === rowId) child.photoUrl = "";
+      });
+    });
+    return { ok: true, message: "تم حذف صورة الشخص." };
+  }
+
   function originLockMessage() {
     const FM = window.AlzidanFamilyPersonCore || {};
     return FM.ORIGIN_LOCK_MSG || "هذا من الأصول — لا يمكن تعديله أو حذفه.";
@@ -1606,6 +1794,7 @@
       updateChild: familyApiUpdateChild,
       deleteChild: familyApiDeleteChild,
       deleteSubtree: familyApiDeleteSubtree,
+      clearPersonPhoto: familyApiClearPersonPhoto,
       loadMemberPhone: async (parentId, child) => {
         const sb = getSupabaseClient();
         syncAdminBranchFromSelect();

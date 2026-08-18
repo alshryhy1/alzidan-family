@@ -30,6 +30,20 @@
   border-radius: 12px;
   background: #fff;
 }
+.fm-person-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.fm-person-photo {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid #d7b56d;
+  flex: 0 0 auto;
+}
 
 .fm-person-card-title {
   font-weight: 800;

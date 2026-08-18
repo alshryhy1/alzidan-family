@@ -3347,6 +3347,14 @@ async function insertOrUpdateSpouseRow(sb, row, editingId) {
   return res;
 }
 
+async function prepareWifeRemarriageInsert(sb, husbandId, row) {
+  const SpousesCore = window.AlzidanSpousesCore || {};
+  if (SpousesCore && typeof SpousesCore.endActiveSpouseMatchesElsewhere === "function") {
+    return SpousesCore.endActiveSpouseMatchesElsewhere(sb, husbandId, row, 0);
+  }
+  return { ended: 0, matches: [] };
+}
+
 function delegateBirthYearFromAge(ageValue) {
   const raw = normalizeArabicDigitsToLatin(String(ageValue || "").trim());
   if (!raw) return null;
@@ -3480,6 +3488,39 @@ function parseWifeFamilyValue(raw) {
   return null;
 }
 
+function parseWifeMarriageStatus(raw) {
+  const v = String(raw || "active").trim().toLowerCase();
+  if (v === "divorced" || v === "مطلقة") return "divorced";
+  return "active";
+}
+
+function formatSpouseSaveError(error) {
+  const msg = String((error && error.message) || "");
+  if (/مسجلة مسبق|زوج آخر|duplicate.*wife/i.test(msg)) {
+    return "قاعدة البيانات ما زالت تمنع الزواج الثاني. اطلب من الإدارة تنفيذ مرة واحدة في Supabase → SQL Editor الملف: supabase/sql/COPY-ME-tree-spouses-divorced-remarriage-v1.sql ثم حدّث الصفحة وأعد الحفظ.";
+  }
+  return msg || "خطأ غير معروف";
+}
+
+async function formatDuplicateWifeMessage(sb, dup) {
+  let suffix = "";
+  if (sb && dup && dup.husband_id) {
+    try {
+      const h = await sb
+        .from("tree_children")
+        .select("child_name,name")
+        .eq("id", Number(dup.husband_id))
+        .maybeSingle();
+      const path = h && h.data ? String(h.data.child_name || h.data.name || "").trim() : "";
+      if (path) {
+        const leaf = path.includes("/") ? path.split("/").filter(Boolean).slice(-1)[0] : path;
+        suffix = " (مسجلة حالياً مع: " + leaf + ")";
+      }
+    } catch (e) {}
+  }
+  return "هذه الزوجة مسجلة نشطة مع زوج آخر" + suffix + ". افتح ذلك الزوج → تعديل الزوجة → غيّر الحالة إلى «مطلقة»، ثم أعد الإضافة هنا.";
+}
+
 function wifeDuplicateKey(value) {
   const SpousesCore = window.AlzidanSpousesCore || {};
   if (SpousesCore && typeof SpousesCore.wifeDuplicateKey === "function") {
@@ -3503,11 +3544,18 @@ async function findDuplicateWifeForDelegate(sb, husbandId, row, editingSpouseId)
   const candidate = row.wife_lineage && hasThreePartWifeName(row.wife_lineage) ? row.wife_lineage : row.wife_name;
   if (!hasThreePartWifeName(candidate)) return null;
   const key = wifeDuplicateKey(candidate);
-  const { data, error } = await sb.from("tree_spouses").select("id,husband_id,wife_name,wife_lineage").limit(1000);
+  const { data, error } = await sb.from("tree_spouses").select("id,husband_id,wife_name,wife_lineage,status").limit(1000);
   if (error) throw error;
+  const isActive = SpousesCore && typeof SpousesCore.isActiveSpouse === "function"
+    ? SpousesCore.isActiveSpouse.bind(SpousesCore)
+    : function (status) {
+        const value = String(status || "active").trim().toLowerCase();
+        return !value || value === "active";
+      };
   return (Array.isArray(data) ? data : []).find((item) => {
     if (editingSpouseId && Number(item.id) === Number(editingSpouseId)) return false;
     if (Number(item.husband_id) === Number(husbandId)) return false;
+    if (!isActive(item.status)) return false;
     const other = item.wife_lineage && hasThreePartWifeName(item.wife_lineage) ? item.wife_lineage : item.wife_name;
     return hasThreePartWifeName(other) && wifeDuplicateKey(other) === key;
   }) || null;
@@ -3647,28 +3695,68 @@ async function familyApiSaveWife(payload) {
     wife_family_name: familyVal === false && payload.familyName ? normalizePersonName(payload.familyName) : null,
     wife_lineage: payload.lineage ? normalizePersonName(payload.lineage) : null,
     marriage_order: order,
-    status: "active",
+    status: parseWifeMarriageStatus(payload.status),
     confidence: "confirmed",
     data_source: "delegate",
     updated_at: new Date().toISOString(),
   };
   const editingId = Number(payload.editingSpouseId || 0);
   if (editingId) {
-    const { error } = await insertOrUpdateSpouseRow(sb, row, editingId);
-    if (error) return { ok: false, message: "تعذر تعديل الزوجة: " + (error.message || "خطأ غير معروف") };
-    return { ok: true, message: "تم تعديل بيانات الزوجة." };
+    const res = await insertOrUpdateSpouseRow(sb, row, editingId);
+    if (res.error) return { ok: false, message: "تعذر تعديل الزوجة: " + (res.error.message || "خطأ غير معروف") };
+    const wantedStatus = parseWifeMarriageStatus(payload.status);
+    if (wantedStatus === "divorced") {
+      const check = await sb.from("tree_spouses").select("status").eq("id", editingId).maybeSingle();
+      const SpousesCore = window.AlzidanSpousesCore || {};
+      const stillActive = SpousesCore && typeof SpousesCore.isActiveSpouse === "function"
+        ? SpousesCore.isActiveSpouse(check.data && check.data.status)
+        : String((check.data && check.data.status) || "active").toLowerCase() === "active";
+      if (stillActive) {
+        return {
+          ok: false,
+          message: "لم تُحفظ حالة «مطلقة» في قاعدة البيانات. تواصل مع الإدارة لتطبيق SQL الزوجات.",
+        };
+      }
+    }
+    return {
+      ok: true,
+      message: wantedStatus === "divorced" ? "تم تسجيل الزوجة كمطلقة." : "تم تعديل بيانات الزوجة.",
+    };
   }
+  let endedPrior = 0;
   try {
+    const endedPrep = await prepareWifeRemarriageInsert(sb, husbandId, row);
+    endedPrior = Number(endedPrep && endedPrep.ended) || 0;
     const dup = await findDuplicateWifeForDelegate(sb, husbandId, row, 0);
     if (dup) {
-      return { ok: false, message: "هذه الزوجة مسجلة مسبقًا مع زوج آخر. راجع الاسم الثلاثي أو سلسلة النسب قبل الحفظ." };
+      const retryEnd = await prepareWifeRemarriageInsert(sb, husbandId, row);
+      endedPrior += Number(retryEnd && retryEnd.ended) || 0;
+      const dupAfter = await findDuplicateWifeForDelegate(sb, husbandId, row, 0);
+      if (dupAfter) {
+        return {
+          ok: false,
+          message: await formatDuplicateWifeMessage(sb, dupAfter),
+        };
+      }
     }
   } catch (err) {
     return { ok: false, message: "تعذر التحقق من تكرار اسم الزوجة، حاول لاحقًا." };
   }
-  const r = await insertOrUpdateSpouseRow(sb, row, 0);
-  if (r.error) return { ok: false, message: "تعذر حفظ الزوجة: " + (r.error.message || "خطأ غير معروف") };
-  return { ok: true, message: "تم حفظ الزوجة." };
+  let r = await insertOrUpdateSpouseRow(sb, row, 0);
+  if (r.error && /مسجلة|زوج آخر/i.test(String(r.error.message || ""))) {
+    try {
+      const retryEnd = await prepareWifeRemarriageInsert(sb, husbandId, row);
+      endedPrior += Number(retryEnd && retryEnd.ended) || 0;
+    } catch (e) {}
+    r = await insertOrUpdateSpouseRow(sb, row, 0);
+  }
+  if (r.error) return { ok: false, message: "تعذر حفظ الزوجة: " + formatSpouseSaveError(r.error) };
+  return {
+    ok: true,
+    message: endedPrior > 0
+      ? "تم حفظ الزوجة (وُسمت " + endedPrior + " زوجية سابقة مطلقة تلقائياً)."
+      : "تم حفظ الزوجة.",
+  };
 }
 
 async function familyApiDeleteWife(payload) {

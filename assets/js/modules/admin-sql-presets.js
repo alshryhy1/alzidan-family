@@ -4083,6 +4083,667 @@ limit 20;
       supabaseOnce: true,
     },
     {
+      id: "maint.tree_maternal_kinship_v1",
+      title: "نسب الأم: خال وابن خال وابن خالة",
+      desc:
+        "للقاء الشخصي في التطبيق: يظهر خالك / ابن خالك / ابن خالتك فقط عند ربط الأم المثبت وأنها من العائلة. لا يعرض أسماء البنات للعامة. شغّله مرة ثم أعد فتح التطبيق بحساب عضو.",
+      file: "../supabase/sql/COPY-ME-tree-maternal-kinship-v1.sql",
+      sql: `-- COPY-ME: run in Supabase SQL Editor / SQL Workspace
+-- Preset id: maint.tree_maternal_kinship_v1
+--
+-- Proven maternal kinship for the mobile encounter:
+--   خالك / ابن خالك / ابن خالتك
+-- Uses tree_mother_links + family-member wives + hidden daughter rows
+-- inside SECURITY DEFINER. Returns only male relative ids (no daughter names).
+-- Does not invent. Safe to re-run.
+
+create or replace function public.tree_child_is_daughter_v1(p_gender text)
+returns boolean
+language sql
+immutable
+as $$
+  select lower(btrim(coalesce(p_gender, ''))) in (
+    'daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت'
+  );
+$$;
+
+create or replace function public.tree_maternal_kinship_for_viewer_v1(p_viewer_id bigint)
+returns table(person_id bigint, label text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_spouse_id bigint;
+  v_lineage text;
+  v_wife_name text;
+  v_branch text;
+  v_mother_id bigint;
+  v_mother_path text;
+  v_gf_path text;
+begin
+  if p_viewer_id is null or p_viewer_id < 1 then
+    return;
+  end if;
+
+  select
+    l.spouse_id,
+    nullif(btrim(coalesce(s.wife_lineage, l.mother_lineage, '')), ''),
+    nullif(btrim(coalesce(s.wife_name, l.mother_name, '')), ''),
+    nullif(btrim(coalesce(s.wife_branch_key, l.mother_branch_key, '')), '')
+  into v_spouse_id, v_lineage, v_wife_name, v_branch
+  from public.tree_mother_links l
+  left join public.tree_spouses s on s.id = l.spouse_id
+  where l.child_id = p_viewer_id
+    and lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')
+    and coalesce(s.wife_is_family_member, l.mother_is_family_member, false) = true
+    and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')
+  order by l.child_id
+  limit 1;
+
+  if v_spouse_id is null then
+    return;
+  end if;
+
+  if v_lineage is not null and position('/' in v_lineage) > 0 then
+    select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent)
+    into v_mother_id, v_mother_path, v_gf_path
+    from public.tree_children c
+    where (v_branch is null or c.branch_key = v_branch)
+      and (
+        lower(btrim(coalesce(c.child_name, c.name, ''))) = lower(btrim(v_lineage))
+        or lower(btrim(coalesce(c.name, ''))) = lower(btrim(v_lineage))
+      )
+    order by c.id
+    limit 2;
+    if found and v_mother_id is not null then
+      if (
+        select count(*)
+        from public.tree_children c2
+        where (v_branch is null or c2.branch_key = v_branch)
+          and (
+            lower(btrim(coalesce(c2.child_name, c2.name, ''))) = lower(btrim(v_lineage))
+            or lower(btrim(coalesce(c2.name, ''))) = lower(btrim(v_lineage))
+          )
+      ) > 1 then
+        return;
+      end if;
+    else
+      v_mother_path := v_lineage;
+      v_gf_path := regexp_replace(v_lineage, '/[^/]+$', '');
+    end if;
+  end if;
+
+  if v_gf_path is null and coalesce(v_wife_name, v_lineage, '') <> '' then
+    select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent), c.branch_key
+    into v_mother_id, v_mother_path, v_gf_path, v_branch
+    from public.tree_children c
+    where (v_branch is null or c.branch_key = v_branch)
+      and lower(btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', '')))
+          = lower(btrim(regexp_replace(coalesce(v_wife_name, v_lineage, ''), '^.*/', '')))
+    order by c.id
+    limit 2;
+    if (
+      select count(*)
+      from public.tree_children c2
+      where (v_branch is null or c2.branch_key = v_branch)
+        and lower(btrim(regexp_replace(coalesce(c2.child_name, c2.name, ''), '^.*/', '')))
+            = lower(btrim(regexp_replace(coalesce(v_wife_name, v_lineage, ''), '^.*/', '')))
+    ) <> 1 then
+      v_mother_id := null;
+      v_gf_path := null;
+    end if;
+  end if;
+
+  v_gf_path := nullif(btrim(coalesce(v_gf_path, '')), '');
+  if v_gf_path is null then
+    return;
+  end if;
+
+  return query
+  with khals as (
+    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key
+    from public.tree_children c
+    where coalesce(c.parent_name, c.parent) = v_gf_path
+      and (v_branch is null or c.branch_key = v_branch)
+      and not public.tree_child_is_daughter_v1(c.gender)
+      and (v_mother_id is null or c.id <> v_mother_id)
+      and (
+        v_mother_path is null
+        or lower(btrim(coalesce(c.child_name, c.name, ''))) <> lower(btrim(v_mother_path))
+      )
+  ),
+  ibn_khal as (
+    select s.id
+    from public.tree_children s
+    join khals k
+      on coalesce(s.parent_name, s.parent) = k.path
+     and s.branch_key = k.branch_key
+    where not public.tree_child_is_daughter_v1(s.gender)
+  ),
+  sisters as (
+    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key,
+           lower(btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', ''))) as leaf
+    from public.tree_children c
+    where coalesce(c.parent_name, c.parent) = v_gf_path
+      and (v_branch is null or c.branch_key = v_branch)
+      and public.tree_child_is_daughter_v1(c.gender)
+      and (v_mother_id is null or c.id <> v_mother_id)
+      and (
+        v_mother_path is null
+        or lower(btrim(coalesce(c.child_name, c.name, ''))) <> lower(btrim(v_mother_path))
+      )
+  ),
+  sister_spouses as (
+    select distinct s.id as spouse_id
+    from sisters sis
+    join public.tree_spouses s
+      on coalesce(s.wife_is_family_member, false) = true
+     and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')
+     and (
+       lower(btrim(coalesce(s.wife_lineage, ''))) = lower(btrim(sis.path))
+       or (
+         position('/' in coalesce(s.wife_lineage, '')) = 0
+         and lower(btrim(regexp_replace(coalesce(s.wife_name, s.wife_lineage, ''), '^.*/', ''))) = sis.leaf
+         and (s.wife_branch_key is null or s.wife_branch_key = sis.branch_key)
+         and (
+           select count(*)
+           from public.tree_spouses s2
+           where coalesce(s2.wife_is_family_member, false) = true
+             and lower(btrim(coalesce(s2.status, 'active'))) in ('', 'active')
+             and position('/' in coalesce(s2.wife_lineage, '')) = 0
+             and lower(btrim(regexp_replace(coalesce(s2.wife_name, s2.wife_lineage, ''), '^.*/', ''))) = sis.leaf
+             and (s2.wife_branch_key is null or s2.wife_branch_key = sis.branch_key)
+         ) = 1
+       )
+     )
+  ),
+  ibn_khala as (
+    select c.id
+    from public.tree_mother_links l
+    join sister_spouses ss on ss.spouse_id = l.spouse_id
+    join public.tree_children c on c.id = l.child_id
+    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')
+      and not public.tree_child_is_daughter_v1(c.gender)
+      and c.id <> p_viewer_id
+  )
+  select k.id, 'خالك'::text
+  from khals k
+  union all
+  select i.id, 'ابن خالك'::text
+  from ibn_khal i
+  union all
+  select x.id, 'ابن خالتك'::text
+  from ibn_khala x;
+end;
+$fn$;
+
+grant execute on function public.tree_child_is_daughter_v1(text) to anon, authenticated;
+grant execute on function public.tree_maternal_kinship_for_viewer_v1(bigint) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+select
+  (select to_regprocedure('public.tree_maternal_kinship_for_viewer_v1(bigint)') is not null)
+    as has_maternal_rpc;
+`,
+      order: 10.368,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_maternal_kinship_v2",
+      title: "نسب الأم للجميع: خال وابن خال وابن خالة",
+      desc:
+        "عام لكل الأمهات المربوطات من العائلة: يقرأ نسب الأم نصًا أو مسارًا، يوحّد التاء المربوطة، ثم يُظهر خالك / ابن خالك / ابن خالتك في اللقاء الشخصي. شغّله مرة ثم أعد فتح التطبيق.",
+      file: "../supabase/sql/COPY-ME-tree-maternal-kinship-v2.sql",
+      sql: `-- COPY-ME: run in Supabase SQL Editor / SQL Workspace
+-- Preset id: maint.tree_maternal_kinship_v2
+--
+-- General maternal kinship for ANY family-member mother:
+--   خالك / ابن خالك / ابن خالتك
+-- Reads confirmed tree_mother_links + wife nasab (text or slash path).
+-- Unifies ة/ه and أ/ا. Does not bind to one name. Safe to re-run.
+
+create or replace function public.tree_arabic_norm_v1(p text)
+returns text
+language sql
+immutable
+as $$
+  select lower(btrim(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(coalesce(p, ''), '[\u064B-\u065F\u0670]', '', 'g'),
+            'ـ', '', 'g'),
+          '[أإآ]', 'ا', 'g'),
+        'ة', 'ه', 'g'),
+      'ى', 'ي', 'g')
+  ));
+$$;
+
+create or replace function public.tree_nasab_tokens_v1(p text)
+returns text[]
+language sql
+immutable
+as $$
+  select coalesce(
+    array_remove(
+      string_to_array(
+        btrim(
+          regexp_replace(
+            public.tree_arabic_norm_v1(p),
+            '(^|[[:space:]])(بنت|بن|ابن)([[:space:]]|$)',
+            ' ',
+            'g'
+          )
+        ),
+        ' '
+      ),
+      ''
+    ),
+    '{}'::text[]
+  );
+$$;
+
+create or replace function public.tree_nasab_nth_v1(p text, p_n integer)
+returns text
+language sql
+immutable
+as $$
+  select nullif((public.tree_nasab_tokens_v1(p))[greatest(p_n, 1)], '');
+$$;
+
+create or replace function public.tree_path_leaf_v1(p text)
+returns text
+language sql
+immutable
+as $$
+  select public.tree_arabic_norm_v1(nullif(btrim(regexp_replace(coalesce(p, ''), '^.*/', '')), ''));
+$$;
+
+create or replace function public.tree_child_is_daughter_v1(p_gender text)
+returns boolean
+language sql
+immutable
+as $$
+  select lower(btrim(coalesce(p_gender, ''))) in (
+    'daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت'
+  );
+$$;
+
+create or replace function public.tree_maternal_kinship_for_viewer_v1(p_viewer_id bigint)
+returns table(person_id bigint, label text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_spouse_id bigint;
+  v_lineage text;
+  v_wife_name text;
+  v_branch text;
+  v_leaf text;
+  v_father_leaf text;
+  v_mother_id bigint;
+  v_mother_path text;
+  v_gf_path text;
+  v_match_count int;
+begin
+  if p_viewer_id is null or p_viewer_id < 1 then
+    return;
+  end if;
+
+  select
+    l.spouse_id,
+    nullif(btrim(coalesce(s.wife_lineage, l.mother_lineage, '')), ''),
+    nullif(btrim(coalesce(s.wife_name, l.mother_name, '')), ''),
+    nullif(btrim(coalesce(s.wife_branch_key, l.mother_branch_key, '')), '')
+  into v_spouse_id, v_lineage, v_wife_name, v_branch
+  from public.tree_mother_links l
+  left join public.tree_spouses s on s.id = l.spouse_id
+  where l.child_id = p_viewer_id
+    and lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')
+    and coalesce(s.wife_is_family_member, l.mother_is_family_member, false) = true
+    and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')
+  order by l.child_id
+  limit 1;
+
+  if v_spouse_id is null then
+    return;
+  end if;
+
+  v_leaf := public.tree_nasab_nth_v1(coalesce(v_wife_name, v_lineage, ''), 1);
+  v_father_leaf := public.tree_nasab_nth_v1(coalesce(v_wife_name, v_lineage, ''), 2);
+
+  if v_lineage is not null and position('/' in v_lineage) > 0 then
+    select count(*) into v_match_count
+    from public.tree_children c
+    where (v_branch is null or c.branch_key = v_branch)
+      and (
+        public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))
+          = public.tree_arabic_norm_v1(v_lineage)
+        or public.tree_arabic_norm_v1(coalesce(c.name, ''))
+          = public.tree_arabic_norm_v1(v_lineage)
+      );
+    if v_match_count = 1 then
+      select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent)
+      into v_mother_id, v_mother_path, v_gf_path
+      from public.tree_children c
+      where (v_branch is null or c.branch_key = v_branch)
+        and (
+          public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))
+            = public.tree_arabic_norm_v1(v_lineage)
+          or public.tree_arabic_norm_v1(coalesce(c.name, ''))
+            = public.tree_arabic_norm_v1(v_lineage)
+        )
+      limit 1;
+    elsif v_match_count = 0 then
+      v_mother_path := v_lineage;
+      v_gf_path := regexp_replace(v_lineage, '/[^/]+$', '');
+    end if;
+  end if;
+
+  if v_gf_path is null and v_leaf is not null then
+    select count(*) into v_match_count
+    from public.tree_children c
+    where (v_branch is null or c.branch_key = v_branch)
+      and public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) = v_leaf
+      and (
+        v_father_leaf is null
+        or public.tree_path_leaf_v1(coalesce(c.parent_name, c.parent)) = v_father_leaf
+        or (
+          select count(*)
+          from public.tree_children c2
+          where (v_branch is null or c2.branch_key = v_branch)
+            and public.tree_path_leaf_v1(coalesce(c2.child_name, c2.name)) = v_leaf
+        ) = 1
+      );
+
+    if v_match_count = 1 then
+      select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent), c.branch_key
+      into v_mother_id, v_mother_path, v_gf_path, v_branch
+      from public.tree_children c
+      where (v_branch is null or c.branch_key = v_branch)
+        and public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) = v_leaf
+        and (
+          v_father_leaf is null
+          or public.tree_path_leaf_v1(coalesce(c.parent_name, c.parent)) = v_father_leaf
+          or (
+            select count(*)
+            from public.tree_children c2
+            where (v_branch is null or c2.branch_key = v_branch)
+              and public.tree_path_leaf_v1(coalesce(c2.child_name, c2.name)) = v_leaf
+          ) = 1
+        )
+      limit 1;
+    end if;
+  end if;
+
+  v_gf_path := nullif(btrim(coalesce(v_gf_path, '')), '');
+  if v_gf_path is null then
+    return;
+  end if;
+
+  return query
+  with khals as (
+    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key
+    from public.tree_children c
+    where coalesce(c.parent_name, c.parent) = v_gf_path
+      and (v_branch is null or c.branch_key = v_branch)
+      and not public.tree_child_is_daughter_v1(c.gender)
+      and (v_mother_id is null or c.id <> v_mother_id)
+      and (
+        v_mother_path is null
+        or public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))
+             <> public.tree_arabic_norm_v1(v_mother_path)
+      )
+  ),
+  ibn_khal as (
+    select s.id
+    from public.tree_children s
+    join khals k
+      on coalesce(s.parent_name, s.parent) = k.path
+     and s.branch_key = k.branch_key
+    where not public.tree_child_is_daughter_v1(s.gender)
+  ),
+  sisters as (
+    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key,
+           public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) as leaf
+    from public.tree_children c
+    where coalesce(c.parent_name, c.parent) = v_gf_path
+      and (v_branch is null or c.branch_key = v_branch)
+      and public.tree_child_is_daughter_v1(c.gender)
+      and (v_mother_id is null or c.id <> v_mother_id)
+      and (
+        v_mother_path is null
+        or public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))
+             <> public.tree_arabic_norm_v1(v_mother_path)
+      )
+  ),
+  sister_spouses as (
+    select distinct s.id as spouse_id
+    from sisters sis
+    join public.tree_spouses s
+      on coalesce(s.wife_is_family_member, false) = true
+     and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')
+     and (
+       public.tree_arabic_norm_v1(coalesce(s.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)
+       or public.tree_nasab_nth_v1(coalesce(s.wife_name, s.wife_lineage, ''), 1) = sis.leaf
+     )
+     and (
+       select count(*)
+       from public.tree_spouses s2
+       where coalesce(s2.wife_is_family_member, false) = true
+         and lower(btrim(coalesce(s2.status, 'active'))) in ('', 'active')
+         and (
+           public.tree_arabic_norm_v1(coalesce(s2.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)
+           or public.tree_nasab_nth_v1(coalesce(s2.wife_name, s2.wife_lineage, ''), 1) = sis.leaf
+         )
+     ) = 1
+  ),
+  ibn_khala as (
+    select c.id
+    from public.tree_mother_links l
+    join sister_spouses ss on ss.spouse_id = l.spouse_id
+    join public.tree_children c on c.id = l.child_id
+    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')
+      and not public.tree_child_is_daughter_v1(c.gender)
+      and c.id <> p_viewer_id
+  )
+  select k.id, 'خالك'::text
+  from khals k
+  union all
+  select i.id, 'ابن خالك'::text
+  from ibn_khal i
+  union all
+  select x.id, 'ابن خالتك'::text
+  from ibn_khala x;
+end;
+$fn$;
+
+grant execute on function public.tree_arabic_norm_v1(text) to anon, authenticated;
+grant execute on function public.tree_nasab_tokens_v1(text) to anon, authenticated;
+grant execute on function public.tree_nasab_nth_v1(text, integer) to anon, authenticated;
+grant execute on function public.tree_path_leaf_v1(text) to anon, authenticated;
+grant execute on function public.tree_child_is_daughter_v1(text) to anon, authenticated;
+grant execute on function public.tree_maternal_kinship_for_viewer_v1(bigint) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+select
+  (select to_regprocedure('public.tree_maternal_kinship_for_viewer_v1(bigint)') is not null)
+    as has_maternal_rpc;
+`,
+      order: 10.369,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_kinship_for_person_v1",
+      title: "قرابة الشخص: عمك، ابن عمك، ابنك، ابن الأخ، ابن الأخت",
+      desc:
+        "للبنت المسجّلة أيضاً: عمك وابن أخيك وابن أختك من صفها المخفي، دون إظهار اسمها للعامة. شغّله مرة ثم Hard Refresh للشجرة.",
+      file: "../supabase/sql/COPY-ME-tree-kinship-for-person-v1.sql",
+      sql: "-- COPY-ME: Preset id: maint.tree_kinship_for_person_v1\n-- Proven male relatives for ANY person (security definer; daughters stay hidden):\n--   أخ من أمك / حفيدك / حفيدك من ابنتك / ابن أخيك / ابن أختك / عمك / ابن عمك / ابنك\n-- Also: tree_member_viewer_v1(phone) loads the member's own tree row (including\n-- daughters) so a registered daughter gets عمك / ابن أخيك from her father path.\n-- Safe to re-run. Small CREATE OR REPLACE.\n\ncreate or replace function public.tree_member_viewer_v1(p_phone text)\nreturns table(\n  id bigint,\n  child_name text,\n  parent_name text,\n  branch_key text,\n  gender text,\n  display_name text,\n  photo_url text\n)\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_child_id bigint;\n  v_display text;\n  v_branch text;\nbegin\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null or char_length(v_digits) < 9 then\n    return;\n  end if;\n\n  select mp.tree_child_id, mp.display_name, mp.branch_key\n    into v_child_id, v_display, v_branch\n  from public.member_profiles mp\n  where coalesce(mp.status, 'active') = 'active'\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n\n  if v_child_id is null then\n    return;\n  end if;\n\n  return query\n  select\n    c.id,\n    coalesce(c.child_name, c.name),\n    coalesce(c.parent_name, c.parent),\n    coalesce(c.branch_key, v_branch),\n    c.gender,\n    coalesce(\n      nullif(btrim(v_display), ''),\n      nullif(btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', '')), '')\n    ),\n    c.photo_url\n  from public.tree_children c\n  where c.id = v_child_id\n  limit 1;\nend;\n$fn$;\n\ncreate or replace function public.tree_wife_nasab_text_v1(p_name text, p_lineage text)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select coalesce(\n    case\n      when coalesce(cardinality(public.tree_nasab_tokens_v1(p_lineage)), 0)\n         >= coalesce(cardinality(public.tree_nasab_tokens_v1(p_name)), 0)\n      then nullif(btrim(coalesce(p_lineage, '')), '')\n      else nullif(btrim(coalesce(p_name, '')), '')\n    end,\n    nullif(btrim(coalesce(p_name, '')), ''),\n    nullif(btrim(coalesce(p_lineage, '')), '')\n  );\n$$;\n\ngrant execute on function public.tree_wife_nasab_text_v1(text, text) to anon, authenticated;\n\ncreate or replace function public.tree_kinship_for_person_v1(p_person_id bigint)\nreturns table(person_id bigint, label text)\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_path text;\n  v_parent text;\n  v_branch text;\n  v_gf_path text;\n  v_father_leaf text;\n  v_spouse_id bigint;\n  v_lineage text;\n  v_wife_name text;\nbegin\n  if p_person_id is null or p_person_id < 1 then\n    return;\n  end if;\n\n  select\n    coalesce(c.child_name, c.name),\n    coalesce(c.parent_name, c.parent),\n    c.branch_key\n  into v_path, v_parent, v_branch\n  from public.tree_children c\n  where c.id = p_person_id\n  limit 1;\n\n  if v_path is null then\n    return;\n  end if;\n\n  v_path := nullif(btrim(v_path), '');\n  v_parent := nullif(btrim(coalesce(v_parent, '')), '');\n  if v_parent is null and v_path is not null and position('/' in v_path) > 0 then\n    v_parent := regexp_replace(v_path, '/[^/]+$', '');\n  elsif v_parent is not null and v_path is not null and position('/' in v_path) = 0 then\n    v_path := v_parent || '/' || public.tree_path_leaf_v1(v_path);\n  end if;\n  v_gf_path := case\n    when v_parent is not null and position('/' in v_parent) > 0\n      then regexp_replace(v_parent, '/[^/]+$', '')\n    else null\n  end;\n  v_father_leaf := public.tree_path_leaf_v1(v_parent);\n\n  select\n    l.spouse_id,\n    nullif(btrim(coalesce(s.wife_lineage, l.mother_lineage, '')), ''),\n    nullif(btrim(coalesce(s.wife_name, l.mother_name, '')), '')\n  into v_spouse_id, v_lineage, v_wife_name\n  from public.tree_mother_links l\n  left join public.tree_spouses s on s.id = l.spouse_id\n  where l.child_id = p_person_id\n    and lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n  order by l.child_id\n  limit 1;\n\n  return query\n  with matching_mother_spouses as (\n    select s.id\n    from public.tree_spouses s\n    where v_spouse_id is not null\n      and coalesce(s.wife_is_family_member, false) = true\n      and (\n        s.id = v_spouse_id\n        or public.tree_mother_spouses_share_identity_v1(\n          v_lineage, v_wife_name, s.wife_lineage, s.wife_name\n        )\n      )\n  ),\n  maternal_brothers as (\n    select distinct l.child_id as id\n    from public.tree_mother_links l\n    join matching_mother_spouses ms on ms.id = l.spouse_id\n    join public.tree_children c on c.id = l.child_id\n    join public.tree_children me on me.id = p_person_id\n    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and l.child_id <> p_person_id\n      and public.tree_arabic_norm_v1(coalesce(c.parent_name, c.parent, ''))\n        is distinct from public.tree_arabic_norm_v1(coalesce(me.parent_name, me.parent, ''))\n  ),\n  sons as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key\n    from public.tree_children c\n    where public.tree_arabic_norm_v1(coalesce(c.parent_name, c.parent, ''))\n        = public.tree_arabic_norm_v1(v_path)\n      and not public.tree_child_is_daughter_v1(c.gender)\n  ),\n  grandsons_sons as (\n    select g.id\n    from public.tree_children g\n    join sons s on coalesce(g.parent_name, g.parent) = s.path and g.branch_key = s.branch_key\n    where not public.tree_child_is_daughter_v1(g.gender)\n  ),\n  daughters as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key,\n           public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) as leaf\n    from public.tree_children c\n    where public.tree_arabic_norm_v1(coalesce(c.parent_name, c.parent, ''))\n        = public.tree_arabic_norm_v1(v_path)\n      and public.tree_child_is_daughter_v1(c.gender)\n  ),\n  daughter_spouses as (\n    select distinct s.id as spouse_id\n    from daughters d\n    join public.tree_spouses s\n      on coalesce(s.wife_is_family_member, false) = true\n     and (\n       public.tree_arabic_norm_v1(coalesce(s.wife_lineage, '')) = public.tree_arabic_norm_v1(d.path)\n       or (\n         public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1) = d.leaf\n         and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 2) is not null\n         and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 2)\n           = public.tree_path_leaf_v1(v_path)\n       )\n     )\n  ),\n  grandsons_daughters as (\n    select distinct c.id\n    from public.tree_mother_links l\n    join daughter_spouses ds on ds.spouse_id = l.spouse_id\n    join public.tree_children c on c.id = l.child_id\n    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n  ),\n  brothers as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key\n    from public.tree_children c\n    where v_parent is not null\n      and public.tree_arabic_norm_v1(coalesce(c.parent_name, c.parent, ''))\n        = public.tree_arabic_norm_v1(v_parent)\n      and (v_branch is null or c.branch_key = v_branch)\n      and c.id <> p_person_id\n      and not public.tree_child_is_daughter_v1(c.gender)\n  ),\n  nephews_brothers as (\n    select n.id\n    from public.tree_children n\n    join brothers b on coalesce(n.parent_name, n.parent) = b.path and n.branch_key = b.branch_key\n    where not public.tree_child_is_daughter_v1(n.gender)\n  ),\n  sisters as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key,\n           public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) as leaf\n    from public.tree_children c\n    where v_parent is not null\n      and public.tree_arabic_norm_v1(coalesce(c.parent_name, c.parent, ''))\n        = public.tree_arabic_norm_v1(v_parent)\n      and (v_branch is null or c.branch_key = v_branch)\n      and c.id <> p_person_id\n      and public.tree_child_is_daughter_v1(c.gender)\n  ),\n  sister_spouses as (\n    select distinct s.id as spouse_id\n    from sisters sis\n    join public.tree_spouses s\n      on coalesce(s.wife_is_family_member, false) = true\n     and (\n       public.tree_arabic_norm_v1(coalesce(s.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)\n       or (\n         public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1) = sis.leaf\n         and v_father_leaf is not null\n         and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 2) = v_father_leaf\n       )\n       or (\n         public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1) = sis.leaf\n         and public.tree_arabic_norm_v1(regexp_replace(coalesce(s.wife_lineage, ''), '/[^/]+$', ''))\n           = public.tree_arabic_norm_v1(v_parent)\n       )\n       or (\n         public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1) = sis.leaf\n         and (\n           select count(*)\n           from public.tree_spouses s2\n           where coalesce(s2.wife_is_family_member, false) = true\n             and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s2.wife_name, s2.wife_lineage), 1) = sis.leaf\n         ) = 1\n       )\n     )\n    union\n    select s.id\n    from public.tree_spouses s\n    where coalesce(s.wife_is_family_member, false) = true\n      and v_parent is not null\n      and position('/' in coalesce(s.wife_lineage, '')) > 0\n      and public.tree_arabic_norm_v1(regexp_replace(s.wife_lineage, '/[^/]+$', ''))\n        = public.tree_arabic_norm_v1(v_parent)\n      and public.tree_arabic_norm_v1(s.wife_lineage)\n        is distinct from public.tree_arabic_norm_v1(v_path)\n  ),\n  nephews_sisters as (\n    select distinct c.id\n    from public.tree_mother_links l\n    join sister_spouses ss on ss.spouse_id = l.spouse_id\n    join public.tree_children c on c.id = l.child_id\n    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and c.id <> p_person_id\n  )\n  select mb.id, 'أخ من أمك'::text from maternal_brothers mb\n  union all\n  select gs.id, 'حفيدك'::text from grandsons_sons gs\n  union all\n  select gd.id, 'حفيدك من ابنتك'::text from grandsons_daughters gd\n  union all\n  select nb.id, 'ابن أخيك'::text from nephews_brothers nb\n  union all\n  select ns.id, 'ابن أختك'::text from nephews_sisters ns\n  union all\n  select u.id, 'عمك'::text from (\n    select c.id\n    from public.tree_children c\n    where v_gf_path is not null\n      and public.tree_arabic_norm_v1(coalesce(c.parent_name, c.parent, ''))\n        = public.tree_arabic_norm_v1(v_gf_path)\n      and (v_branch is null or c.branch_key = v_branch)\n      and public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n            is distinct from public.tree_arabic_norm_v1(v_parent)\n      and not public.tree_child_is_daughter_v1(c.gender)\n  ) u\n  union all\n  select us.id, 'ابن عمك'::text from (\n    select n.id\n    from public.tree_children n\n    join public.tree_children u\n      on coalesce(n.parent_name, n.parent) = coalesce(u.child_name, u.name)\n     and n.branch_key = u.branch_key\n    where v_gf_path is not null\n      and public.tree_arabic_norm_v1(coalesce(u.parent_name, u.parent, ''))\n        = public.tree_arabic_norm_v1(v_gf_path)\n      and (v_branch is null or u.branch_key = v_branch)\n      and public.tree_arabic_norm_v1(coalesce(u.child_name, u.name, ''))\n            is distinct from public.tree_arabic_norm_v1(v_parent)\n      and not public.tree_child_is_daughter_v1(u.gender)\n      and not public.tree_child_is_daughter_v1(n.gender)\n  ) us\n  union all\n  select os.id, 'ابنك'::text from (\n    select distinct c.id\n    from public.tree_spouses s\n    join public.tree_mother_links l on l.spouse_id = s.id\n    join public.tree_children c on c.id = l.child_id\n    where coalesce(s.wife_is_family_member, false) = true\n      and lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and (\n        public.tree_arabic_norm_v1(coalesce(s.wife_lineage, '')) = public.tree_arabic_norm_v1(v_path)\n        or (\n          public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1) = public.tree_path_leaf_v1(v_path)\n          and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 2)\n            = public.tree_path_leaf_v1(v_parent)\n        )\n      )\n  ) os;\nend;\n$fn$;\n\ngrant execute on function public.tree_member_viewer_v1(text) to anon, authenticated;\ngrant execute on function public.tree_kinship_for_person_v1(bigint) to anon, authenticated;\nnotify pgrst, 'reload schema';\nselect\n  (to_regprocedure('public.tree_kinship_for_person_v1(bigint)') is not null) as has_kinship_rpc,\n  (to_regprocedure('public.tree_member_viewer_v1(text)') is not null) as has_member_viewer_rpc;\n",
+      order: 10.3691,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_member_photo_v1",
+      title: "صورة العضو: إضافة وتغيير وحذف",
+      desc: "عمود photo_url على الشجرة. العضو يضيف/يغيّر/يحذف صورته بعد الدخول بلا موافقة. الإدارة تحذف الصورة المخالفة. شغّله مرة ثم Hard Refresh.",
+      file: "../supabase/sql/COPY-ME-tree-member-photo-v1.sql",
+      sql: "-- COPY-ME: Preset id: maint.tree_member_photo_v1\n-- Personal photo on the tree person (tree_children.photo_url).\n-- Member after login sets / changes / clears their own photo. No admin approval.\n-- Admin can clear an inappropriate photo by person id.\n-- Public tree shows the photo next to the name for visible people.\n-- Daughters stay hidden; their photo is for their own login only.\n-- Safe to re-run.\n\nalter table public.tree_children add column if not exists photo_url text;\n\ndrop function if exists public.tree_member_viewer_v1(text);\n\ncreate function public.tree_member_viewer_v1(p_phone text)\nreturns table(\n  id bigint,\n  child_name text,\n  parent_name text,\n  branch_key text,\n  gender text,\n  display_name text,\n  photo_url text\n)\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_child_id bigint;\n  v_display text;\n  v_branch text;\nbegin\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null or char_length(v_digits) < 9 then\n    return;\n  end if;\n\n  select mp.tree_child_id, mp.display_name, mp.branch_key\n    into v_child_id, v_display, v_branch\n  from public.member_profiles mp\n  where coalesce(mp.status, 'active') = 'active'\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n\n  if v_child_id is null then\n    return;\n  end if;\n\n  return query\n  select\n    c.id,\n    coalesce(c.child_name, c.name),\n    coalesce(c.parent_name, c.parent),\n    coalesce(c.branch_key, v_branch),\n    c.gender,\n    coalesce(\n      nullif(btrim(v_display), ''),\n      nullif(btrim(regexp_replace(coalesce(c.child_name, c.name, ''), '^.*/', '')), '')\n    ),\n    c.photo_url\n  from public.tree_children c\n  where c.id = v_child_id\n  limit 1;\nend;\n$fn$;\n\ncreate or replace function public.tree_member_set_photo_v1(p_phone text, p_photo_url text)\nreturns boolean\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_child_id bigint;\n  v_url text;\nbegin\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null or char_length(v_digits) < 9 then\n    return false;\n  end if;\n\n  v_url := nullif(btrim(coalesce(p_photo_url, '')), '');\n  if v_url is not null then\n    if v_url !~* '^https?://' or char_length(v_url) > 2000 then\n      raise exception 'photo_url_invalid';\n    end if;\n  end if;\n\n  select mp.tree_child_id\n    into v_child_id\n  from public.member_profiles mp\n  where coalesce(mp.status, 'active') = 'active'\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n    and mp.tree_child_id is not null\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n\n  if v_child_id is null then\n    return false;\n  end if;\n\n  update public.tree_children c\n  set photo_url = v_url\n  where c.id = v_child_id;\n\n  return found;\nend;\n$fn$;\n\ncreate or replace function public.admin_tree_child_clear_photo_v1(p_token text, p_id bigint)\nreturns boolean\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  if p_id is null or p_id < 1 then\n    return false;\n  end if;\n\n  update public.tree_children c\n  set photo_url = null\n  where c.id = p_id;\n\n  return found;\nend;\n$fn$;\n\ngrant execute on function public.tree_member_viewer_v1(text) to anon, authenticated;\ngrant execute on function public.tree_member_set_photo_v1(text, text) to anon, authenticated;\nrevoke all on function public.admin_tree_child_clear_photo_v1(text, bigint) from public;\ngrant execute on function public.admin_tree_child_clear_photo_v1(text, bigint) to anon, authenticated;\n\nnotify pgrst, 'reload schema';\n\nselect\n  (to_regprocedure('public.tree_member_set_photo_v1(text,text)') is not null) as has_member_set_photo,\n  (to_regprocedure('public.admin_tree_child_clear_photo_v1(text,bigint)') is not null) as has_admin_clear_photo;\n",
+      order: 10.36911,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_mother_identity_strict_v1",
+      title: "منع خلط الأمهات المتشابهات بالاسم الأول",
+      desc: "لا تُعدّ زوجتان أماً واحدة لمجرد تطابق الاسم الأول. يطابق النسب أو الاسم الثنائي فأعلى فقط.",
+      file: "../supabase/sql/COPY-ME-tree-mother-identity-strict-v1.sql",
+      sql: `-- Preset id: maint.tree_mother_identity_strict_v1
+create or replace function public.tree_mother_spouses_share_identity_v1(
+  p_lineage_a text, p_name_a text, p_lineage_b text, p_name_b text
+) returns boolean language sql immutable as $$
+  select (
+    coalesce(nullif(btrim(p_lineage_a), ''), nullif(btrim(p_name_a), '')) is not null
+    and coalesce(nullif(btrim(p_lineage_b), ''), nullif(btrim(p_name_b), '')) is not null
+  ) and (
+    (nullif(btrim(p_lineage_a), '') is not null and nullif(btrim(p_lineage_b), '') is not null
+      and public.tree_arabic_norm_v1(p_lineage_a) = public.tree_arabic_norm_v1(p_lineage_b))
+    or (nullif(btrim(p_name_a), '') is not null and nullif(btrim(p_name_b), '') is not null
+      and public.tree_arabic_norm_v1(p_name_a) = public.tree_arabic_norm_v1(p_name_b)
+      and cardinality(public.tree_nasab_tokens_v1(p_name_a)) >= 2
+      and cardinality(public.tree_nasab_tokens_v1(p_name_b)) >= 2)
+    or (
+      public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1) is not null
+      and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 2) is not null
+      and public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1) is not null
+      and public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 2) is not null
+      and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1)
+        = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1)
+      and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 2)
+        = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 2)
+    )
+  );
+$$;
+grant execute on function public.tree_mother_spouses_share_identity_v1(text, text, text, text) to anon, authenticated;
+notify pgrst, 'reload schema';
+select true as mother_identity_strict;`,
+      order: 10.3692,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_maternal_kinship_v4",
+      title: "إظهار أخ من الأم حتى بعد الطلاق",
+      desc:
+        "أمر صغير: الأم تبقى أماً بعد الطلاق أو الزواج الثاني. يُظهر أخ من أمك / خالك / ابن خالك / ابن خالتك. شغّله مرة ثم Hard Refresh للشجرة العامة.",
+      file: "../supabase/sql/COPY-ME-tree-maternal-kinship-v4.sql",
+      sql: "-- COPY-ME: run in Supabase SQL Editor / SQL Workspace\n-- Preset id: maint.tree_maternal_kinship_v4\n--\n-- Patch: motherhood survives divorce/remarriage.\n--   أخ من أمك / خالك / ابن خالك / ابن خالتك\n-- Small CREATE OR REPLACE — will not timeout.\n-- Safe to re-run.\n\ncreate or replace function public.tree_arabic_norm_v1(p text)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select lower(btrim(\n    regexp_replace(\n      regexp_replace(\n        regexp_replace(\n          regexp_replace(\n            regexp_replace(coalesce(p, ''), '[\\u064B-\\u065F\\u0670]', '', 'g'),\n            'ـ', '', 'g'),\n          '[أإآ]', 'ا', 'g'),\n        'ة', 'ه', 'g'),\n      'ى', 'ي', 'g')\n  ));\n$$;\n\ncreate or replace function public.tree_nasab_tokens_v1(p text)\nreturns text[]\nlanguage sql\nimmutable\nas $$\n  select coalesce(\n    array_remove(\n      string_to_array(\n        btrim(\n          regexp_replace(\n            public.tree_arabic_norm_v1(p),\n            '(^|[[:space:]])(بنت|بن|ابن)([[:space:]]|$)',\n            ' ',\n            'g'\n          )\n        ),\n        ' '\n      ),\n      ''\n    ),\n    '{}'::text[]\n  );\n$$;\n\ncreate or replace function public.tree_nasab_nth_v1(p text, p_n integer)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select nullif((public.tree_nasab_tokens_v1(p))[greatest(p_n, 1)], '');\n$$;\n\ncreate or replace function public.tree_path_leaf_v1(p text)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select public.tree_arabic_norm_v1(nullif(btrim(regexp_replace(coalesce(p, ''), '^.*/', '')), ''));\n$$;\n\ncreate or replace function public.tree_child_is_daughter_v1(p_gender text)\nreturns boolean\nlanguage sql\nimmutable\nas $$\n  select lower(btrim(coalesce(p_gender, ''))) in (\n    'daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت'\n  );\n$$;\n\ncreate or replace function public.tree_mother_spouses_share_identity_v1(\n  p_lineage_a text,\n  p_name_a text,\n  p_lineage_b text,\n  p_name_b text\n)\nreturns boolean\nlanguage sql\nimmutable\nas $$\n  select\n    (\n      coalesce(nullif(btrim(p_lineage_a), ''), nullif(btrim(p_name_a), '')) is not null\n      and coalesce(nullif(btrim(p_lineage_b), ''), nullif(btrim(p_name_b), '')) is not null\n    )\n    and (\n      (\n        nullif(btrim(p_lineage_a), '') is not null\n        and nullif(btrim(p_lineage_b), '') is not null\n        and public.tree_arabic_norm_v1(p_lineage_a) = public.tree_arabic_norm_v1(p_lineage_b)\n      )\n      or (\n        nullif(btrim(p_name_a), '') is not null\n        and nullif(btrim(p_name_b), '') is not null\n        and public.tree_arabic_norm_v1(p_name_a) = public.tree_arabic_norm_v1(p_name_b)\n      )\n      or (\n        public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1)\n          = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1)\n      )\n      or (\n        public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 2) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 2) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1)\n          = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1)\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 2)\n          = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 2)\n      )\n    );\n$$;\n\ncreate or replace function public.tree_maternal_kinship_for_viewer_v1(p_viewer_id bigint)\nreturns table(person_id bigint, label text)\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_spouse_id bigint;\n  v_lineage text;\n  v_wife_name text;\n  v_branch text;\n  v_leaf text;\n  v_father_leaf text;\n  v_mother_id bigint;\n  v_mother_path text;\n  v_gf_path text;\n  v_match_count int;\nbegin\n  if p_viewer_id is null or p_viewer_id < 1 then\n    return;\n  end if;\n\n  select\n    l.spouse_id,\n    nullif(btrim(coalesce(s.wife_lineage, l.mother_lineage, '')), ''),\n    nullif(btrim(coalesce(s.wife_name, l.mother_name, '')), ''),\n    nullif(btrim(coalesce(s.wife_branch_key, l.mother_branch_key, '')), '')\n  into v_spouse_id, v_lineage, v_wife_name, v_branch\n  from public.tree_mother_links l\n  left join public.tree_spouses s on s.id = l.spouse_id\n  where l.child_id = p_viewer_id\n    and lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n    and coalesce(s.wife_is_family_member, l.mother_is_family_member, false) = true\n  order by l.child_id\n  limit 1;\n\n  if v_spouse_id is null then\n    return;\n  end if;\n\n  v_leaf := public.tree_nasab_nth_v1(coalesce(v_wife_name, v_lineage, ''), 1);\n  v_father_leaf := public.tree_nasab_nth_v1(coalesce(v_wife_name, v_lineage, ''), 2);\n\n  if v_lineage is not null and position('/' in v_lineage) > 0 then\n    select count(*) into v_match_count\n    from public.tree_children c\n    where (v_branch is null or c.branch_key = v_branch)\n      and (\n        public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n          = public.tree_arabic_norm_v1(v_lineage)\n        or public.tree_arabic_norm_v1(coalesce(c.name, ''))\n          = public.tree_arabic_norm_v1(v_lineage)\n      );\n    if v_match_count = 1 then\n      select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent)\n      into v_mother_id, v_mother_path, v_gf_path\n      from public.tree_children c\n      where (v_branch is null or c.branch_key = v_branch)\n        and (\n          public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n            = public.tree_arabic_norm_v1(v_lineage)\n          or public.tree_arabic_norm_v1(coalesce(c.name, ''))\n            = public.tree_arabic_norm_v1(v_lineage)\n        )\n      limit 1;\n    elsif v_match_count = 0 then\n      v_mother_path := v_lineage;\n      v_gf_path := regexp_replace(v_lineage, '/[^/]+$', '');\n    end if;\n  end if;\n\n  if v_gf_path is null and v_leaf is not null then\n    select count(*) into v_match_count\n    from public.tree_children c\n    where (v_branch is null or c.branch_key = v_branch)\n      and public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) = v_leaf\n      and (\n        v_father_leaf is null\n        or public.tree_path_leaf_v1(coalesce(c.parent_name, c.parent)) = v_father_leaf\n        or (\n          select count(*)\n          from public.tree_children c2\n          where (v_branch is null or c2.branch_key = v_branch)\n            and public.tree_path_leaf_v1(coalesce(c2.child_name, c2.name)) = v_leaf\n        ) = 1\n      );\n\n    if v_match_count = 1 then\n      select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent), c.branch_key\n      into v_mother_id, v_mother_path, v_gf_path, v_branch\n      from public.tree_children c\n      where (v_branch is null or c.branch_key = v_branch)\n        and public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) = v_leaf\n        and (\n          v_father_leaf is null\n          or public.tree_path_leaf_v1(coalesce(c.parent_name, c.parent)) = v_father_leaf\n          or (\n            select count(*)\n            from public.tree_children c2\n            where (v_branch is null or c2.branch_key = v_branch)\n              and public.tree_path_leaf_v1(coalesce(c2.child_name, c2.name)) = v_leaf\n          ) = 1\n        )\n      limit 1;\n    end if;\n  end if;\n\n  v_gf_path := nullif(btrim(coalesce(v_gf_path, '')), '');\n\n  return query\n  with matching_spouses as (\n    select s.id\n    from public.tree_spouses s\n    where coalesce(s.wife_is_family_member, false) = true\n      and (\n        s.id = v_spouse_id\n        or public.tree_mother_spouses_share_identity_v1(\n          v_lineage,\n          v_wife_name,\n          s.wife_lineage,\n          s.wife_name\n        )\n      )\n  ),\n  maternal_brothers as (\n    select distinct l.child_id as id\n    from public.tree_mother_links l\n    join matching_spouses ms on ms.id = l.spouse_id\n    join public.tree_children c on c.id = l.child_id\n    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and l.child_id <> p_viewer_id\n  ),\n  khals as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key\n    from public.tree_children c\n    where v_gf_path is not null\n      and coalesce(c.parent_name, c.parent) = v_gf_path\n      and (v_branch is null or c.branch_key = v_branch)\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and (v_mother_id is null or c.id <> v_mother_id)\n      and (\n        v_mother_path is null\n        or public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n             <> public.tree_arabic_norm_v1(v_mother_path)\n      )\n  ),\n  ibn_khal as (\n    select s.id\n    from public.tree_children s\n    join khals k\n      on coalesce(s.parent_name, s.parent) = k.path\n     and s.branch_key = k.branch_key\n    where not public.tree_child_is_daughter_v1(s.gender)\n  ),\n  sisters as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key,\n           public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) as leaf\n    from public.tree_children c\n    where v_gf_path is not null\n      and coalesce(c.parent_name, c.parent) = v_gf_path\n      and (v_branch is null or c.branch_key = v_branch)\n      and public.tree_child_is_daughter_v1(c.gender)\n      and (v_mother_id is null or c.id <> v_mother_id)\n      and (\n        v_mother_path is null\n        or public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n             <> public.tree_arabic_norm_v1(v_mother_path)\n      )\n  ),\n  sister_spouses as (\n    select distinct s.id as spouse_id\n    from sisters sis\n    join public.tree_spouses s\n      on coalesce(s.wife_is_family_member, false) = true\n     and (\n       public.tree_arabic_norm_v1(coalesce(s.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)\n       or public.tree_nasab_nth_v1(coalesce(s.wife_name, s.wife_lineage, ''), 1) = sis.leaf\n     )\n     and (\n       select count(*)\n       from public.tree_spouses s2\n       where coalesce(s2.wife_is_family_member, false) = true\n         and (\n           public.tree_arabic_norm_v1(coalesce(s2.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)\n           or public.tree_nasab_nth_v1(coalesce(s2.wife_name, s2.wife_lineage, ''), 1) = sis.leaf\n         )\n     ) = 1\n  ),\n  ibn_khala as (\n    select c.id\n    from public.tree_mother_links l\n    join sister_spouses ss on ss.spouse_id = l.spouse_id\n    join public.tree_children c on c.id = l.child_id\n    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and c.id <> p_viewer_id\n  )\n  select mb.id, 'أخ من أمك'::text\n  from maternal_brothers mb\n  union all\n  select k.id, 'خالك'::text\n  from khals k\n  union all\n  select i.id, 'ابن خالك'::text\n  from ibn_khal i\n  union all\n  select x.id, 'ابن خالتك'::text\n  from ibn_khala x;\nend;\n$fn$;\n\ngrant execute on function public.tree_arabic_norm_v1(text) to anon, authenticated;\ngrant execute on function public.tree_nasab_tokens_v1(text) to anon, authenticated;\ngrant execute on function public.tree_nasab_nth_v1(text, integer) to anon, authenticated;\ngrant execute on function public.tree_path_leaf_v1(text) to anon, authenticated;\ngrant execute on function public.tree_child_is_daughter_v1(text) to anon, authenticated;\ngrant execute on function public.tree_mother_spouses_share_identity_v1(text, text, text, text) to anon, authenticated;\ngrant execute on function public.tree_maternal_kinship_for_viewer_v1(bigint) to anon, authenticated;\n\nnotify pgrst, 'reload schema';\n\nselect\n  (select to_regprocedure('public.tree_maternal_kinship_for_viewer_v1(bigint)') is not null)\n    as has_maternal_rpc;\n",
+      order: 10.3693,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_kinship_and_remarriage_bundle_v1",
+      title: "حزمة نهائية: نسب الأم + ربط الأبناء + الزواج بعد الطلاق",
+      desc:
+        "أمر واحد لكل العلاقات المشابهة: نسب الأم (أخ من أمك/خال/ابن خال/ابن خالة) + ربط أبناء الأزواج بزوجات العائلة + حفظ الزوجة بعد الطلاق. الصقه مرة في Supabase أو شغّله من هنا ثم Hard Refresh.",
+      file: "../supabase/sql/COPY-ME-tree-kinship-and-remarriage-bundle-v1.sql",
+      sql: "-- COPY-ME: الصق مرة واحدة في Supabase → SQL Editor ثم Run\n-- Preset id: maint.tree_kinship_and_remarriage_bundle_v1\n--\n-- حزمة نهائية عامة (آمنة للتكرار):\n--   1) الزواج بعد الطلاق (حارس التكرار للنشيطات فقط + RPC الحفظ)\n--   2) نسب الأم: أخ من أمك / خالك / ابن خالك / ابن خالتك لأي أم من العائلة\n--   3) ربط جماعي: أبناء كل زوج بزوجته المسجّلة من العائلة\n--\n-- بعد التنفيذ: Hard Refresh لصفحة الإدارة والشجرة العامة.\n\n-- ============================================================\n-- 1) الزواج بعد الطلاق\n-- ============================================================\n\n-- Allow remarriage after divorce — spouse duplicate guard (active marriages only)\n-- Apply in Supabase SQL editor if inserts fail with:\n-- «هذه الزوجة مسجلة مسبقًا مع زوج آخر...» even after marking prior marriage as divorced.\n\ncreate or replace function public.tree_spouses_wife_identity_key_v1(p_text text)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select nullif(\n    btrim(\n      regexp_replace(\n        regexp_replace(coalesce(p_text, ''), '\\m(بن|ابن|بنت)\\M', ' ', 'g'),\n        '\\s+',\n        ' ',\n        'g'\n      )\n    ),\n    ''\n  );\n$$;\n\ncreate or replace function public.tree_spouses_wife_identity_matches_v1(\n  p_a_name text,\n  p_a_lineage text,\n  p_b_name text,\n  p_b_lineage text\n) returns boolean\nlanguage plpgsql\nimmutable\nas $$\ndeclare\n  fa text[];\n  fb text[];\n  ka text;\n  kb text;\n  pa text[];\n  pb text[];\n  x text;\n  y text;\nbegin\n  fa := array_remove(array[p_a_lineage, p_a_name], null);\n  fb := array_remove(array[p_b_lineage, p_b_name], null);\n  if coalesce(array_length(fa, 1), 0) = 0 or coalesce(array_length(fb, 1), 0) = 0 then\n    return false;\n  end if;\n\n  foreach x in array fa loop\n    ka := public.tree_spouses_wife_identity_key_v1(x);\n    if ka is null then\n      continue;\n    end if;\n    pa := regexp_split_to_array(ka, '\\s+');\n    foreach y in array fb loop\n      kb := public.tree_spouses_wife_identity_key_v1(y);\n      if kb is null then\n        continue;\n      end if;\n      if ka = kb then\n        return true;\n      end if;\n      pb := regexp_split_to_array(kb, '\\s+');\n      if coalesce(array_length(pa, 1), 0) >= 3\n         and coalesce(array_length(pb, 1), 0) >= 3\n         and array_to_string(pa[1:3], ' ') = array_to_string(pb[1:3], ' ') then\n        return true;\n      end if;\n      if coalesce(array_length(pa, 1), 0) >= 3\n         and coalesce(array_length(pb, 1), 0) = 2\n         and array_to_string(pa[1:2], ' ') = array_to_string(pb, ' ') then\n        return true;\n      end if;\n      if coalesce(array_length(pb, 1), 0) >= 3\n         and coalesce(array_length(pa, 1), 0) = 2\n         and array_to_string(pb[1:2], ' ') = array_to_string(pa, ' ') then\n        return true;\n      end if;\n    end loop;\n  end loop;\n\n  return false;\nend;\n$$;\n\ncreate or replace function public.tree_spouses_guard_duplicate_wife_v1()\nreturns trigger\nlanguage plpgsql\nas $$\ndeclare\n  v_other public.tree_spouses%rowtype;\nbegin\n  if lower(btrim(coalesce(new.status, 'active'))) not in ('', 'active') then\n    return new;\n  end if;\n\n  for v_other in\n    select s.*\n    from public.tree_spouses s\n    where s.id is distinct from new.id\n      and s.husband_id is distinct from new.husband_id\n      and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')\n  loop\n    if public.tree_spouses_wife_identity_matches_v1(\n      new.wife_name,\n      new.wife_lineage,\n      v_other.wife_name,\n      v_other.wife_lineage\n    ) then\n      raise exception using\n        message = 'هذه الزوجة مسجلة نشطة مع زوج آخر. افتح الزوج السابق → تعديل الزوجة → غيّر الحالة إلى «مطلقة»، ثم أعد الإضافة.';\n    end if;\n  end loop;\n\n  return new;\nend;\n$$;\n\ndrop trigger if exists tree_spouses_duplicate_wife_guard on public.tree_spouses;\ndrop trigger if exists tree_spouses_guard_duplicate_wife on public.tree_spouses;\n\ncreate trigger tree_spouses_guard_duplicate_wife\n  before insert or update of wife_name, wife_lineage, status, husband_id\n  on public.tree_spouses\n  for each row\n  execute function public.tree_spouses_guard_duplicate_wife_v1();\n\n-- Admin RPC: bypass legacy duplicate triggers + end prior active marriages on remarriage.\ncreate or replace function public.admin_tree_spouse_upsert_v1(\n  p_token text,\n  p_spouse_id bigint,\n  p_row jsonb\n) returns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $$\ndeclare\n  v_id bigint;\n  v_husband_id bigint;\n  v_other record;\n  v_status text;\n  v_family boolean;\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  if to_regclass('public.tree_spouses') is null then\n    raise exception 'tree_spouses table missing';\n  end if;\n\n  v_husband_id := nullif(p_row->>'husband_id', '')::bigint;\n  if v_husband_id is null then\n    raise exception 'missing husband_id';\n  end if;\n\n  v_status := lower(btrim(coalesce(p_row->>'status', 'active')));\n  if v_status not in ('', 'active', 'divorced', 'مطلقة') then\n    v_status := 'active';\n  end if;\n  if v_status in ('', 'active') then\n    v_status := 'active';\n  else\n    v_status := 'divorced';\n  end if;\n\n  if p_row ? 'wife_is_family_member' then\n    if jsonb_typeof(p_row->'wife_is_family_member') = 'boolean' then\n      v_family := (p_row->>'wife_is_family_member')::boolean;\n    elsif lower(btrim(coalesce(p_row->>'wife_is_family_member', ''))) in ('true', 't', '1', 'yes', 'نعم') then\n      v_family := true;\n    elsif lower(btrim(coalesce(p_row->>'wife_is_family_member', ''))) in ('false', 'f', '0', 'no', 'لا') then\n      v_family := false;\n    else\n      v_family := null;\n    end if;\n  else\n    v_family := null;\n  end if;\n\n  for v_other in\n    select s.*\n    from public.tree_spouses s\n    where s.id is distinct from coalesce(p_spouse_id, 0)\n      and s.husband_id is distinct from v_husband_id\n      and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')\n  loop\n    if public.tree_spouses_wife_identity_matches_v1(\n      p_row->>'wife_name',\n      p_row->>'wife_lineage',\n      v_other.wife_name,\n      v_other.wife_lineage\n    ) then\n      update public.tree_spouses\n      set status = 'divorced', updated_at = now()\n      where id = v_other.id;\n    end if;\n  end loop;\n\n  alter table public.tree_spouses disable trigger user;\n\n  if p_spouse_id is not null and p_spouse_id > 0 then\n    update public.tree_spouses s\n    set\n      husband_id = v_husband_id,\n      husband_person_id = nullif(p_row->>'husband_person_id', '')::uuid,\n      wife_name = nullif(btrim(coalesce(p_row->>'wife_name', '')), ''),\n      wife_is_family_member = v_family,\n      wife_branch_key = nullif(btrim(coalesce(p_row->>'wife_branch_key', '')), ''),\n      wife_family_name = nullif(btrim(coalesce(p_row->>'wife_family_name', '')), ''),\n      wife_lineage = nullif(btrim(coalesce(p_row->>'wife_lineage', '')), ''),\n      marriage_order = nullif(p_row->>'marriage_order', '')::int,\n      status = v_status,\n      confidence = nullif(btrim(coalesce(p_row->>'confidence', 'confirmed')), ''),\n      data_source = nullif(btrim(coalesce(p_row->>'data_source', 'admin')), ''),\n      updated_at = coalesce(nullif(p_row->>'updated_at', '')::timestamptz, now())\n    where s.id = p_spouse_id\n    returning s.id into v_id;\n  else\n    insert into public.tree_spouses (\n      husband_id,\n      husband_person_id,\n      wife_name,\n      wife_is_family_member,\n      wife_branch_key,\n      wife_family_name,\n      wife_lineage,\n      marriage_order,\n      status,\n      confidence,\n      data_source,\n      updated_at\n    ) values (\n      v_husband_id,\n      nullif(p_row->>'husband_person_id', '')::uuid,\n      nullif(btrim(coalesce(p_row->>'wife_name', '')), ''),\n      v_family,\n      nullif(btrim(coalesce(p_row->>'wife_branch_key', '')), ''),\n      nullif(btrim(coalesce(p_row->>'wife_family_name', '')), ''),\n      nullif(btrim(coalesce(p_row->>'wife_lineage', '')), ''),\n      nullif(p_row->>'marriage_order', '')::int,\n      v_status,\n      nullif(btrim(coalesce(p_row->>'confidence', 'confirmed')), ''),\n      nullif(btrim(coalesce(p_row->>'data_source', 'admin')), ''),\n      coalesce(nullif(p_row->>'updated_at', '')::timestamptz, now())\n    )\n    returning id into v_id;\n  end if;\n\n  alter table public.tree_spouses enable trigger user;\n\n  if v_id is null then\n    raise exception 'spouse upsert failed';\n  end if;\n\n  return jsonb_build_object('ok', true, 'id', v_id);\nexception\n  when others then\n    begin\n      alter table public.tree_spouses enable trigger user;\n    exception\n      when others then null;\n    end;\n    raise;\nend;\n$$;\n\nrevoke all on function public.admin_tree_spouse_upsert_v1(text, bigint, jsonb) from public;\ngrant execute on function public.admin_tree_spouse_upsert_v1(text, bigint, jsonb) to anon, authenticated;\n\n-- ============================================================\n-- 2) نسب الأم الكامل\n-- ============================================================\n\n-- COPY-ME: run in Supabase SQL Editor / SQL Workspace\n-- Preset id: maint.tree_maternal_kinship_v3\n--\n-- General maternal kinship for ANY family-member mother:\n--   أخ من أمك / خالك / ابن خالك / ابن خالتك\n-- Matches mother identity across different spouse rows (different husbands).\n-- Safe to re-run.\n\ncreate or replace function public.tree_arabic_norm_v1(p text)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select lower(btrim(\n    regexp_replace(\n      regexp_replace(\n        regexp_replace(\n          regexp_replace(\n            regexp_replace(coalesce(p, ''), '[\\u064B-\\u065F\\u0670]', '', 'g'),\n            'ـ', '', 'g'),\n          '[أإآ]', 'ا', 'g'),\n        'ة', 'ه', 'g'),\n      'ى', 'ي', 'g')\n  ));\n$$;\n\ncreate or replace function public.tree_nasab_tokens_v1(p text)\nreturns text[]\nlanguage sql\nimmutable\nas $$\n  select coalesce(\n    array_remove(\n      string_to_array(\n        btrim(\n          regexp_replace(\n            public.tree_arabic_norm_v1(p),\n            '(^|[[:space:]])(بنت|بن|ابن)([[:space:]]|$)',\n            ' ',\n            'g'\n          )\n        ),\n        ' '\n      ),\n      ''\n    ),\n    '{}'::text[]\n  );\n$$;\n\ncreate or replace function public.tree_nasab_nth_v1(p text, p_n integer)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select nullif((public.tree_nasab_tokens_v1(p))[greatest(p_n, 1)], '');\n$$;\n\ncreate or replace function public.tree_path_leaf_v1(p text)\nreturns text\nlanguage sql\nimmutable\nas $$\n  select public.tree_arabic_norm_v1(nullif(btrim(regexp_replace(coalesce(p, ''), '^.*/', '')), ''));\n$$;\n\ncreate or replace function public.tree_child_is_daughter_v1(p_gender text)\nreturns boolean\nlanguage sql\nimmutable\nas $$\n  select lower(btrim(coalesce(p_gender, ''))) in (\n    'daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت'\n  );\n$$;\n\ncreate or replace function public.tree_mother_spouses_share_identity_v1(\n  p_lineage_a text,\n  p_name_a text,\n  p_lineage_b text,\n  p_name_b text\n)\nreturns boolean\nlanguage sql\nimmutable\nas $$\n  select\n    (\n      coalesce(nullif(btrim(p_lineage_a), ''), nullif(btrim(p_name_a), '')) is not null\n      and coalesce(nullif(btrim(p_lineage_b), ''), nullif(btrim(p_name_b), '')) is not null\n    )\n    and (\n      (\n        nullif(btrim(p_lineage_a), '') is not null\n        and nullif(btrim(p_lineage_b), '') is not null\n        and public.tree_arabic_norm_v1(p_lineage_a) = public.tree_arabic_norm_v1(p_lineage_b)\n      )\n      or (\n        nullif(btrim(p_name_a), '') is not null\n        and nullif(btrim(p_name_b), '') is not null\n        and public.tree_arabic_norm_v1(p_name_a) = public.tree_arabic_norm_v1(p_name_b)\n      )\n      or (\n        public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1)\n          = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1)\n      )\n      or (\n        public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 2) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 2) is not null\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 1)\n          = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 1)\n        and public.tree_nasab_nth_v1(coalesce(p_name_a, p_lineage_a, ''), 2)\n          = public.tree_nasab_nth_v1(coalesce(p_name_b, p_lineage_b, ''), 2)\n      )\n    );\n$$;\n\ncreate or replace function public.tree_maternal_kinship_for_viewer_v1(p_viewer_id bigint)\nreturns table(person_id bigint, label text)\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_spouse_id bigint;\n  v_lineage text;\n  v_wife_name text;\n  v_branch text;\n  v_leaf text;\n  v_father_leaf text;\n  v_mother_id bigint;\n  v_mother_path text;\n  v_gf_path text;\n  v_match_count int;\nbegin\n  if p_viewer_id is null or p_viewer_id < 1 then\n    return;\n  end if;\n\n  select\n    l.spouse_id,\n    nullif(btrim(coalesce(s.wife_lineage, l.mother_lineage, '')), ''),\n    nullif(btrim(coalesce(s.wife_name, l.mother_name, '')), ''),\n    nullif(btrim(coalesce(s.wife_branch_key, l.mother_branch_key, '')), '')\n  into v_spouse_id, v_lineage, v_wife_name, v_branch\n  from public.tree_mother_links l\n  left join public.tree_spouses s on s.id = l.spouse_id\n  where l.child_id = p_viewer_id\n    and lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n    and coalesce(s.wife_is_family_member, l.mother_is_family_member, false) = true\n    and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')\n  order by l.child_id\n  limit 1;\n\n  if v_spouse_id is null then\n    return;\n  end if;\n\n  v_leaf := public.tree_nasab_nth_v1(coalesce(v_wife_name, v_lineage, ''), 1);\n  v_father_leaf := public.tree_nasab_nth_v1(coalesce(v_wife_name, v_lineage, ''), 2);\n\n  if v_lineage is not null and position('/' in v_lineage) > 0 then\n    select count(*) into v_match_count\n    from public.tree_children c\n    where (v_branch is null or c.branch_key = v_branch)\n      and (\n        public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n          = public.tree_arabic_norm_v1(v_lineage)\n        or public.tree_arabic_norm_v1(coalesce(c.name, ''))\n          = public.tree_arabic_norm_v1(v_lineage)\n      );\n    if v_match_count = 1 then\n      select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent)\n      into v_mother_id, v_mother_path, v_gf_path\n      from public.tree_children c\n      where (v_branch is null or c.branch_key = v_branch)\n        and (\n          public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n            = public.tree_arabic_norm_v1(v_lineage)\n          or public.tree_arabic_norm_v1(coalesce(c.name, ''))\n            = public.tree_arabic_norm_v1(v_lineage)\n        )\n      limit 1;\n    elsif v_match_count = 0 then\n      v_mother_path := v_lineage;\n      v_gf_path := regexp_replace(v_lineage, '/[^/]+$', '');\n    end if;\n  end if;\n\n  if v_gf_path is null and v_leaf is not null then\n    select count(*) into v_match_count\n    from public.tree_children c\n    where (v_branch is null or c.branch_key = v_branch)\n      and public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) = v_leaf\n      and (\n        v_father_leaf is null\n        or public.tree_path_leaf_v1(coalesce(c.parent_name, c.parent)) = v_father_leaf\n        or (\n          select count(*)\n          from public.tree_children c2\n          where (v_branch is null or c2.branch_key = v_branch)\n            and public.tree_path_leaf_v1(coalesce(c2.child_name, c2.name)) = v_leaf\n        ) = 1\n      );\n\n    if v_match_count = 1 then\n      select c.id, coalesce(c.child_name, c.name), coalesce(c.parent_name, c.parent), c.branch_key\n      into v_mother_id, v_mother_path, v_gf_path, v_branch\n      from public.tree_children c\n      where (v_branch is null or c.branch_key = v_branch)\n        and public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) = v_leaf\n        and (\n          v_father_leaf is null\n          or public.tree_path_leaf_v1(coalesce(c.parent_name, c.parent)) = v_father_leaf\n          or (\n            select count(*)\n            from public.tree_children c2\n            where (v_branch is null or c2.branch_key = v_branch)\n              and public.tree_path_leaf_v1(coalesce(c2.child_name, c2.name)) = v_leaf\n          ) = 1\n        )\n      limit 1;\n    end if;\n  end if;\n\n  v_gf_path := nullif(btrim(coalesce(v_gf_path, '')), '');\n\n  return query\n  with matching_spouses as (\n    select s.id\n    from public.tree_spouses s\n    where coalesce(s.wife_is_family_member, false) = true\n      and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')\n      and (\n        s.id = v_spouse_id\n        or public.tree_mother_spouses_share_identity_v1(\n          v_lineage,\n          v_wife_name,\n          s.wife_lineage,\n          s.wife_name\n        )\n      )\n  ),\n  maternal_brothers as (\n    select distinct l.child_id as id\n    from public.tree_mother_links l\n    join matching_spouses ms on ms.id = l.spouse_id\n    join public.tree_children c on c.id = l.child_id\n    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and l.child_id <> p_viewer_id\n  ),\n  khals as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key\n    from public.tree_children c\n    where v_gf_path is not null\n      and coalesce(c.parent_name, c.parent) = v_gf_path\n      and (v_branch is null or c.branch_key = v_branch)\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and (v_mother_id is null or c.id <> v_mother_id)\n      and (\n        v_mother_path is null\n        or public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n             <> public.tree_arabic_norm_v1(v_mother_path)\n      )\n  ),\n  ibn_khal as (\n    select s.id\n    from public.tree_children s\n    join khals k\n      on coalesce(s.parent_name, s.parent) = k.path\n     and s.branch_key = k.branch_key\n    where not public.tree_child_is_daughter_v1(s.gender)\n  ),\n  sisters as (\n    select c.id, coalesce(c.child_name, c.name) as path, c.branch_key,\n           public.tree_path_leaf_v1(coalesce(c.child_name, c.name)) as leaf\n    from public.tree_children c\n    where v_gf_path is not null\n      and coalesce(c.parent_name, c.parent) = v_gf_path\n      and (v_branch is null or c.branch_key = v_branch)\n      and public.tree_child_is_daughter_v1(c.gender)\n      and (v_mother_id is null or c.id <> v_mother_id)\n      and (\n        v_mother_path is null\n        or public.tree_arabic_norm_v1(coalesce(c.child_name, c.name, ''))\n             <> public.tree_arabic_norm_v1(v_mother_path)\n      )\n  ),\n  sister_spouses as (\n    select distinct s.id as spouse_id\n    from sisters sis\n    join public.tree_spouses s\n      on coalesce(s.wife_is_family_member, false) = true\n     and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')\n     and (\n       public.tree_arabic_norm_v1(coalesce(s.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)\n       or public.tree_nasab_nth_v1(coalesce(s.wife_name, s.wife_lineage, ''), 1) = sis.leaf\n     )\n     and (\n       select count(*)\n       from public.tree_spouses s2\n       where coalesce(s2.wife_is_family_member, false) = true\n         and lower(btrim(coalesce(s2.status, 'active'))) in ('', 'active')\n         and (\n           public.tree_arabic_norm_v1(coalesce(s2.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)\n           or public.tree_nasab_nth_v1(coalesce(s2.wife_name, s2.wife_lineage, ''), 1) = sis.leaf\n         )\n     ) = 1\n  ),\n  ibn_khala as (\n    select c.id\n    from public.tree_mother_links l\n    join sister_spouses ss on ss.spouse_id = l.spouse_id\n    join public.tree_children c on c.id = l.child_id\n    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')\n      and not public.tree_child_is_daughter_v1(c.gender)\n      and c.id <> p_viewer_id\n  )\n  select mb.id, 'أخ من أمك'::text\n  from maternal_brothers mb\n  union all\n  select k.id, 'خالك'::text\n  from khals k\n  union all\n  select i.id, 'ابن خالك'::text\n  from ibn_khal i\n  union all\n  select x.id, 'ابن خالتك'::text\n  from ibn_khala x;\nend;\n$fn$;\n\ngrant execute on function public.tree_arabic_norm_v1(text) to anon, authenticated;\ngrant execute on function public.tree_nasab_tokens_v1(text) to anon, authenticated;\ngrant execute on function public.tree_nasab_nth_v1(text, integer) to anon, authenticated;\ngrant execute on function public.tree_path_leaf_v1(text) to anon, authenticated;\ngrant execute on function public.tree_child_is_daughter_v1(text) to anon, authenticated;\ngrant execute on function public.tree_mother_spouses_share_identity_v1(text, text, text, text) to anon, authenticated;\ngrant execute on function public.tree_maternal_kinship_for_viewer_v1(bigint) to anon, authenticated;\n\nnotify pgrst, 'reload schema';\n\nselect\n  (select to_regprocedure('public.tree_maternal_kinship_for_viewer_v1(bigint)') is not null)\n    as has_maternal_rpc;\n\n-- ============================================================\n-- 3) ربط جماعي للأبناء الموجودين\n-- ============================================================\n\n-- COPY-ME: run once in Supabase SQL Editor\n-- Preset id: maint.tree_mother_links_backfill_v1\n--\n-- Backfill tree_mother_links for ALL active family-member wives:\n-- links every son of the husband to the mother's spouse row.\n-- Safe to re-run (upsert on child_id).\n\ninsert into public.tree_mother_links (\n  child_id,\n  spouse_id,\n  mother_name,\n  mother_is_family_member,\n  mother_branch_key,\n  mother_family_name,\n  mother_lineage,\n  confidence,\n  updated_at\n)\nselect\n  c.id as child_id,\n  s.id as spouse_id,\n  s.wife_name,\n  s.wife_is_family_member,\n  s.wife_branch_key,\n  s.wife_family_name,\n  s.wife_lineage,\n  'confirmed',\n  now()\nfrom public.tree_spouses s\njoin public.tree_children h on h.id = s.husband_id\njoin public.tree_children c\n  on c.branch_key = h.branch_key\n and (\n   coalesce(c.parent_name, c.parent) = coalesce(h.child_name, h.name)\n   or coalesce(c.parent_name, c.parent) = public.tree_path_leaf_v1(coalesce(h.child_name, h.name))\n )\nwhere coalesce(s.wife_is_family_member, false) = true\n  and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')\n  and not public.tree_child_is_daughter_v1(c.gender)\non conflict (child_id) do update set\n  spouse_id = excluded.spouse_id,\n  mother_name = excluded.mother_name,\n  mother_is_family_member = excluded.mother_is_family_member,\n  mother_branch_key = excluded.mother_branch_key,\n  mother_family_name = excluded.mother_family_name,\n  mother_lineage = excluded.mother_lineage,\n  confidence = excluded.confidence,\n  updated_at = excluded.updated_at;\n\nselect count(*) as mother_links_total from public.tree_mother_links;\n",
+      order: 10.3694,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_maternal_kinship_v3",
+      title: "نسب الأم الكامل: أخ من الأم + خال + ابن خال + ابن خالة",
+      desc:
+        "حل عام لكل الأمهات المربوطات: يطابق هوية الأم عبر زيجات مختلفة (أزواج مختلفون) ويُظهر أخ من أمك / خالك / ابن خالك / ابن خالتك. شغّله مرة ثم Hard Refresh.",
+      file: "../supabase/sql/COPY-ME-tree-maternal-kinship-v3.sql",
+      sql: `-- Preset id: maint.tree_maternal_kinship_v3
+-- Run the full script from: supabase/sql/COPY-ME-tree-maternal-kinship-v3.sql
+select (select to_regprocedure('public.tree_maternal_kinship_for_viewer_v1(bigint)') is not null) as has_maternal_rpc;`,
+      order: 10.3695,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_mother_links_backfill_v1",
+      title: "ربط جماعي: كل أبناء الأزواج بزوجات العائلة",
+      desc:
+        "يربط أبناء الزوج بزوجته من العائلة فقط إذا كانت زوجته الوحيدة المسجّلة. لا يخلط أبناء زوجتين. شغّله مرة بعد تسجيل الزوجات ثم Hard Refresh.",
+      file: "../supabase/sql/COPY-ME-tree-mother-links-backfill-v1.sql",
+      sql: `-- COPY-ME: run once in Supabase SQL Editor
+-- Preset id: maint.tree_mother_links_backfill_v1
+--
+-- Links sons to a family-member wife ONLY when that husband has exactly
+-- one active wife. Does not assume motherhood when there are two wives.
+-- Safe to re-run (upsert on child_id).
+
+insert into public.tree_mother_links (
+  child_id,
+  spouse_id,
+  mother_name,
+  mother_is_family_member,
+  mother_branch_key,
+  mother_family_name,
+  mother_lineage,
+  confidence,
+  updated_at
+)
+select
+  c.id as child_id,
+  s.id as spouse_id,
+  s.wife_name,
+  s.wife_is_family_member,
+  s.wife_branch_key,
+  s.wife_family_name,
+  s.wife_lineage,
+  'confirmed',
+  now()
+from public.tree_spouses s
+join public.tree_children h on h.id = s.husband_id
+join public.tree_children c
+  on c.branch_key = h.branch_key
+ and (
+   coalesce(c.parent_name, c.parent) = coalesce(h.child_name, h.name)
+   or coalesce(c.parent_name, c.parent) = public.tree_path_leaf_v1(coalesce(h.child_name, h.name))
+ )
+where coalesce(s.wife_is_family_member, false) = true
+  and lower(btrim(coalesce(s.status, 'active'))) in ('', 'active')
+  and not public.tree_child_is_daughter_v1(c.gender)
+  and (
+    select count(*)
+    from public.tree_spouses s2
+    where s2.husband_id = s.husband_id
+      and lower(btrim(coalesce(s2.status, 'active'))) in ('', 'active')
+  ) = 1
+on conflict (child_id) do update set
+  spouse_id = excluded.spouse_id,
+  mother_name = excluded.mother_name,
+  mother_is_family_member = excluded.mother_is_family_member,
+  mother_branch_key = excluded.mother_branch_key,
+  mother_family_name = excluded.mother_family_name,
+  mother_lineage = excluded.mother_lineage,
+  confidence = excluded.confidence,
+  updated_at = excluded.updated_at;
+
+select count(*) as mother_links_total from public.tree_mother_links;
+`,
+      order: 10.3696,
+      supabaseOnce: true,
+    },
+    {
+      id: "maint.tree_spouses_divorced_remarriage_v1",
+      title: "الزواج الثاني بعد الطلاق — إصلاح حفظ الزوجة",
+      desc:
+        "يستبدل حارس التكرار القديم ليمنع فقط الزوجات «النشطة»، ويضيف RPC admin_tree_spouse_upsert_v1. شغّله مرة إذا ظهر «مسجلة مع زوج آخر» رغم أن الحالة مطلقة.",
+      file: "../supabase/sql/COPY-ME-tree-spouses-divorced-remarriage-v1.sql",
+      order: 10.375,
+      supabaseOnce: true,
+    },
+    {
       id: "maint.delegate_set_status_tree_inbox_v1",
       title: "إصلاح رفض/قبول طلبات الشجرة عند المندوب",
       desc:

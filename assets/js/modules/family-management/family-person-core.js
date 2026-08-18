@@ -368,6 +368,7 @@
             city: c.city || "",
             area: c.area || "",
             deceased: !!c.deceased,
+            photoUrl: c.photoUrl || c.photo_url || "",
             rowId: c.rowId,
           };
         });
@@ -463,6 +464,7 @@
         parent_person_id: row.parent_person_id ? String(row.parent_person_id) : "",
         db_parent_name: norm(row.parent_name || row.parent || ""),
         db_child_name: childPath,
+        photo_url: String(row.photo_url || row.photoUrl || "").trim(),
       };
       if (childPath) pathToRow[childPath] = meta;
       if (meta.person_id) pathToRow["pid:" + norm(meta.person_id)] = meta;

@@ -36,6 +36,8 @@
       '<div class="field" data-fm-wife-family-name-field><label>اسم العائلة الخارجية</label><input type="text" data-fm-wife-family-name placeholder="مثال: الشمري" /></div>' +
       '<div class="field" data-fm-wife-branch-field><label>فرع الزوجة</label><select data-fm-wife-branch><option value="">غير محدد</option><option value="زايد">زايد</option><option value="زيدان">زيدان</option><option value="لاحم">لاحم</option><option value="مزيد">مزيد</option><option value="ملحم">ملحم</option></select></div>' +
       '<div class="field"><label>ترتيب الزوجة</label><input type="number" data-fm-wife-order min="1" max="4" step="1" inputmode="numeric" placeholder="1 إلى 4" /></div>' +
+      '<div class="field" data-fm-wife-status-field><label>حالة الزوجية</label><select data-fm-wife-status><option value="active">نشطة</option><option value="divorced">مطلقة</option></select><div class="hint" data-fm-wife-status-hint></div></div>' +
+      '<div class="hint" data-fm-wife-remarry-hint style="grid-column:1/-1;display:none;"></div>' +
       '<div class="field" style="grid-column:1/-1;"><label>سلسلة نسب الزوجة</label><input type="text" data-fm-wife-lineage placeholder="مثال: عقيلة بنت خزيم بن ملقاط..." /></div>' +
       "</div>" +
       '<div data-fm-form-child class="grid" style="display:none;">' +
@@ -75,12 +77,26 @@
     var titleEl = sheet.querySelector(".fm-sheet-title");
     var typeTabsEl = sheet.querySelector(".fm-type-tabs");
     var deleteWifeBtn = sheet.querySelector("[data-fm-delete-wife]");
+    var wifeStatusField = sheet.querySelector("[data-fm-wife-status-field]");
+    var wifeStatusHint = sheet.querySelector("[data-fm-wife-status-hint]");
+    var wifeRemarryHint = sheet.querySelector("[data-fm-wife-remarry-hint]");
 
     function syncWifeEditChrome() {
       var editing = currentType === "wife" && !!editingWifeId;
       if (titleEl) titleEl.textContent = editing ? "تعديل الزوجة" : "إضافة";
       if (typeTabsEl) typeTabsEl.style.display = editing ? "none" : "";
       if (deleteWifeBtn) deleteWifeBtn.style.display = editing ? "" : "none";
+      if (wifeStatusField) wifeStatusField.style.display = currentType === "wife" ? "" : "none";
+      if (wifeStatusHint) {
+        wifeStatusHint.textContent = editing
+          ? "غيّر إلى «مطلقة» لإنهاء زواج سابق مسجّل مع هذا الزوج."
+          : "زواج جديد يُسجَّل «نشطة». لتسجيل طلاق سابق: افتح الزوج القديم → تعديل الزوجة → «مطلقة».";
+      }
+      if (wifeRemarryHint) {
+        wifeRemarryHint.style.display = editing || currentType !== "wife" ? "none" : "";
+        wifeRemarryHint.textContent =
+          "إذا رُفض الحفظ لأنها مسجلة مع زوج آخر: لا تختر «مطلقة» هنا — عدّل سجلها عند الزوج السابق أولاً، ثم أضفها للزوج الجديد.";
+      }
     }
 
     var wifeForm = sheet.querySelector("[data-fm-form-wife]");
@@ -137,6 +153,7 @@
       if (wifeForm) wifeForm.style.display = currentType === "wife" ? "" : "none";
       if (childForm) childForm.style.display = currentType === "wife" ? "none" : "";
       hideAlert(alertEl);
+      syncWifeEditChrome();
     }
 
     sheet.querySelectorAll(".fm-type-tab").forEach(function (btn) {
@@ -174,6 +191,10 @@
         if (famNameEl) famNameEl.value = row.wife_family_name || "";
         var orderEl = sheet.querySelector("[data-fm-wife-order]");
         if (orderEl) orderEl.value = row.marriage_order || "";
+        var statusEl = sheet.querySelector("[data-fm-wife-status]");
+        if (statusEl) {
+          statusEl.value = String(row.status || "active").trim().toLowerCase() === "divorced" ? "divorced" : "active";
+        }
         var lineageEl = sheet.querySelector("[data-fm-wife-lineage]");
         if (lineageEl) lineageEl.value = row.wife_lineage || "";
         updateWifeFieldsVisibility();
@@ -263,6 +284,16 @@
 
       if (currentType === "wife") {
         if (typeof api.saveWife !== "function") return;
+        var wifeStatusEl = sheet.querySelector("[data-fm-wife-status]");
+        var wifeStatusValue = wifeStatusEl ? String(wifeStatusEl.value || "active").trim() : "active";
+        if (!editingWifeId && wifeStatusValue === "divorced") {
+          setAlert(
+            alertEl,
+            "error",
+            "لا يمكن إضافة زوجة جديدة بحالة «مطلقة». اتركها «نشطة» هنا، وعدّل السجل القديم عند الزوج السابق إلى «مطلقة».",
+          );
+          return;
+        }
         var res = await api.saveWife({
           personId: personId,
           editingSpouseId: editingWifeId,
@@ -271,6 +302,7 @@
           branch: sheet.querySelector("[data-fm-wife-branch]").value,
           familyName: sheet.querySelector("[data-fm-wife-family-name]").value,
           order: sheet.querySelector("[data-fm-wife-order]").value,
+          status: wifeStatusValue,
           lineage: sheet.querySelector("[data-fm-wife-lineage]").value,
         });
         if (!res || !res.ok) {

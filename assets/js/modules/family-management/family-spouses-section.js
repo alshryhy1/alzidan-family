@@ -169,10 +169,11 @@
         var wifeText = typeof api.normalizePersonName === "function"
           ? api.normalizePersonName(row.wife_name || "")
           : normalizeText(row.wife_name || "");
+        var statusLabel = String(row.status || "active").trim().toLowerCase() === "divorced" ? " — مطلقة" : "";
         var item = document.createElement("div");
         item.className = "fm-row";
         item.innerHTML =
-          '<div class="fm-row-main"><strong>' + escapeHtml(wifeText || "بدون اسم") + "</strong>" +
+          '<div class="fm-row-main"><strong>' + escapeHtml(wifeText || "بدون اسم") + escapeHtml(statusLabel) + "</strong>" +
           '<div class="hint">الترتيب: ' + escapeHtml(String(row.marriage_order || "غير محدد")) +
           " — الأبناء المرتبطون: " + escapeHtml(String(row.linked_children_count || 0)) + "</div></div>" +
           '<div class="fm-row-actions">' +

@@ -41,30 +41,102 @@
     return wifeDuplicateKey(value).split(" ").filter(Boolean).length >= 3;
   }
 
-  async function findDuplicateWife(client, husbandId, row, editingSpouseId) {
-    const candidate = row && row.wife_lineage && hasThreePartWifeName(row.wife_lineage)
-      ? row.wife_lineage
-      : (row && row.wife_name ? row.wife_name : "");
+  function isActiveSpouse(status) {
+    var value = String(status || "active")
+      .trim()
+      .toLowerCase();
+    return !value || value === "active";
+  }
 
-    if (!hasThreePartWifeName(candidate)) return null;
+  function wifeIdentityMatches(rowA, rowB) {
+    var fieldsA = [rowA && rowA.wife_lineage, rowA && rowA.wife_name].filter(Boolean);
+    var fieldsB = [rowB && rowB.wife_lineage, rowB && rowB.wife_name].filter(Boolean);
+    if (!fieldsA.length || !fieldsB.length) return false;
 
-    const key = wifeDuplicateKey(candidate);
-    const { data, error } = await client
-      .from("tree_spouses")
-      .select("id,husband_id,wife_name,wife_lineage")
-      .limit(1000);
+    for (var i = 0; i < fieldsA.length; i++) {
+      for (var j = 0; j < fieldsB.length; j++) {
+        var ka = wifeDuplicateKey(fieldsA[i]);
+        var kb = wifeDuplicateKey(fieldsB[j]);
+        if (!ka || !kb) continue;
+        if (ka === kb) return true;
 
-    if (error) throw error;
+        var pa = ka.split(" ").filter(Boolean);
+        var pb = kb.split(" ").filter(Boolean);
+        if (pa.length >= 3 && pb.length >= 3 && pa.slice(0, 3).join(" ") === pb.slice(0, 3).join(" ")) {
+          return true;
+        }
+        if (pa.length >= 3 && pb.length === 2 && pa.slice(0, 2).join(" ") === pb.join(" ")) {
+          return true;
+        }
+        if (pb.length >= 3 && pa.length === 2 && pb.slice(0, 2).join(" ") === pa.join(" ")) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
-    const list = Array.isArray(data) ? data : [];
-    return list.find(function (item) {
+  function rowHasWifeIdentity(row) {
+    if (!row) return false;
+    return [row.wife_lineage, row.wife_name].some(function (value) {
+      return wifeDuplicateKey(value).split(" ").filter(Boolean).length >= 2;
+    });
+  }
+
+  async function loadAllSpouseRows(client) {
+    var all = [];
+    var pageSize = 1000;
+    var offset = 0;
+    while (true) {
+      var page = await client
+        .from("tree_spouses")
+        .select("id,husband_id,wife_name,wife_lineage,status")
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (page.error) throw page.error;
+      var batch = Array.isArray(page.data) ? page.data : [];
+      all = all.concat(batch);
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+    return all;
+  }
+
+  function findActiveSpouseMatchesInList(list, husbandId, row, editingSpouseId) {
+    return (Array.isArray(list) ? list : []).filter(function (item) {
       if (editingSpouseId && Number(item.id) === Number(editingSpouseId)) return false;
       if (Number(item.husband_id) === Number(husbandId)) return false;
-      const other = item.wife_lineage && hasThreePartWifeName(item.wife_lineage)
-        ? item.wife_lineage
-        : item.wife_name;
-      return hasThreePartWifeName(other) && wifeDuplicateKey(other) === key;
-    }) || null;
+      if (!isActiveSpouse(item.status)) return false;
+      return wifeIdentityMatches(row, item);
+    });
+  }
+
+  async function findActiveSpouseMatchesElsewhere(client, husbandId, row, editingSpouseId) {
+    if (!rowHasWifeIdentity(row)) return [];
+    var list = await loadAllSpouseRows(client);
+    return findActiveSpouseMatchesInList(list, husbandId, row, editingSpouseId);
+  }
+
+  async function endActiveSpouseMatchesElsewhere(client, husbandId, row, editingSpouseId) {
+    var matches = await findActiveSpouseMatchesElsewhere(client, husbandId, row, editingSpouseId || 0);
+    var ended = 0;
+    var now = new Date().toISOString();
+    for (var i = 0; i < matches.length; i++) {
+      var item = matches[i];
+      var res = await client
+        .from("tree_spouses")
+        .update({ status: "divorced", updated_at: now })
+        .eq("id", item.id);
+      if (!res.error) ended += 1;
+    }
+    return { ended: ended, matches: matches };
+  }
+
+  async function findDuplicateWife(client, husbandId, row, editingSpouseId) {
+    if (!rowHasWifeIdentity(row)) return null;
+
+    var list = await loadAllSpouseRows(client);
+    return findActiveSpouseMatchesInList(list, husbandId, row, editingSpouseId)[0] || null;
   }
 
   async function loadSpousesByHusband(client, husbandId) {
@@ -155,13 +227,54 @@
     return { ok: true, message: "تم حذف الزوجة." };
   }
 
+  function isSonGender(gender) {
+    var g = String(gender || "")
+      .trim()
+      .toLowerCase();
+    if (!g) return true;
+    return !(
+      g === "daughter" ||
+      g === "female" ||
+      g === "f" ||
+      g === "أنثى" ||
+      g === "انثى" ||
+      g === "ابنة" ||
+      g === "بنت"
+    );
+  }
+
+  function spouseIsFamilyMember(spouse) {
+    if (!spouse) return false;
+    var value =
+      spouse.wife_is_family_member != null
+        ? spouse.wife_is_family_member
+        : spouse.wifeIsFamilyMember;
+    if (value === true || value === 1) return true;
+    if (typeof value === "string") {
+      var v = value.trim().toLowerCase();
+      return v === "true" || v === "yes" || v === "1" || v === "نعم";
+    }
+    return false;
+  }
+
+  async function autoLinkHusbandSonsToSpouse() {
+    return { ok: true, linked: 0, skipped: "no_assumptions" };
+  }
+
   window.AlzidanSpousesCore = Object.assign(window.AlzidanSpousesCore || {}, {
     normalizeSearchText: normalizeSearchText,
     matchesOrderedSubstring: matchesOrderedSubstring,
     wifeDuplicateKey: wifeDuplicateKey,
     hasThreePartWifeName: hasThreePartWifeName,
+    isActiveSpouse: isActiveSpouse,
+    wifeIdentityMatches: wifeIdentityMatches,
+    rowHasWifeIdentity: rowHasWifeIdentity,
     findDuplicateWife: findDuplicateWife,
+    findActiveSpouseMatchesElsewhere: findActiveSpouseMatchesElsewhere,
+    endActiveSpouseMatchesElsewhere: endActiveSpouseMatchesElsewhere,
     loadSpousesByHusband: loadSpousesByHusband,
     deleteSpouseById: deleteSpouseById,
+    autoLinkHusbandSonsToSpouse: autoLinkHusbandSonsToSpouse,
+    spouseIsFamilyMember: spouseIsFamilyMember,
   });
 })();
