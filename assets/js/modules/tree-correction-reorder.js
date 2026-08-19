@@ -165,7 +165,7 @@
           sb
             .from("tree_children")
             .select(
-              "id,person_id,parent_person_id,parent_name,parent,child_name,name,birth_order,branch_key,birth_date_g,birth_date_h,birth_year,city,area,is_deceased,deceased"
+              "id,person_id,parent_person_id,parent_name,parent,child_name,name,birth_order,branch_key,birth_date_g,birth_date_h,birth_year,death_date_g,death_date_h,city,area,is_deceased,deceased"
             )
         );
         var res = await q.range(from, from + PAGE - 1);
@@ -210,6 +210,8 @@
         birth_date_g: r.birth_date_g || null,
         birth_date_h: r.birth_date_h || null,
         birth_year: r.birth_year != null ? r.birth_year : null,
+        death_date_g: r.death_date_g || null,
+        death_date_h: r.death_date_h || null,
         city: r.city || null,
         area: r.area || null,
         is_deceased: !!(r.is_deceased || r.deceased),
@@ -788,8 +790,46 @@
     }
   }
 
+  function rpcErrorText(err) {
+    if (!err) return "";
+    var detail = String(err.detail || err.arabic || "");
+    if (detail && /[\u0600-\u06FF]/.test(detail)) return detail;
+    var reason = String(err.reason || "");
+    var msg = String(err.message || err.error || err || "");
+    if (/[\u0600-\u06FF]/.test(msg) && !/not allowed/i.test(msg)) return msg;
+    if (/no_session|no session/i.test(msg + " " + reason)) return "سجّل دخول المندوب ثم أعد الحفظ.";
+    if (/row not found/i.test(msg)) {
+      return "تعذر إيجاد السجل في الشجرة. حدّث الصفحة ثم أعد الحفظ.";
+    }
+    if (/not allowed|permission|jwt|unauthorized|auth/i.test(msg)) {
+      return "تعذر الحفظ: لا صلاحية لهذه العملية. سجّل الخروج ثم الدخول بالجوال والرقم السري.";
+    }
+    var details = String(err.details || "");
+    var hint = String(err.hint || "");
+    var code = String(err.code || "");
+    var parts = [msg];
+    if (details && details !== msg) parts.push(details);
+    if (hint && hint !== msg) parts.push(hint);
+    if (code && code !== "ADMIN-RPC-001") parts.push(code);
+    return parts.filter(Boolean).join(" — ");
+  }
+
+  async function callAdminUpsert(sb, token, row) {
+    var core = window.AlzidanAdminCore || {};
+    if (typeof core.invokeAdminRpc === "function") {
+      return core.invokeAdminRpc("admin_tree_child_upsert_v1", {
+        p_token: token,
+        p_row: row,
+      });
+    }
+    return sb.rpc("admin_tree_child_upsert_v1", {
+      p_token: token,
+      p_row: row,
+    });
+  }
+
   async function adminUpsertBirthOrder(sb, token, child, birthOrder) {
-    // birth_order only change — preserve identity and existing biodata fields.
+    // birth_order only change — preserve identity, biodata, and death dates.
     var row = {
       branch_key: child.branch_key,
       parent_name: child.parent_name,
@@ -799,20 +839,20 @@
       person_id: child.person_id,
       parent_person_id: child.parent_person_id,
       birth_order: birthOrder,
-      id: child.id,
       birth_date_g: child.birth_date_g || null,
       birth_date_h: child.birth_date_h || null,
       birth_year: child.birth_year != null ? child.birth_year : null,
+      death_date_g: child.death_date_g || null,
+      death_date_h: child.death_date_h || null,
       city: child.city || null,
       area: child.area || null,
       is_deceased: !!child.is_deceased,
       deceased: !!child.deceased,
     };
-    var upsert = await sb.rpc("admin_tree_child_upsert_v1", {
-      p_token: token,
-      p_row: row,
-    });
-    if (upsert.error) {
+    var idNum = Number(child && child.id);
+    if (Number.isFinite(idNum) && idNum > 0) row.id = idNum;
+    var upsert = await callAdminUpsert(sb, token, row);
+    if (upsert && upsert.error) {
       return { ok: false, error: upsert.error };
     }
     return { ok: true };
@@ -928,63 +968,87 @@
         byId[c.person_id] = c;
       });
 
-      // Clear-then-assign ALL members 1..N (never only the "changed" subset).
-      var clearList = working.orderedIds
-        .map(function (id) {
-          return byId[id];
-        })
-        .filter(Boolean);
+      var alreadyCanonical = api.verifyCanonicalBirthOrder(
+        working.children,
+        working.orderedIds
+      );
+      var skipTreeWrite = !!(alreadyCanonical && alreadyCanonical.ok);
 
-      if (activeMode === "delegate") {
-        for (var i = 0; i < clearList.length; i++) {
-          var clr = await delegatePatchBirthOrder(sb, clearList[i], null);
-          if (!clr.ok) {
-            throw new Error(
-              (clr.error && clr.error.message) || "فشل تفريغ الترتيب"
+      if (!skipTreeWrite) {
+        // Park then assign ALL members 1..N (never only the "changed" subset).
+        // High parking numbers avoid unique(parent, birth_order) without NULLing.
+        var clearList = working.orderedIds
+          .map(function (id) {
+            return byId[id];
+          })
+          .filter(Boolean);
+
+        if (activeMode === "delegate") {
+          for (var i = 0; i < clearList.length; i++) {
+            var clr = await delegatePatchBirthOrder(
+              sb,
+              clearList[i],
+              10000 + i
             );
+            if (!clr.ok) {
+              throw new Error(
+                rpcErrorText(clr.error) || "فشل تفريغ الترتيب"
+              );
+            }
           }
-        }
-        for (var j = 0; j < working.orderedIds.length; j++) {
-          var child = byId[working.orderedIds[j]];
-          var setRes = await delegatePatchBirthOrder(sb, child, j + 1);
-          if (!setRes.ok) {
-            throw new Error(
-              (setRes.error && setRes.error.message) ||
-                "فشل تعيين الترتيب لـ " + (child.name || "")
-            );
+          for (var j = 0; j < working.orderedIds.length; j++) {
+            var child = byId[working.orderedIds[j]];
+            var setRes = await delegatePatchBirthOrder(sb, child, j + 1);
+            if (!setRes.ok) {
+              throw new Error(
+                rpcErrorText(setRes.error) ||
+                  "فشل تعيين الترتيب لـ " + (child.name || "")
+              );
+            }
           }
-        }
-      } else {
-        var token = getAdminToken();
-        if (!token) throw new Error("يلزم تسجيل دخول الإدارة.");
-        for (var k = 0; k < clearList.length; k++) {
-          var c1 = await adminUpsertBirthOrder(sb, token, clearList[k], null);
-          if (!c1.ok) {
-            throw new Error(
-              (c1.error && c1.error.message) || "فشل تفريغ الترتيب"
+        } else {
+          var token = getAdminToken();
+          if (!token) throw new Error("يلزم تسجيل دخول الإدارة.");
+          for (var k = 0; k < clearList.length; k++) {
+            var c1 = await adminUpsertBirthOrder(
+              sb,
+              token,
+              clearList[k],
+              10000 + k
             );
+            if (!c1.ok) {
+              throw new Error(
+                rpcErrorText(c1.error) || "فشل تفريغ الترتيب"
+              );
+            }
           }
-        }
-        for (var n = 0; n < working.orderedIds.length; n++) {
-          var c2 = byId[working.orderedIds[n]];
-          var s2 = await adminUpsertBirthOrder(sb, token, c2, n + 1);
-          if (!s2.ok) {
-            throw new Error(
-              (s2.error && s2.error.message) ||
-                "فشل تعيين الترتيب لـ " + (c2.name || "")
-            );
+          for (var n = 0; n < working.orderedIds.length; n++) {
+            var c2 = byId[working.orderedIds[n]];
+            var s2 = await adminUpsertBirthOrder(sb, token, c2, n + 1);
+            if (!s2.ok) {
+              throw new Error(
+                rpcErrorText(s2.error) ||
+                  "فشل تعيين الترتيب لـ " + (c2.name || "")
+              );
+            }
           }
         }
       }
 
       // Re-read tree and verify display order follows stored birth_order 1..N
-      setStatus("جاري التحقق من الشجرة بعد الحفظ…");
-      var refreshed = await fetchChildrenUnderParent(
-        sb,
-        p.parent_person_id,
-        p.branch_key || "",
-        p.parent_path || p.parent_name || ""
+      setStatus(
+        skipTreeWrite
+          ? "الترتيب مخزّن مسبقاً كما هو — جاري اعتماد الطلب…"
+          : "جاري التحقق من الشجرة بعد الحفظ…"
       );
+      var refreshed = skipTreeWrite
+        ? working.children
+        : await fetchChildrenUnderParent(
+            sb,
+            p.parent_person_id,
+            p.branch_key || "",
+            p.parent_path || p.parent_name || ""
+          );
       var verify = api.verifyCanonicalBirthOrder(
         refreshed,
         working.orderedIds
@@ -1178,7 +1242,7 @@
     } catch (err) {
       setStatus(
         "فشل الحفظ/التحقق دون انهيار: " +
-          String((err && err.message) || err || ""),
+          (rpcErrorText(err) || String((err && err.message) || err || "")),
         true
       );
       if (saveBtn) saveBtn.disabled = false;

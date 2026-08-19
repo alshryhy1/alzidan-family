@@ -54,6 +54,25 @@
     return apply;
   }
 
+  function setDeathDateFieldsUiMode(deceased, fieldEls) {
+    var list = Array.isArray(fieldEls) ? fieldEls : [];
+    list.forEach(function (el) {
+      if (!el) return;
+      var wrap = el.closest(".field") || el.parentElement;
+      if (wrap && wrap.style) wrap.style.display = deceased ? "" : "none";
+    });
+  }
+
+  function bindDeathDateToggle(checkbox, fieldEls) {
+    if (!checkbox) return function () {};
+    var apply = function () {
+      setDeathDateFieldsUiMode(!!checkbox.checked, fieldEls);
+    };
+    checkbox.addEventListener("change", apply);
+    apply();
+    return apply;
+  }
+
   function bindBirthDateSync(hijriEl, gregEl, api) {
     if (!hijriEl || !gregEl || !api) return;
     var syncing = false;
@@ -365,6 +384,8 @@
             order: c.order || "",
             gdate: c.gdate || "",
             hdate: c.hdate || "",
+            ddate: c.ddate || "",
+            dhdate: c.dhdate || "",
             city: c.city || "",
             area: c.area || "",
             deceased: !!c.deceased,
@@ -845,6 +866,8 @@
     hideAlert: hideAlert,
     setDeceasedFieldsUiMode: setDeceasedFieldsUiMode,
     bindDeceasedToggle: bindDeceasedToggle,
+    setDeathDateFieldsUiMode: setDeathDateFieldsUiMode,
+    bindDeathDateToggle: bindDeathDateToggle,
     bindBirthDateSync: bindBirthDateSync,
     parentNamesMatch: parentNamesMatch,
     nodePathMatches: nodePathMatches,

@@ -6,6 +6,7 @@
   var setAlert = PersonCore.setAlert || function () {};
   var hideAlert = PersonCore.hideAlert || function () {};
   var bindDeceasedToggle = PersonCore.bindDeceasedToggle || function () {};
+  var bindDeathDateToggle = PersonCore.bindDeathDateToggle || function () {};
   var bindBirthDateSync = PersonCore.bindBirthDateSync || function () {};
 
   function createChildrenSection(opts) {
@@ -87,31 +88,29 @@
       if (child && child.order) parts.push("الترتيب: " + String(child.order));
       parts.push("الأبناء: " + String(resolveDescendantsCount(childId)));
       var isDeceased = !!(child && child.deceased);
-      if (!isDeceased) {
-        var ageText = typeof api.calculateAge === "function" ? api.calculateAge(child) : "";
-        if (ageText) parts.push("العمر: " + ageText);
-        var birthParts = [];
-        var h = typeof api.normalizePersonName === "function"
-          ? api.normalizePersonName(child && child.hdate ? child.hdate : "")
-          : String(child && child.hdate ? child.hdate : "");
-        var g = typeof api.normalizePersonName === "function"
-          ? api.normalizePersonName(child && child.gdate ? child.gdate : "")
-          : String(child && child.gdate ? child.gdate : "");
-        var y = child && child.year ? String(child.year) : "";
-        var hijriLabel = h && typeof api.formatDateISO === "function" ? api.formatDateISO(h) : h;
-        if (!hijriLabel && g && typeof api.formatDateISO === "function") hijriLabel = api.formatDateISO(g);
-        if (hijriLabel) birthParts.push(hijriLabel);
-        if (!hijriLabel && y) birthParts.push("سنة: " + y);
-        if (birthParts.length) parts.push("الميلاد: " + birthParts.join(" / "));
-        var city = typeof api.normalizePersonName === "function"
-          ? api.normalizePersonName(child && child.city ? child.city : "")
-          : String(child && child.city ? child.city : "");
-        var area = typeof api.normalizePersonName === "function"
-          ? api.normalizePersonName(child && child.area ? child.area : "")
-          : String(child && child.area ? child.area : "");
-        if (city) parts.push("المدينة: " + city);
-        if (area) parts.push("الحي: " + area);
-      }
+      var ageText = typeof api.calculateAge === "function" ? api.calculateAge(child) : "";
+      if (ageText) parts.push(isDeceased ? ("العمر عند الوفاة: " + ageText) : ("العمر: " + ageText));
+      var birthParts = [];
+      var h = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName(child && child.hdate ? child.hdate : "")
+        : String(child && child.hdate ? child.hdate : "");
+      var g = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName(child && child.gdate ? child.gdate : "")
+        : String(child && child.gdate ? child.gdate : "");
+      var y = child && child.year ? String(child.year) : "";
+      var hijriLabel = h && typeof api.formatDateISO === "function" ? api.formatDateISO(h) : h;
+      if (!hijriLabel && g && typeof api.formatDateISO === "function") hijriLabel = api.formatDateISO(g);
+      if (hijriLabel) birthParts.push(hijriLabel);
+      if (!hijriLabel && y) birthParts.push("سنة: " + y);
+      if (birthParts.length) parts.push("الميلاد: " + birthParts.join(" / "));
+      var city = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName(child && child.city ? child.city : "")
+        : String(child && child.city ? child.city : "");
+      var area = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName(child && child.area ? child.area : "")
+        : String(child && child.area ? child.area : "");
+      if (city) parts.push("المدينة: " + city);
+      if (area) parts.push("الحي: " + area);
       return { parts: parts, childId: childId, parentKey: parentKey };
     }
 
@@ -142,30 +141,79 @@
         '<div class="field"><label>المدينة</label><input type="text" data-fm-edit-city /></div>' +
         '<div class="field"><label>الحي / القرية</label><input type="text" data-fm-edit-area /></div>' +
         '<div class="field"><label>الحالة</label><label style="display:flex;align-items:center;gap:8px;min-height:38px;"><input type="checkbox" data-fm-edit-deceased /> متوفى</label></div>' +
+        '<div class="field" data-fm-death-field><label>تاريخ الوفاة (هجري)</label><input type="text" data-fm-edit-death-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
+        '<div class="field" data-fm-death-field><label>تاريخ الوفاة (ميلادي)</label><input type="date" data-fm-edit-death-greg dir="ltr" lang="en" /></div>' +
         '<div class="fm-toolbar" style="grid-column:1/-1;"><button type="button" class="btn btn-primary btn-small" data-fm-save-edit>حفظ التعديل</button>' +
         '<button type="button" class="btn btn-secondary btn-small" data-fm-cancel-edit>إلغاء</button></div>' +
         '<div class="alert fm-section-alert" data-fm-edit-alert style="display:none;grid-column:1/-1;"></div>';
 
       var hijriEl = wrap.querySelector("[data-fm-edit-hijri]");
       var gregEl = wrap.querySelector("[data-fm-edit-greg]");
+      var deathHijriEl = wrap.querySelector("[data-fm-edit-death-hijri]");
+      var deathGregEl = wrap.querySelector("[data-fm-edit-death-greg]");
       var deceasedEl = wrap.querySelector("[data-fm-edit-deceased]");
-      bindDeceasedToggle(deceasedEl, [
-        hijriEl,
-        gregEl,
-        wrap.querySelector("[data-fm-edit-city]"),
-        wrap.querySelector("[data-fm-edit-area]"),
-      ]);
       bindBirthDateSync(hijriEl, gregEl, api);
+      bindBirthDateSync(deathHijriEl, deathGregEl, api);
+      function syncDeathDateFields() {
+        var on = !!(deceasedEl && deceasedEl.checked);
+        wrap.querySelectorAll("[data-fm-death-field]").forEach(function (field) {
+          field.style.display = on ? "" : "none";
+        });
+        refreshAgeHint();
+      }
+      var ageHint = document.createElement("div");
+      ageHint.className = "hint";
+      ageHint.style.gridColumn = "1 / -1";
+      function refreshAgeHint() {
+        if (typeof api.calculateAge !== "function") {
+          ageHint.style.display = "none";
+          return;
+        }
+        var on = !!(deceasedEl && deceasedEl.checked);
+        var age = api.calculateAge({
+          deceased: on,
+          gdate: gregEl ? gregEl.value : "",
+          hdate: hijriEl ? hijriEl.value : "",
+          year: hijriEl ? hijriEl.value : "",
+          ddate: deathGregEl ? deathGregEl.value : "",
+          dhdate: deathHijriEl ? deathHijriEl.value : "",
+        });
+        if (on) ageHint.textContent = age ? ("العمر عند الوفاة: " + age) : "أدخل الميلاد وتاريخ الوفاة لحساب العمر عند الوفاة.";
+        else ageHint.textContent = age ? ("العمر: " + age) : "";
+        ageHint.style.display = ageHint.textContent ? "" : "none";
+      }
 
-      if (hijriEl) hijriEl.value = String(child && child.hdate ? child.hdate : "");
-      if (gregEl) gregEl.value = String(child && child.gdate ? child.gdate : "");
+      function toDateInputValue(v) {
+        var s = String(v || "").trim().replace(/\//g, "-");
+        var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+        if (!m) return "";
+        return m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0");
+      }
+      if (hijriEl) hijriEl.value = String((child && child.hdate) || (child && child.year) || "");
+      if (gregEl) gregEl.value = toDateInputValue(child && child.gdate ? child.gdate : "");
+      if (deathHijriEl) deathHijriEl.value = String(child && child.dhdate ? child.dhdate : "");
+      if (deathGregEl) deathGregEl.value = toDateInputValue(child && child.ddate ? child.ddate : "");
       var orderEl = wrap.querySelector("[data-fm-edit-order]");
       if (orderEl) orderEl.value = child && child.order ? String(child.order) : "";
       var cityEl = wrap.querySelector("[data-fm-edit-city]");
       if (cityEl) cityEl.value = String(child && child.city ? child.city : "");
       var areaEl = wrap.querySelector("[data-fm-edit-area]");
       if (areaEl) areaEl.value = String(child && child.area ? child.area : "");
-      if (deceasedEl) deceasedEl.checked = !!(child && child.deceased);
+      if (deceasedEl) {
+        deceasedEl.checked = !!(child && child.deceased);
+        deceasedEl.addEventListener("change", syncDeathDateFields);
+      }
+      bindDeathDateToggle(deceasedEl, [deathHijriEl, deathGregEl]);
+      var toolbar = wrap.querySelector(".fm-toolbar");
+      if (toolbar) wrap.insertBefore(ageHint, toolbar);
+      else wrap.appendChild(ageHint);
+      [hijriEl, gregEl, deathHijriEl, deathGregEl].forEach(function (el) {
+        if (!el) return;
+        el.addEventListener("input", refreshAgeHint);
+        el.addEventListener("change", refreshAgeHint);
+        el.addEventListener("blur", refreshAgeHint);
+      });
+      syncDeathDateFields();
 
       var nameEl = wrap.querySelector("[data-fm-edit-name]");
       if (nameEl) {
@@ -259,6 +307,8 @@
           city: cityEl ? cityEl.value : "",
           area: areaEl ? areaEl.value : "",
           deceased: !!(deceasedEl && deceasedEl.checked),
+          deathHijri: deathHijriEl ? deathHijriEl.value : "",
+          deathGreg: deathGregEl ? deathGregEl.value : "",
         });
         if (!res || !res.ok) {
           setAlert(editAlert, "error", (res && res.message) || "تعذر حفظ التعديل.");
