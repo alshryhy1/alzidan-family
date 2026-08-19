@@ -305,12 +305,12 @@ function applyPersonCardKinship(modal, ctx) {
   const enc = K.encounterForCard({ nodeId: ctx.id, branchKey: ctx.key, rows: Array.isArray(ctx.sourceRows) ? ctx.sourceRows : [] });
   if (!enc) return;
   if (enc.mode === "self" && sub) sub.textContent = "مكانك في العائلة";
-  else if (enc.kinship && sub) sub.textContent = enc.kinship;
-  else if (sub && ctx.subText) sub.textContent = ctx.subText;
-  if (enc.kinship && kinshipHost && kinshipText) {
+  else if (enc.kinship && kinshipHost && kinshipText) {
     kinshipText.textContent = enc.kinship;
     kinshipHost.hidden = false;
-  }
+    if (sub) sub.textContent = ctx.subText || "";
+  } else if (enc.kinship && sub) sub.textContent = enc.kinship;
+  else if (sub && ctx.subText) sub.textContent = ctx.subText;
   if (enc.sharedBadge && badge) {
     badge.textContent = enc.sharedBadge;
     badge.hidden = false;

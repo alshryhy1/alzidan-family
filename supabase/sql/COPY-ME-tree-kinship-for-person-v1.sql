@@ -1,4 +1,5 @@
--- COPY-ME: Preset id: maint.tree_kinship_for_person_v1
+-- Identity: person_id / full path / parent path. Same first name is never a join key.
+
 -- Proven male relatives for ANY person (security definer; daughters stay hidden):
 --   أخ من أمك / حفيدك / حفيدك من ابنتك / ابن أخيك / ابن أختك / عمك / ابن عمك / ابنك
 -- Also: tree_member_viewer_v1(phone) loads the member's own tree row (including
@@ -254,15 +255,6 @@ begin
          public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1) = sis.leaf
          and public.tree_arabic_norm_v1(regexp_replace(coalesce(s.wife_lineage, ''), '/[^/]+$', ''))
            = public.tree_arabic_norm_v1(v_parent)
-       )
-       or (
-         public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1) = sis.leaf
-         and (
-           select count(*)
-           from public.tree_spouses s2
-           where coalesce(s2.wife_is_family_member, false) = true
-             and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s2.wife_name, s2.wife_lineage), 1) = sis.leaf
-         ) = 1
        )
      )
     union

@@ -24,9 +24,15 @@
     حفيدك: true,
     "حفيدك من ابنتك": true,
     "ابن أخيك": true,
+    "ابن ابن أخيك": true,
     "ابن أختك": true,
     عمك: true,
     "ابن عمك": true,
+    "بنت عمي": true,
+    "ابن بنت عمي": true,
+    "ابن بنت عمك": true,
+    "ابن ابن عمك": true,
+    أخت: true,
     ابنك: true,
   };
 
@@ -49,7 +55,8 @@
       if (key) aliases[key] = true;
     }
     add(nodePathId(person));
-    add(person && person.name);
+    var rawName = String((person && person.name) || "");
+    if (rawName.indexOf("/") >= 0) add(rawName);
     add(person && person.parentName ? person.parentName + "/" + leafPersonName(person.name || "") : "");
     return Object.keys(aliases);
   }
@@ -85,7 +92,18 @@
       var path = nodePathId(person);
       return path === wanted || normalizePathKey(person.name) === wanted;
     }
+    var wantedPersonId = String(nodeId || "").trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wantedPersonId)) {
+      var byUuid = people.filter(function (person) {
+        return String(person.personId || "") === wantedPersonId;
+      });
+      if (byUuid.length === 1) return byUuid[0];
+    }
     var matches = people.filter(pathMatches);
+    if (matches.length !== 1) {
+      var byNasab = uniqueByNasab(people, branchKey, nodeId);
+      if (byNasab) return byNasab;
+    }
     if (matches.length !== 1) {
       var parts = String(nodeId || "")
         .split("/")
@@ -160,8 +178,14 @@
       if (linked) return linked;
     }
     if (ctx && target.id) return resolveMaternalKinshipLabel(viewerId, target.id, ctx);
-    if (ctx && target.name) {
+    if (ctx && target.name && (String(target.name).indexOf("/") >= 0 || String(target.parentName || "").trim())) {
       var resolved = findTarget(target.name, ctx.children, target.branchKey, []);
+      if (resolved.id && Number(resolved.id) === Number(target.id || resolved.id)) {
+        if (target.parentName && effectiveParentName(resolved) &&
+            normalizePathKey(effectiveParentName(resolved)) !== normalizePathKey(effectiveParentName(target))) {
+          resolved = { id: 0 };
+        }
+      }
       if (resolved.id) {
         var fromResolved = byId[Number(resolved.id)] || resolveMaternalKinshipLabel(viewerId, resolved.id, ctx);
         if (fromResolved) return fromResolved;
@@ -348,6 +372,65 @@
     return parentPathKey(path);
   }
 
+  function isFemalePerson(person) {
+    return isPublicLineageHiddenPerson(person);
+  }
+
+  function isProvenSisterNephew(viewer, target, people) {
+    var viewerParent = normalizePathKey(effectiveParentName(viewer));
+    var targetParent = normalizePathKey(effectiveParentName(target));
+    if (!viewerParent || !targetParent) return false;
+    var motherParent = parentPathKey(targetParent);
+    if (!motherParent || motherParent !== viewerParent) return false;
+    if (targetParent === nodePathId(viewer)) return false;
+    var parentNode = (people || []).filter(function (row) {
+      return nodePathId(row) === targetParent;
+    })[0];
+    return Boolean(parentNode && isFemalePerson(parentNode));
+  }
+
+  function paternalCousinChildLabel(viewer, target, people) {
+    var viewerParent = normalizePathKey(effectiveParentName(viewer));
+    var targetParent = normalizePathKey(effectiveParentName(target));
+    if (!viewerParent || !targetParent) return null;
+    var cousinFather = parentPathKey(targetParent);
+    var viewerGf = parentPathKey(viewerParent);
+    if (!cousinFather || !viewerGf) return null;
+    if (parentPathKey(cousinFather) !== viewerGf) return null;
+    if (cousinFather === viewerParent) return null;
+    var parentNode = (people || []).filter(function (row) {
+      return nodePathId(row) === targetParent;
+    })[0];
+    if (parentNode && !isFemalePerson(parentNode)) return "ابن ابن عمك";
+    return "ابن بنت عمي";
+  }
+
+  function isPaternalFemaleCousin(viewer, woman) {
+    if (!viewer || !woman || !isFemalePerson(woman)) return false;
+    var viewerParent = normalizePathKey(effectiveParentName(viewer));
+    var womanParent = normalizePathKey(effectiveParentName(woman));
+    var viewerGf = parentPathKey(viewerParent);
+    var womanGf = parentPathKey(womanParent);
+    if (!viewerParent || !womanParent || !viewerGf || !womanGf) return false;
+    return womanGf === viewerGf && womanParent !== viewerParent;
+  }
+
+  function childLabelViaMother(viewer, target, ctx) {
+    if (!viewer || !target || !ctx || !Number(target.id)) return null;
+    var link = confirmedMotherLinkForChild(target.id, ctx);
+    if (!link) return null;
+    var spouse = ((ctx.spouses || []).filter(function (row) {
+      return Number(row.id) === Number(link.spouseId);
+    })[0] || null);
+    if (!spouse) return null;
+    var role = wifeRoleTowardViewer(spouse, viewer, ctx.children || []);
+    if (role === "self") return "ابنك";
+    if (role === "daughter") return "حفيدك من ابنتك";
+    if (role === "sister") return "ابن أختك";
+    if (role === "cousinDaughter") return "ابن بنت عمي";
+    return null;
+  }
+
   function resolveProvenKinshipLabel(viewer, target, maternalLabel, ctx) {
     if (!viewer || !target) return null;
     if (Number(viewer.id) && Number(target.id) && Number(viewer.id) === Number(target.id)) {
@@ -362,22 +445,52 @@
       }
     }
 
+    var viaMother = childLabelViaMother(viewer, target, ctx);
+    if (viaMother === "ابن بنت عمي") maternal = viaMother;
+    if (maternal === "ابن بنت عمك") maternal = "ابن بنت عمي";
+    var people = ctx && Array.isArray(ctx.children) ? ctx.children : [];
     var viewerNode = nodePathId(viewer);
     var targetNode = nodePathId(target);
     if (!viewerNode || !targetNode) return maternal || null;
 
     var viewerParent = normalizePathKey(effectiveParentName(viewer));
     var targetParent = normalizePathKey(effectiveParentName(target));
+    var cousinChild = paternalCousinChildLabel(viewer, target, people);
+    var underFatherDepth = 0;
+    if (
+      viewerParent &&
+      targetNode &&
+      targetNode.indexOf(viewerParent + "/") === 0
+    ) {
+      underFatherDepth = targetNode
+        .slice(viewerParent.length + 1)
+        .split("/")
+        .filter(Boolean).length;
+    }
+    if (maternal === "ابن أختك") {
+      var sameFatherNephew =
+        viewerParent &&
+        targetParent &&
+        parentPathKey(targetParent) === viewerParent &&
+        targetParent !== viewerNode;
+      if (
+        cousinChild ||
+        underFatherDepth >= 3 ||
+        (sameFatherNephew && !isProvenSisterNephew(viewer, target, people))
+      ) {
+        maternal = "";
+      }
+    }
 
     if (viewerParent && viewerParent === targetNode) return "أبوك";
     if (targetParent && targetParent === viewerNode) return "ابنك";
     if (maternal === "ابنك") return "ابنك";
     if (viewerParent && targetParent && viewerParent === targetParent) {
       var bond = siblingBondKind(viewer, target, ctx || null);
-      if (bond === "full") return "شقيقك";
-      if (bond === "paternal") return "أخ من الأب";
-      if (maternal === "أخ من أمك") return "شقيقك";
-      return "أخ";
+      if (bond === "full") return isFemalePerson(target) ? "شقيقتك" : "شقيقك";
+      if (bond === "paternal") return isFemalePerson(target) ? "أخت من الأب" : "أخ من الأب";
+      if (maternal === "أخ من أمك") return isFemalePerson(target) ? "شقيقتك" : "شقيقك";
+      return isFemalePerson(target) ? "أخت" : "أخ";
     }
 
     var paternalGrandfather = parentPathKey(effectiveParentName(viewer) || viewer.parentName);
@@ -386,7 +499,8 @@
     if (targetPaternalGrandfather && targetPaternalGrandfather === viewerNode) return "حفيدك";
 
     if (maternal === "حفيدك من ابنتك") return "حفيدك من ابنتك";
-    if (maternal === "ابن أختك") return "ابن أختك";
+    if (maternal === "ابن بنت عمي") return "ابن بنت عمي";
+    if (viaMother === "ابن بنت عمي") return "ابن بنت عمي";
     if (maternal === "أخ من أمك") return "أخ من أمك";
     if (maternal === "حفيدك") return "حفيدك";
 
@@ -404,8 +518,12 @@
       return "حفيدك";
     }
     if (viewerUp === 1 && targetUp === 2) {
-      if (maternal === "ابن أختك") return "ابن أختك";
+      if (maternal === "ابن أختك" || isProvenSisterNephew(viewer, target, people)) return "ابن أختك";
       return "ابن أخيك";
+    }
+    if (viewerUp === 1 && targetUp === 3) {
+      if (maternal === "ابن بنت عمي" || viaMother === "ابن بنت عمي") return "ابن بنت عمي";
+      return "ابن ابن أخيك";
     }
     if (viewerUp === 2 && targetUp === 1) {
       if (maternal === "خالك") return "خالك";
@@ -419,9 +537,13 @@
       ) {
         return maternal;
       }
-      return "ابن عمك";
+      return isFemalePerson(target) ? "بنت عمي" : "ابن عمك";
+    }
+    if (viewerUp === 2 && targetUp === 3) {
+      return cousinChild || maternal || null;
     }
 
+    if (maternal === "ابن أختك") return "ابن أختك";
     return maternal || null;
   }
 
@@ -509,14 +631,13 @@
       if (branch && arabicNorm(row.branchKey) !== branch) return false;
       return arabicNorm(leafPersonName(row.name)) === wanted;
     });
-    if (inBranch.length === 1) return inBranch[0];
-    if (inBranch.length > 1 && father) {
+    if (father) {
       var narrowed = inBranch.filter(function (row) {
-        return arabicNorm(leafPersonName(row.parentName)) === father;
+        return arabicNorm(leafPersonName(effectiveParentName(row))) === father;
       });
       return narrowed.length === 1 ? narrowed[0] : null;
     }
-    return null;
+    return inBranch.length === 1 ? inBranch[0] : null;
   }
 
   function uniqueFatherNodeFromNasab(rows, branchKey, query) {
@@ -586,8 +707,10 @@
     if (byPath.length === 1) return byPath[0];
     if (byPath.length > 1) return null;
 
-    if (!sisterLeaf) return null;
-    var byLeaf = spouses.filter(function (spouse) {
+    var sisterParentLeaf = arabicNorm(leafPersonName(effectiveParentName(sister)));
+    var sisterGfLeaf = arabicNorm(leafPersonName(parentPathKey(effectiveParentName(sister))));
+    if (!sisterLeaf || !sisterParentLeaf) return null;
+    var byNasab = spouses.filter(function (spouse) {
       if (!isActiveSpouse(spouse.status) || !isFamilyMember(spouse.wifeIsFamilyMember)) {
         return false;
       }
@@ -595,14 +718,13 @@
       if (branch && spouse.wifeBranchKey && normalizePathKey(spouse.wifeBranchKey) !== branch) {
         return false;
       }
-      var nameLeaf =
-        nasabTokens(spouse.wifeName || "")[0] || arabicNorm(leafPersonName(spouse.wifeName || ""));
-      var lineageLeaf =
-        nasabTokens(spouse.wifeLineage || "")[0] ||
-        arabicNorm(leafPersonName(spouse.wifeLineage || ""));
-      return nameLeaf === sisterLeaf || lineageLeaf === sisterLeaf;
+      var tokens = nasabTokens(wifeNasabText(spouse));
+      if (!tokens[0] || tokens[0] !== sisterLeaf) return false;
+      if (!tokens[1] || tokens[1] !== sisterParentLeaf) return false;
+      if (tokens[2] && sisterGfLeaf && tokens[2] !== sisterGfLeaf) return false;
+      return true;
     });
-    return byLeaf.length === 1 ? byLeaf[0] : null;
+    return byNasab.length === 1 ? byNasab[0] : null;
   }
 
   function normalizeSpouseRow(row) {
@@ -651,12 +773,52 @@
     return lineage || name;
   }
 
-  function wifeRoleTowardViewer(spouse, viewer) {
+  function resolveWifeTreeChild(spouse, children) {
+    if (!spouse || !Array.isArray(children) || !children.length) return null;
+    var path = lineagePath(spouse.wifeLineage);
+    if (path) {
+      var byPath = children.filter(function (row) {
+        return nodePathId(row) === path;
+      });
+      if (byPath.length === 1) return byPath[0];
+      if (byPath.length > 1) return null;
+    }
+    var tokens = nasabTokens(wifeNasabText(spouse));
+    if (tokens[0] && tokens[1]) {
+      var byNasab = children.filter(function (row) {
+        return (
+          arabicNorm(leafPersonName(row.name)) === tokens[0] &&
+          arabicNorm(leafPersonName(effectiveParentName(row))) === tokens[1]
+        );
+      });
+      return byNasab.length === 1 ? byNasab[0] : null;
+    }
+    return null;
+  }
+
+  function wifeRoleTowardViewer(spouse, viewer, children) {
     if (!spouse || !viewer || !isFamilyMember(spouse.wifeIsFamilyMember)) return null;
     if (!isActiveSpouse(spouse.status)) return null;
     var viewerPath = normalizePathKey(nodePathId(viewer));
     var viewerParent = normalizePathKey(effectiveParentName(viewer));
     var viewerGf = parentPathKey(viewerParent);
+    var resolved = resolveWifeTreeChild(spouse, children || []);
+    if (resolved) {
+      var resolvedPath = nodePathId(resolved);
+      var resolvedParent = normalizePathKey(effectiveParentName(resolved));
+      if (resolvedPath && viewerPath && resolvedPath === viewerPath) return "self";
+      if (resolvedParent && viewerPath && resolvedParent === viewerPath) return "daughter";
+      if (
+        resolvedParent &&
+        viewerParent &&
+        resolvedParent === viewerParent &&
+        resolvedPath !== viewerPath
+      ) {
+        return "sister";
+      }
+      if (isPaternalFemaleCousin(viewer, resolved)) return "cousinDaughter";
+      return null;
+    }
     var nasab = wifeNasabText(spouse);
     var lineage = lineagePath(spouse.wifeLineage) || lineagePath(nasab);
     var tokens = nasabTokens(nasab);
@@ -692,6 +854,17 @@
       wifeLeaf !== selfLeaf
     ) {
       if (!wifeGf || !gfLeaf || wifeGf === gfLeaf) return "sister";
+    }
+    if (
+      wifeFather &&
+      gfLeaf &&
+      wifeGf &&
+      wifeGf === gfLeaf &&
+      wifeFather !== fatherLeaf &&
+      wifeLeaf &&
+      wifeLeaf !== selfLeaf
+    ) {
+      return "cousinDaughter";
     }
     return null;
   }
@@ -729,10 +902,18 @@
     if (!viewer || !ctx) return map;
     var counts = activeWifeCountByHusband(ctx.spouses);
     (ctx.spouses || []).forEach(function (spouse) {
-      var role = wifeRoleTowardViewer(spouse, viewer);
+      var role = wifeRoleTowardViewer(spouse, viewer, ctx.children);
       if (!role) return;
       var label =
-        role === "self" ? "ابنك" : role === "daughter" ? "حفيدك من ابنتك" : role === "sister" ? "ابن أختك" : "";
+        role === "self"
+          ? "ابنك"
+          : role === "daughter"
+            ? "حفيدك من ابنتك"
+            : role === "sister"
+              ? "ابن أختك"
+              : role === "cousinDaughter"
+                ? "ابن بنت عمي"
+                : "";
       if (!label) return;
       childIdsForSpouse(spouse, ctx, counts).forEach(function (childId) {
         if (!childId || childId === Number(viewer.id)) return;
@@ -1383,6 +1564,8 @@
     }
     return {
       id: Number((row && (row.id || row.rowId)) || 0),
+      personId: (row && (row.person_id || row.personId)) || null,
+      parentPersonId: (row && (row.parent_person_id || row.parentPersonId)) || null,
       name: name,
       parentName: parentName,
       branchKey: String((row && (row.branch_key || row.branchKey || branchKey)) || ""),
@@ -1396,6 +1579,8 @@
     if (!id) return null;
     return {
       id: id,
+      personId: person.personId || person.person_id || null,
+      parentPersonId: person.parentPersonId || person.parent_person_id || null,
       name: String(person.name || ""),
       parentName: String(person.parentName || person.parent_name || person.parent || ""),
       branchKey: String(person.branchKey || person.branch_key || ""),
@@ -1471,10 +1656,16 @@
     if (value === "حفيدك") return { group: "grandsons", kind: "grandson", suffix: "من ابنك" };
     if (value === "حفيدك من ابنتك") return { group: "grandsons", kind: "grandson", suffix: "من ابنتك" };
     if (value === "ابن أخيك") return { group: "nephews", kind: "nephew", suffix: "ابن أخ" };
+    if (value === "ابن ابن أخيك") return { group: "nephews", kind: "nephew", suffix: "ابن ابن أخ" };
     if (value === "ابن أختك") return { group: "nephews", kind: "nephew", suffix: "ابن أخت" };
     if (value === "عمك") return { group: "uncles", kind: "uncle", suffix: "عمك" };
     if (value === "خالك") return { group: "uncles", kind: "uncle", suffix: "خالك" };
     if (value === "ابن عمك") return { group: "cousins", kind: "cousin", suffix: "ابن عم" };
+    if (value === "بنت عمي") return { group: "cousins", kind: "cousin", suffix: "بنت عم" };
+    if (value === "ابن بنت عمي" || value === "ابن بنت عمك") {
+      return { group: "nephews", kind: "nephew", suffix: "ابن بنت عم" };
+    }
+    if (value === "ابن ابن عمك") return { group: "nephews", kind: "nephew", suffix: "ابن ابن عم" };
     if (value === "ابن خالك" || value === "ابن خالتك") {
       return { group: "cousins", kind: "cousin", suffix: value === "ابن خالك" ? "ابن خال" : "ابن خالة" };
     }
@@ -1770,6 +1961,8 @@
       return member.viewer || null;
     },
     wifeRoleTowardViewer: wifeRoleTowardViewer,
+    uniqueByNasab: uniqueByNasab,
+    uniqueSpouseForSister: uniqueSpouseForSister,
     isReady: function () {
       return member.ready === true;
     },

@@ -698,4 +698,213 @@ assert.equal(
   "visitor",
 );
 
+Kinship.clearMember();
+
+const wadhaFatherKhamis = {
+  id: 2001,
+  branchKey: "مزيد",
+  parentName: "مزيد/دليميك",
+  name: "مزيد/دليميك/خميس",
+  gender: "son",
+  personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
+  parentPersonId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa0",
+};
+const wadhaFatherMutlaq = {
+  id: 2002,
+  branchKey: "مزيد",
+  parentName: "مزيد/دليميك",
+  name: "مزيد/دليميك/مطلق",
+  gender: "son",
+  personId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
+  parentPersonId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa0",
+};
+const wadhaViewer = {
+  id: 2100,
+  branchKey: "مزيد",
+  parentName: "مزيد/دليميك/خميس",
+  name: "مزيد/دليميك/خميس/حسن",
+  gender: "son",
+  personId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1",
+  parentPersonId: wadhaFatherKhamis.personId,
+};
+const wadhaSister = {
+  id: 2101,
+  branchKey: "مزيد",
+  parentName: "مزيد/دليميك/خميس",
+  name: "مزيد/دليميك/خميس/وضحاء",
+  gender: "daughter",
+  personId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2",
+  parentPersonId: wadhaFatherKhamis.personId,
+};
+const wadhaCousin = {
+  id: 2201,
+  branchKey: "مزيد",
+  parentName: "مزيد/دليميك/مطلق",
+  name: "مزيد/دليميك/مطلق/وضحاء",
+  gender: "daughter",
+  personId: "cccccccc-cccc-cccc-cccc-ccccccccccc1",
+  parentPersonId: wadhaFatherMutlaq.personId,
+};
+const wadhaCousinSon = {
+  id: 2202,
+  branchKey: "مزيد",
+  parentName: "مزيد/دليميك/مطلق/وضحاء",
+  name: "مزيد/دليميك/مطلق/وضحاء/زيد",
+  gender: "son",
+  personId: "cccccccc-cccc-cccc-cccc-ccccccccccc2",
+  parentPersonId: wadhaCousin.personId,
+};
+const wadhaPeople = [
+  wadhaFatherKhamis,
+  wadhaFatherMutlaq,
+  wadhaViewer,
+  wadhaSister,
+  wadhaCousin,
+  wadhaCousinSon,
+];
+const wadhaSpouseOutside = {
+  id: 9101,
+  husbandId: 0,
+  wifeName: "وضحاء",
+  wifeLineage: "وضحاء",
+  wifeIsFamilyMember: true,
+  wifeBranchKey: "مزيد",
+  status: "active",
+};
+const wadhaSpouseCousin = {
+  id: 9102,
+  husbandId: 9901,
+  wifeName: "وضحاء مطلق دليميك",
+  wifeLineage: wadhaCousin.name,
+  wifeIsFamilyMember: true,
+  wifeBranchKey: "مزيد",
+  status: "active",
+};
+const wadhaCtx = {
+  children: wadhaPeople,
+  spouses: [wadhaSpouseOutside, wadhaSpouseCousin],
+  motherLinks: [{ childId: wadhaCousinSon.id, spouseId: wadhaSpouseCousin.id, confidence: "confirmed" }],
+  viewerPerson: wadhaViewer,
+};
+
+assert.equal(
+  Kinship.resolveProvenKinshipLabel(wadhaViewer, wadhaSister, null, wadhaCtx),
+  "أخت",
+  "A) وضحاء خميس أخت وليست ابنة عم",
+);
+assert.equal(
+  Kinship.resolveProvenKinshipLabel(wadhaViewer, wadhaCousin, null, wadhaCtx),
+  "بنت عمي",
+  "B) وضحاء مطلق بنت عم لا أخت",
+);
+assert.equal(
+  Kinship.resolveProvenKinshipLabel(wadhaViewer, wadhaCousinSon, "ابن أختك", wadhaCtx),
+  "ابن بنت عمي",
+  "أبناء وضحاء مطلق لا يُحسبون أبناء أخت بسبب تطابق الاسم",
+);
+assert.equal(
+  Kinship.findTarget("وضحاء مطلق دليميك", wadhaPeople, "مزيد").id,
+  wadhaCousin.id,
+  "اختيار وضحاء مطلق لا يعيد شخص وضحاء خميس",
+);
+assert.notEqual(
+  Kinship.findTarget("وضحاء مطلق دليميك", wadhaPeople, "مزيد").id,
+  wadhaSister.id,
+);
+assert.equal(
+  Kinship.findTarget("وضحاء", wadhaPeople, "مزيد").id,
+  0,
+  "الاسم الأول وحده ليس هوية",
+);
+assert.equal(
+  Kinship.uniqueByNasab(wadhaPeople, "مزيد", "وضحاء مطلق دليميك").id,
+  wadhaCousin.id,
+);
+assert.equal(
+  Kinship.uniqueByNasab(wadhaPeople, "مزيد", "وضحاء خميس دليميك خميس").id,
+  wadhaSister.id,
+);
+assert.equal(
+  Kinship.uniqueSpouseForSister([wadhaSpouseOutside, wadhaSpouseCousin], wadhaSister),
+  null,
+  "زوجة اسمها وضحاء فقط لا تُلصق بالأخت",
+);
+assert.equal(
+  Kinship.wifeRoleTowardViewer(wadhaSpouseCousin, wadhaViewer, wadhaPeople),
+  "cousinDaughter",
+  "زوجة وضحاء مطلق بنت عم لا أخت",
+);
+assert.equal(
+  Kinship.linkKinshipByTargetId(wadhaViewer, wadhaCtx)[wadhaCousinSon.id],
+  "ابن بنت عمي",
+);
+
+const jayizRoot = "مزيد بن مطلق بن زيدان";
+const jayizViewer = {
+  id: 3100,
+  branchKey: "مزيد",
+  parentName: jayizRoot + "/خميس",
+  name: jayizRoot + "/خميس/حسن",
+  gender: "son",
+};
+const jayizArfaj = {
+  id: 3101,
+  branchKey: "مزيد",
+  parentName: jayizRoot + "/خميس",
+  name: jayizRoot + "/خميس/عرفج",
+  gender: "son",
+};
+const jayizFayid = {
+  id: 3102,
+  branchKey: "مزيد",
+  parentName: jayizArfaj.name,
+  name: jayizArfaj.name + "/فايض",
+  gender: "son",
+};
+const jayiz = {
+  id: 3103,
+  branchKey: "مزيد",
+  parentName: jayizFayid.name,
+  name: jayizFayid.name + "/جايز",
+  gender: "son",
+};
+const jayizMutlaq = {
+  id: 3200,
+  branchKey: "مزيد",
+  parentName: jayizRoot,
+  name: jayizRoot + "/مطلق",
+  gender: "son",
+};
+const jayizWadhaCousin = {
+  id: 3201,
+  branchKey: "مزيد",
+  parentName: jayizMutlaq.name,
+  name: jayizMutlaq.name + "/وضحاء",
+  gender: "daughter",
+};
+const jayizMotherSpouse = {
+  id: 9301,
+  husbandId: jayizFayid.id,
+  wifeName: "وضحاء مطلق دليميك",
+  wifeLineage: jayizWadhaCousin.name,
+  wifeIsFamilyMember: true,
+  wifeBranchKey: "مزيد",
+  status: "active",
+};
+const jayizCtx = {
+  children: [jayizViewer, jayizArfaj, jayizFayid, jayiz, jayizMutlaq, jayizWadhaCousin],
+  spouses: [jayizMotherSpouse],
+  motherLinks: [{ childId: jayiz.id, spouseId: jayizMotherSpouse.id, confidence: "confirmed" }],
+  viewerPerson: jayizViewer,
+};
+assert.equal(
+  Kinship.wifeRoleTowardViewer(jayizMotherSpouse, jayizViewer, jayizCtx.children),
+  "cousinDaughter",
+);
+assert.equal(
+  Kinship.resolveProvenKinshipLabel(jayizViewer, jayiz, "ابن أختك", jayizCtx),
+  "ابن بنت عمي",
+  "جايز ابن وضحاء مطلق = ابن بنت عمي ولو سُجّل تحت فايض",
+);
+
 console.log("test-person-kinship: ok");

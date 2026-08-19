@@ -296,17 +296,13 @@ begin
       on coalesce(s.wife_is_family_member, false) = true
      and (
        public.tree_arabic_norm_v1(coalesce(s.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)
-       or public.tree_nasab_nth_v1(coalesce(s.wife_name, s.wife_lineage, ''), 1) = sis.leaf
+       or (
+         public.tree_nasab_nth_v1(coalesce(s.wife_name, s.wife_lineage, ''), 1) = sis.leaf
+         and v_gf_path is not null
+         and public.tree_nasab_nth_v1(coalesce(s.wife_name, s.wife_lineage, ''), 2)
+           = public.tree_path_leaf_v1(v_gf_path)
+       )
      )
-     and (
-       select count(*)
-       from public.tree_spouses s2
-       where coalesce(s2.wife_is_family_member, false) = true
-         and (
-           public.tree_arabic_norm_v1(coalesce(s2.wife_lineage, '')) = public.tree_arabic_norm_v1(sis.path)
-           or public.tree_nasab_nth_v1(coalesce(s2.wife_name, s2.wife_lineage, ''), 1) = sis.leaf
-         )
-     ) = 1
   ),
   ibn_khala as (
     select c.id
