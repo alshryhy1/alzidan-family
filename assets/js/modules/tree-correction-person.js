@@ -313,20 +313,28 @@
       ? text(tree.child_name || tree.name)
       : text(p.path || "");
     body.innerHTML =
-      '<p style="margin:0 0 10px;font-size:14px"><strong>الشخص:</strong> ' +
+      '<p style="margin:0 0 10px;font-size:14px"><strong>الشخص المعدّل:</strong> ' +
       escapeHtml(p.person_name || leafOf(path) || p.person_id) +
       "<br><span style=\"color:#6b7280;font-size:12px\">" +
       escapeHtml(path || "—") +
       " · " +
       escapeHtml(p.branch_key || "") +
       "</span></p>" +
+      '<p style="margin:0 0 10px;font-size:13px;color:#374151"><strong>المرسل:</strong> ' +
+      escapeHtml(p.requester_name || (p.submitter && p.submitter.name) || "—") +
+      (p.requester_phone || (p.submitter && p.submitter.phone)
+        ? ' · <span dir="ltr">جوال المرسل: ' +
+          escapeHtml(p.requester_phone || (p.submitter && p.submitter.phone)) +
+          "</span>"
+        : "") +
+      "</p>" +
       (p.operation === api.OPERATION_NAME
         ? '<p style="margin:0 0 8px"><strong>الاسم الجديد:</strong> ' +
           escapeHtml(p.name_new) +
           "</p>"
         : p.operation === api.OPERATION_PHONE
-          ? '<p style="margin:0 0 8px"><strong>الجوال الجديد:</strong> <span dir="ltr">' +
-            escapeHtml(p.phone_new) +
+          ? '<p style="margin:0 0 8px"><strong>الجوال الجديد للشخص المعدّل:</strong> <span dir="ltr">' +
+            escapeHtml(p.target_phone || p.phone_new) +
             "</span></p>"
           : p.operation === api.OPERATION_BIRTH
             ? '<p style="margin:0 0 8px"><strong>الميلاد الجديد:</strong> ' +
@@ -706,7 +714,13 @@
         }
         working.treeRow = again;
       } else if (p.operation === api.OPERATION_PHONE) {
-        var conflict = await checkPhoneConflict(sb, p.phone_new, p.person_id);
+        var targetPhone = text(p.target_phone || p.phone_new);
+        if (!targetPhone) {
+          throw new Error(
+            "لا يوجد جوال جديد للشخص المعدّل. جوال المرسل لا يُطبَّق على الشخص."
+          );
+        }
+        var conflict = await checkPhoneConflict(sb, targetPhone, p.person_id);
         var phoneSaveOk = false;
         if (conflict.ok) {
           phoneSaveOk = true;
@@ -718,7 +732,7 @@
           }
           var reassigned = await reassignPhoneFromConflict(
             sb,
-            p.phone_new,
+            targetPhone,
             tree,
             conflict
           );
@@ -744,7 +758,7 @@
             ) {
               var dPhone = await window.AlzidanDelegateTreeWrite.saveMemberPhone(
                 tree,
-                p.phone_new
+                targetPhone
               );
               if (!dPhone || !dPhone.ok) {
                 throw new Error(
@@ -752,7 +766,7 @@
                 );
               }
             } else {
-              var phoneResD = await savePhoneProfile(sb, p.phone_new, tree);
+              var phoneResD = await savePhoneProfile(sb, targetPhone, tree);
               if (!phoneResD.ok) {
                 throw new Error(
                   (phoneResD.error && phoneResD.error.message) || "فشل حفظ الجوال"
@@ -760,7 +774,7 @@
               }
             }
           } else {
-            var phoneRes = await savePhoneProfile(sb, p.phone_new, tree);
+            var phoneRes = await savePhoneProfile(sb, targetPhone, tree);
             if (!phoneRes.ok) {
               throw new Error(
                 (phoneRes.error && phoneRes.error.message) || "فشل حفظ الجوال"
@@ -776,7 +790,7 @@
           p.branch_key,
           tree.id
         );
-        if (phoneNow !== p.phone_new) {
+        if (phoneNow !== targetPhone) {
           throw new Error("الحفظ لم يُثبَّت — الجوال في الملف لا يطابق المطلوب.");
         }
       } else if (p.operation === api.OPERATION_BIRTH) {

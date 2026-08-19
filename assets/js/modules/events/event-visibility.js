@@ -52,8 +52,32 @@
       .trim();
   }
 
+  var RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+  function riyadhYmd(date) {
+    var d = date instanceof Date ? date : new Date(date);
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Riyadh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    var get = function (t) {
+      var p = parts.find(function (x) {
+        return x.type === t;
+      });
+      return Number(p && p.value);
+    };
+    return { y: get("year"), m: get("month"), d: get("day") };
+  }
+
+  function riyadhDayStartMs(year, month, day) {
+    return Date.UTC(year, month - 1, day, 0, 0, 0) - RIYADH_OFFSET_MS;
+  }
+
   function startOfLocalDayMs(date) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    var p = riyadhYmd(date || new Date());
+    return riyadhDayStartMs(p.y, p.m, p.d);
   }
 
   function endOfLocalDayMs(date) {
@@ -202,7 +226,7 @@
     var month = Number(iso[2]);
     var day = Number(iso[3]);
     if (!year || !month || !day) return null;
-    if (year >= 1900) return new Date(year, month - 1, day).getTime();
+    if (year >= 1900) return riyadhDayStartMs(year, month, day);
     if (year >= 1300 && year < 1900) {
       return parseHijriApproxToGregorianMs(day + "/" + month + "/" + year);
     }
@@ -326,15 +350,19 @@
       return "visible";
     }
 
-    // Happy / dated occasions — schedule-aware
+    // Happy / dated occasions — Riyadh calendar day wins over a stale UTC end_at/show_at.
     var win = resolveScheduleWindow(row, when);
     if (win.eventDayMs != null || win.showAtMs != null || win.endAtMs != null) {
-      if (win.endAtMs != null && nowMs > win.endAtMs) return "ended";
-      if (win.showAtMs != null && nowMs < win.showAtMs) return "scheduled";
-      if (win.eventDayMs != null) {
-        var diff = daysFromEventDay(row, when);
-        if (diff !== null && diff < 0 && win.endAtMs == null) return "ended";
+      var riyadhDiff = win.eventDayMs != null ? daysFromEventDay(row, when) : null;
+      var riyadhDayEnd =
+        win.eventDayMs != null ? endOfLocalDayMs(new Date(win.eventDayMs)) : null;
+      if (riyadhDiff === 0) return "visible";
+      if (riyadhDayEnd != null && nowMs <= riyadhDayEnd && riyadhDiff != null && riyadhDiff <= 0) {
+        return "visible";
       }
+      if (win.endAtMs != null && nowMs > win.endAtMs) return "ended";
+      if (riyadhDiff != null && riyadhDiff < 0) return "ended";
+      if (win.showAtMs != null && nowMs < win.showAtMs) return "scheduled";
       return "visible";
     }
 

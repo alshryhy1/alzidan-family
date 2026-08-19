@@ -54,6 +54,7 @@
       "new_house",
       "travel",
       "gathering",
+      "family_meetup",
     ]);
     return fallback.has(key);
   }

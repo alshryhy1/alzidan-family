@@ -131,4 +131,66 @@ var badCity = Corr.assertCreatablePersonCorrection(
 );
 assert(!badCity.ok, "city without city/area rejected");
 
+var identityPayload = {
+  operation: "name_correction",
+  branch_key: "مزيد",
+  person_id: "pid-abdulrahman",
+  person_name: "عبدالرحمن",
+  path: "حسن/عبدالرحمن",
+  name_old: "عبدالرحمن",
+  name_new: "عبدالله",
+  source: "web_rx",
+  submitter: { name: "حسن", phone: "+966534000000" },
+  phone: "+966534000000",
+};
+var requesterRow = { name: "حسن", phone: "+966534000000", branch_key: "مزيد" };
+var nIdent = Corr.normalizePersonCorrectionPayload(identityPayload, requesterRow);
+assert(!nIdent.phone_new, "name_correction does not copy requester phone onto phone_new");
+assert(nIdent.target_phone === "", "name_correction target_phone empty");
+assert(nIdent.requester_phone === "+966534000000", "requester_phone kept");
+assert(nIdent.person_name === "عبدالرحمن", "target person_name is عبدالرحمن not حسن");
+assert(nIdent.target_person && nIdent.target_person.person_id === "pid-abdulrahman", "target_person identity");
+
+var gateIdent = Corr.assertCreatablePersonCorrection(identityPayload, requesterRow);
+assert(gateIdent.ok, "name_correction still creatable with requester row.phone");
+assert(!/"phone_new": "\+966534000000"/.test(gateIdent.message), "serialized JSON must not set phone_new from row.phone");
+assert(/جوال المرسل/.test(gateIdent.message), "serialized labels requester phone separately");
+
+var poisoned = Corr.normalizePersonCorrectionPayload({
+  operation: "name_correction",
+  branch_key: "مزيد",
+  person_id: "pid-abdulrahman",
+  person_name: "عبدالرحمن",
+  name_new: "عبدالله",
+  phone: "+966534000000",
+});
+assert(!poisoned.phone_new, "src.phone is never phone_new");
+
+var phoneSplit = Corr.normalizePersonCorrectionPayload(
+  {
+    operation: "phone_correction",
+    branch_key: "مزيد",
+    person_id: "pid-abdulrahman",
+    person_name: "عبدالرحمن",
+    phone_new: "+966555111222",
+    submitter: { name: "حسن", phone: "+966534000000" },
+  },
+  { phone: "+966534000000", name: "حسن" }
+);
+assert(phoneSplit.phone_new === "+966555111222", "phone_correction keeps target phone_new");
+assert(phoneSplit.target_phone === "+966555111222", "target_phone aliases phone_new");
+assert(phoneSplit.requester_phone === "+966534000000", "requester_phone distinct from target");
+
+var selfEdit = Corr.normalizePersonCorrectionPayload({
+  operation: "name_correction",
+  branch_key: "مزيد",
+  person_id: "pid-hassan",
+  person_name: "حسن",
+  name_new: "حسين",
+  requester_person_id: "pid-hassan",
+  submitter: { name: "حسن", phone: "+966534000000", person_id: "pid-hassan" },
+});
+assert(selfEdit.self_edit === true, "self_edit when target === requester");
+assert(!selfEdit.phone_new, "self name_correction still does not apply requester phone");
+
 console.log("\nAll person correction contract tests passed.");

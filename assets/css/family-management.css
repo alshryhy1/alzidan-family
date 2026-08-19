@@ -150,6 +150,19 @@
   gap: 10px;
 }
 
+.fm-person-editor {
+  grid-column: 1 / -1;
+}
+
+.fm-edit-preview {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 .fm-stat {
   padding: 10px;
   border-radius: 10px;

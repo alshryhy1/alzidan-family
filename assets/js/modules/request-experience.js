@@ -2851,7 +2851,7 @@
         '<div class="founder-field"><label>الاسم الجديد</label><input name="nameNew" required maxlength="40" placeholder="مثال: عبدالرحمن" /></div>';
     } else if (operation === "phone_correction") {
       extraField =
-        '<div class="founder-field"><label>الجوال الجديد</label>' +
+        '<div class="founder-field"><label>الجوال الجديد للشخص المعدّل</label>' +
         (window.AlzidanPhoneIntl
           ? window.AlzidanPhoneIntl.fieldHtml({
               key: "rx-person-phone-new",
@@ -2898,7 +2898,7 @@
             key: "rx-person-submitter-phone",
             nationalName: "phone",
             required: true,
-            hint: "اختر الدولة ثم اكتب الرقم المحلي فقط.",
+            hint: "جوال صاحب الطلب فقط — لا يُحفظ على الشخص المعدّل إلا إذا كنت تصحّح بياناتك أنت.",
           })
         : '<input name="phone" type="tel" required />') +
       "</div>" +
@@ -3131,6 +3131,13 @@
         person_id: ctx.personId,
         person_name: ctx.personName,
         path: ctx.personPath,
+        target_person: {
+          person_id: ctx.personId,
+          person_name: ctx.personName,
+          path: ctx.personPath,
+        },
+        requester_name: submitterName,
+        requester_phone: phone,
         notes: notes,
         source: "web_rx",
         submitter: { name: submitterName, phone: phone },
@@ -3158,6 +3165,7 @@
           );
         }
         payload.phone_new = phoneNew;
+        payload.target_phone = phoneNew;
       } else if (operation === "birth_date_correction") {
         payload.birth_date_new = text(
           form.querySelector('[name="birthDateNew"]') &&

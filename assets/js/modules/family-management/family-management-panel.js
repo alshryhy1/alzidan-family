@@ -61,6 +61,7 @@
       '<div><div class="fm-person-card-title" data-fm-person-title>—</div><div class="fm-person-card-meta" data-fm-person-meta></div></div>' +
       "</div>" +
       '<div class="fm-toolbar"><button type="button" class="btn btn-primary btn-small" data-fm-open-add>+ إضافة</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" data-fm-edit-person>تعديل الشخص</button>' +
       (mode === "admin"
         ? '<button type="button" class="btn btn-secondary btn-small" data-fm-clear-photo hidden>حذف الصورة المخالفة</button>' +
           '<button type="button" class="btn btn-secondary btn-small" data-fm-delete-subtree style="border-color:rgba(239,68,68,0.5);color:#991b1b;">حذف الشجرة الفرعية</button>'
@@ -86,7 +87,8 @@
     personDataBody.innerHTML =
       '<div class="fm-stat"><div class="fm-stat-label">الزوجات</div><div class="fm-stat-value" data-fm-stat-wives>0</div></div>' +
       '<div class="fm-stat"><div class="fm-stat-label">الأبناء</div><div class="fm-stat-value" data-fm-stat-children>0</div></div>' +
-      '<div class="fm-stat"><div class="fm-stat-label">معرّف الشخص</div><div class="fm-stat-value" style="font-size:13px;" data-fm-stat-id>—</div></div>';
+      '<div class="fm-stat"><div class="fm-stat-label">معرّف الشخص</div><div class="fm-stat-value" style="font-size:13px;" data-fm-stat-id>—</div></div>' +
+      '<div class="fm-person-editor" data-fm-person-editor></div>';
 
     var spousesSection = typeof SpousesSection.create === "function"
       ? SpousesSection.create({
@@ -127,8 +129,38 @@
 
     personCard.querySelector("[data-fm-open-add]").addEventListener("click", function () {
       if (!selectedPersonId) return;
+      if (childrenSection && typeof childrenSection.closePersonEditor === "function") {
+        childrenSection.closePersonEditor();
+      }
       addSheet.open("son", { wives: spousesSection ? spousesSection.getWivesRows() : [] });
     });
+
+    var editPersonBtn = personCard.querySelector("[data-fm-edit-person]");
+    if (editPersonBtn) {
+      editPersonBtn.addEventListener("click", function () {
+        if (!selectedPersonId) return;
+        if (typeof api.isOriginPerson === "function" && api.isOriginPerson(selectedPersonId)) {
+          if (childrenSection && typeof childrenSection.setAlert === "function") {
+            childrenSection.setAlert(
+              "error",
+              (PersonCore && PersonCore.ORIGIN_LOCK_MSG) ||
+                "هذا من الأصول — لا يمكن تعديله أو حذفه.",
+            );
+          }
+          return;
+        }
+        var host = personDataBody.querySelector("[data-fm-person-editor]");
+        if (!host || !childrenSection || typeof childrenSection.openPersonEditor !== "function") return;
+        var acc = personDataBody.closest("details");
+        if (acc) acc.open = true;
+        var opened = childrenSection.openPersonEditor(selectedPersonId, host);
+        if (!opened || !opened.ok) {
+          if (childrenSection && typeof childrenSection.setAlert === "function") {
+            childrenSection.setAlert("error", (opened && opened.message) || "تعذر فتح محرر الشخص.");
+          }
+        }
+      });
+    }
 
     var deleteSubtreeBtn = personCard.querySelector("[data-fm-delete-subtree]");
     if (deleteSubtreeBtn) {
@@ -294,6 +326,17 @@
           ? (PersonCore && PersonCore.ORIGIN_LOCK_MSG) ||
             "هذا من الأصول — لا يمكن تعديله أو حذفه."
           : "";
+      }
+      if (editPersonBtn) {
+        editPersonBtn.style.display = selectedIsOrigin || !selectedPersonId ? "none" : "";
+        editPersonBtn.disabled = !!selectedIsOrigin || !selectedPersonId;
+        editPersonBtn.title = selectedIsOrigin
+          ? (PersonCore && PersonCore.ORIGIN_LOCK_MSG) ||
+            "هذا من الأصول — لا يمكن تعديله أو حذفه."
+          : "تعديل بيانات الشخص المحدد، بما فيها الجوال";
+        if (selectedIsOrigin && childrenSection && typeof childrenSection.closePersonEditor === "function") {
+          childrenSection.closePersonEditor();
+        }
       }
       var originHintEl = personCard.querySelector("[data-fm-origin-hint]");
       if (!originHintEl) {

@@ -114,24 +114,97 @@
       return { parts: parts, childId: childId, parentKey: parentKey };
     }
 
-    function buildInlineEdit(parentKey, child) {
+    function findPersonAsChild(personPath) {
+      var state = typeof api.getState === "function" ? api.getState() : {};
+      var norm = typeof api.normalizePersonName === "function"
+        ? api.normalizePersonName
+        : function (v) { return String(v || "").trim(); };
+      var id = norm(personPath || "");
+      if (!id) return null;
+      var children = state && state.children ? state.children : {};
+      var parentFromPath = id.indexOf("/") >= 0 ? id.split("/").slice(0, -1).join("/") : "";
+      function scanList(list, parentKey) {
+        var arr = Array.isArray(list) ? list : [];
+        for (var i = 0; i < arr.length; i++) {
+          var c = arr[i] || {};
+          if (norm(c.name || "") === id) return { parentId: parentKey, child: c };
+        }
+        return null;
+      }
+      if (parentFromPath && children[parentFromPath]) {
+        var hit = scanList(children[parentFromPath], parentFromPath);
+        if (hit) return hit;
+      }
+      var keys = Object.keys(children);
+      for (var k = 0; k < keys.length; k++) {
+        var hit2 = scanList(children[keys[k]], keys[k]);
+        if (hit2) return hit2;
+      }
+      if (parentFromPath) {
+        var meta = typeof api.getPersonRowMeta === "function" ? api.getPersonRowMeta(id) : null;
+        return {
+          parentId: parentFromPath,
+          child: {
+            name: id,
+            personId: meta && meta.person_id ? String(meta.person_id) : "",
+            parentPersonId: meta && meta.parent_person_id ? String(meta.parent_person_id) : "",
+            city: "",
+            area: "",
+            gender: "",
+          },
+        };
+      }
+      return null;
+    }
+
+    function genderSelectValue(raw) {
+      var g = String(raw || "").trim().toLowerCase();
+      if (g === "daughter" || g === "female" || g === "f" || g === "أنثى" || g === "انثى" || g === "ابنة" || g === "بنت") return "daughter";
+      if (g === "son" || g === "male" || g === "m" || g === "ذكر" || g === "ابن") return "son";
+      return "";
+    }
+
+    function genderLabel(raw) {
+      var g = genderSelectValue(raw);
+      if (g === "daughter") return "أنثى";
+      if (g === "son") return "ذكر";
+      return "غير محدد";
+    }
+
+    function buildInlineEdit(parentKey, child, editorOpts) {
+      var optsEdit = editorOpts || {};
       var isAdmin = api && api.mode === "admin";
       var childId = typeof api.normalizePersonName === "function"
         ? api.normalizePersonName(child && child.name ? child.name : "")
         : String(child && child.name ? child.name : "");
+      var phoneKey = optsEdit.phoneKey || "fm-edit";
       var wrap = document.createElement("div");
       wrap.className = "fm-inline-edit grid";
+      var branch = typeof api.getBranchKey === "function" ? api.getBranchKey() : "";
+      var branchRoot = typeof api.getBranchRootName === "function" ? api.getBranchRootName(branch) : "";
+      var parentDisplay = typeof api.getDisplayNameForNodeId === "function"
+        ? api.getDisplayNameForNodeId(parentKey, branchRoot)
+        : parentKey;
       wrap.innerHTML =
+        (optsEdit.hub
+          ? '<div class="hint" style="grid-column:1/-1;margin:0 0 4px;">محرر الشخص المحدد — ليس محرر طلب. الأب يُعرض للقراءة؛ تغيير الأب يتم عبر طلب تصحيح الأب.</div>'
+          : "") +
+        '<div class="field"><label>الأب / المسار</label><input type="text" data-fm-edit-parent readonly /></div>' +
         (isAdmin
           ? '<div class="field"><label>person_id (UUID)</label><input type="text" data-fm-edit-person-id dir="ltr" lang="en" placeholder="اختياري — للإدارة فقط" /></div>'
           : "") +
-        '<div class="field"><label for="fm-edit-child-name">تعديل الاسم</label><input id="fm-edit-child-name" type="text" data-fm-edit-name placeholder="اسم الابن/الابنة" /></div>' +
+        '<div class="field"><label for="fm-edit-child-name">الاسم</label><input id="fm-edit-child-name" type="text" data-fm-edit-name placeholder="اسم الشخص" /></div>' +
+        '<div class="field"><label>الجنس</label><select data-fm-edit-gender>' +
+        '<option value="">غير محدد</option>' +
+        '<option value="son">ذكر</option>' +
+        '<option value="daughter">أنثى</option>' +
+        "</select></div>" +
         '<div class="field"><label>رقم الجوال</label>' +
         (window.AlzidanPhoneIntl
           ? window.AlzidanPhoneIntl.fieldHtml({
-              key: "fm-edit",
+              key: phoneKey,
               nationalAttr: 'data-fm-edit-phone',
-              hint: "اختر الدولة ثم اكتب الرقم المحلي فقط.",
+              hint: "جوال هذا الشخص — ليس جوال المرسل في طلب تصحيح.",
             })
           : '<input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="5XXXXXXXX" /><div class="hint">اختر الدولة ثم الرقم المحلي</div>') +
         "</div>" +
@@ -143,6 +216,7 @@
         '<div class="field"><label>الحالة</label><label style="display:flex;align-items:center;gap:8px;min-height:38px;"><input type="checkbox" data-fm-edit-deceased /> متوفى</label></div>' +
         '<div class="field" data-fm-death-field><label>تاريخ الوفاة (هجري)</label><input type="text" data-fm-edit-death-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
         '<div class="field" data-fm-death-field><label>تاريخ الوفاة (ميلادي)</label><input type="date" data-fm-edit-death-greg dir="ltr" lang="en" /></div>' +
+        '<div class="fm-edit-preview" data-fm-edit-preview style="grid-column:1/-1;"></div>' +
         '<div class="fm-toolbar" style="grid-column:1/-1;"><button type="button" class="btn btn-primary btn-small" data-fm-save-edit>حفظ التعديل</button>' +
         '<button type="button" class="btn btn-secondary btn-small" data-fm-cancel-edit>إلغاء</button></div>' +
         '<div class="alert fm-section-alert" data-fm-edit-alert style="display:none;grid-column:1/-1;"></div>';
@@ -196,6 +270,10 @@
       var orderEl = wrap.querySelector("[data-fm-edit-order]");
       if (orderEl) orderEl.value = child && child.order ? String(child.order) : "";
       var cityEl = wrap.querySelector("[data-fm-edit-city]");
+      var parentEl = wrap.querySelector("[data-fm-edit-parent]");
+      if (parentEl) parentEl.value = String(parentDisplay || parentKey || "");
+      var genderEl = wrap.querySelector("[data-fm-edit-gender]");
+      if (genderEl) genderEl.value = genderSelectValue(child && child.gender);
       if (cityEl) cityEl.value = String(child && child.city ? child.city : "");
       var areaEl = wrap.querySelector("[data-fm-edit-area]");
       if (areaEl) areaEl.value = String(child && child.area ? child.area : "");
@@ -215,14 +293,14 @@
       });
       syncDeathDateFields();
 
+      var originalName = "";
       var nameEl = wrap.querySelector("[data-fm-edit-name]");
       if (nameEl) {
-        var branch = typeof api.getBranchKey === "function" ? api.getBranchKey() : "";
-        var branchRoot = typeof api.getBranchRootName === "function" ? api.getBranchRootName(branch) : "";
         var displayName = typeof api.getDisplayNameForNodeId === "function"
           ? api.getDisplayNameForNodeId(childId, branchRoot)
           : childId;
         nameEl.value = String(displayName || childId || "");
+        originalName = String(nameEl.value || "");
       }
 
       var personIdEl = wrap.querySelector("[data-fm-edit-person-id]");
@@ -232,12 +310,17 @@
       }
 
       var phoneEl = wrap.querySelector("[data-fm-edit-phone]");
-      var phoneWrap = wrap.querySelector('[data-phone-intl="fm-edit"]') || (phoneEl && phoneEl.closest ? phoneEl.closest("[data-phone-intl]") : null);
+      var phoneWrap =
+        wrap.querySelector('[data-phone-intl="' + phoneKey + '"]') ||
+        (phoneEl && phoneEl.closest ? phoneEl.closest("[data-phone-intl]") : null);
+      var originalPhone = "";
       if (phoneWrap && window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.bindPhoneIntl(phoneWrap);
       if (phoneEl && typeof api.loadMemberPhone === "function") {
         api.loadMemberPhone(parentKey, child).then(function (v) {
-          if (phoneWrap && window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.setPhoneIntl(phoneWrap, v || "");
-          else if (phoneEl) phoneEl.value = v || "";
+          originalPhone = String(v || "").trim();
+          if (phoneWrap && window.AlzidanPhoneIntl) window.AlzidanPhoneIntl.setPhoneIntl(phoneWrap, originalPhone);
+          else if (phoneEl) phoneEl.value = originalPhone;
+          refreshPreview();
         }).catch(function () {});
       }
 
@@ -277,22 +360,141 @@
         });
       }
 
+      var previewEl = wrap.querySelector("[data-fm-edit-preview]");
+      var saveBtn = wrap.querySelector("[data-fm-save-edit]");
+      var pendingConfirm = false;
+      var originalGender = genderSelectValue(child && child.gender);
+      var originalHijri = String((child && child.hdate) || (child && child.year) || "");
+      var originalGreg = toDateInputValue(child && child.gdate ? child.gdate : "");
+      var originalOrder = child && child.order ? String(child.order) : "";
+      var originalCity = String(child && child.city ? child.city : "");
+      var originalArea = String(child && child.area ? child.area : "");
+      var originalDeceased = !!(child && child.deceased);
+      var originalDeathHijri = String(child && child.dhdate ? child.dhdate : "");
+      var originalDeathGreg = toDateInputValue(child && child.ddate ? child.ddate : "");
+
+      function readDraftPhone() {
+        if (phoneWrap && window.AlzidanPhoneIntl) {
+          var phoneRead = window.AlzidanPhoneIntl.readE164(phoneWrap, false);
+          if (!phoneRead.empty && !phoneRead.ok) return { ok: false, value: "" };
+          return { ok: true, value: phoneRead.e164 || "" };
+        }
+        return { ok: true, value: phoneEl ? String(phoneEl.value || "").trim() : "" };
+      }
+
+      function collectDiffs() {
+        var lines = [];
+        var nextName = nameEl ? String(nameEl.value || "").trim() : "";
+        if (nextName !== originalName) {
+          lines.push("الاسم: «" + originalName + "» → «" + nextName + "»");
+        }
+        var nextGender = genderEl ? genderSelectValue(genderEl.value) : "";
+        if (nextGender !== originalGender) {
+          lines.push("الجنس: «" + genderLabel(originalGender) + "» → «" + genderLabel(nextGender) + "»");
+        }
+        var phoneDraft = readDraftPhone();
+        if (phoneDraft.ok && phoneDraft.value !== originalPhone) {
+          lines.push(
+            "الجوال: «" +
+              (originalPhone || "—") +
+              "» → «" +
+              (phoneDraft.value || "—") +
+              "»"
+          );
+        }
+        var nextHijri = hijriEl ? String(hijriEl.value || "").trim() : "";
+        var nextGreg = gregEl ? String(gregEl.value || "").trim() : "";
+        if (nextHijri !== originalHijri || nextGreg !== originalGreg) {
+          lines.push(
+            "الميلاد: «" +
+              (originalHijri || originalGreg || "—") +
+              "» → «" +
+              (nextHijri || nextGreg || "—") +
+              "»"
+          );
+        }
+        var nextOrder = orderEl ? String(orderEl.value || "").trim() : "";
+        if (nextOrder !== originalOrder) {
+          lines.push("ترتيب الميلاد: «" + (originalOrder || "—") + "» → «" + (nextOrder || "—") + "»");
+        }
+        var nextCity = cityEl ? String(cityEl.value || "").trim() : "";
+        if (nextCity !== originalCity) {
+          lines.push("المدينة: «" + (originalCity || "—") + "» → «" + (nextCity || "—") + "»");
+        }
+        var nextArea = areaEl ? String(areaEl.value || "").trim() : "";
+        if (nextArea !== originalArea) {
+          lines.push("الحي/القرية: «" + (originalArea || "—") + "» → «" + (nextArea || "—") + "»");
+        }
+        var nextDeceased = !!(deceasedEl && deceasedEl.checked);
+        if (nextDeceased !== originalDeceased) {
+          lines.push("الحالة: «" + (originalDeceased ? "متوفى" : "حي") + "» → «" + (nextDeceased ? "متوفى" : "حي") + "»");
+        }
+        var nextDeathHijri = deathHijriEl ? String(deathHijriEl.value || "").trim() : "";
+        var nextDeathGreg = deathGregEl ? String(deathGregEl.value || "").trim() : "";
+        if (nextDeceased && (nextDeathHijri !== originalDeathHijri || nextDeathGreg !== originalDeathGreg)) {
+          lines.push(
+            "الوفاة: «" +
+              (originalDeathHijri || originalDeathGreg || "—") +
+              "» → «" +
+              (nextDeathHijri || nextDeathGreg || "—") +
+              "»"
+          );
+        }
+        return lines;
+      }
+
+      function refreshPreview() {
+        pendingConfirm = false;
+        if (saveBtn) saveBtn.textContent = "حفظ التعديل";
+        if (!previewEl) return;
+        var lines = collectDiffs();
+        if (!lines.length) {
+          previewEl.innerHTML = "<strong>معاينة الحفظ</strong><div class=\"hint\" style=\"margin-top:6px;\">لا توجد تغييرات بعد.</div>";
+          return;
+        }
+        previewEl.innerHTML =
+          "<strong>سيُحفظ على هذا الشخص</strong>" +
+          '<ul style="margin:6px 0 0;padding-inline-start:18px;">' +
+          lines
+            .map(function (line) {
+              return "<li>" + escapeHtml(line) + "</li>";
+            })
+            .join("") +
+          "</ul>" +
+          '<div class="hint" style="margin-top:8px;">الأب/المسار لا يتغير من هنا. جوال المرسل في طلبات التصحيح لا يُكتب على هذا الشخص.</div>';
+      }
+
+      wrap.querySelectorAll("input, select, textarea").forEach(function (el) {
+        el.addEventListener("input", refreshPreview);
+        el.addEventListener("change", refreshPreview);
+      });
+      refreshPreview();
+
       wrap.querySelector("[data-fm-cancel-edit]").addEventListener("click", function () {
+        if (typeof optsEdit.onCancel === "function") {
+          optsEdit.onCancel();
+          return;
+        }
         editingKey = "";
         refresh();
       });
       wrap.querySelector("[data-fm-save-edit]").addEventListener("click", async function () {
         if (typeof api.updateChild !== "function") return;
-        var phoneValue = "";
-        if (phoneWrap && window.AlzidanPhoneIntl) {
-          var phoneRead = window.AlzidanPhoneIntl.readE164(phoneWrap, false);
-          if (!phoneRead.empty && !phoneRead.ok) {
-            setAlert(editAlert, "error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
-            return;
-          }
-          phoneValue = phoneRead.e164 || "";
-        } else {
-          phoneValue = phoneEl ? phoneEl.value : "";
+        var phoneDraft = readDraftPhone();
+        if (!phoneDraft.ok) {
+          setAlert(editAlert, "error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
+          return;
+        }
+        var diffs = collectDiffs();
+        if (!diffs.length) {
+          setAlert(editAlert, "error", "لا توجد تغييرات للحفظ.");
+          return;
+        }
+        if (!pendingConfirm) {
+          pendingConfirm = true;
+          if (saveBtn) saveBtn.textContent = "تأكيد الحفظ";
+          setAlert(editAlert, "success", "راجع المعاينة ثم اضغط تأكيد الحفظ.");
+          return;
         }
         var res = await api.updateChild({
           parentId: parentKey,
@@ -300,7 +502,8 @@
           child: child,
           newName: nameEl ? nameEl.value : "",
           personId: personIdEl ? personIdEl.value : "",
-          phone: phoneValue,
+          phone: phoneDraft.value,
+          gender: genderEl ? genderEl.value : "",
           hijri: hijriEl ? hijriEl.value : "",
           greg: gregEl ? gregEl.value : "",
           order: orderEl ? orderEl.value : "",
@@ -311,10 +514,16 @@
           deathGreg: deathGregEl ? deathGregEl.value : "",
         });
         if (!res || !res.ok) {
+          pendingConfirm = false;
+          if (saveBtn) saveBtn.textContent = "حفظ التعديل";
           setAlert(editAlert, "error", (res && res.message) || "تعذر حفظ التعديل.");
           return;
         }
         editingKey = "";
+        if (typeof optsEdit.onSaved === "function") {
+          optsEdit.onSaved(res);
+          return;
+        }
         setAlert(alertEl, "success", res.message || "تم حفظ التعديل.");
         await refresh();
         if (typeof opts.onDataChanged === "function") opts.onDataChanged();
@@ -468,8 +677,43 @@
       });
     }
 
+    function closePersonEditor() {
+      if (hubEditorHost) hubEditorHost.innerHTML = "";
+      hubEditorHost = null;
+    }
+
+    function openPersonEditor(personPath, hostEl) {
+      closePersonEditor();
+      if (!hostEl) return { ok: false, message: "تعذر فتح المحرر." };
+      var found = findPersonAsChild(personPath);
+      if (!found) {
+        hostEl.innerHTML =
+          '<div class="hint">تعذر فتح محرر هذا الشخص من هنا — غالباً لأنه جذر الفرع أو بلا أب في الشجرة.</div>';
+        return { ok: false, message: "تعذر تحديد سجل الشخص." };
+      }
+      hubEditorHost = hostEl;
+      editingKey = "";
+      hostEl.appendChild(
+        buildInlineEdit(found.parentId, found.child, {
+          hub: true,
+          phoneKey: "fm-person-hub-edit",
+          onCancel: closePersonEditor,
+          onSaved: function (res) {
+            closePersonEditor();
+            setAlert(alertEl, "success", (res && res.message) || "تم حفظ التعديل.");
+            refresh();
+            if (typeof opts.onDataChanged === "function") opts.onDataChanged();
+          },
+        })
+      );
+      return { ok: true };
+    }
+
+    var hubEditorHost = null;
+
     function resetSession() {
       editingKey = "";
+      closePersonEditor();
       hideAlert(alertEl);
       refresh();
     }
@@ -478,6 +722,8 @@
       el: container,
       refresh: refresh,
       resetSession: resetSession,
+      openPersonEditor: openPersonEditor,
+      closePersonEditor: closePersonEditor,
       setAlert: function (type, text) { setAlert(alertEl, type, text); },
     };
   }

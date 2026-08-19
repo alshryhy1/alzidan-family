@@ -1103,26 +1103,88 @@
    * Admin/Delegate router entry.
    */
 
+  /**
+   * Requester phone and target phone are independent identities.
+   * approval_requests.phone / src.phone / submitter.phone = صاحب الطلب.
+   * phone_new / target_phone = جوال الشخص المعدّل، وفقط في phone_correction.
+   * Never copy the requester number onto the person being corrected.
+   */
+  function splitCorrectionIdentities(src, rowObj) {
+    var input = src || {};
+    var row = rowObj || {};
+    var submitter =
+      input.submitter && typeof input.submitter === "object"
+        ? input.submitter
+        : {};
+    var targetObj =
+      input.target_person && typeof input.target_person === "object"
+        ? input.target_person
+        : {};
+    var requesterName = text(
+      submitter.name || input.requester_name || row.name || ""
+    );
+    var requesterPhone = text(
+      submitter.phone || input.requester_phone || row.phone || ""
+    );
+    var requesterPersonId = text(
+      submitter.person_id ||
+        submitter.personId ||
+        input.requester_person_id ||
+        ""
+    );
+    var personId = text(
+      input.person_id || input.personId || targetObj.person_id || ""
+    );
+    var personName = text(
+      input.person_name ||
+        input.personName ||
+        input.match_name ||
+        targetObj.person_name ||
+        targetObj.name ||
+        ""
+    );
+    var path = text(
+      input.path ||
+        input.child_name ||
+        input.childName ||
+        targetObj.path ||
+        ""
+    );
+    return {
+      requesterName: requesterName,
+      requesterPhone: requesterPhone,
+      requesterPersonId: requesterPersonId,
+      personId: personId,
+      personName: personName,
+      path: path,
+      submitter: {
+        name: requesterName,
+        phone: requesterPhone,
+        person_id: requesterPersonId || undefined,
+      },
+    };
+  }
+
   function normalizePersonCorrectionPayload(input, row) {
     var src = input || {};
     var rowObj = row || {};
     var operation = text(src.operation || "");
     if (PERSON_OPS.indexOf(operation) < 0) operation = "";
-    var personId = text(src.person_id || src.personId || "");
-    var personName = text(
-      src.person_name || src.personName || src.match_name || src.name || ""
-    );
-    var path = text(src.path || src.child_name || src.childName || "");
+    var ids = splitCorrectionIdentities(src, rowObj);
+    var personId = ids.personId;
+    var personName = ids.personName;
+    var path = ids.path;
     var branch = text(
       src.branch_key || src.branchKey || rowObj.branch_key || ""
     );
     var nameNew = text(src.name_new || src.nameNew || src.new_name || "");
     var nameOld = text(src.name_old || src.nameOld || src.old_name || personName);
-    var phoneNew = text(src.phone_new || src.phoneNew || src.phone || "");
-    var phoneOld = text(src.phone_old || src.phoneOld || "");
-    var birthNew = text(
-      src.birth_date_new || src.birthDateNew || src.birth_date_g || src.birth_date || ""
+    var explicitTargetPhone = text(
+      src.target_phone || src.phone_new || src.phoneNew || ""
     );
+    var phoneNew = operation === OPERATION_PHONE ? explicitTargetPhone : "";
+    var phoneOld = text(src.phone_old || src.phoneOld || "");
+    var birthNew = text(src.birth_date_new || src.birthDateNew || "");
     var birthOld = text(
       src.birth_date_old || src.birthDateOld || src.birth_date_g_old || ""
     );
@@ -1145,14 +1207,13 @@
     var cityOld = text(src.city_old || src.cityOld || "");
     var areaNew = text(src.area_new || src.areaNew || "");
     var areaOld = text(src.area_old || src.areaOld || "");
-    if (!cityNew && operation === OPERATION_CITY) {
-      cityNew = text(src.city || "");
-    }
-    if (!areaNew && operation === OPERATION_CITY) {
-      areaNew = text(src.area || "");
-    }
     var notes = text(src.notes || "");
     var review = text(src.review_state || "");
+    var selfEdit = !!(
+      personId &&
+      ids.requesterPersonId &&
+      personId === ids.requesterPersonId
+    );
     return {
       schema: SCHEMA,
       schema_version: SCHEMA_VERSION,
@@ -1162,10 +1223,20 @@
       person_id: personId,
       person_name: personName,
       path: path,
+      target_person: {
+        person_id: personId,
+        person_name: personName,
+        path: path,
+      },
+      requester_name: ids.requesterName,
+      requester_phone: ids.requesterPhone,
+      requester_person_id: ids.requesterPersonId,
+      self_edit: selfEdit,
       name_old: nameOld,
       name_new: nameNew,
       phone_new: phoneNew,
       phone_old: phoneOld,
+      target_phone: phoneNew,
       birth_date_new: birthNew,
       birth_date_old: birthOld,
       city_new: cityNew,
@@ -1180,7 +1251,7 @@
       notes: notes,
       review_state: review,
       source: text(src.source || "web_rx") || "web_rx",
-      submitter: src.submitter || null,
+      submitter: ids.submitter,
       created_at: text(src.created_at || src.createdAt || "") || null,
       applied_at: text(src.applied_at || "") || null,
     };
@@ -1276,8 +1347,8 @@
     };
   }
 
-  function serializePersonCorrectionMessage(input) {
-    var p = normalizePersonCorrectionPayload(input);
+  function serializePersonCorrectionMessage(input, row) {
+    var p = normalizePersonCorrectionPayload(input, row);
     var lines = [];
     if (p.operation === OPERATION_NAME) {
       lines.push("طلب تصحيح اسم");
@@ -1323,8 +1394,21 @@
     }
     if (p.branch_key) lines.push("الفرع: " + p.branch_key);
     if (p.notes) lines.push("ملاحظة: " + p.notes);
-    if (p.submitter && p.submitter.name) {
-      lines.push("المرسل: " + text(p.submitter.name));
+    lines.push("الشخص المعدّل: " + (p.person_name || p.person_id || "—"));
+    if (p.path) lines.push("مسار الشخص المعدّل: " + p.path);
+    if (p.requester_name || (p.submitter && p.submitter.name)) {
+      lines.push(
+        "المرسل: " + text(p.requester_name || (p.submitter && p.submitter.name))
+      );
+    }
+    if (p.requester_phone || (p.submitter && p.submitter.phone)) {
+      lines.push(
+        "جوال المرسل: " +
+          text(p.requester_phone || (p.submitter && p.submitter.phone))
+      );
+    }
+    if (p.operation === OPERATION_PHONE && p.phone_new) {
+      lines.push("جوال الشخص المعدّل (الجديد): " + p.phone_new);
     }
     lines.push("");
     lines.push(MARKER);
@@ -1367,9 +1451,7 @@
     var message =
       typeof messageOrPayload === "string"
         ? messageOrPayload
-        : serializePersonCorrectionMessage(
-            Object.assign({}, parsed.payload, row || {})
-          );
+        : serializePersonCorrectionMessage(parsed.payload, row);
     return {
       ok: true,
       code: "",
@@ -1693,6 +1775,7 @@
     serializeReorderMessage: serializeReorderMessage,
     parseCorrectionMessage: parseCorrectionMessage,
     assertCreatableReorder: assertCreatableReorder,
+    splitCorrectionIdentities: splitCorrectionIdentities,
     normalizePersonCorrectionPayload: normalizePersonCorrectionPayload,
     validatePersonCorrectionPayload: validatePersonCorrectionPayload,
     serializePersonCorrectionMessage: serializePersonCorrectionMessage,

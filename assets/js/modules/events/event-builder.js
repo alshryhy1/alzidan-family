@@ -102,6 +102,23 @@
     if (typeof E.normalizeEventType === "function") {
       out.type = E.normalizeEventType(out.type || "gathering");
     }
+    if (out.type === "family_meetup") {
+      var det = {};
+      if (out.details && typeof out.details === "object" && !Array.isArray(out.details)) {
+        det = Object.assign({}, out.details);
+      } else {
+        try {
+          var parsed = JSON.parse(String(out.details || "{}"));
+          det = parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+          det = {};
+        }
+      }
+      det.display_type = "family_meetup";
+      det.occasion_key = "family_meetup";
+      out.details = stringifyDetails(det);
+      out.type = "gathering";
+    }
     return out;
   }
 
@@ -145,10 +162,8 @@
         date_label: normalizeText(event.date_label || ""),
         event_date: toSqlDateOrEmpty(event.event_date || ""),
         details: stringifyDetails(details),
-        hospital_name: normalizeText(event.hospital_name || ""),
-        hospital_dept: normalizeText(event.hospital_dept || ""),
-        contact_method: normalizeText(event.contact_method || ""),
-        contact_phone: normalizeText(event.contact_phone || ""),
+        ...emptyRowFields(),
+        contact_phone: normalizeText(event.contact_phone || row.phone || ""),
         visit_date_from: toSqlDateOrEmpty(event.visit_date_from || ""),
         visit_date_to: toSqlDateOrEmpty(event.visit_date_to || ""),
         visit_time_from: normalizeText(event.visit_time_from || ""),
@@ -295,6 +310,12 @@
       videoUrl: normalizeText(input.videoUrl),
       showDays: 7,
     };
+    const hostPhone = normalizeText(input.phone || input.contactPhone || "");
+    if (hostPhone) details.submitter_phone = hostPhone;
+    if (personId) {
+      details.person_id = personId;
+      details.personId = personId;
+    }
     const Vis = root.AlzidanEventVisibility || {};
     const schedule =
       typeof Vis.buildScheduleFields === "function"
@@ -322,6 +343,7 @@
       event_date: normalizeText(input.eventDate || ""),
       details: stringifyDetails(merged),
       ...emptyRowFields(),
+      contact_phone: hostPhone,
       created_at: normalizeText(input.createdAt || new Date().toISOString()),
     };
     if (schedule.show_before_days != null) row.show_before_days = schedule.show_before_days;
@@ -455,6 +477,12 @@
       created_at: createdAt,
     };
     row.details = stringifyDetails(applySchedule(details, row));
+    const hostPhone = normalizeText(input.phone || input.contactPhone || "");
+    if (hostPhone) {
+      row.contact_phone = hostPhone;
+      details.submitter_phone = hostPhone;
+      row.details = stringifyDetails(applySchedule(details, row));
+    }
     return row;
   }
 
@@ -546,7 +574,7 @@
       hospital_name: isHealth ? hospitalName || null : "",
       hospital_dept: isHealth ? hospitalDept || null : "",
       contact_method: isHealth ? contactMethod || null : "",
-      contact_phone: isHealth ? contactPhone || null : "",
+      contact_phone: contactPhone || "",
       visit_date_from: isHealth ? visitDateFrom || null : "",
       visit_date_to: isHealth ? visitDateTo || null : "",
       visit_time_from: isHealth ? visitTimeFrom || null : "",

@@ -252,7 +252,10 @@
       return q.data.filter(function (row) {
         var types = row.applies_to_types || [];
         if (Array.isArray(types) && types.length) {
-          return types.indexOf(typeKey) >= 0;
+          if (types.indexOf(typeKey) >= 0) return true;
+          if (typeKey === "family_meetup" && types.indexOf("gathering") >= 0) return true;
+          if (typeKey === "gathering" && types.indexOf("family_meetup") >= 0) return true;
+          return false;
         }
         return normalizeText(row.family).toLowerCase() === family;
       });
