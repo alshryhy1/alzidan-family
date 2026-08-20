@@ -9,6 +9,8 @@
  *  - path_mismatch: parent extracted from name path ≠ stored parent, OR stored parent
  *    text conflicts with a valid parent_person_id (orange review — not missing_father)
  *  - possible_spelling_duplicates: sibling names match after Arabic normalize (review only)
+ *  - wrong_name_similarity: siblings under same father, edit distance 1 after normalize
+ *  - suspicious_name_typo: OCR/typo patterns (محد، أرقام في الاسم) — not popular names
  *  - duplicate_person_id
  *  - spouses_without_husband
  *  - broken_relation: union of structural failures (no healthy father link)
@@ -25,6 +27,8 @@
     MISSING_FATHER: "missing_father",
     PATH_MISMATCH: "path_mismatch",
     POSSIBLE_SPELLING_DUPLICATES: "possible_spelling_duplicates",
+    WRONG_NAME_SIMILARITY: "wrong_name_similarity",
+    SUSPICIOUS_NAME_TYPO: "suspicious_name_typo",
     DUPLICATE_PERSON_ID: "duplicate_person_id",
     SPOUSES_WITHOUT_HUSBAND: "spouses_without_husband",
     BROKEN_RELATION: "broken_relation",
@@ -35,7 +39,9 @@
     parent_empty: "الأب غير مذكور",
     missing_father: "الأب غير موجود في الشجرة",
     path_mismatch: "عدم تطابق/مراجعة",
-    possible_spelling_duplicates: "أسماء قد تكون مكررة",
+    possible_spelling_duplicates: "تكرار تحت الأب نفسه",
+    wrong_name_similarity: "تشابه خاطئ تحت الأب",
+    suspicious_name_typo: "كتابة مشتبهة في الاسم",
     duplicate_person_id: "معرف شخص مكرر",
     spouses_without_husband: "زوجات بلا زوج صالح",
     broken_relation: "أبناء بدون أب صالح",
@@ -66,6 +72,14 @@
     possible_spelling_duplicates: [
       "يسمح بطلبات مكررة",
       "يُربك البحث في الطلبات",
+    ],
+    wrong_name_similarity: [
+      "يسمح بطلبات مكررة",
+      "يُربك البحث في الطلبات",
+    ],
+    suspicious_name_typo: [
+      "يُربك البحث في الطلبات",
+      "يسمح بطلبات مكررة",
     ],
     duplicate_person_id: [
       "يسمح بطلبات مكررة",
@@ -101,6 +115,8 @@
     missing_father: PRIORITY.CRITICAL,
     path_mismatch: PRIORITY.HIGH,
     possible_spelling_duplicates: PRIORITY.HIGH,
+    wrong_name_similarity: PRIORITY.HIGH,
+    suspicious_name_typo: PRIORITY.MEDIUM,
     broken_relation: PRIORITY.HIGH,
     duplicate_person_id: PRIORITY.MEDIUM,
     spouses_without_husband: PRIORITY.MEDIUM,
@@ -118,6 +134,10 @@
       "عُدّل المسار دون تحديث حقل الأب، أو نص الأب لا يطابق الأب المرتبط بـ UUID، أو الاسم مكتوب بطريقة مختلفة عن صف الأب. اختلاف ى/ي وحده بعد التوحيد لا يُعدّ مشكلة هيكلية.",
     possible_spelling_duplicates:
       "اسمان تحت نفس الأب تطابقا بعد توحيد العربية (همزة / ى↔ي / ة↔ه / تشكيل) — قد يكونان شخصًا واحدًا أو شخصين مختلفين.",
+    wrong_name_similarity:
+      "اسمان تحت نفس الأب يختلفان بحرف زائد أو ناقص بعد التوحيد — غالبًا خطأ إدخال لا أخوان باسمين مختلفين (مثل سعيد وسعود).",
+    suspicious_name_typo:
+      "ورقة الاسم تطابق نمط مسح أو خطأ شائع (محد بدل محمد، رقم داخل الاسم، رمز OCR).",
     duplicate_person_id:
       "دمج أو استيراد مكرر — يحتاج ربط المعرف الداخلي لا إعادة تسمية.",
     spouses_without_husband: "زوجة رُبطت بزوج غير موجود أو معرف مكسور.",
@@ -135,6 +155,10 @@
       "كيفية الإصلاح: وحّد حقل الأب مع المسار عبر إصلاح صف واحد بعد موافقة (مندوب/إدارة/استيراد).",
     possible_spelling_duplicates:
       "كيفية الإصلاح: مراجعة يدوية فقط — لا دمج تلقائي. قرّر لاحقًا الإبقاء أو الدمج بعد التحقق.",
+    wrong_name_similarity:
+      "كيفية الإصلاح: راجع إن كانا شخصًا واحدًا بخطأ إملائي أو شخصين — لا دمج تلقائي.",
+    suspicious_name_typo:
+      "كيفية الإصلاح: صحّح ورقة الاسم من إدارة الشجرة بعد التأكد — ليس توحيد أسماء شائعة.",
     duplicate_person_id:
       "كيفية الإصلاح: ربط المعرف الداخلي عبر مسار الكتابة الموحّد — بلا إعادة تسمية.",
     spouses_without_husband:
@@ -634,22 +658,64 @@
     );
   }
 
+  function groupSiblingsByFather(children) {
+    var groups = new Map();
+    (Array.isArray(children) ? children : []).forEach(function (c) {
+      if (!c) return;
+      var key = fatherGroupKey(c);
+      if (!key) return;
+      if (!leafName(childPath(c))) return;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    });
+    return groups;
+  }
+
+  function editDistanceOneMax(a, b) {
+    a = String(a || "");
+    b = String(b || "");
+    if (a === b) return 0;
+    var m = a.length;
+    var n = b.length;
+    if (Math.abs(m - n) > 1) return 2;
+    if (!m) return n;
+    if (!n) return m;
+    var prev = [];
+    var i;
+    var j;
+    for (j = 0; j <= n; j += 1) prev[j] = j;
+    for (i = 1; i <= m; i += 1) {
+      var cur = [i];
+      var ca = a.charAt(i - 1);
+      for (j = 1; j <= n; j += 1) {
+        var cost = ca === b.charAt(j - 1) ? 0 : 1;
+        var del = prev[j] + 1;
+        var ins = cur[j - 1] + 1;
+        var sub = prev[j - 1] + cost;
+        cur[j] = del < ins ? (del < sub ? del : sub) : ins < sub ? ins : sub;
+        if (cur[j] > 1 && j === n && i < m) {
+          /* keep computing; names are short */
+        }
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+
+  function pairSortKey(x, y) {
+    var fa = normalizeArabicForCompare(x.father_label || "");
+    var fb = normalizeArabicForCompare(y.father_label || "");
+    if (fa < fb) return -1;
+    if (fa > fb) return 1;
+    return String(x.id).localeCompare(String(y.id));
+  }
+
   /**
    * Sibling pairs under same father whose leaf names match after Arabic normalize.
    * Read-only · no auto-merge (Truth Before Speed).
    */
   function findPossibleSpellingDuplicates(children) {
-    var rows = Array.isArray(children) ? children : [];
-    var groups = new Map();
-    rows.forEach(function (c) {
-      if (!c) return;
-      var key = fatherGroupKey(c);
-      if (!key) return;
-      var leaf = leafName(childPath(c));
-      if (!leaf) return;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(c);
-    });
+    var groups = groupSiblingsByFather(children);
 
     var pairs = [];
     var seenPair = new Set();
@@ -750,14 +816,221 @@
       }
     });
 
-    pairs.sort(function (x, y) {
-      var fa = normalizeArabicForCompare(x.father_label || "");
-      var fb = normalizeArabicForCompare(y.father_label || "");
-      if (fa < fb) return -1;
-      if (fa > fb) return 1;
-      return String(x.id).localeCompare(String(y.id));
-    });
+    pairs.sort(pairSortKey);
     return pairs;
+  }
+
+  /**
+   * Given names that often appear as distinct brothers. Same-father pairs
+   * among these are not «wrong similarity» (سعد/سعيد, عمر/عمرو).
+   */
+  var COMMON_DISTINCT_GIVEN = (function () {
+    var raw = [
+      "محمد",
+      "احمد",
+      "عبدالله",
+      "عبدالرحمن",
+      "عبدالعزيز",
+      "عبدالاله",
+      "عبدالوهاب",
+      "فهد",
+      "فهاد",
+      "خالد",
+      "سلطان",
+      "نايف",
+      "سعد",
+      "سعيد",
+      "سعود",
+      "عمر",
+      "عمرو",
+      "علي",
+      "علوي",
+      "حسن",
+      "حسين",
+      "يوسف",
+      "ابراهيم",
+      "فارس",
+      "ياسر",
+      "منيف",
+      "ماجد",
+      "مشعل",
+      "تركي",
+      "بدر",
+      "نواف",
+      "راكان",
+      "فيصل",
+      "طلال",
+      "مشاري",
+      "مقرن",
+      "بندر",
+      "حمد",
+      "حمود",
+      "صالح",
+      "سليمان",
+      "ناصر",
+      "نصر",
+      "مطلق",
+      "منصور",
+      "زيد",
+      "زيدان",
+      "مزيد",
+      "زايد",
+      "ملحم",
+      "لاحم",
+    ];
+    var set = new Set();
+    raw.forEach(function (n) {
+      var k = normalizeArabicForCompare(n);
+      if (k) set.add(k);
+    });
+    return set;
+  })();
+
+  function bothCommonDistinctGivens(normA, normB) {
+    return COMMON_DISTINCT_GIVEN.has(normA) && COMMON_DISTINCT_GIVEN.has(normB);
+  }
+
+  /**
+   * Siblings under the same father whose normalized leaves differ by one character.
+   * Not the public «popular names» list (محمد across the family).
+   */
+  function findWrongNameSimilarity(children) {
+    var groups = groupSiblingsByFather(children);
+    var pairs = [];
+    var seenPair = new Set();
+
+    groups.forEach(function (siblings) {
+      if (!siblings || siblings.length < 2) return;
+      var i;
+      var j;
+      for (i = 0; i < siblings.length; i += 1) {
+        for (j = i + 1; j < siblings.length; j += 1) {
+          var a = siblings[i];
+          var b = siblings[j];
+          if (a.id != null && b.id != null && Number(a.id) === Number(b.id)) continue;
+          var leafA = leafName(childPath(a));
+          var leafB = leafName(childPath(b));
+          if (!leafA || !leafB) continue;
+          var normA = normalizeArabicForCompare(leafA);
+          var normB = normalizeArabicForCompare(leafB);
+          if (!normA || !normB || normA === normB) continue;
+          if (normA.length < 3 || normB.length < 3) continue;
+          if (Math.abs(normA.length - normB.length) !== 1) continue;
+          if (editDistanceOneMax(normA, normB) !== 1) continue;
+          if (bothCommonDistinctGivens(normA, normB)) continue;
+          var idA = a.id != null ? Number(a.id) : 0;
+          var idB = b.id != null ? Number(b.id) : 0;
+          var lo = idA && idB ? Math.min(idA, idB) : idA || idB;
+          var hi = idA && idB ? Math.max(idA, idB) : idA || idB;
+          var pairKey = "near:" + lo + ":" + hi;
+          if (seenPair.has(pairKey)) continue;
+          seenPair.add(pairKey);
+
+          var first = idA && idB && idA > idB ? b : a;
+          var second = first === a ? b : a;
+          var name1 = leafName(childPath(first));
+          var name2 = leafName(childPath(second));
+          var path1 = childPath(first);
+          var path2 = childPath(second);
+          var fatherLabel = fatherDisplay(first) || fatherDisplay(second);
+          var longer = Math.max(normA.length, normB.length) || 1;
+          var pct = Math.round((1 - 1 / longer) * 100);
+          pairs.push({
+            id: pairKey,
+            id_a: first.id,
+            id_b: second.id,
+            branch_key: norm(first.branch_key) || norm(second.branch_key),
+            child_path: path1 + " ↔ " + path2,
+            child_path_a: path1,
+            child_path_b: path2,
+            parent: storedParent(first) || storedParent(second) || null,
+            parent_name: parentNameColumn(first) || parentNameColumn(second) || null,
+            stored_parent: storedParent(first) || storedParent(second) || null,
+            extracted_parent: null,
+            person_id: first.person_id || null,
+            person_id_a: first.person_id || null,
+            person_id_b: second.person_id || null,
+            parent_person_id: first.parent_person_id || second.parent_person_id || null,
+            father_label: fatherLabel,
+            name_a: name1,
+            name_b: name2,
+            normalized_name: "",
+            similarity_pct: pct,
+            similarity_ar: pct + "%",
+            diff_reason_ar: "حرف زائد أو ناقص بعد التوحيد",
+            status_ar: "يحتاج مراجعة",
+            created_at: first.created_at || null,
+            updated_at: first.updated_at || null,
+            created_by: first.created_by || null,
+            updated_by: first.updated_by || first.modified_by || null,
+            category: CAT.WRONG_NAME_SIMILARITY,
+            category_ar: CAT_AR.wrong_name_similarity,
+            group: GROUP_DATA_INTEGRITY,
+            group_ar: "سلامة البيانات",
+            severity: "warning",
+            priority: PRIORITY.HIGH,
+            priority_ar: PRIORITY_AR.high,
+            impact: impactFor(CAT.WRONG_NAME_SIMILARITY),
+            impact_ar: impactLabel(CAT.WRONG_NAME_SIMILARITY),
+            root_cause_ar: rootCauseFor(CAT.WRONG_NAME_SIMILARITY),
+            write_path_ar: writePathFor(CAT.WRONG_NAME_SIMILARITY),
+            code: "TREE-NAME-NEAR",
+            repair_forbidden: true,
+            never_auto_merge: true,
+            reason_ar:
+              "تشابه خاطئ تحت الأب «" +
+              fatherLabel +
+              "»: «" +
+              name1 +
+              "» ↔ «" +
+              name2 +
+              "» — حرف زائد أو ناقص. ليست الأسماء الشائعة في الرئيسية. لا دمج تلقائي.",
+          });
+        }
+      }
+    });
+
+    pairs.sort(pairSortKey);
+    return pairs;
+  }
+
+  var SUSPICIOUS_NAME_RULES = [
+    { pattern: /(^|\/|\s)محد($|\/|\s)/, label: "محد بدل محمد غالبًا" },
+    { pattern: /(^|\/|\s)ممد($|\/|\s)/, label: "ممد بدل محمد غالبًا" },
+    { pattern: /(^|\/|\s)مليف($|\/|\s)/, label: "مليف بدل منيف غالبًا" },
+    { pattern: /(^|\/|\s)لا في($|\/|\s)/, label: "لا في بدل محمد غالبًا" },
+    { pattern: /(^|\/|\s)قارس($|\/|\s)/, label: "قارس بدل فارس غالبًا" },
+    { pattern: /(^|\/|\s)باسر($|\/|\s)/, label: "باسر بدل ياسر غالبًا" },
+    { pattern: /(^|\/|\s)شحاذالاسم($|\/|\s)/, label: "التصق فيها عنوان الاسم" },
+    { pattern: /(^|\/|\s)الاسم($|\/|\s)/, label: "كلمة الاسم دخلت داخل السجل" },
+    { pattern: /[0-9٠-٩]/, label: "يوجد رقم داخل الاسم" },
+    { pattern: /[\[\]،.]{2,}|[\[\]]/, label: "رمز من المسح داخل الاسم" },
+  ];
+
+  function findSuspiciousNameTypos(children) {
+    var out = [];
+    (Array.isArray(children) ? children : []).forEach(function (c) {
+      if (!c) return;
+      var path = childPath(c);
+      var leaf = leafName(path);
+      var hay = (leaf || "") + "/" + (path || "");
+      var hits = [];
+      var r;
+      for (r = 0; r < SUSPICIOUS_NAME_RULES.length; r += 1) {
+        if (SUSPICIOUS_NAME_RULES[r].pattern.test(hay)) {
+          hits.push(SUSPICIOUS_NAME_RULES[r].label);
+        }
+      }
+      if (!hits.length) return;
+      out.push(
+        issueRow(c, CAT.SUSPICIOUS_NAME_TYPO, {
+          reason_ar: hits.join(" · "),
+          father_label: fatherDisplay(c),
+          name_a: leaf,
+        }),
+      );
+    });
+    return out;
   }
 
   /**
@@ -955,6 +1228,8 @@
     });
 
     var spellingDupes = findPossibleSpellingDuplicates(rows);
+    var wrongSimilarity = findWrongNameSimilarity(rows);
+    var nameTypos = findSuspiciousNameTypos(rows);
 
     var spousesBad = [];
     var byId = new Map();
@@ -1003,13 +1278,15 @@
     lists[CAT.MISSING_FATHER] = missingFather;
     lists[CAT.PATH_MISMATCH] = pathMismatch;
     lists[CAT.POSSIBLE_SPELLING_DUPLICATES] = spellingDupes;
+    lists[CAT.WRONG_NAME_SIMILARITY] = wrongSimilarity;
+    lists[CAT.SUSPICIOUS_NAME_TYPO] = nameTypos;
     lists[CAT.DUPLICATE_PERSON_ID] = duplicatePersonId;
     lists[CAT.SPOUSES_WITHOUT_HUSBAND] = spousesBad;
     lists[CAT.BROKEN_RELATION] = brokenRelation;
 
     var criticalCount =
       parentNull.length + parentEmpty.length + missingFather.length;
-    var highCount = pathMismatch.length + spellingDupes.length;
+    var highCount = pathMismatch.length + spellingDupes.length + wrongSimilarity.length;
     // broken_relation overlaps — counted in high "needs review" separately via path
     var needsReview = highCount + brokenRelation.length;
 
@@ -1024,12 +1301,14 @@
         missing_father: missingFather.length,
         path_mismatch: pathMismatch.length,
         possible_spelling_duplicates: spellingDupes.length,
+        wrong_name_similarity: wrongSimilarity.length,
+        suspicious_name_typo: nameTypos.length,
         duplicate_person_id: duplicatePersonId.length,
         spouses_without_husband: spousesBad.length,
         broken_relation: brokenRelation.length,
         priority_critical: criticalCount,
         priority_high: needsReview,
-        priority_medium: duplicatePersonId.length + spousesBad.length,
+        priority_medium: duplicatePersonId.length + spousesBad.length + nameTypos.length,
       },
       summary_card: {
         critical: criticalCount,
@@ -1037,14 +1316,16 @@
         uuid_link_needed: duplicatePersonId.length + spousesBad.length,
         healthy: healthy,
         possible_spelling_duplicates: spellingDupes.length,
+        wrong_name_similarity: wrongSimilarity.length,
+        suspicious_name_typo: nameTypos.length,
         labels: {
           critical: "🔴 حرج (أب فارغ · أب غير موجود في الشجرة)",
-          needs_review: "🟠 يحتاج مراجعة (مسار/علاقة/أسماء قد تكون مكررة)",
+          needs_review: "🟠 يحتاج مراجعة (مسار/علاقة/أخطاء أسماء)",
           uuid_link_needed: "🟡 يحتاج ربط المعرف الداخلي",
           healthy: "🟢 علاقات سليمة",
         },
         note_ar:
-          "أولوية الإصلاح: حرج → مراجعة → ربط المعرف. الأسماء التي قد تكون مكررة للمراجعة فقط — بلا دمج تلقائي.",
+          "أولوية الإصلاح: حرج → مراجعة → ربط المعرف. أخطاء الأسماء (تكرار/تشابه خاطئ) للمراجعة فقط — بلا دمج تلقائي. الأسماء الشائعة في الرئيسية ليست أخطاء.",
       },
       groups: {
         data_integrity: {
@@ -1057,6 +1338,8 @@
             CAT.MISSING_FATHER,
             CAT.PATH_MISMATCH,
             CAT.POSSIBLE_SPELLING_DUPLICATES,
+            CAT.WRONG_NAME_SIMILARITY,
+            CAT.SUSPICIOUS_NAME_TYPO,
             CAT.PARENT_EMPTY,
             CAT.BROKEN_RELATION,
           ],
@@ -1134,6 +1417,31 @@
           impact_ar: impactLabel(CAT.POSSIBLE_SPELLING_DUPLICATES),
           root_cause_ar: rootCauseFor(CAT.POSSIBLE_SPELLING_DUPLICATES),
           note_ar: "مراجعة فقط — لا دمج تلقائي.",
+        },
+        {
+          id: CAT.WRONG_NAME_SIMILARITY,
+          label: "🟠 " + CAT_AR.wrong_name_similarity,
+          count: wrongSimilarity.length,
+          ok: wrongSimilarity.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.wrong_name_similarity,
+          priority_ar: PRIORITY_AR.high,
+          impact_ar: impactLabel(CAT.WRONG_NAME_SIMILARITY),
+          root_cause_ar: rootCauseFor(CAT.WRONG_NAME_SIMILARITY),
+          note_ar: "تحت الأب نفسه فقط — ليست الأسماء الشائعة.",
+        },
+        {
+          id: CAT.SUSPICIOUS_NAME_TYPO,
+          label: "🟡 " + CAT_AR.suspicious_name_typo,
+          count: nameTypos.length,
+          ok: nameTypos.length === 0,
+          group: GROUP_DATA_INTEGRITY,
+          group_ar: "سلامة البيانات",
+          priority: CAT_PRIORITY.suspicious_name_typo,
+          priority_ar: PRIORITY_AR.medium,
+          impact_ar: impactLabel(CAT.SUSPICIOUS_NAME_TYPO),
+          root_cause_ar: rootCauseFor(CAT.SUSPICIOUS_NAME_TYPO),
         },
         {
           id: CAT.PARENT_EMPTY,
@@ -1217,6 +1525,9 @@
     childPath: childPath,
     buildNameIndex: buildNameIndex,
     findPossibleSpellingDuplicates: findPossibleSpellingDuplicates,
+    findWrongNameSimilarity: findWrongNameSimilarity,
+    bothCommonDistinctGivens: bothCommonDistinctGivens,
+    findSuspiciousNameTypos: findSuspiciousNameTypos,
     impactFor: impactFor,
     impactLabel: impactLabel,
     priorityFor: priorityFor,

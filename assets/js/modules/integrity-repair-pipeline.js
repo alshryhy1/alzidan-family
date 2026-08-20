@@ -1235,7 +1235,12 @@
           analysis.write_path_ar ||
           "كيفية الإصلاح: أضف الأب للشجرة أو صحّح العلاقة نصيًا أولًا — بلا ربط UUID.";
       }
-    } else if (cat === "possible_spelling_duplicates" || cat === "TREE-SPELL-DUP") {
+    } else if (
+      cat === "possible_spelling_duplicates" ||
+      cat === "TREE-SPELL-DUP" ||
+      cat === "wrong_name_similarity" ||
+      cat === "TREE-NAME-NEAR"
+    ) {
       analysis.repair_type = "manual_review_no_merge";
       analysis.requires_manual_choice = true;
       analysis.can_auto_propose = false;
@@ -1272,7 +1277,9 @@
         id_b: issue && issue.id_b,
       };
       analysis.decision_logic_ar = [
-        "أسماء قد تكون مكررة تحت نفس الأب بعد توحيد العربية (همزة / ى↔ي / ة↔ه / تشكيل).",
+        cat === "wrong_name_similarity" || cat === "TREE-NAME-NEAR"
+          ? "تشابه خاطئ تحت نفس الأب (حرف زائد أو ناقص بعد التوحيد) — ليست الأسماء الشائعة في الرئيسية."
+          : "أسماء قد تكون مكررة تحت نفس الأب بعد توحيد العربية (همزة / ى↔ي / ة↔ه / تشكيل).",
         "الاسم الأول: «" +
           norm(issue && issue.name_a) +
           "» · الاسم الثاني: «" +
@@ -1309,7 +1316,9 @@
       cat === "path_mismatch" ||
       cat === "broken_relation" ||
       cat === "possible_spelling_duplicates" ||
-      cat === "TREE-SPELL-DUP"
+      cat === "TREE-SPELL-DUP" ||
+      cat === "wrong_name_similarity" ||
+      cat === "TREE-NAME-NEAR"
     ) {
       return "high";
     }

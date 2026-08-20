@@ -30,7 +30,11 @@
       title: "الشجرة",
       desc: "إدارة الأشخاص والزوجات والأبناء وإدخال الأسماء الجماعي",
       icon: "🌳",
-      sections: ["admin-family-management-section", "bulk-name-audit-section"],
+      sections: [
+        "admin-family-management-section",
+        "admin-name-errors-section",
+        "bulk-name-audit-section",
+      ],
       priority: true,
       group: "data",
     },
@@ -205,6 +209,9 @@
         "</span><span>" +
         mod.title +
         "</span>" +
+        (mod.id === "tree"
+          ? '<span class="mod-badge mod-badge-warn" data-admin-name-errors-count="1" hidden></span>'
+          : "") +
         (mod.stub
           ? '<span class="mod-badge">قريبًا</span>'
           : "");

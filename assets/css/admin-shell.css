@@ -127,6 +127,10 @@ body:not(.admin-shell-ready) #admin-shell-sidebar {
   background: rgba(255, 255, 255, 0.12);
   color: #fde68a;
 }
+.admin-shell-nav-btn .mod-badge-warn {
+  background: #dc2626;
+  color: #fff;
+}
 
 .admin-shell-main {
   grid-column: 2;
@@ -350,6 +354,11 @@ body.admin-shell-ready.admin-authenticated .page > footer {
   margin: 0 0 8px;
   font-size: 15px;
   font-weight: 900;
+}
+.delegates-v2-audit-detail {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
 }
 .delegates-v2-code {
   font-size: 11px;

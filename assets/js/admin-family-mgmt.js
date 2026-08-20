@@ -270,6 +270,26 @@
 
   function getAllBaseNames() { const baseNames = new Set(); Object.keys(state.children || {}).forEach((p) =>{ const b = normalizePersonBaseName(p); if (b) baseNames.add(b); }); Object.values(state.children || {}).forEach((list) =>{ (Array.isArray(list) ? list : []).forEach((c) =>{ const b = normalizePersonBaseName(c && c.name ? c.name : ""); if (b) baseNames.add(b); }); }); return baseNames; }
 
+  function checkSiblingSimilarNameWarning(parentName, childBase, opts) {
+    const key = normalizePersonName(parentName || "");
+    const existing = state.children[key] || [];
+    const FM = window.AlzidanFamilyPersonCore || {};
+    if (typeof FM.findSiblingSimilarNameWarning === "function") {
+      return FM.findSiblingSimilarNameWarning(
+        existing,
+        childBase,
+        Object.assign(
+          {
+            normalizePersonName,
+            normalizePersonBaseName,
+          },
+          opts || {},
+        ),
+      );
+    }
+    return null;
+  }
+
   function findChildNameByBase(parentName, childBase, opts) {
     const key = normalizePersonName(parentName || "");
     const existing = state.children[key] || [];
@@ -1540,6 +1560,17 @@
     const tokensCheck = tokenizeLineageInput(rawName);
     if (tokensCheck.length !== 1) return { ok: false, message: "ممنوع تسجيل الاسم الأخير بأكثر من كلمة. اكتب اسم الابن فقط." };
     const inputBase = normalizePersonBaseName(rawName);
+    if (!payload.confirmSimilarName) {
+      const similarWarn = checkSiblingSimilarNameWarning(parentName, inputBase, {});
+      if (similarWarn) {
+        return {
+          ok: false,
+          needsConfirm: true,
+          warningKind: similarWarn.kind,
+          message: similarWarn.message,
+        };
+      }
+    }
     if (findChildNameByBase(parentName, inputBase)) return { ok: false, message: "اسم الابن مسجل مسبقًا لهذا الأب." };
     const finalName = normalizePersonBaseName(rawName);
     const childId = buildChildId(parentName, finalName);
@@ -1666,6 +1697,20 @@
       // Same leaf name → keep existing path (birth_order / phone / dates only).
       // Do not treat self as a sibling duplicate when parent path spellings differ.
       if (newBase && newBase !== currentBase) {
+        if (!payload.confirmSimilarName) {
+          const similarWarn = checkSiblingSimilarNameWarning(parentId, newBase, {
+            excludeChildId: childId,
+            excludePersonId,
+          });
+          if (similarWarn) {
+            return {
+              ok: false,
+              needsConfirm: true,
+              warningKind: similarWarn.kind,
+              message: similarWarn.message,
+            };
+          }
+        }
         const existing = findChildNameByBase(parentId, newBase, {
           excludeChildId: childId,
           excludePersonId,
@@ -1873,6 +1918,30 @@
     return normalizePersonName((el && el.value) || "لاحم") || "لاحم";
   }
 
+  async function openPersonInAdminTree(branchKey, personPath) {
+    const token = getAdminToken();
+    if (!token) {
+      setFmStatus("سجل الدخول أولًا.");
+      return { ok: false, message: "not_authed" };
+    }
+    const branch = normalizePersonName(branchKey || "");
+    const personId = normalizePersonName(personPath || "");
+    if (!branch || !personId) {
+      return { ok: false, message: "missing_target" };
+    }
+    const branchSelect = getAdminFmBranchSelect();
+    if (branchSelect) branchSelect.value = branch;
+    const section = document.getElementById("admin-family-management-section");
+    if (section && typeof section.scrollIntoView === "function") {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (!ensureFamilyPanelMounted()) {
+      return { ok: false, message: "panel_unavailable" };
+    }
+    await refreshAdminFamilyData(personId);
+    return { ok: true };
+  }
+
   async function refreshAdminFamilyData(initialPersonId) {
     const token = getAdminToken();
     if (!token) {
@@ -1980,6 +2049,7 @@
     mountAdminFamilyManagement,
     destroyAdminFamilyManagement,
     refreshAdminFamilyData,
+    openPersonInAdminTree,
     setProtectedVisibility,
     buildAdminFamilyApi,
   };

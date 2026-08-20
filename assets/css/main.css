@@ -675,6 +675,89 @@ nav a.site-nav-access-link:hover {
   color: #6b7280;
   margin-top: 6px;
 }
+.stats-card-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #047857;
+  text-decoration: none;
+}
+.stats-card-link:hover {
+  text-decoration: underline;
+}
+.stats-age-tree-link {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  text-decoration: none;
+}
+.stats-age-tree-link:hover {
+  text-decoration: underline;
+}
+.stats-age-name-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  color: #047857;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.stats-age-name-btn:hover {
+  color: #065f46;
+}
+.stats-name-age-modal {
+  border: none;
+  border-radius: 14px;
+  padding: 0;
+  max-width: 520px;
+  width: calc(100% - 24px);
+  direction: rtl;
+}
+.stats-name-age-modal-form {
+  margin: 0;
+}
+.stats-name-age-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.stats-name-age-modal-body {
+  padding: 12px 16px 16px;
+  max-height: min(60vh, 420px);
+  overflow: auto;
+}
+.stats-age-people-head,
+.stats-age-people-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 0.6fr 0.5fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid #f3f4f6;
+}
+.stats-age-people-head {
+  border-top: 0;
+  padding-top: 0;
+}
+.stats-age-people-cell.is-muted {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b7280;
+}
+.stats-age-people-cell {
+  font-size: 13px;
+  color: #111827;
+}
 .stats-section {
   background: linear-gradient(135deg, #f0fdf4, #f8fafc);
   border: 1px solid #d1fae5;
@@ -732,6 +815,40 @@ nav a.site-nav-access-link:hover {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
+}
+.stats-age-table {
+  gap: 0;
+}
+.stats-age-head,
+.stats-age-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.2fr) repeat(4, minmax(52px, auto));
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid #f3f4f6;
+}
+.stats-age-head {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b7280;
+  border-top: 0;
+  padding-bottom: 4px;
+}
+.stats-age-row-name {
+  font-weight: 800;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+.stats-age-cell {
+  font-weight: 900;
+  color: #065f46;
+  text-align: center;
+  white-space: nowrap;
+}
+.stats-age-cell.is-muted {
+  color: #374151;
+  font-weight: 700;
 }
 .stats-alert {
   padding: 10px 12px;

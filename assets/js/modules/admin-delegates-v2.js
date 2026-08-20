@@ -14,6 +14,16 @@
     approver_l1: "معتمد مرحلة 1",
   };
 
+  const ACTION_LABELS = {
+    "delegate.activate_from_request": "تفعيل مندوب من طلب مقبول",
+    "delegates.sync_from_requests": "مزامنة المندوبين من الطلبات القديمة",
+    "delegate.enable": "تفعيل حساب المندوب",
+    "delegate.disable": "تعطيل حساب المندوب",
+    "delegate.role_set": "تغيير دور المندوب",
+    "delegate.secret_reset_approve": "الموافقة على إعادة تعيين الرقم السري",
+    "delegate.secret_reset_reject": "رفض إعادة تعيين الرقم السري",
+  };
+
   let state = {
     mode: "v2", // v2 | legacy | missing_sql
     rows: [],
@@ -78,6 +88,108 @@
     );
   }
 
+  function parseAuditPayload(raw) {
+    if (!raw) return {};
+    if (typeof raw === "object" && !Array.isArray(raw)) return raw;
+    try {
+      const parsed = JSON.parse(String(raw));
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function actionLabelAr(actionKey) {
+    const k = String(actionKey || "").trim();
+    if (ACTION_LABELS[k]) return ACTION_LABELS[k];
+    if (!k) return "—";
+    return k.replace(/\./g, " · ").replace(/_/g, " ");
+  }
+
+  function kindLabelAr(kind) {
+    const k = String(kind || "").trim();
+    if (k === "tree_delegate") return "صلاحية شجرة";
+    if (k === "events_delegate") return "صلاحية مناسبات";
+    if (k === "delegate_secret_reset") return "إعادة تعيين الرقم السري";
+    return "";
+  }
+
+  function delegateLabelFromAudit(row, payload) {
+    const action = String(row.action_key || "").trim();
+    if (action === "delegates.sync_from_requests") {
+      return "الإدارة — مزامنة";
+    }
+    const entityId = String(row.entity_id || "").trim();
+    const byId = state.rows.find((r) => String(r.id) === entityId);
+    if (byId) {
+      const name = String(byId.name || "").trim();
+      const contact = [byId.phone, byId.email].filter(Boolean).join(" · ");
+      if (name && contact) return name + " · " + contact;
+      return name || contact || "مندوب";
+    }
+    const email = String(payload.email || "").trim();
+    const phone = String(payload.phone || "").trim();
+    if (email || phone) {
+      const normEmail = email.toLowerCase();
+      const normPhone = phone.replace(/\s+/g, "");
+      const byContact = state.rows.find((r) => {
+        const rEmail = String(r.email || "").trim().toLowerCase();
+        const rPhone = String(r.phone || "").replace(/\s+/g, "");
+        return (normEmail && rEmail === normEmail) || (normPhone && rPhone === normPhone);
+      });
+      if (byContact) {
+        const name = String(byContact.name || "").trim();
+        if (name) return name + (email ? " · " + email : phone ? " · " + phone : "");
+      }
+      return [email, phone].filter(Boolean).join(" · ");
+    }
+    if (payload.request_id) return "طلب " + String(payload.request_id);
+    if (entityId) return "مندوب";
+    return "—";
+  }
+
+  function actionDetailAr(row, payload) {
+    const action = String(row.action_key || "").trim();
+    const parts = [];
+    if (action === "delegate.activate_from_request") {
+      if (payload.request_id) parts.push("طلب " + payload.request_id);
+      const kind = kindLabelAr(payload.kind);
+      if (kind) parts.push(kind);
+      if (payload.role_key) parts.push("الدور: " + roleTitle(payload.role_key));
+      if (payload.is_enabled === true) parts.push("مفعّل");
+      else if (payload.is_enabled === false) parts.push("غير مفعّل");
+    } else if (action === "delegate.enable" || action === "delegate.disable") {
+      if (payload.role_key) parts.push("الدور: " + roleTitle(payload.role_key));
+    } else if (action === "delegate.role_set") {
+      if (payload.previous_role_key && payload.role_key) {
+        parts.push(
+          "من «" +
+            roleTitle(payload.previous_role_key) +
+            "» إلى «" +
+            roleTitle(payload.role_key) +
+            "»",
+        );
+      } else if (payload.role_key) {
+        parts.push("الدور الجديد: " + roleTitle(payload.role_key));
+      }
+    } else if (action === "delegates.sync_from_requests") {
+      if (payload.upserted != null) {
+        parts.push("عدد السجلات: " + String(payload.upserted));
+      }
+    } else if (
+      action === "delegate.secret_reset_approve" ||
+      action === "delegate.secret_reset_reject"
+    ) {
+      if (payload.request_id) parts.push("طلب " + payload.request_id);
+    }
+    return parts.join(" · ");
+  }
+
+  function auditBranchLabel(row, payload) {
+    const branch = String(row.branch_key || payload.branch_key || "").trim();
+    return branch || "—";
+  }
+
   function buildKey(branch, phone, email) {
     return [
       String(branch || "").trim(),
@@ -124,10 +236,10 @@
       '<tbody id="delegates-v2-body"></tbody>' +
       "</table></div>" +
       '<div class="delegates-v2-audit-block">' +
-      "<h3>سجل تدقيق الإدارة (Delegates v2)</h3>" +
+      "<h3>سجل تدقيق المندوبين</h3>" +
       '<div id="delegates-v2-audit-status" class="hint"></div>' +
       '<div class="table-wrap"><table style="min-width: 720px;"><thead><tr>' +
-      "<th>الوقت</th><th>الإجراء</th><th>الفرع</th><th>التفاصيل</th>" +
+      "<th>المندوب</th><th>فرعه</th><th>ماذا نُفّذ</th><th>التاريخ والوقت</th>" +
       '</tr></thead><tbody id="delegates-v2-audit-body"></tbody></table></div>' +
       "</div></div>";
 
@@ -410,22 +522,27 @@
           when = c.formatDateTimeArSaVerbose(row.created_at);
         }
       } catch (_) {}
-      let details = "";
-      try {
-        details = row.payload ? JSON.stringify(row.payload) : "";
-      } catch (_) {
-        details = String(row.payload || "");
-      }
+      const payload = parseAuditPayload(row.payload);
+      const delegateLabel = delegateLabelFromAudit(row, payload);
+      const branchLabel = auditBranchLabel(row, payload);
+      const actionMain = actionLabelAr(row.action_key);
+      const actionExtra = actionDetailAr(row, payload);
       tr.innerHTML =
+        "<td><strong>" +
+        esc(delegateLabel) +
+        "</strong></td>" +
+        "<td>" +
+        esc(branchLabel) +
+        "</td>" +
+        "<td>" +
+        esc(actionMain) +
+        (actionExtra
+          ? '<div class="hint delegates-v2-audit-detail">' + esc(actionExtra) + "</div>"
+          : "") +
+        "</td>" +
         "<td>" +
         esc(when) +
-        "</td><td>" +
-        esc(row.action_key || "") +
-        "</td><td>" +
-        esc(row.branch_key || "—") +
-        "</td><td><code class=\"delegates-v2-code\">" +
-        esc(details) +
-        "</code></td>";
+        "</td>";
       body.appendChild(tr);
     });
   }

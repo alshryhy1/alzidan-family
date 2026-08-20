@@ -6,6 +6,7 @@
   var hideAlert = PersonCore.hideAlert || function () {};
   var bindDeceasedToggle = PersonCore.bindDeceasedToggle || function () {};
   var bindBirthDateSync = PersonCore.bindBirthDateSync || function () {};
+  var bindAgeToBirthDates = PersonCore.bindAgeToBirthDates || function () {};
 
   function createAddSheet(opts) {
     var api = opts && opts.api ? opts.api : {};
@@ -52,6 +53,7 @@
         : '<input type="tel" data-fm-child-phone inputmode="numeric" placeholder="5XXXXXXXX" />') +
       "</div>" +
       '<div class="field"><label>ربط الأم (اختياري)</label><select data-fm-child-wife><option value="">بدون ربط أم الآن</option></select></div>' +
+      '<div class="field"><label>العمر (سنة)</label><input type="text" data-fm-child-age dir="ltr" inputmode="numeric" placeholder="73" /><div class="hint" style="margin-top:4px;">اكتب العمر رقماً — يُعبَّأ التاريخ الهجري والميلادي تلقائياً</div></div>' +
       '<div class="field"><label>تاريخ الميلاد (هجري)</label><input type="text" data-fm-child-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
       '<div class="field"><label>تاريخ الميلاد (ميلادي)</label><input type="date" data-fm-child-greg dir="ltr" lang="en" /></div>' +
       '<div class="field"><label>ترتيب الميلاد</label><input type="number" data-fm-child-order min="1" step="1" inputmode="numeric" placeholder="مثال: 1" /></div>' +
@@ -106,12 +108,14 @@
     var wifeBranchField = sheet.querySelector("[data-fm-wife-branch-field]");
 
     var childDeceased = sheet.querySelector("[data-fm-child-deceased]");
+    var childAge = sheet.querySelector("[data-fm-child-age]");
     var childHijri = sheet.querySelector("[data-fm-child-hijri]");
     var childGreg = sheet.querySelector("[data-fm-child-greg]");
     var childCity = sheet.querySelector("[data-fm-child-city]");
     var childArea = sheet.querySelector("[data-fm-child-area]");
-    bindDeceasedToggle(childDeceased, [childHijri, childGreg, childCity, childArea]);
+    bindDeceasedToggle(childDeceased, [childAge, childHijri, childGreg, childCity, childArea]);
     bindBirthDateSync(childHijri, childGreg, api);
+    bindAgeToBirthDates(childAge, childHijri, childGreg, api);
     if (window.AlzidanPhoneIntl) {
       window.AlzidanPhoneIntl.bindAllIn(sheet);
     }
@@ -342,6 +346,30 @@
         area: childArea ? childArea.value : "",
         deceased: !!(childDeceased && childDeceased.checked),
       });
+      if (childRes && childRes.needsConfirm) {
+        var okProceed = typeof window.confirm === "function"
+          ? window.confirm((childRes.message || "اسم قريب من أخ.") + "\n\nهل تريد المتابعة؟")
+          : false;
+        if (!okProceed) {
+          setAlert(alertEl, "error", childRes.message || "تم إلغاء الحفظ.");
+          return;
+        }
+        childRes = await api.saveChild({
+          personId: personId,
+          boundParentPath: personId,
+          gender: currentType === "daughter" ? "daughter" : "son",
+          name: sheet.querySelector("[data-fm-child-name]").value,
+          phone: childPhoneValue,
+          spouseId: sheet.querySelector("[data-fm-child-wife]").value,
+          hijri: childHijri ? childHijri.value : "",
+          greg: childGreg ? childGreg.value : "",
+          order: sheet.querySelector("[data-fm-child-order]").value,
+          city: childCity ? childCity.value : "",
+          area: childArea ? childArea.value : "",
+          deceased: !!(childDeceased && childDeceased.checked),
+          confirmSimilarName: true,
+        });
+      }
       if (!childRes || !childRes.ok) {
         setAlert(alertEl, "error", (childRes && childRes.message) || "تعذر حفظ الابن.");
         return;

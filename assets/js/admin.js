@@ -194,6 +194,44 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const healthStructureCards = document.getElementById("health-structure-cards");
   const healthStructureBody = document.getElementById("health-structure-body");
   const healthStructureDetailTitle = document.getElementById("health-structure-detail-title");
+  const adminNameErrorsCards = document.getElementById("admin-name-errors-cards");
+  const adminNameErrorsStatus = document.getElementById("admin-name-errors-status");
+  const adminNameErrorsRefresh = document.getElementById("admin-name-errors-refresh");
+  const adminNameErrorsExport = document.getElementById("admin-name-errors-export");
+  const adminNameErrorsDetailTitle = document.getElementById(
+    "admin-name-errors-detail-title",
+  );
+  const adminNameErrorsBody = document.getElementById("admin-name-errors-body");
+  const adminNameErrorsFilterBranch = document.getElementById(
+    "admin-name-errors-filter-branch",
+  );
+  const adminNameErrorsFilterFather = document.getElementById(
+    "admin-name-errors-filter-father",
+  );
+  const adminNameErrorsFilterClear = document.getElementById(
+    "admin-name-errors-filter-clear",
+  );
+  const adminNameErrorsTotalBadge = document.getElementById(
+    "admin-name-errors-total-badge",
+  );
+  const adminNameErrorsNavBadge = document.getElementById(
+    "admin-name-errors-badge",
+  );
+  let adminNameErrorsActiveCat = "possible_spelling_duplicates";
+  const NAME_ERROR_CATS = [
+    {
+      id: "possible_spelling_duplicates",
+      title: "تكرار تحت الأب",
+    },
+    {
+      id: "wrong_name_similarity",
+      title: "تشابه خاطئ",
+    },
+    {
+      id: "suspicious_name_typo",
+      title: "كتابة مشتبهة",
+    },
+  ];
   const healthSummaryCard = document.getElementById("health-summary-card");
   const healthRepairPanel = document.getElementById("health-repair-panel");
   const healthRepairStages = document.getElementById("health-repair-stages");
@@ -3032,9 +3070,13 @@ where c.id = matches.id; commit;
     if (!issue || issue.id == null) return;
     suppressSpellPair(issue.id);
     setHealthRepairStatus("تم تجاهل الزوج — لن يظهر كمشكلة في هذه الجلسة/الجهاز.");
-    if (healthStructureActiveCat === "possible_spelling_duplicates") {
-      renderHealthStructureDetail("possible_spelling_duplicates");
+    if (
+      healthStructureActiveCat === "possible_spelling_duplicates" ||
+      healthStructureActiveCat === "wrong_name_similarity"
+    ) {
+      renderHealthStructureDetail(healthStructureActiveCat);
     }
+    renderAdminNameErrors(healthStructureAudit);
   }
 
   function renderHealthStructureDetail(categoryId) {
@@ -3050,7 +3092,9 @@ where c.id = matches.id; commit;
       document.querySelector("#health-structure-thead tr") ||
       (healthStructureBody.closest("table") &&
         healthStructureBody.closest("table").querySelector("thead tr"));
-    const isSpellDup = healthStructureActiveCat === "possible_spelling_duplicates";
+    const isSpellDup =
+      healthStructureActiveCat === "possible_spelling_duplicates" ||
+      healthStructureActiveCat === "wrong_name_similarity";
     if (theadRow) {
       theadRow.innerHTML = isSpellDup
         ? "<th>الأب</th><th>الاسم الأول</th><th>الاسم الثاني</th><th>السبب</th><th>الحالة</th><th>إجراء</th>"
@@ -3126,15 +3170,23 @@ where c.id = matches.id; commit;
             '</td><td><div class="health-row-actions">' +
             '<button type="button" class="btn btn-outline btn-sm" data-health-analyze="' +
             pairId +
-            '" data-health-cat="possible_spelling_duplicates">🔍 مراجعة</button>' +
+            '" data-health-cat="' +
+            escapeHtml(healthStructureActiveCat) +
+            '">🔍 مراجعة</button>' +
             '<button type="button" class="btn btn-outline btn-sm" data-health-spell-unify="' +
             pairId +
+            '" data-health-cat="' +
+            escapeHtml(healthStructureActiveCat) +
             '">✏️ توحيد الاسم</button>' +
             '<button type="button" class="btn btn-outline btn-sm" data-health-spell-merge="' +
             pairId +
+            '" data-health-cat="' +
+            escapeHtml(healthStructureActiveCat) +
             '">🔗 دمج السجلين</button>' +
             '<button type="button" class="btn btn-outline btn-sm" data-health-spell-ignore="' +
             pairId +
+            '" data-health-cat="' +
+            escapeHtml(healthStructureActiveCat) +
             '">🚫 تجاهل</button>' +
             "</div></td></tr>"
           );
@@ -3227,7 +3279,7 @@ where c.id = matches.id; commit;
     healthStructureBody.querySelectorAll("[data-health-spell-unify]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const issue = findIssueRow(
-          "possible_spelling_duplicates",
+          btn.getAttribute("data-health-cat") || healthStructureActiveCat,
           btn.getAttribute("data-health-spell-unify"),
         );
         if (issue) stageUnifySpellName(issue);
@@ -3236,7 +3288,7 @@ where c.id = matches.id; commit;
     healthStructureBody.querySelectorAll("[data-health-spell-merge]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const issue = findIssueRow(
-          "possible_spelling_duplicates",
+          btn.getAttribute("data-health-cat") || healthStructureActiveCat,
           btn.getAttribute("data-health-spell-merge"),
         );
         if (issue) stageMergeSpellPair(issue);
@@ -3245,7 +3297,7 @@ where c.id = matches.id; commit;
     healthStructureBody.querySelectorAll("[data-health-spell-ignore]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const issue = findIssueRow(
-          "possible_spelling_duplicates",
+          btn.getAttribute("data-health-cat") || healthStructureActiveCat,
           btn.getAttribute("data-health-spell-ignore"),
         );
         if (issue) ignoreSpellPair(issue);
@@ -3253,8 +3305,513 @@ where c.id = matches.id; commit;
     });
   }
 
+  function nameErrorTreeBtn(branch, path, label) {
+    const b = String(branch || "").trim();
+    const p = String(path || "").trim();
+    if (!b || !p) return "";
+    return (
+      '<button type="button" class="btn btn-outline btn-sm" data-name-err-tree="1" data-name-err-tree-branch="' +
+      escapeHtml(b) +
+      '" data-name-err-tree-path="' +
+      escapeHtml(p) +
+      '">' +
+      escapeHtml(label || "فتح") +
+      "</button>"
+    );
+  }
+
+  async function openNameErrorInAdminTree(branch, path) {
+    const Mgmt = window.AdminFamilyMgmt || {};
+    if (typeof Mgmt.openPersonInAdminTree !== "function") {
+      showAlert("error", "تحميل إدارة الشجرة غير متاح.");
+      return;
+    }
+    try {
+      const res = await Mgmt.openPersonInAdminTree(branch, path);
+      if (!res || !res.ok) {
+        showAlert("error", "تعذر فتح الشخص في الشجرة.");
+      }
+    } catch (e) {
+      showAlert("error", "تعذر فتح الشخص في الشجرة.");
+    }
+  }
+
+  function csvEscapeCell(v) {
+    const s = String(v == null ? "" : v).replace(/\r?\n/g, " ").trim();
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function exportNameErrorsCsv() {
+    const audit = healthStructureAudit;
+    if (!audit || !audit.lists) {
+      showAlert("error", "اضغط تحديث الفحص أولاً.");
+      return;
+    }
+    const lines = [
+      "\ufeff" +
+        ["الفئة", "الفرع", "الأب", "الاسم الأول", "الاسم الثاني", "شرح الخطأ"].join(","),
+    ];
+    let total = 0;
+    NAME_ERROR_CATS.forEach((meta) => {
+      const rows = nameErrorRowsForCat(audit, meta.id);
+      const isPair =
+        meta.id === "possible_spelling_duplicates" || meta.id === "wrong_name_similarity";
+      rows.forEach((row) => {
+        total += 1;
+        const cols = [
+          meta.title,
+          row.branch_key || "",
+          row.father_label || row.stored_parent || "",
+          row.name_a || leafFromPath(row.child_path) || "",
+          isPair ? row.name_b || "" : row.child_path || "",
+          explainNameError(row, meta.id),
+        ];
+        lines.push(cols.map(csvEscapeCell).join(","));
+      });
+    });
+    if (!total) {
+      showAlert("error", "لا توجد أخطاء أسماء للتصدير.");
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (typeof downloadTextFile === "function") {
+      downloadTextFile(
+        "alzidan-name-errors-" + stamp + ".csv",
+        lines.join("\n"),
+        "text/csv;charset=utf-8",
+      );
+    }
+    if (adminNameErrorsStatus) {
+      adminNameErrorsStatus.textContent = "تم تصدير " + total + " سجلًا إلى CSV.";
+    }
+    showAlert("success", "تم تنزيل تقرير أخطاء الأسماء (" + total + " سجل).");
+  }
+
+  function explainNameError(row, cat) {
+    const father = (row && (row.father_label || row.stored_parent)) || "—";
+    const a = (row && row.name_a) || "";
+    const b = (row && row.name_b) || "";
+    if (cat === "possible_spelling_duplicates") {
+      if (a && b && a === b) {
+        return "تحت الأب «" + father + "» يوجد سجلان بنفس الاسم «" + a + "» — احتمال تكرار صف.";
+      }
+      return (
+        "تحت الأب «" +
+        father +
+        "»: «" +
+        a +
+        "» و «" +
+        b +
+        "» نفس الاسم بعد توحيد الهمزة/الياء — راجع إن كانا شخصًا واحدًا."
+      );
+    }
+    if (cat === "wrong_name_similarity") {
+      return (
+        "تحت الأب «" +
+        father +
+        "»: «" +
+        a +
+        "» و «" +
+        b +
+        "» يختلفان بحرف زائد أو ناقص — غالبًا خطأ كتابة لا أخوان باسمين معروفين."
+      );
+    }
+    return (row && (row.reason_ar || row.diff_reason_ar)) || "كتابة مشتبهة في ورقة الاسم.";
+  }
+
+  function nameErrorRowsForCat(audit, catId) {
+    const rows = (audit && audit.lists && audit.lists[catId]) || [];
+    if (catId === "suspicious_name_typo") return rows.slice();
+    return rows.filter((row) => !isSpellPairSuppressed(row.id));
+  }
+
+  function openNameCorrectionFromError(row, catId, side) {
+    if (!row) return;
+    const chosen = String(catId || adminNameErrorsActiveCat || "");
+    const isPair =
+      chosen === "possible_spelling_duplicates" ||
+      chosen === "wrong_name_similarity";
+    const which = side === "b" ? "b" : "a";
+    const path =
+      which === "b"
+        ? String(row.child_path_b || "").trim()
+        : String(row.child_path_a || row.child_path || "").trim();
+    const personId =
+      which === "b"
+        ? String(row.person_id_b || "").trim()
+        : String(row.person_id_a || row.person_id || "").trim();
+    const nameOld =
+      which === "b"
+        ? String(row.name_b || leafFromPath(path) || "").trim()
+        : String(row.name_a || leafFromPath(path) || "").trim();
+    let nameNew = "";
+    if (isPair) {
+      nameNew =
+        which === "a"
+          ? String(row.name_b || "").trim()
+          : String(row.name_a || "").trim();
+      if (nameNew && nameNew === nameOld) nameNew = "";
+    }
+    const branch = String(row.branch_key || "").trim();
+    const Contract = window.AlzidanTreeCorrectionContract;
+    const Person = window.AlzidanTreeCorrectionPerson;
+    const draft = [
+      "طلب تصحيح اسم — من فحص أخطاء الأسماء",
+      "الفرع: " + (branch || "—"),
+      "المسار: " + (path || "—"),
+      "الاسم الحالي: " + (nameOld || "—"),
+      nameNew ? "الاسم المقترح: " + nameNew : "التصحيح المطلوب:",
+      explainNameError(row, chosen),
+    ].join("\n");
+
+    if (!personId || !Contract || typeof Person.openPersonCorrectionEditor !== "function") {
+      if (branch && path) openNameErrorInAdminTree(branch, path);
+      if (typeof copyText === "function") copyText(draft);
+      showAlert(
+        "success",
+        personId
+          ? "وحدة التصحيح غير جاهزة — فُتح في الشجرة ونسخنا مسودة."
+          : "لا person_id — فُتح في الشجرة ونسخنا مسودة التصحيح.",
+      );
+      return;
+    }
+    if (!nameNew) {
+      if (branch && path) openNameErrorInAdminTree(branch, path);
+      if (typeof copyText === "function") copyText(draft);
+      showAlert("success", "فُتح في الشجرة — أكمل التصحيح يدوياً (لا اقتراح اسم تلقائي).");
+      return;
+    }
+    const validated = Contract.validatePersonCorrectionPayload(
+      {
+        operation: Contract.OPERATION_NAME || "name_correction",
+        person_id: personId,
+        branch_key: branch,
+        path: path,
+        person_name: leafFromPath(path) || nameOld,
+        name_old: nameOld,
+        name_new: nameNew,
+        notes: explainNameError(row, chosen),
+      },
+      { branch_key: branch },
+    );
+    if (!validated.ok) {
+      if (branch && path) openNameErrorInAdminTree(branch, path);
+      if (typeof copyText === "function") copyText(draft);
+      showAlert(
+        "error",
+        (validated.reasons && validated.reasons[0]) ||
+          "تعذر فتح محرر التصحيح — فُتح في الشجرة.",
+      );
+      return;
+    }
+    const message = Contract.serializePersonCorrectionMessage(
+      validated.payload,
+      { branch_key: branch },
+    );
+    Person.openPersonCorrectionEditor({ branch_key: branch, message }, { mode: "admin" });
+  }
+
+  function bindNameErrorRowActions(tbody, catId) {
+    if (!tbody) return;
+    tbody.querySelectorAll("[data-name-err-correct]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(catId, btn.getAttribute("data-name-err-correct"));
+        if (issue) {
+          openNameCorrectionFromError(
+            issue,
+            catId,
+            btn.getAttribute("data-name-err-correct-side") || "a",
+          );
+        }
+      });
+    });
+    tbody.querySelectorAll("[data-name-err-tree]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const branch = btn.getAttribute("data-name-err-tree-branch") || "";
+        const path = btn.getAttribute("data-name-err-tree-path") || "";
+        openNameErrorInAdminTree(branch, path);
+      });
+    });
+    tbody.querySelectorAll("[data-name-err-analyze]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(catId, btn.getAttribute("data-name-err-analyze"));
+        if (issue) openHealthRepairPanel(issue);
+      });
+    });
+    tbody.querySelectorAll("[data-name-err-unify]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(catId, btn.getAttribute("data-name-err-unify"));
+        if (issue) stageUnifySpellName(issue);
+      });
+    });
+    tbody.querySelectorAll("[data-name-err-merge]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(catId, btn.getAttribute("data-name-err-merge"));
+        if (issue) stageMergeSpellPair(issue);
+      });
+    });
+    tbody.querySelectorAll("[data-name-err-ignore]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const issue = findIssueRow(catId, btn.getAttribute("data-name-err-ignore"));
+        if (issue) ignoreSpellPair(issue);
+      });
+    });
+  }
+
+  function renderAdminNameErrorRows(catId) {
+    const chosen = String(catId || adminNameErrorsActiveCat || "");
+    adminNameErrorsActiveCat = chosen;
+    if (adminNameErrorsCards) {
+      adminNameErrorsCards.querySelectorAll(".health-structure-card").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.getAttribute("data-name-error-cat") === chosen);
+      });
+    }
+    if (!adminNameErrorsBody) return;
+    const audit = healthStructureAudit;
+    const meta = NAME_ERROR_CATS.find((c) => c.id === chosen) || { title: chosen };
+    const allRows = nameErrorRowsForCat(audit, chosen);
+    const rows = applyNameErrorFilters(allRows);
+    const isPair =
+      chosen === "possible_spelling_duplicates" || chosen === "wrong_name_similarity";
+    if (adminNameErrorsDetailTitle) {
+      const filterNote =
+        rows.length !== allRows.length
+          ? " · معروض " + rows.length + " من " + allRows.length
+          : "";
+      adminNameErrorsDetailTitle.textContent = audit
+        ? meta.title +
+          " — " +
+          rows.length +
+          (isPair ? " زوج" : " سجل") +
+          filterNote +
+          (rows.length
+            ? " · العمود «ما هو الخطأ» يشرح الحالة · العمود «أين» هو الأب والفرع"
+            : allRows.length
+              ? " · لا نتائج بعد الفلتر — غيّر الفرع أو اسم الأب"
+              : "")
+        : "";
+    }
+    if (!audit) {
+      adminNameErrorsBody.innerHTML =
+        '<tr><td colspan="6" class="hint">اضغط تحديث الفحص لعرض الأسماء هنا.</td></tr>';
+      return;
+    }
+    if (!allRows.length) {
+      adminNameErrorsBody.innerHTML =
+        '<tr><td colspan="6" class="hint">لا بنود في هذه البطاقة.</td></tr>';
+      return;
+    }
+    if (!rows.length) {
+      adminNameErrorsBody.innerHTML =
+        '<tr><td colspan="6" class="hint">لا نتائج مطابقة للفلتر.</td></tr>';
+      return;
+    }
+    adminNameErrorsBody.innerHTML = rows
+      .slice(0, 200)
+      .map((row) => {
+        const pairId = escapeHtml(row.id != null ? row.id : "");
+        const branch = escapeHtml(row.branch_key || "—");
+        const father = escapeHtml(row.father_label || row.stored_parent || "—");
+        const n1 = escapeHtml(row.name_a || leafFromPath(row.child_path) || "—");
+        const n2 = isPair
+          ? escapeHtml(row.name_b || "—")
+          : escapeHtml(row.child_path || "—");
+        const why = escapeHtml(explainNameError(row, chosen));
+        const actions = isPair
+          ? '<button type="button" class="btn btn-outline btn-sm" data-name-err-analyze="' +
+            pairId +
+            '">مراجعة</button>' +
+            nameErrorTreeBtn(row.branch_key, row.child_path_a, "فتح ١") +
+            nameErrorTreeBtn(row.branch_key, row.child_path_b, "فتح ٢") +
+            '<button type="button" class="btn btn-outline btn-sm" data-name-err-correct="' +
+            pairId +
+            '" data-name-err-correct-side="a">تصحيح ١</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-name-err-correct="' +
+            pairId +
+            '" data-name-err-correct-side="b">تصحيح ٢</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-name-err-unify="' +
+            pairId +
+            '">توحيد</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-name-err-merge="' +
+            pairId +
+            '">دمج</button>' +
+            '<button type="button" class="btn btn-outline btn-sm" data-name-err-ignore="' +
+            pairId +
+            '">تجاهل</button>'
+          : '<button type="button" class="btn btn-outline btn-sm" data-name-err-analyze="' +
+            pairId +
+            '">مراجعة</button>' +
+            nameErrorTreeBtn(
+              row.branch_key,
+              row.child_path && !String(row.child_path).includes("↔")
+                ? row.child_path
+                : row.child_path_a || "",
+              "فتح",
+            ) +
+            '<button type="button" class="btn btn-outline btn-sm" data-name-err-correct="' +
+            pairId +
+            '" data-name-err-correct-side="a">تصحيح</button>';
+        return (
+          "<tr><td>" +
+          branch +
+          "</td><td>" +
+          father +
+          "</td><td>" +
+          n1 +
+          "</td><td>" +
+          n2 +
+          "</td><td>" +
+          why +
+          '</td><td><div class="health-row-actions">' +
+          actions +
+          "</div></td></tr>"
+        );
+      })
+      .join("");
+    bindNameErrorRowActions(adminNameErrorsBody, chosen);
+  }
+
+  function countAllNameErrors(audit) {
+    if (!audit || !audit.lists) return 0;
+    let total = 0;
+    NAME_ERROR_CATS.forEach((meta) => {
+      total += nameErrorRowsForCat(audit, meta.id).length;
+    });
+    return total;
+  }
+
+  function applyNameErrorFilters(rows) {
+    const branch = String(
+      (adminNameErrorsFilterBranch && adminNameErrorsFilterBranch.value) || "",
+    ).trim();
+    const fatherQ = String(
+      (adminNameErrorsFilterFather && adminNameErrorsFilterFather.value) || "",
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return (Array.isArray(rows) ? rows : []).filter((row) => {
+      if (branch && String(row.branch_key || "").trim() !== branch) return false;
+      if (fatherQ) {
+        const father = String(
+          row.father_label || row.stored_parent || row.parent_name || "",
+        )
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        if (!father.includes(fatherQ)) return false;
+      }
+      return true;
+    });
+  }
+
+  function updateAdminNameErrorsBadges(total) {
+    const n = Number(total || 0);
+    const show = n > 0;
+    const label = String(n);
+    if (adminNameErrorsNavBadge) {
+      adminNameErrorsNavBadge.textContent = label;
+      adminNameErrorsNavBadge.hidden = !show;
+    }
+    if (adminNameErrorsTotalBadge) {
+      adminNameErrorsTotalBadge.textContent = show ? n + " خطأ اسم" : "";
+      adminNameErrorsTotalBadge.hidden = !show;
+    }
+    document
+      .querySelectorAll('[data-admin-name-errors-count="1"]')
+      .forEach((el) => {
+        el.textContent = label;
+        el.hidden = !show;
+      });
+  }
+
+  function leafFromPath(path) {
+    const p = String(path || "");
+    if (!p) return "";
+    const i = p.lastIndexOf("/");
+    return i >= 0 ? p.slice(i + 1) : p;
+  }
+
+  function openNameErrorInHealth(catId) {
+    renderAdminNameErrorRows(catId);
+  }
+
+  function renderAdminNameErrors(audit) {
+    if (!adminNameErrorsCards) return;
+    adminNameErrorsCards.innerHTML = "";
+    if (!audit || !audit.lists) {
+      if (adminNameErrorsStatus) {
+        adminNameErrorsStatus.textContent =
+          "اضغط تحديث الفحص بعد تسجيل الدخول — يُقرأ من نفس مسح الشجرة في مركز الصحة.";
+      }
+      renderAdminNameErrorRows("possible_spelling_duplicates");
+      return;
+    }
+    let total = 0;
+    NAME_ERROR_CATS.forEach((meta) => {
+      const rows = audit.lists[meta.id] || [];
+      const visible =
+        meta.id === "suspicious_name_typo"
+          ? rows.length
+          : rows.filter((row) => !isSpellPairSuppressed(row.id)).length;
+      total += visible;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className =
+        "health-structure-card " + (visible ? "is-warn is-di" : "is-ok");
+      btn.setAttribute("data-name-error-cat", meta.id);
+      btn.innerHTML =
+        '<span class="hs-mark">' +
+        (visible ? "🟠" : "✓") +
+        "</span>" +
+        '<span class="hs-label">' +
+        escapeHtml(meta.title) +
+        "</span>" +
+        '<span class="hs-count">' +
+        escapeHtml(String(visible)) +
+        "</span>" +
+        '<span class="hs-impact">' +
+        (meta.id === "wrong_name_similarity"
+          ? "تحت الأب نفسه · حرف زائد أو ناقص"
+          : meta.id === "suspicious_name_typo"
+            ? "مسح / خطأ إدخال — ليست الأسماء الشائعة"
+            : "نفس الأب · نفس الاسم بعد التوحيد") +
+        "</span>";
+      btn.addEventListener("click", () => {
+        if (!healthStructureAudit) {
+          loadHealthCenterReport()
+            .then(() => openNameErrorInHealth(meta.id))
+            .catch(() => {});
+          return;
+        }
+        openNameErrorInHealth(meta.id);
+      });
+      adminNameErrorsCards.appendChild(btn);
+    });
+    if (adminNameErrorsStatus) {
+      adminNameErrorsStatus.textContent = total
+        ? "وُجد " +
+          total +
+          " بندًا. الجدول تحت البطاقات يوضح أين (الفرع والأب) وما هو الخطأ. استخدم الفلتر أو «تصحيح» لفتح محرر الاسم. بلا دمج تلقائي."
+        : "لا أخطاء أسماء تحت الأب نفسه في هذا المسح. محمد المتكرر في فروع مختلفة يظهر في الرئيسية كاسم شائع وليس هنا.";
+    }
+    updateAdminNameErrorsBadges(total);
+    const preferred = NAME_ERROR_CATS.find(
+      (meta) => nameErrorRowsForCat(audit, meta.id).length > 0,
+    );
+    const nextCat =
+      (adminNameErrorsActiveCat &&
+        nameErrorRowsForCat(audit, adminNameErrorsActiveCat).length &&
+        adminNameErrorsActiveCat) ||
+      (preferred && preferred.id) ||
+      "possible_spelling_duplicates";
+    renderAdminNameErrorRows(nextCat);
+  }
+
   function renderHealthStructureAudit(audit) {
     healthStructureAudit = audit || null;
+    renderAdminNameErrors(audit);
     if (!healthStructureCards) return;
     healthStructureCards.innerHTML = "";
     if (!audit || !Array.isArray(audit.categories)) {
@@ -5147,6 +5704,29 @@ where c.id = matches.id; commit;
     healthCenterRefresh.addEventListener("click", () =>
       loadHealthCenterReport().catch(() => {}),
     );
+  if (adminNameErrorsRefresh)
+    adminNameErrorsRefresh.addEventListener("click", () =>
+      loadHealthCenterReport().catch(() => {}),
+    );
+  if (adminNameErrorsExport)
+    adminNameErrorsExport.addEventListener("click", exportNameErrorsCsv);
+  if (adminNameErrorsFilterBranch) {
+    adminNameErrorsFilterBranch.addEventListener("change", () =>
+      renderAdminNameErrorRows(adminNameErrorsActiveCat),
+    );
+  }
+  if (adminNameErrorsFilterFather) {
+    adminNameErrorsFilterFather.addEventListener("input", () =>
+      renderAdminNameErrorRows(adminNameErrorsActiveCat),
+    );
+  }
+  if (adminNameErrorsFilterClear) {
+    adminNameErrorsFilterClear.addEventListener("click", () => {
+      if (adminNameErrorsFilterBranch) adminNameErrorsFilterBranch.value = "";
+      if (adminNameErrorsFilterFather) adminNameErrorsFilterFather.value = "";
+      renderAdminNameErrorRows(adminNameErrorsActiveCat);
+    });
+  }
   if (healthRepairApprove) {
     const syncHealthRepairApprove = () => {
       const ready =

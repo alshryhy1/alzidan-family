@@ -101,6 +101,85 @@ assert(
 const cat = (report.categories || []).find((c) => c.id === "possible_spelling_duplicates");
 assert(cat && cat.count === 1 && cat.priority === "high", "category card high priority");
 
+const nearKids = children.concat([
+  {
+    id: 5,
+    branch_key: "زيدان",
+    parent_name: father,
+    parent: father,
+    name: father + "/خلد",
+    child_name: father + "/خلد",
+  },
+  {
+    id: 6,
+    branch_key: "زيدان",
+    parent_name: father,
+    parent: father,
+    name: father + "/سعيد",
+    child_name: father + "/سعيد",
+  },
+  {
+    id: 7,
+    branch_key: "زيدان",
+    parent_name: father,
+    parent: father,
+    name: father + "/سعود",
+    child_name: father + "/سعود",
+  },
+  {
+    id: 8,
+    branch_key: "زيدان",
+    parent_name: father,
+    parent: father,
+    name: father + "/محد",
+    child_name: father + "/محد",
+  },
+  {
+    id: 9,
+    branch_key: "زيدان",
+    parent_name: father,
+    parent: father,
+    name: father + "/عبد الرحمن",
+    child_name: father + "/عبد الرحمن",
+  },
+  {
+    id: 10,
+    branch_key: "زيدان",
+    parent_name: father,
+    parent: father,
+    name: father + "/سعد",
+    child_name: father + "/سعد",
+  },
+]);
+const near = Struct.findWrongNameSimilarity(nearKids);
+assert(near.length === 1, "exactly one near-miss pair (خالد/خلد)");
+assert(
+  !near.some(
+    (row) =>
+      (row.name_a === "سعد" && row.name_b === "سعيد") ||
+      (row.name_a === "سعيد" && row.name_b === "سعد"),
+  ),
+  "سعد/سعيد are distinct brothers, not a name error",
+);
+assert(
+  (near[0].name_a === "خالد" && near[0].name_b === "خلد") ||
+    (near[0].name_a === "خلد" && near[0].name_b === "خالد"),
+  "near pair is خالد/خلد",
+);
+assert(near[0].never_auto_merge === true, "near-miss never auto-merge");
+const typos = Struct.findSuspiciousNameTypos(nearKids);
+assert(
+  typos.some((row) => String(row.reason_ar || "").indexOf("محد") >= 0),
+  "محد flagged as typo",
+);
+assert(
+  !typos.some((row) => String(row.child_path || "").indexOf("عبد الرحمن") >= 0),
+  "عبد الرحمن spacing is not a name error",
+);
+const report2 = Struct.auditTreeStructure(nearKids, []);
+assert(report2.totals.wrong_name_similarity === 1, "audit totals include near-miss");
+assert(report2.totals.suspicious_name_typo >= 1, "audit totals include typos");
+
 const PipeSrc = fs.readFileSync(
   path.join(__dirname, "../assets/js/modules/integrity-repair-pipeline.js"),
   "utf8",

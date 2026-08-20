@@ -110,6 +110,128 @@
     gregEl.addEventListener("change", fromGreg);
   }
 
+  function parseIsoDateParts(v) {
+    var s = String(v || "").trim().replace(/\//g, "-");
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+    if (!m) return null;
+    return { y: parseInt(m[1], 10), mo: parseInt(m[2], 10), d: parseInt(m[3], 10) };
+  }
+
+  function formatIsoDateParts(p) {
+    if (!p) return "";
+    return (
+      String(p.y) +
+      "-" +
+      String(p.mo).padStart(2, "0") +
+      "-" +
+      String(p.d).padStart(2, "0")
+    );
+  }
+
+  function todayIsoDateParts() {
+    var n = new Date();
+    return { y: n.getFullYear(), mo: n.getMonth() + 1, d: n.getDate() };
+  }
+
+  function ageYearsOnDate(birthISO, asOfParts) {
+    var b = parseIsoDateParts(birthISO);
+    if (!b || !asOfParts) return null;
+    var age = asOfParts.y - b.y;
+    if (asOfParts.mo < b.mo || (asOfParts.mo === b.mo && asOfParts.d < b.d)) age -= 1;
+    return age;
+  }
+
+  function birthIsoFromAgeYears(age, asOfParts) {
+    if (age == null || !asOfParts) return "";
+    var y = asOfParts.y - age;
+    var greg = formatIsoDateParts({ y: y, mo: asOfParts.mo, d: asOfParts.d });
+    var guard = 0;
+    while (ageYearsOnDate(greg, asOfParts) > age && guard < 5) {
+      y -= 1;
+      greg = formatIsoDateParts({ y: y, mo: asOfParts.mo, d: asOfParts.d });
+      guard += 1;
+    }
+    guard = 0;
+    while (ageYearsOnDate(greg, asOfParts) < age && guard < 5) {
+      y += 1;
+      greg = formatIsoDateParts({ y: y, mo: asOfParts.mo, d: asOfParts.d });
+      guard += 1;
+    }
+    return greg;
+  }
+
+  function parseAgeYearsInput(v, api) {
+    var s = String(v || "").trim();
+    if (!s) return null;
+    if (api && typeof api.normalizeArabicDigitsToLatin === "function") {
+      s = api.normalizeArabicDigitsToLatin(s);
+    } else {
+      s = s.replace(/[٠-٩]/g, function (d) {
+        return String("٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      });
+    }
+    s = s.replace(/[^\d]/g, "");
+    if (!s) return null;
+    var n = parseInt(s, 10);
+    if (!Number.isFinite(n) || n < 0 || n > 120) return null;
+    return n;
+  }
+
+  function bindAgeToBirthDates(ageEl, hijriEl, gregEl, api, opts) {
+    if (!ageEl || !hijriEl || !gregEl || !api) return null;
+    var options = opts || {};
+    var syncing = false;
+
+    function getAsOfParts() {
+      if (typeof options.getAsOfGregISO === "function") {
+        var custom = parseIsoDateParts(options.getAsOfGregISO());
+        if (custom) return custom;
+      }
+      return todayIsoDateParts();
+    }
+
+    function applyAgeToDates() {
+      if (syncing) return;
+      var age = parseAgeYearsInput(ageEl.value, api);
+      if (age == null) return;
+      var gregISO = birthIsoFromAgeYears(age, getAsOfParts());
+      if (!gregISO) return;
+      var hijriISO =
+        typeof api.gregorianToHijriISO === "function" ? api.gregorianToHijriISO(gregISO) : "";
+      if (!hijriISO) return;
+      syncing = true;
+      gregEl.value = gregISO;
+      hijriEl.value = hijriISO;
+      syncing = false;
+      if (typeof options.onApplied === "function") options.onApplied();
+    }
+
+    function syncAgeFromDates() {
+      if (syncing) return;
+      if (typeof api.calculateAge !== "function") return;
+      var ageText = api.calculateAge({
+        deceased: typeof options.isDeceased === "function" ? options.isDeceased() : false,
+        gdate: gregEl.value,
+        hdate: hijriEl.value,
+        year: hijriEl.value,
+        ddate: typeof options.getDeathGregISO === "function" ? options.getDeathGregISO() : "",
+        dhdate: typeof options.getDeathHijriISO === "function" ? options.getDeathHijriISO() : "",
+      });
+      var n = parseAgeYearsInput(String(ageText || "").replace(/\s*سنة\s*$/, ""), api);
+      if (n == null) return;
+      syncing = true;
+      ageEl.value = String(n);
+      syncing = false;
+    }
+
+    ageEl.addEventListener("input", applyAgeToDates);
+    ageEl.addEventListener("change", applyAgeToDates);
+    ageEl.addEventListener("blur", applyAgeToDates);
+    hijriEl.addEventListener("blur", syncAgeFromDates);
+    gregEl.addEventListener("change", syncAgeFromDates);
+    return { applyAgeToDates: applyAgeToDates, syncAgeFromDates: syncAgeFromDates };
+  }
+
   function parentNamesMatch(parentId, dbParentName, norm, baseName) {
     var parentNorm = norm(parentId || "");
     var dbParent = norm(dbParentName || "");
@@ -827,6 +949,145 @@
    * On edit, pass excludeChildId / excludePersonId so the row being saved
    * is not treated as a duplicate of itself (birth_order / phone / dates).
    */
+  function normalizeArabicForSiblingCompare(value) {
+    var Core = root.AlzidanCore || {};
+    if (typeof Core.normalizeArabicForCompare === "function") {
+      return Core.normalizeArabicForCompare(value);
+    }
+    var ITS = root.AlzidanIntegrityTreeStructure;
+    if (ITS && typeof ITS.normalizeArabicForCompare === "function") {
+      return ITS.normalizeArabicForCompare(value);
+    }
+    var s = normalizeText(value);
+    return s
+      .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+      .replace(/[إأآٱ]/g, "ا")
+      .replace(/ؤ/g, "و")
+      .replace(/ئ/g, "ي")
+      .replace(/ء/g, "")
+      .replace(/ى/g, "ي")
+      .replace(/ة/g, "ه");
+  }
+
+  function editDistanceAtMostOne(a, b) {
+    a = String(a || "");
+    b = String(b || "");
+    if (a === b) return 0;
+    var m = a.length;
+    var n = b.length;
+    if (Math.abs(m - n) > 1) return 2;
+    if (!m) return n;
+    if (!n) return m;
+    var prev = [];
+    var i;
+    var j;
+    for (j = 0; j <= n; j += 1) prev[j] = j;
+    for (i = 1; i <= m; i += 1) {
+      var cur = [i];
+      var ca = a.charAt(i - 1);
+      for (j = 1; j <= n; j += 1) {
+        var cost = ca === b.charAt(j - 1) ? 0 : 1;
+        var del = prev[j] + 1;
+        var ins = cur[j - 1] + 1;
+        var sub = prev[j - 1] + cost;
+        cur[j] = del < ins ? (del < sub ? del : sub) : ins < sub ? ins : sub;
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+
+  function bothCommonDistinctGivens(normA, normB) {
+    var ITS = root.AlzidanIntegrityTreeStructure;
+    if (ITS && typeof ITS.bothCommonDistinctGivens === "function") {
+      return ITS.bothCommonDistinctGivens(normA, normB);
+    }
+    return false;
+  }
+
+  function explainSiblingSpellingDiff(a, b) {
+    var ITS = root.AlzidanIntegrityTreeStructure;
+    if (ITS && typeof ITS.explainArabicSpellingDiff === "function") {
+      return ITS.explainArabicSpellingDiff(a, b);
+    }
+    return "الاسم قريب من أخ موجود تحت نفس الأب";
+  }
+
+  /**
+   * Soft warning before save: spelling duplicate or one-char sibling similarity.
+   * Exact leaf match stays in findSiblingNameCollision (hard block).
+   */
+  function findSiblingSimilarNameWarning(siblings, childBase, opts) {
+    var options = opts || {};
+    var norm =
+      typeof options.normalizePersonName === "function"
+        ? options.normalizePersonName
+        : normalizeText;
+    var baseName =
+      typeof options.normalizePersonBaseName === "function"
+        ? options.normalizePersonBaseName
+        : function (v) {
+            var n = norm(v || "");
+            if (!n) return "";
+            var parts = n.split("/").map(norm).filter(Boolean);
+            return parts.length ? parts[parts.length - 1] : n;
+          };
+    var want = baseName(childBase || "");
+    if (!want) return null;
+    var normWant = normalizeArabicForSiblingCompare(want);
+    if (!normWant) return null;
+    var excludeChildId = norm(options.excludeChildId || "");
+    var excludePersonId = norm(options.excludePersonId || "");
+    var list = Array.isArray(siblings) ? siblings : [];
+    var i;
+    for (i = 0; i < list.length; i += 1) {
+      var c = list[i] || {};
+      var siblingPath = norm(c.name || "");
+      var siblingLeaf = baseName(c.name || "");
+      if (!siblingLeaf) continue;
+      var pid = norm(c.personId || c.person_id || "");
+      if (excludeChildId && siblingPath === excludeChildId) continue;
+      if (excludePersonId && pid && pid === excludePersonId) continue;
+      if (siblingLeaf === want) continue;
+      var normSibling = normalizeArabicForSiblingCompare(siblingLeaf);
+      if (!normSibling) continue;
+      if (normWant === normSibling) {
+        return {
+          kind: "spelling",
+          siblingName: siblingPath || siblingLeaf,
+          siblingLeaf: siblingLeaf,
+          message:
+            "يوجد أخ مسجّل باسم «" +
+            siblingLeaf +
+            "» — يطابق «" +
+            want +
+            "» بعد توحيد الهمزة/الياء (" +
+            explainSiblingSpellingDiff(want, siblingLeaf) +
+            ").",
+        };
+      }
+      if (normWant.length >= 3 && normSibling.length >= 3) {
+        if (Math.abs(normWant.length - normSibling.length) === 1) {
+          if (editDistanceAtMostOne(normWant, normSibling) === 1) {
+            if (bothCommonDistinctGivens(normWant, normSibling)) continue;
+            return {
+              kind: "similar",
+              siblingName: siblingPath || siblingLeaf,
+              siblingLeaf: siblingLeaf,
+              message:
+                "يوجد أخ باسم «" +
+                siblingLeaf +
+                "» قريب جداً من «" +
+                want +
+                "» (فرق حرف واحد) — قد يكون خطأ كتابة.",
+            };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   function findSiblingNameCollision(siblings, childBase, opts) {
     var options = opts || {};
     var norm =
@@ -869,6 +1130,9 @@
     setDeathDateFieldsUiMode: setDeathDateFieldsUiMode,
     bindDeathDateToggle: bindDeathDateToggle,
     bindBirthDateSync: bindBirthDateSync,
+    bindAgeToBirthDates: bindAgeToBirthDates,
+    parseAgeYearsInput: parseAgeYearsInput,
+    birthIsoFromAgeYears: birthIsoFromAgeYears,
     parentNamesMatch: parentNamesMatch,
     nodePathMatches: nodePathMatches,
     resolveChildrenMapKey: resolveChildrenMapKey,
@@ -893,6 +1157,7 @@
     findTreeRowId: findTreeRowId,
     buildDeleteNameAttempts: buildDeleteNameAttempts,
     findSiblingNameCollision: findSiblingNameCollision,
+    findSiblingSimilarNameWarning: findSiblingSimilarNameWarning,
     ORIGIN_LOCK_MSG: ORIGIN_LOCK_MSG,
     branchRootNameForKey: branchRootNameForKey,
     isBranchRootParentName: isBranchRootParentName,

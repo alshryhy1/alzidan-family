@@ -8,6 +8,7 @@
   var bindDeceasedToggle = PersonCore.bindDeceasedToggle || function () {};
   var bindDeathDateToggle = PersonCore.bindDeathDateToggle || function () {};
   var bindBirthDateSync = PersonCore.bindBirthDateSync || function () {};
+  var bindAgeToBirthDates = PersonCore.bindAgeToBirthDates || function () {};
 
   function createChildrenSection(opts) {
     var api = opts && opts.api ? opts.api : {};
@@ -208,6 +209,7 @@
             })
           : '<input type="tel" data-fm-edit-phone inputmode="numeric" placeholder="5XXXXXXXX" /><div class="hint">اختر الدولة ثم الرقم المحلي</div>') +
         "</div>" +
+        '<div class="field"><label>العمر (سنة)</label><input type="text" data-fm-edit-age dir="ltr" inputmode="numeric" placeholder="73" /><div class="hint" style="margin-top:4px;">اكتب العمر رقماً (مثل 73 أو ٧٣) — يُعبَّأ التاريخ الهجري والميلادي تلقائياً</div></div>' +
         '<div class="field"><label>تاريخ الميلاد (هجري)</label><input type="text" data-fm-edit-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
         '<div class="field"><label>تاريخ الميلاد (ميلادي)</label><input type="date" data-fm-edit-greg dir="ltr" lang="en" /></div>' +
         '<div class="field"><label>ترتيب الميلاد</label><input type="number" data-fm-edit-order min="1" step="1" inputmode="numeric" /></div>' +
@@ -223,11 +225,39 @@
 
       var hijriEl = wrap.querySelector("[data-fm-edit-hijri]");
       var gregEl = wrap.querySelector("[data-fm-edit-greg]");
+      var ageEl = wrap.querySelector("[data-fm-edit-age]");
       var deathHijriEl = wrap.querySelector("[data-fm-edit-death-hijri]");
       var deathGregEl = wrap.querySelector("[data-fm-edit-death-greg]");
       var deceasedEl = wrap.querySelector("[data-fm-edit-deceased]");
       bindBirthDateSync(hijriEl, gregEl, api);
       bindBirthDateSync(deathHijriEl, deathGregEl, api);
+      var ageBinder = bindAgeToBirthDates(ageEl, hijriEl, gregEl, api, {
+        isDeceased: function () {
+          return !!(deceasedEl && deceasedEl.checked);
+        },
+        getDeathGregISO: function () {
+          return deathGregEl ? deathGregEl.value : "";
+        },
+        getDeathHijriISO: function () {
+          return deathHijriEl ? deathHijriEl.value : "";
+        },
+        getAsOfGregISO: function () {
+          if (deceasedEl && deceasedEl.checked && deathGregEl && deathGregEl.value) {
+            return deathGregEl.value;
+          }
+          if (
+            deceasedEl &&
+            deceasedEl.checked &&
+            deathHijriEl &&
+            deathHijriEl.value &&
+            typeof api.hijriToGregorianISO === "function"
+          ) {
+            return api.hijriToGregorianISO(deathHijriEl.value) || "";
+          }
+          return "";
+        },
+        onApplied: refreshAgeHint,
+      });
       function syncDeathDateFields() {
         var on = !!(deceasedEl && deceasedEl.checked);
         wrap.querySelectorAll("[data-fm-death-field]").forEach(function (field) {
@@ -292,6 +322,9 @@
         el.addEventListener("blur", refreshAgeHint);
       });
       syncDeathDateFields();
+      if (ageBinder && typeof ageBinder.syncAgeFromDates === "function") {
+        ageBinder.syncAgeFromDates();
+      }
 
       var originalName = "";
       var nameEl = wrap.querySelector("[data-fm-edit-name]");
@@ -513,6 +546,35 @@
           deathHijri: deathHijriEl ? deathHijriEl.value : "",
           deathGreg: deathGregEl ? deathGregEl.value : "",
         });
+        if (res && res.needsConfirm) {
+          var okProceed = typeof window.confirm === "function"
+            ? window.confirm((res.message || "اسم قريب من أخ.") + "\n\nهل تريد المتابعة؟")
+            : false;
+          if (!okProceed) {
+            pendingConfirm = false;
+            if (saveBtn) saveBtn.textContent = "حفظ التعديل";
+            setAlert(editAlert, "error", res.message || "تم إلغاء الحفظ.");
+            return;
+          }
+          res = await api.updateChild({
+            parentId: parentKey,
+            childId: childId,
+            child: child,
+            newName: nameEl ? nameEl.value : "",
+            personId: personIdEl ? personIdEl.value : "",
+            phone: phoneDraft.value,
+            gender: genderEl ? genderEl.value : "",
+            hijri: hijriEl ? hijriEl.value : "",
+            greg: gregEl ? gregEl.value : "",
+            order: orderEl ? orderEl.value : "",
+            city: cityEl ? cityEl.value : "",
+            area: areaEl ? areaEl.value : "",
+            deceased: !!(deceasedEl && deceasedEl.checked),
+            deathHijri: deathHijriEl ? deathHijriEl.value : "",
+            deathGreg: deathGregEl ? deathGregEl.value : "",
+            confirmSimilarName: true,
+          });
+        }
         if (!res || !res.ok) {
           pendingConfirm = false;
           if (saveBtn) saveBtn.textContent = "حفظ التعديل";
