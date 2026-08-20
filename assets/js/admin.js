@@ -348,6 +348,23 @@ const relationPathLabel = (window.TreeLineage && window.TreeLineage.relationPath
   const adminTickerMobileSpeed = document.getElementById(
     "admin-ticker-mobile-speed",
   );
+  const adminGivingSadaqahEnabled = document.getElementById(
+    "admin-giving-sadaqah-enabled",
+  );
+  const adminGivingSadaqahUrl = document.getElementById(
+    "admin-giving-sadaqah-url",
+  );
+  const adminGivingSupportEnabled = document.getElementById(
+    "admin-giving-support-enabled",
+  );
+  const adminGivingSupportCustom = document.getElementById(
+    "admin-giving-support-custom",
+  );
+  const adminGivingAmountChecks = () =>
+    Array.from(document.querySelectorAll(".admin-giving-amount"));
+  const adminGivingSave = document.getElementById("admin-giving-save");
+  const adminGivingReload = document.getElementById("admin-giving-reload");
+  const adminGivingStatus = document.getElementById("admin-giving-status");
   let bannerMessagesRows = [];
   const eventsSourceTitle = document.getElementById("events-source-title");
   const eventsSourceGregorian = document.getElementById(
@@ -5021,6 +5038,224 @@ where c.id = matches.id; commit;
         " ثانية.",
     );
   }
+
+  const GIVING_KEYS = {
+    sadaqahUrl: "sadaqah_jariyah_url",
+    sadaqahEnabled: "sadaqah_jariyah_enabled",
+    supportEnabled: "site_support_enabled",
+    supportAmounts: "site_support_amounts",
+    supportAllowCustom: "site_support_allow_custom",
+  };
+  const GIVING_DEFAULT_AMOUNTS = [10, 25, 50, 100];
+
+  function setGivingStatus(text) {
+    if (adminGivingStatus) adminGivingStatus.textContent = text || "";
+  }
+
+  function isHttpsGivingUrl(v) {
+    if (
+      window.AlzidanGivingLinks &&
+      typeof window.AlzidanGivingLinks.isHttpsUrl === "function"
+    ) {
+      return window.AlzidanGivingLinks.isHttpsUrl(v);
+    }
+    const s = String(v || "").trim();
+    if (!s) return false;
+    try {
+      const u = new URL(s);
+      return u.protocol === "https:";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isGivingEnabledFlag(v) {
+    if (
+      window.AlzidanGivingLinks &&
+      typeof window.AlzidanGivingLinks.isEnabledFlag === "function"
+    ) {
+      return window.AlzidanGivingLinks.isEnabledFlag(v);
+    }
+    const s = String(v == null ? "" : v)
+      .trim()
+      .toLowerCase();
+    return s === "1" || s === "true" || s === "yes" || s === "on";
+  }
+
+  function parseGivingAmounts(raw) {
+    if (
+      window.AlzidanGivingLinks &&
+      typeof window.AlzidanGivingLinks.parseAmounts === "function"
+    ) {
+      return window.AlzidanGivingLinks.parseAmounts(raw);
+    }
+    const parts = String(raw == null ? "" : raw)
+      .split(/[,|\s]+/)
+      .map((p) => Math.round(Number(String(p).trim())))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const seen = {};
+    const out = [];
+    parts.forEach((n) => {
+      if (seen[n]) return;
+      seen[n] = true;
+      out.push(n);
+    });
+    out.sort((a, b) => a - b);
+    return out.length ? out : GIVING_DEFAULT_AMOUNTS.slice();
+  }
+
+  function readAdminGivingAmounts() {
+    const selected = adminGivingAmountChecks()
+      .filter((el) => el.checked)
+      .map((el) => Math.round(Number(el.value)))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    selected.sort((a, b) => a - b);
+    return selected;
+  }
+
+  function applyAdminGivingAmounts(amounts) {
+    const set = {};
+    (Array.isArray(amounts) ? amounts : []).forEach((n) => {
+      set[String(n)] = true;
+    });
+    adminGivingAmountChecks().forEach((el) => {
+      el.checked = !!set[String(el.value)];
+    });
+  }
+
+  async function loadGivingLinksSettings() {
+    const sb = getClient();
+    if (!sb) {
+      setGivingStatus("تعذر الاتصال.");
+      return;
+    }
+    setGivingStatus("جاري التحميل...");
+    const { data, error } = await sb
+      .from("site_settings")
+      .select("key,value")
+      .in("key", [
+        GIVING_KEYS.sadaqahUrl,
+        GIVING_KEYS.sadaqahEnabled,
+        GIVING_KEYS.supportEnabled,
+        GIVING_KEYS.supportAmounts,
+        GIVING_KEYS.supportAllowCustom,
+      ]);
+    if (error) {
+      setGivingStatus("تعذر التحميل، حاول لاحقاً.");
+      return;
+    }
+    const map = {};
+    (Array.isArray(data) ? data : []).forEach((row) => {
+      if (!row || row.key == null) return;
+      map[String(row.key)] = row.value == null ? "" : String(row.value);
+    });
+    if (adminGivingSadaqahUrl) {
+      adminGivingSadaqahUrl.value = String(map[GIVING_KEYS.sadaqahUrl] || "");
+    }
+    if (adminGivingSadaqahEnabled) {
+      adminGivingSadaqahEnabled.checked = isGivingEnabledFlag(
+        map[GIVING_KEYS.sadaqahEnabled],
+      );
+    }
+    if (adminGivingSupportEnabled) {
+      adminGivingSupportEnabled.checked = isGivingEnabledFlag(
+        map[GIVING_KEYS.supportEnabled],
+      );
+    }
+    const amountsRaw = map[GIVING_KEYS.supportAmounts];
+    applyAdminGivingAmounts(
+      amountsRaw == null || amountsRaw === ""
+        ? GIVING_DEFAULT_AMOUNTS
+        : parseGivingAmounts(amountsRaw),
+    );
+    if (adminGivingSupportCustom) {
+      adminGivingSupportCustom.checked =
+        map[GIVING_KEYS.supportAllowCustom] == null ||
+        map[GIVING_KEYS.supportAllowCustom] === ""
+          ? true
+          : isGivingEnabledFlag(map[GIVING_KEYS.supportAllowCustom]);
+    }
+    setGivingStatus("جاهز — احفظ بعد التعديل. (Paymob إعدادات · بلا رابط خام)");
+  }
+
+  async function saveGivingLinksSettings() {
+    const sb = getClient();
+    const token = getAdminToken();
+    if (!sb || !token) {
+      setGivingStatus("سجّل الدخول أولاً.");
+      return;
+    }
+    const sadaqahUrl = adminGivingSadaqahUrl
+      ? String(adminGivingSadaqahUrl.value || "").trim()
+      : "";
+    const sadaqahOn = !!(
+      adminGivingSadaqahEnabled && adminGivingSadaqahEnabled.checked
+    );
+    const supportOn = !!(
+      adminGivingSupportEnabled && adminGivingSupportEnabled.checked
+    );
+    const amounts = readAdminGivingAmounts();
+    const allowCustom = !!(
+      adminGivingSupportCustom && adminGivingSupportCustom.checked
+    );
+    if (sadaqahOn && !isHttpsGivingUrl(sadaqahUrl)) {
+      setGivingStatus("رابط الصدقة يجب أن يكون https صالحًا (إحسان).");
+      showAlert("error", "رابط الصدقة غير صالح.");
+      return;
+    }
+    if (sadaqahUrl && !isHttpsGivingUrl(sadaqahUrl)) {
+      setGivingStatus("رابط الصدقة غير صالح — استخدم https فقط.");
+      return;
+    }
+    if (supportOn && amounts.length === 0 && !allowCustom) {
+      setGivingStatus("فعّل مبلغًا واحدًا على الأقل أو اسمح بمبلغ آخر.");
+      showAlert("error", "اختر مبالغ دعم الموقع.");
+      return;
+    }
+    setGivingStatus("جاري الحفظ...");
+    const pairs = [
+      [GIVING_KEYS.sadaqahUrl, sadaqahUrl],
+      [GIVING_KEYS.sadaqahEnabled, sadaqahOn ? "1" : "0"],
+      [GIVING_KEYS.supportEnabled, supportOn ? "1" : "0"],
+      [GIVING_KEYS.supportAmounts, amounts.join(",")],
+      [GIVING_KEYS.supportAllowCustom, allowCustom ? "1" : "0"],
+    ];
+    for (let i = 0; i < pairs.length; i += 1) {
+      const { error } = await sb.rpc("admin_site_setting_set_v1", {
+        p_token: token,
+        p_key: pairs[i][0],
+        p_value: pairs[i][1],
+      });
+      if (error) {
+        setGivingStatus("تعذر الحفظ، حاول لاحقاً.");
+        showAlert("error", "تعذر حفظ إعدادات الصدقة/الدعم.");
+        return;
+      }
+    }
+    if (
+      window.AlzidanGivingLinks &&
+      typeof window.AlzidanGivingLinks.invalidate === "function"
+    ) {
+      window.AlzidanGivingLinks.invalidate();
+    }
+    if (!sadaqahOn && !supportOn) {
+      setGivingStatus(
+        "تم الحفظ — لكن التفعيل مغلق؛ لن يظهر شيء في الرئيسية حتى تفعّل أحد القسمين.",
+      );
+      showAlert(
+        "success",
+        "حُفظت الإعدادات. فعّل «دعم الموقع» أو «الصدقة» ليظهر في الرئيسية.",
+      );
+      return;
+    }
+    const parts = [];
+    if (sadaqahOn) parts.push("الصدقة");
+    if (supportOn) parts.push("دعم الموقع");
+    setGivingStatus(
+      "تم الحفظ. يظهر في الرئيسية: " + parts.join(" + ") + " — حدّث الصفحة الرئيسية.",
+    );
+    showAlert("success", "تم حفظ إعدادات الصدقة ودعم الموقع.");
+  }
   async function loadEventsSourceRows() {
     const sb = getClient();
     if (!sb)
@@ -5954,6 +6189,20 @@ where c.id = matches.id; commit;
     adminTickerSpeedSave.addEventListener("click", () =>
       saveTickerSpeedSetting().catch(() => {}),
     );
+  if (adminGivingSave)
+    adminGivingSave.addEventListener("click", () =>
+      saveGivingLinksSettings().catch(() => {}),
+    );
+  if (adminGivingReload)
+    adminGivingReload.addEventListener("click", () =>
+      loadGivingLinksSettings().catch(() => {}),
+    );
+  document.addEventListener("alzidan:admin-module", (ev) => {
+    const id = ev && ev.detail ? ev.detail.id : "";
+    if (id === "giving" && getAdminToken()) {
+      loadGivingLinksSettings().catch(() => {});
+    }
+  });
 
   if (eventsSourceType)
     eventsSourceType.addEventListener("change", toggleAdminEventFields);
@@ -5997,6 +6246,7 @@ where c.id = matches.id; commit;
   }
 
   window.loadTickerSpeedSetting = loadTickerSpeedSetting;
+  window.loadGivingLinksSettings = loadGivingLinksSettings;
 
   (async function init() {
     // When AlzidanAuth is present it owns: token restore, refreshAuthStatus,
@@ -6119,5 +6369,11 @@ window.addEventListener("load", () => {
       loadTickerSpeedSetting().catch(() => {});
   } catch (e) {
     console.warn("تعذر تحميل إعداد سرعة الشريط:", e);
+  }
+  try {
+    if (typeof window.loadGivingLinksSettings === "function")
+      window.loadGivingLinksSettings().catch(() => {});
+  } catch (e) {
+    console.warn("تعذر تحميل روابط الصدقة/الدعم:", e);
   }
 });

@@ -23,7 +23,7 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23065f46' d='M32 6c-10.6 0-19.2 7.3-19.2 16.3 0 7 5 13 12.2 15.4-1.7 1.1-2.8 2.6-3.5 4.3h21c-.7-1.7-1.8-3.2-3.5-4.3 7.2-2.4 12.2-8.4 12.2-15.4C51.2 13.3 42.6 6 32 6z'/%3E%3Cpath fill='%23065f46' d='M30 34h4v24h-4z'/%3E%3Cpath fill='%23065f46' d='M22 58h20v-4H22z'/%3E%3C/svg%3E"
     />
 
-    <link rel="stylesheet" href="../assets/css/main.css?v=20260820feat1" />
+    <link rel="stylesheet" href="../assets/css/main.css?v=20260820give11" />
     <link rel="stylesheet" href="../assets/css/person-card.css?v=20260818photo2" />
     <link rel="stylesheet" href="../assets/css/legal.css?v=2026071207" />
     <link rel="stylesheet" href="../assets/css/request-experience.css?v=20260813home1" />
@@ -1023,6 +1023,89 @@
         </div>
         <div id="home-tree-body" class="tree-list"></div>
       </section>
+      <section id="giving" class="section giving-section" hidden aria-label="مساهمة العائلة">
+        <div class="giving-section-head">
+          <div class="giving-section-title" data-giving-section-title>مساهمة العائلة</div>
+          <p class="giving-section-lead" data-giving-section-lead>
+            خير عن الموتى عبر إحسان، ومساهمة لتغطية تشغيل الموقع — مساران منفصلان.
+          </p>
+        </div>
+        <div class="giving-grid">
+          <article class="giving-card giving-card-sadaqah" data-giving-sadaqah hidden>
+            <div class="giving-card-top">
+              <span class="giving-card-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 11c0 5.6-7 10-7 10Z"></path>
+                </svg>
+              </span>
+              <div>
+                <div class="giving-card-kicker">صدقة جارية · إحسان</div>
+                <h2 class="giving-card-title">عن موتى عائلة الزيدان</h2>
+              </div>
+            </div>
+            <p class="giving-card-text">
+              نسأل الله أن يغفر لهم ويرحمهم ويسكنهم فسيح جناته — التبرع عبر منصة إحسان المرخّصة.
+            </p>
+            <a
+              class="btn btn-primary giving-card-cta"
+              data-giving-sadaqah-link
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >التبرع بصدقة جارية</a
+            >
+            <p class="giving-card-note">
+              المال للجهة الخيرية — ليست إيرادًا للموقع.
+            </p>
+          </article>
+          <article class="giving-card giving-card-support" data-giving-support hidden>
+            <div class="giving-card-top">
+              <span class="giving-card-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+                  <path d="M8 20h8"></path>
+                  <path d="M12 16v4"></path>
+                </svg>
+              </span>
+              <div>
+                <div class="giving-card-kicker">دعم تشغيل الموقع</div>
+                <h2 class="giving-card-title">مساهمة لاستمرار المنصة</h2>
+              </div>
+            </div>
+            <p class="giving-card-text">
+              تغطي الاستضافة والتطوير والخدمات التقنية — ليست صدقة خيرية.
+            </p>
+              <div class="giving-amount-block" data-giving-support-amounts>
+              <div class="giving-amount-label">اختر المبلغ (ريال)</div>
+              <div class="giving-amount-row" data-giving-amount-chips></div>
+              <div class="giving-custom-wrap" data-giving-custom-wrap hidden>
+                <label class="giving-custom-label" for="giving-custom-amount">أو اكتب مبلغًا آخر</label>
+                <input
+                  id="giving-custom-amount"
+                  class="giving-custom-input"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  autocomplete="off"
+                  placeholder="مثال: 75"
+                  data-giving-custom-input
+                />
+              </div>
+              <button
+                type="button"
+                class="btn giving-card-cta"
+                data-giving-support-pay
+                disabled
+              >
+                متابعة للدفع
+              </button>
+              <p class="giving-card-note" data-giving-support-status>
+                بوابة الدفع عبر Paymob — يُؤكَّد النجاح من الخادم وليس بمجرد العودة.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
       <section id="fund" class="section">
         <details class="toggle-card" data-accordion="initiatives">
           <summary class="toggle-summary">
@@ -1670,7 +1753,8 @@
     <script src="../assets/js/event-submit.js?v=20260819meet1"></script>
     <script src="../assets/js/modules/person-kinship.js?v=20260819wad3"></script>
     <script src="../assets/js/modules/person-photo.js?v=20260818photo2"></script>
-    <script src="../assets/js/app.js?v=20260820feat1"></script>
+    <script src="../assets/js/modules/giving-links.js?v=20260820pay10"></script>
+<script src="../assets/js/app.js?v=20260820feat1"></script>
     <script src="../assets/js/memory/submit.js?v=20260817send2"></script>
     <script src="../assets/js/modules/request-experience.js?v=20260820ident1"></script>
 

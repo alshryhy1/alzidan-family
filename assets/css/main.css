@@ -391,14 +391,239 @@ nav a.site-nav-access-link:hover {
 #stats {
   order: 7;
 }
-#fund {
+#giving {
   order: 8;
 }
-#events {
+#fund {
   order: 9;
 }
-#about {
+#events {
   order: 10;
+}
+#about {
+  order: 11;
+}
+.giving-section {
+  margin: 18px 0 22px;
+}
+.giving-section-head {
+  margin: 0 0 12px;
+}
+.giving-section-title {
+  font-size: clamp(1.15rem, 2vw, 1.35rem);
+  font-weight: 900;
+  color: #064e3b;
+  margin: 0 0 4px;
+}
+.giving-section-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #6b7280;
+  max-width: 42rem;
+}
+.giving-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.giving-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  border: 1px solid #d1fae5;
+  background: linear-gradient(160deg, #f0fdf4, #ffffff 55%);
+  display: flex;
+  flex-direction: column;
+}
+.giving-card[hidden],
+.giving-section[hidden] {
+  display: none !important;
+}
+.giving-card::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  background: #059669;
+}
+.giving-card-support {
+  border-color: #e2d6c8;
+  background: linear-gradient(165deg, #f7f1ea 0%, #fbf7f2 48%, #ffffff 100%);
+  box-shadow: 0 1px 0 rgba(87, 62, 42, 0.05);
+}
+.giving-card-support::before {
+  background: linear-gradient(90deg, #b8956c, #8a6540);
+}
+.giving-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.giving-card-mark {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 120, 87, 0.1);
+  color: #047857;
+}
+.giving-card-mark svg {
+  width: 20px;
+  height: 20px;
+}
+.giving-card-support .giving-card-mark {
+  background: rgba(166, 124, 82, 0.16);
+  color: #8a6540;
+}
+.giving-card-kicker {
+  font-size: 12px;
+  font-weight: 800;
+  color: #047857;
+  margin-bottom: 4px;
+}
+.giving-card-support .giving-card-kicker {
+  color: #9a7b5f;
+}
+.giving-card-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: #064e3b;
+  line-height: 1.35;
+}
+.giving-card-support .giving-card-title {
+  font-size: 17px;
+  color: #3f2e22;
+}
+.giving-card-text {
+  margin: 0 0 14px;
+  color: #374151;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.giving-card-support .giving-card-text {
+  color: #6b5748;
+  font-size: 13px;
+}
+.giving-card-cta {
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: auto;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  font-weight: 800;
+}
+.giving-card-support .giving-card-cta,
+.giving-card-support [data-giving-support-pay] {
+  background: #5c4033;
+  border: 1px solid #5c4033;
+  color: #fff;
+}
+.giving-card-support .giving-card-cta:hover:not(:disabled),
+.giving-card-support [data-giving-support-pay]:hover:not(:disabled) {
+  background: #4a3329;
+  border-color: #4a3329;
+  color: #fff;
+}
+.giving-card-support [data-giving-support-pay]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.giving-card-note {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.55;
+}
+.giving-card-support .giving-card-note {
+  color: #8a7464;
+}
+.giving-amount-block {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.giving-amount-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b5748;
+  margin-bottom: 8px;
+}
+.giving-amount-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.giving-amount-chip {
+  appearance: none;
+  border: 1px solid #e0d4c6;
+  background: #fff;
+  color: #5c4033;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  min-width: 52px;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.giving-amount-chip.is-active {
+  border-color: #a67c52;
+  background: #f3e8dc;
+  color: #4a3329;
+}
+.giving-custom-wrap {
+  margin: 0 0 12px;
+  max-width: 220px;
+}
+.giving-custom-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a7464;
+  margin-bottom: 6px;
+}
+.giving-custom-input {
+  width: 100%;
+  border: 1px solid #e0d4c6;
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #3f2e22;
+  background: #fff;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.giving-custom-input::-webkit-outer-spin-button,
+.giving-custom-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.giving-custom-input:focus {
+  outline: 2px solid rgba(166, 124, 82, 0.28);
+  border-color: #a67c52;
+}
+@media (max-width: 720px) {
+  .giving-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.giving-section.giving-only-one .giving-grid {
+  grid-template-columns: 1fr;
+  max-width: 520px;
 }
 
 /* Make «قدّم طلبًا» stand out on the homepage */

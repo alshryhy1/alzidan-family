@@ -98,6 +98,14 @@
       group: "content",
     },
     {
+      id: "giving",
+      title: "صدقة ودعم",
+      desc: "صدقة جارية (إحسان) ودعم الموقع عبر Paymob",
+      icon: "♡",
+      sections: ["admin-giving-section"],
+      group: "content",
+    },
+    {
       id: "polls",
       title: "التصويت",
       desc: "إدارة مواضيع التصويت العام",
