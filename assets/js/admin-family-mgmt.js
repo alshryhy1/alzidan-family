@@ -638,10 +638,14 @@
     if (rowId) {
       const p = await phoneQuery({ branch_key: branchKey, tree_child_id: rowId });
       if (p) return p;
+      const byChild = await phoneQuery({ tree_child_id: rowId });
+      if (byChild) return byChild;
     }
     if (personId) {
       const p = await phoneQuery({ branch_key: branchKey, person_id: personId });
       if (p) return p;
+      const byPid = await phoneQuery({ person_id: personId });
+      if (byPid) return byPid;
     }
     return "";
   }
@@ -1226,39 +1230,92 @@
     return { ok: true, message: "تم حذف الزوجة." };
   }
 
+  function mapWifeManagerChildRow(r) {
+    const childPath = normalizePersonName(r.child_name || r.name || "");
+    const label = getDisplayNameForNodeId(childPath, state.branch ? getBranchRootName(state.branch) : "") || childPath;
+    return {
+      id: r.id,
+      name: childPath,
+      personId: normalizePersonName(r.person_id || ""),
+      parentPersonId: normalizePersonName(r.parent_person_id || ""),
+      label,
+      order: r.birth_order || "",
+      hdate: r.birth_date_h || "",
+      gdate: r.birth_date_g || "",
+      ddate: String(r.death_date_g || "").slice(0, 10),
+      dhdate: r.death_date_h || "",
+      year: r.birth_year || "",
+      city: r.city || "",
+      area: r.area || "",
+      gender: String(r.gender || "").trim(),
+      deceased: !!(r.is_deceased || r.deceased),
+    };
+  }
+
   async function familyApiGetParentChildrenForWifeManager(personName) {
     const sb = getSupabaseClient();
     syncAdminBranchFromSelect();
     const parentId = resolveSelectedParentId(normalizePersonName(personName || ""), state.branch);
     if (!sb || !parentId || !state.branch) return [];
-    const parentLeaf = getLeafStoredNameFromNodeId(parentId);
-    const parentCandidates = [parentId, parentLeaf].filter(Boolean);
-    const { data, error } = await sb
-      .from("tree_children")
-      .select("id,person_id,branch_key,parent_name,parent,child_name,name,birth_order,birth_date_h,birth_date_g,birth_year,death_date_g,death_date_h,city,area,is_deceased,deceased")
-      .eq("branch_key", state.branch)
-      .in("parent_name", parentCandidates)
-      .limit(500);
-    if (error) return [];
-    return (Array.isArray(data) ? data : []).map((r) => {
-      const childPath = normalizePersonName(r.child_name || r.name || "");
-      const label = getDisplayNameForNodeId(childPath, state.branch ? getBranchRootName(state.branch) : "") || childPath;
-      return {
-        id: r.id,
-        name: childPath,
-        personId: normalizePersonName(r.person_id || ""),
-        label,
-        order: r.birth_order || "",
-        hdate: r.birth_date_h || "",
-        gdate: r.birth_date_g || "",
-        ddate: String(r.death_date_g || "").slice(0, 10),
-        dhdate: r.death_date_h || "",
-        year: r.birth_year || "",
-        city: r.city || "",
-        area: r.area || "",
-        deceased: !!(r.is_deceased || r.deceased),
-      };
-    }).filter((c) => c.id != null && c.name);
+    const parentPath = normalizePersonName(parentId || "");
+    const parentCandidates = new Set([parentPath].filter(Boolean));
+    const meta = getPersonRowMeta(parentId);
+    const parentPersonId = normalizePersonName(meta && meta.person_id ? meta.person_id : "");
+    if (meta && meta.db_child_name) {
+      const stored = normalizePersonName(meta.db_child_name);
+      if (stored.indexOf("/") >= 0) parentCandidates.add(stored);
+    }
+
+    function belongsToParent(r) {
+      const pp = normalizePersonName(r.parent_person_id || "");
+      if (parentPersonId) {
+        if (pp) return pp === parentPersonId;
+      } else if (pp) {
+        return false;
+      }
+      const pn = normalizePersonName(r.parent_name || r.parent || "");
+      if (pn && parentCandidates.has(pn)) return true;
+      const cn = normalizePersonName(r.child_name || r.name || "");
+      if (parentPath && cn.indexOf(parentPath + "/") === 0) {
+        const rest = cn.slice(parentPath.length + 1);
+        if (rest && rest.indexOf("/") < 0) return true;
+      }
+      return false;
+    }
+
+    let rows = [];
+    const token = getAdminToken();
+    if (token) {
+      const listed = await sb.rpc("admin_tree_children_list_v1", {
+        p_token: token,
+        p_branch_key: state.branch,
+      });
+      if (!listed.error && Array.isArray(listed.data)) {
+        rows = listed.data;
+      }
+    }
+    if (!rows.length) {
+      const { data, error } = await sb
+        .from("tree_children")
+        .select("id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name,gender,birth_order,birth_date_h,birth_date_g,birth_year,death_date_g,death_date_h,city,area,is_deceased,deceased")
+        .eq("branch_key", state.branch)
+        .in("parent_name", Array.from(parentCandidates))
+        .limit(500);
+      if (error) return [];
+      rows = Array.isArray(data) ? data : [];
+    }
+
+    const mapped = rows
+      .filter(belongsToParent)
+      .map(mapWifeManagerChildRow)
+      .filter((c) => c.id != null && c.name);
+    const seen = Object.create(null);
+    return mapped.filter((c) => {
+      const k = c.personId ? "p:" + c.personId : "id:" + String(c.id);
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
   }
   
 
@@ -1617,8 +1674,20 @@
     if (!motherLinkRes.ok) {
       return { ok: false, message: "تم حفظ الابن لكن تعذر ربط الأم. أعد الربط من إدارة الزوجات." };
     }
-    if (!reloadRes.ok) return { ok: true, message: "تم حفظ بيانات الابن في قاعدة البيانات، لكن تعذر تحديث العرض الآن.", selectedPersonId: childId };
-    return { ok: true, message: "تم حفظ بيانات الابن في قاعدة البيانات: " + finalName, selectedPersonId: childId };
+    if (!reloadRes.ok) {
+      return {
+        ok: true,
+        message: "تم حفظ بيانات الابن في قاعدة البيانات، لكن تعذر تحديث العرض الآن.",
+        selectedPersonId: childId,
+        treeChildId: Number((insertRes.data && insertRes.data.id) || findRowIdForPath(childId) || 0) || 0,
+      };
+    }
+    return {
+      ok: true,
+      message: "تم حفظ بيانات الابن في قاعدة البيانات: " + finalName,
+      selectedPersonId: childId,
+      treeChildId: Number((insertRes.data && insertRes.data.id) || findRowIdForPath(childId) || 0) || 0,
+    };
   }
   
 
@@ -1854,6 +1923,409 @@
     return { ok: true, message: "تم حذف " + String(res.data || 0) + " سجل." };
   }
 
+
+  function parseExternalOffspringList(data) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object" && Array.isArray(data.rows)) return data.rows;
+    if (typeof data === "string") {
+      try {
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  function externalOffspringRpcMissingMessage() {
+    return "شغّل بطاقة «أبناء خارج نطاق العائلة» في مساحة SQL ثم حدّث الصفحة.";
+  }
+
+  function womenManagerRpcMissingMessage() {
+    return "شغّل بطاقة «صلاحية مسؤولة نسائية» في مساحة SQL ثم حدّث الصفحة.";
+  }
+
+  function familyAdminRpcMissingMessage() {
+    return "شغّل بطاقة «إدارة العائلة في التطبيق» في مساحة SQL ثم حدّث الصفحة.";
+  }
+
+  function womenPendingRpcMissingMessage() {
+    return "شغّل بطاقة «عضوات بانتظار التثبيت العائلي» في مساحة SQL ثم حدّث الصفحة.";
+  }
+
+  async function familyApiListWomenPending() {
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    if (!sb || !token) return { ok: false, rows: [], message: "سجل الدخول أولًا." };
+    const { data, error } = await sb.rpc("admin_women_pending_list_v1", { p_token: token });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, rows: [], message: womenPendingRpcMissingMessage() };
+      return { ok: false, rows: [], message: formatTreeChildrenDbError(error, "load") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    const rows = Array.isArray(out.rows) ? out.rows : [];
+    return {
+      ok: true,
+      rows: rows.map((row) => ({
+        id: Number(row && row.id ? row.id : 0),
+        displayName: String((row && row.display_name) || "").trim(),
+        phone: String((row && row.phone) || "").trim(),
+        status: String((row && row.status) || ""),
+        updatedAt: row && row.updated_at ? String(row.updated_at) : "",
+      })).filter((row) => row.id > 0),
+    };
+  }
+
+  async function familyApiPlaceWomenPending(memberId, treeChildId) {
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const mid = Number(memberId || 0);
+    const tid = Number(treeChildId || 0);
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    if (!mid || !tid) return { ok: false, message: "اختَر العضوة وشخص الشجرة." };
+    const { data, error } = await sb.rpc("admin_women_pending_place_v1", {
+      p_token: token,
+      p_member_id: mid,
+      p_tree_child_id: tid,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, message: womenPendingRpcMissingMessage() };
+      return { ok: false, message: formatTreeChildrenDbError(error, "save") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    if (out.ok === false) {
+      if (out.error === "not_daughter") return { ok: false, message: "التثبيت على عضوة أنثى في الشجرة فقط." };
+      if (out.error === "phone_conflict") return { ok: false, message: "هذا الجوال مربوط بشخص آخر." };
+      if (out.error === "already_placed") return { ok: false, message: "هذه العضوة مثبتة مسبقًا." };
+      if (out.error === "person_not_found") return { ok: false, message: "شخص الشجرة غير موجود." };
+      if (out.error === "not_pending") return { ok: false, message: "هذه ليست عضوة بانتظار التثبيت." };
+      if (out.error === "bind_failed") return { ok: false, message: "تعذر ربط الجوال بهذا الشخص." };
+      return { ok: false, message: "تعذر التثبيت." };
+    }
+    return { ok: true, message: "تم التثبيت. الدخول الكامل متاح بعد ربط الجوال بالشخص." };
+  }
+
+  async function familyApiAddWomenPendingUnderParent(memberId, parentId, fullName) {
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const mid = Number(memberId || 0);
+    const pid = Number(parentId || 0);
+    const name = String(fullName || "").trim();
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    if (!mid || !pid) return { ok: false, message: "اختر الأب من قائمة الشخص أعلاه." };
+    const { data, error } = await sb.rpc("admin_women_pending_add_under_parent_v1", {
+      p_token: token,
+      p_member_id: mid,
+      p_parent_id: pid,
+      p_full_name: name || null,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) {
+        return {
+          ok: false,
+          message: "شغّل بطاقة «إضافة عضوة إذا صح الأب والجد والعائلة» في مساحة SQL ثم حدّث الصفحة.",
+        };
+      }
+      return { ok: false, message: formatTreeChildrenDbError(error, "save") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    if (out.ok === false) {
+      if (out.error === "not_father") return { ok: false, message: "الشخص المختار ليس أبًا في الشجرة." };
+      if (out.error === "name_conflict") return { ok: false, message: "يوجد ابن بنفس الاسم تحت هذا الأب." };
+      if (out.error === "not_daughter") return { ok: false, message: "التثبيت على عضوة أنثى في الشجرة فقط." };
+      if (out.error === "already_placed") return { ok: false, message: "هذه العضوة مثبتة مسبقًا." };
+      if (out.error === "person_not_found") return { ok: false, message: "شخص الشجرة غير موجود." };
+      if (out.error === "not_pending") return { ok: false, message: "هذه ليست عضوة بانتظار التثبيت." };
+      return { ok: false, message: "تعذر الإضافة تحت الأب." };
+    }
+    return { ok: true, message: "أُضيفت كابنة للأب المختار وثُبّت الربط." };
+  }
+
+  function isDaughterGenderLabel(gender) {
+    const g = String(gender || "").trim().toLowerCase();
+    return (
+      g === "daughter" ||
+      g === "female" ||
+      g === "f" ||
+      g === "أنثى" ||
+      g === "انثى" ||
+      g === "ابنة" ||
+      g === "بنت"
+    );
+  }
+
+  async function familyApiSearchWomenPlaceTargets(query) {
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const q = String(query || "").trim();
+    if (!sb || !token) return { ok: false, rows: [], message: "سجل الدخول أولًا." };
+    if (q.length < 2) return { ok: true, rows: [] };
+
+    const mapRows = function (raw) {
+      return (Array.isArray(raw) ? raw : [])
+        .map(function (row) {
+          const path = String((row && (row.path || row.child_name || row.name)) || "").trim();
+          return {
+            id: Number(row && row.id ? row.id : 0),
+            path: path,
+            displayName: String((row && row.display_name) || path.split("/").pop() || "").trim(),
+            branchKey: String((row && (row.branch_key || row.branchKey)) || "").trim(),
+          };
+        })
+        .filter(function (row) {
+          return row.id > 0 && row.path;
+        });
+    };
+
+    const { data, error } = await sb.rpc("admin_women_pending_search_v1", {
+      p_token: token,
+      p_query: q,
+    });
+    if (!error) {
+      const out = data && typeof data === "object" ? data : {};
+      return { ok: true, rows: mapRows(out.rows) };
+    }
+    if (!isRpcMissingError(error)) {
+      return { ok: false, rows: [], message: formatTreeChildrenDbError(error, "load") };
+    }
+
+    const FM = window.AlzidanFamilyPersonCore || {};
+    const orFilter =
+      typeof FM.buildPersonNameIlikeOrFilter === "function"
+        ? FM.buildPersonNameIlikeOrFilter(q)
+        : "child_name.ilike.%" + q + "%,name.ilike.%" + q + "%";
+    if (!orFilter) return { ok: true, rows: [] };
+    const res = await sb
+      .from(FAMILY_TREE_CHILDREN_TABLE)
+      .select("id, child_name, name, branch_key, gender")
+      .or(orFilter)
+      .limit(40);
+    if (res.error) {
+      return { ok: false, rows: [], message: formatTreeChildrenDbError(res.error, "load") };
+    }
+    return {
+      ok: true,
+      rows: mapRows(
+        (Array.isArray(res.data) ? res.data : []).filter(function (row) {
+          return isDaughterGenderLabel(row && row.gender);
+        }),
+      ),
+    };
+  }
+
+  function womenManagerEligibilityMessage(code) {
+    if (code === "not_daughter") return "التعيين للعضوة الأنثى الموثّقة فقط. الجنس وحده في الواجهة لا يكفي.";
+    if (code === "no_phone") return "اربط جوالًا فعالًا بهذه العضوة في العضوية قبل التعيين.";
+    if (code === "account_inactive") return "حساب العضوية غير فعال.";
+    if (code === "person_not_found") return "لا يوجد سجل شخص في الشجرة.";
+    if (code === "not_eligible") return "لا تستوفي شروط التعيين.";
+    return code ? String(code) : "";
+  }
+
+  async function familyApiGetWomenManagerGrant(treeChildId) {
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const id = Number(treeChildId || 0);
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    if (!id) return { ok: false, message: "تعذر تحديد سجل العضوة." };
+    const { data, error } = await sb.rpc("admin_women_manager_get_v1", {
+      p_token: token,
+      p_tree_child_id: id,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, message: womenManagerRpcMissingMessage() };
+      return { ok: false, message: formatTreeChildrenDbError(error, "load") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    return {
+      ok: true,
+      status: String(out.status || "inactive"),
+      eligible: !!out.eligible,
+      eligibilityError: String(out.eligibility_error || ""),
+      assignedAt: out.assigned_at || null,
+      assignedBy: out.assigned_by || "",
+      updatedAt: out.updated_at || null,
+    };
+  }
+
+  async function familyApiSetWomenManagerGrant(treeChildId, action) {
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const id = Number(treeChildId || 0);
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    if (!id) return { ok: false, message: "تعذر تحديد سجل العضوة." };
+    const { data, error } = await sb.rpc("admin_women_manager_set_v1", {
+      p_token: token,
+      p_tree_child_id: id,
+      p_action: action,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, message: womenManagerRpcMissingMessage() };
+      return { ok: false, message: formatTreeChildrenDbError(error, "save") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    if (out.ok === false) {
+      return {
+        ok: false,
+        message: womenManagerEligibilityMessage(out.error) || "تعذر حفظ الصلاحية.",
+        status: String(out.status || "inactive"),
+      };
+    }
+    return {
+      ok: true,
+      status: String(out.status || "inactive"),
+      eligible: !!out.eligible,
+      eligibilityError: String(out.eligibility_error || ""),
+      assignedAt: out.assigned_at || null,
+      assignedBy: out.assigned_by || "",
+      updatedAt: out.updated_at || null,
+      message: action === "assign" ? "تم تعيين المسؤولة النسائية." : "تم إيقاف المسؤولية.",
+    };
+  }
+
+  async function familyApiGetFamilyAdminGrant(treeChildId) {
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const id = Number(treeChildId || 0);
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    if (!id) return { ok: false, message: "تعذر تحديد سجل الشخص." };
+    const { data, error } = await sb.rpc("admin_family_admin_get_v1", {
+      p_token: token,
+      p_tree_child_id: id,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, message: familyAdminRpcMissingMessage() };
+      return { ok: false, message: formatTreeChildrenDbError(error, "load") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    if (out.ok === false) {
+      return { ok: false, message: "تعذر تحميل صلاحية إدارة العائلة." };
+    }
+    return {
+      ok: true,
+      status: String(out.status || "inactive"),
+      assignedAt: out.assigned_at || null,
+      assignedBy: out.assigned_by || "",
+    };
+  }
+
+  async function familyApiSetFamilyAdminGrant(treeChildId, action) {
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const id = Number(treeChildId || 0);
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    if (!id) return { ok: false, message: "تعذر تحديد سجل الشخص." };
+    const { data, error } = await sb.rpc("admin_family_admin_set_v1", {
+      p_token: token,
+      p_tree_child_id: id,
+      p_action: action,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, message: familyAdminRpcMissingMessage() };
+      return { ok: false, message: formatTreeChildrenDbError(error, "save") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    if (out.ok === false) {
+      return {
+        ok: false,
+        message: "تعذر حفظ صلاحية إدارة العائلة.",
+        status: String(out.status || "inactive"),
+      };
+    }
+    return {
+      ok: true,
+      status: String(out.status || "inactive"),
+      assignedAt: out.assigned_at || null,
+      assignedBy: out.assigned_by || "",
+      message: action === "assign" ? "تم منح إدارة العائلة في التطبيق." : "تم إيقاف إدارة العائلة.",
+    };
+  }
+
+  async function familyApiListExternalOffspring(motherTreeChildId) {
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const motherId = Number(motherTreeChildId || 0);
+    if (!sb || !token) return { ok: false, rows: [], message: "سجل الدخول أولًا." };
+    if (!motherId) return { ok: true, rows: [] };
+    const { data, error } = await sb.rpc("admin_tree_external_offspring_list_v1", {
+      p_token: token,
+      p_mother_tree_child_id: motherId,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, rows: [], message: externalOffspringRpcMissingMessage() };
+      return { ok: false, rows: [], message: formatTreeChildrenDbError(error, "load") };
+    }
+    return { ok: true, rows: parseExternalOffspringList(data) };
+  }
+
+  async function familyApiSaveExternalOffspring(payload) {
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    const row = {
+      id: payload && payload.id ? Number(payload.id) : null,
+      mother_tree_child_id: Number(payload && payload.mother_tree_child_id ? payload.mother_tree_child_id : 0),
+      child_name: String(payload && payload.child_name ? payload.child_name : "").trim(),
+      gender: normalizeTreeChildGender(payload && payload.gender) || null,
+      father_name: String(payload && payload.father_name ? payload.father_name : "").trim() || null,
+    };
+    if (!row.mother_tree_child_id || !row.child_name) {
+      return { ok: false, message: "يلزم اسم الابن وأم لها سجل في الشجرة." };
+    }
+    const { data, error } = await sb.rpc("admin_tree_external_offspring_save_v1", {
+      p_token: token,
+      p_row: row,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, message: externalOffspringRpcMissingMessage() };
+      return { ok: false, message: formatTreeChildrenDbError(error, "save") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    if (out.ok === false) {
+      if (out.error === "mother_not_found") return { ok: false, message: "تعذر تحديد الأم في الشجرة." };
+      if (out.error === "not_found") return { ok: false, message: "السجل غير موجود." };
+      return { ok: false, message: "تعذر الحفظ." };
+    }
+    return {
+      ok: true,
+      message: out.action === "updated"
+        ? "تم تعديل السجل."
+        : "تم الحفظ. هذا الابن خارج نطاق العائلة ولا يدخل العدادات.",
+    };
+  }
+
+  async function familyApiDeleteExternalOffspring(id) {
+    const writeCtx = await ensureAdminWriteContext();
+    if (!writeCtx.ok) return writeCtx;
+    const sb = getSupabaseClient();
+    const token = getAdminToken();
+    const rowId = Number(id || 0);
+    if (!sb || !token) return { ok: false, message: "سجل الدخول أولًا." };
+    if (!rowId) return { ok: false, message: "تعذر تحديد السجل." };
+    const { data, error } = await sb.rpc("admin_tree_external_offspring_delete_v1", {
+      p_token: token,
+      p_id: rowId,
+    });
+    if (error) {
+      if (isRpcMissingError(error)) return { ok: false, message: externalOffspringRpcMissingMessage() };
+      return { ok: false, message: formatTreeChildrenDbError(error, "delete") };
+    }
+    const out = data && typeof data === "object" ? data : {};
+    if (out.ok === false) return { ok: false, message: "تعذر الحذف." };
+    return { ok: true, message: "تم حذف السجل." };
+  }
+
   function buildAdminFamilyApi() {
     return {
       mode: "admin",
@@ -1894,6 +2366,18 @@
       confirmLinkAllChildrenToOnlyWife: familyApiConfirmLinkAllChildrenToOnlyWife,
       saveWife: familyApiSaveWife,
       deleteWife: familyApiDeleteWife,
+      getTreeChildRowId: (path) => findRowIdForPath(path) || 0,
+      getWomenManagerGrant: familyApiGetWomenManagerGrant,
+      setWomenManagerGrant: familyApiSetWomenManagerGrant,
+      getFamilyAdminGrant: familyApiGetFamilyAdminGrant,
+      setFamilyAdminGrant: familyApiSetFamilyAdminGrant,
+      listWomenPending: familyApiListWomenPending,
+      searchWomenPlaceTargets: familyApiSearchWomenPlaceTargets,
+      placeWomenPending: familyApiPlaceWomenPending,
+      addWomenPendingUnderParent: familyApiAddWomenPendingUnderParent,
+      listExternalOffspring: familyApiListExternalOffspring,
+      saveExternalOffspring: familyApiSaveExternalOffspring,
+      deleteExternalOffspring: familyApiDeleteExternalOffspring,
       saveChild: familyApiSaveChild,
       updateChild: familyApiUpdateChild,
       deleteChild: familyApiDeleteChild,

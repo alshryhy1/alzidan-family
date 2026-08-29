@@ -90,11 +90,16 @@
         (children.length
           ? children.map(function (child) {
               var checked = linked.has(String(child.id)) ? " checked" : "";
+              var g = String((child && child.gender) || "").trim().toLowerCase();
+              var hiddenDaughter =
+                g === "daughter" || g === "female" || g === "f" || g === "أنثى" || g === "انثى" || g === "ابنة" || g === "بنت";
+              var extra = (child.order ? " — الترتيب: " + child.order : "") +
+                (hiddenDaughter ? " — أنثى (محجوبة عن العامة)" : "");
               return (
                 '<label class="fm-wife-child-check">' +
                 '<input type="checkbox" data-fm-wife-child-id="' + String(child.id) + '"' + checked + " />" +
                 "<span>" +
-                escapeHtml((child.label || child.name) + (child.order ? " — الترتيب: " + child.order : "")) +
+                escapeHtml((child.label || child.name) + extra) +
                 "</span></label>"
               );
             }).join("")

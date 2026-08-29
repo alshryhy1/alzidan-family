@@ -181,6 +181,65 @@
     return type === "sick" || type === "operation" || type === "discharge";
   }
 
+  /** تهاني وأخبار (مولود/زواج خبر…) — ليست دعوة بتاريخ. الظهور من النشر لا من يوم الواقعة. */
+  var NEWS_NOTICE_TYPE_KEYS = {
+    birth: true,
+    marriage: true,
+    promotion_notice: true,
+    graduation_notice: true,
+    success: true,
+    achievement: true,
+    appointment: true,
+    retirement_notice: true,
+    certification: true,
+    new_house: true,
+    family_news: true,
+    congratulation: true,
+    travel: true,
+    happy: true,
+    مولود: true,
+    "مولود جديد": true,
+    زواج: true,
+    تخرج: true,
+    ترقية: true,
+    "خبر عائلي": true,
+  };
+
+  function eventFamilyOfRow(row) {
+    var type = normalizeText(row && (row.type || row.category) ? row.type || row.category : "");
+    var Events = root.AlzidanEvents;
+    if (Events && typeof Events.eventFamilyFromType === "function") {
+      return Events.eventFamilyFromType(type);
+    }
+    if (Events && typeof Events.normalizeEventType === "function") {
+      type = Events.normalizeEventType(type);
+    }
+    var key = String(type || "").toLowerCase();
+    if (key === "death" || key === "condolence" || key.indexOf("وفاة") >= 0) return "death";
+    if (
+      key === "sick" ||
+      key === "operation" ||
+      key === "discharge" ||
+      key === "healing" ||
+      key === "safety"
+    ) {
+      return "health";
+    }
+    if (NEWS_NOTICE_TYPE_KEYS[type] || NEWS_NOTICE_TYPE_KEYS[key]) return "news";
+    return "";
+  }
+
+  function isNewsNoticeEventType(row) {
+    return eventFamilyOfRow(row) === "news";
+  }
+
+  /** أخبار + صحة: نافذة من created_at (showDays)، مع تجاهل end_at المشتق من تاريخ الواقعة. */
+  function isPublishWindowEventType(row) {
+    var family = eventFamilyOfRow(row);
+    if (family === "news" || family === "health") return true;
+    return isHealthEventType(row);
+  }
+
   function parseHijriApproxToGregorianMs(label) {
     var s = normalizeArabicDigits(label || "");
     var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
@@ -345,7 +404,7 @@
       return isWithinDaysFromEventDay(row, DEATH_KEEP_DAYS, when) ? "visible" : "ended";
     }
 
-    if (isHealthEventType(row)) {
+    if (isPublishWindowEventType(row)) {
       if (!isCreatedWithinShowWindow(row, when)) return "ended";
       return "visible";
     }
@@ -406,13 +465,19 @@
   function validateEventDateForSubmit(rawDate, opts) {
     var options = opts || {};
     var category = normalizeText(options.category || options.type || "happy").toLowerCase();
+    var typeHint = normalizeText(options.type || options.eventType || "");
+    var family = typeHint ? eventFamilyOfRow({ type: typeHint }) : "";
     var allowPast =
       options.allowPast === true ||
       category === "death" ||
       category === "sick" ||
       category === "health" ||
       category === "operation" ||
-      category === "discharge";
+      category === "discharge" ||
+      category === "news" ||
+      family === "news" ||
+      family === "health" ||
+      family === "death";
     var required = options.required !== false;
     var raw = normalizeText(rawDate);
     if (!raw) {
@@ -476,8 +541,12 @@
       manual_hidden: manualHidden,
     };
 
+    // News/health: do not derive end_at from the incident date (birth day ≠ expiry).
+    var scheduleType = normalizeText(src.type || src.eventType || "");
+    var skipDateDerivedWindow = !!(scheduleType && isPublishWindowEventType({ type: scheduleType }));
+
     // Prefer explicit show_at; otherwise derive from Gregorian or Hijri label.
-    if (!fields.show_at) {
+    if (!fields.show_at && !skipDateDerivedWindow) {
       var dayMs =
         parseIsoDateToLocalDayMs(src.event_date) ||
         eventDayMs({
@@ -808,6 +877,8 @@
     isDeathEventType: isDeathEventType,
     isHappyEventType: isHappyEventType,
     isHealthEventType: isHealthEventType,
+    isNewsNoticeEventType: isNewsNoticeEventType,
+    isPublishWindowEventType: isPublishWindowEventType,
     daysFromEventDay: daysFromEventDay,
     isWithinDaysFromEventDay: isWithinDaysFromEventDay,
     isCreatedWithinShowWindow: isCreatedWithinShowWindow,

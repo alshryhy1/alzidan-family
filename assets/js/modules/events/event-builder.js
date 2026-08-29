@@ -26,6 +26,55 @@
     return JSON.stringify(details);
   }
 
+  function attachSubmitterToDetails(details, envelope, row) {
+    const out = details && typeof details === "object" ? details : {};
+    const env = envelope && typeof envelope === "object" ? envelope : {};
+    const sub = env.submitter && typeof env.submitter === "object" ? env.submitter : {};
+    const parsed =
+      typeof E.parseEventCardMessage === "function" && row
+        ? E.parseEventCardMessage(row)
+        : null;
+    const name = normalizeText(
+      sub.name ||
+        env.submitter_name ||
+        env.submitterName ||
+        (parsed && parsed.submitterName) ||
+        (row && row.name) ||
+        "",
+    );
+    const phone = normalizeText(
+      sub.phone ||
+        env.submitter_phone ||
+        env.submitterPhone ||
+        (parsed && parsed.submitterPhone) ||
+        (row && row.phone) ||
+        "",
+    );
+    if (name) out.submitter_name = name;
+    if (phone) out.submitter_phone = phone;
+    return out;
+  }
+
+  function attachVenueToDetails(details, input) {
+    const out = details && typeof details === "object" ? details : {};
+    const placeKind =
+      typeof E.normalizePlaceKind === "function"
+        ? E.normalizePlaceKind(input && (input.placeKind || input.place_kind || ""))
+        : "";
+    if (placeKind) out.place_kind = placeKind;
+    const coordsRaw = input && (input.coords || input.coordinates || "");
+    let pair =
+      typeof E.parseCoordinates === "function" ? E.parseCoordinates(coordsRaw) : null;
+    if (!pair && input && input.lat != null && input.lng != null && typeof E.parseCoordinates === "function") {
+      pair = E.parseCoordinates(String(input.lat) + "," + String(input.lng));
+    }
+    if (pair) {
+      out.lat = pair.lat;
+      out.lng = pair.lng;
+    }
+    return out;
+  }
+
   function toSqlDateOrEmpty(v) {
     const raw = normalizeText(v)
       .replace(/[٠-٩]/g, function (d) {
@@ -134,10 +183,12 @@
       const event = envelope.event;
       let details = E.parseDetailsValue ? E.parseDetailsValue(event.details) : {};
       details.requestId = requestId;
+      attachSubmitterToDetails(details, envelope, row);
       const Vis = root.AlzidanEventVisibility || {};
       const schedule =
         typeof Vis.buildScheduleFields === "function"
           ? Vis.buildScheduleFields({
+              type: event.type || event.typeLabel || "",
               event_date: normalizeText(event.event_date || event.date_label || ""),
               show_before_days:
                 event.show_before_days != null
@@ -192,6 +243,7 @@
       videoUrl: media.video || "",
       showDays: 7,
     };
+    attachSubmitterToDetails(details, envelope, row);
 
     return {
       branch_key: normalizeText(
@@ -205,12 +257,22 @@
               "صاحب المناسبة",
               "اسم المريض",
               "اسم المتوفى",
+              "اسم المولود أو الأب",
               "اسم المولود",
               "اسم العريس",
               "اسم الخريج",
             ])
           : "") || normalizeText(row.name || ""),
-      date_label: E.readMessageLine ? E.readMessageLine(msg, "التاريخ") : "",
+      date_label: E.readMessageLine
+        ? E.readMessageLine(msg, [
+            "تاريخ الولادة",
+            "تاريخ الخبر",
+            "تاريخ الحالة",
+            "تاريخ الوفاة",
+            "تاريخ المناسبة",
+            "التاريخ",
+          ])
+        : "",
       event_date: "",
       details: stringifyDetails(details),
       ...emptyRowFields(),
@@ -310,6 +372,7 @@
       videoUrl: normalizeText(input.videoUrl),
       showDays: 7,
     };
+    attachVenueToDetails(details, input);
     const hostPhone = normalizeText(input.phone || input.contactPhone || "");
     if (hostPhone) details.submitter_phone = hostPhone;
     if (personId) {
@@ -320,6 +383,7 @@
     const schedule =
       typeof Vis.buildScheduleFields === "function"
         ? Vis.buildScheduleFields({
+            type: type,
             event_date: normalizeText(input.eventDate || input.dateLabel || ""),
             show_before_days:
               input.showBeforeDays != null
@@ -365,6 +429,7 @@
     const schedule =
       typeof Vis.buildScheduleFields === "function"
         ? Vis.buildScheduleFields({
+            type: type,
             event_date: eventDate || dateLabel,
             show_before_days:
               input.showBeforeDays != null
@@ -461,11 +526,12 @@
       v: 1,
       kind: "happy_notice",
       text: normalizeText(input.text),
-      extra: normalizeText(input.extra),
+      extra: normalizeText(input.extra || input.place || ""),
       imageUrl: normalizeText(input.imageUrl),
       videoUrl: normalizeText(input.videoUrl),
       showDays,
     };
+    attachVenueToDetails(details, input);
     const row = {
       branch_key: branch,
       type,
@@ -559,9 +625,45 @@
         videoUrl,
         showDays,
       };
+      const extraPlace = normalizeText(input.extra || input.place || oldDetails.extra);
+      if (extraPlace) details.extra = extraPlace;
+      attachVenueToDetails(details, Object.assign({}, oldDetails, input));
     }
     if (imageUrl) details.imageUrl = imageUrl;
     if (videoUrl) details.videoUrl = videoUrl;
+    delete details.end_at;
+    delete details.endAt;
+    delete details.show_at;
+    delete details.showAt;
+
+    const Vis = root.AlzidanEventVisibility || {};
+    const family = typeof E.eventFamilyFromType === "function" ? E.eventFamilyFromType(type) : "";
+    const newsWindow = family === "news" || family === "health" || isHealth;
+    let schedule = null;
+    if (typeof Vis.buildScheduleFields === "function") {
+      if (newsWindow) {
+        const createdMs = Date.parse(String(input.createdAt || "")) || Date.now();
+        const startMs = Number.isFinite(createdMs) ? createdMs : Date.now();
+        const endMs = Math.max(Date.now(), startMs) + showDays * 24 * 60 * 60 * 1000;
+        schedule = {
+          show_before_days: 0,
+          show_at: new Date(Math.min(startMs, Date.now())).toISOString(),
+          end_at: new Date(endMs).toISOString(),
+          manual_hidden: false,
+        };
+      } else {
+        schedule = Vis.buildScheduleFields({
+          type: type,
+          event_date: normalizeText(input.eventDate),
+          date_label: normalizeText(input.dateLabel),
+          show_before_days: 3,
+        });
+      }
+      details =
+        typeof Vis.mergeScheduleIntoDetails === "function"
+          ? Vis.mergeScheduleIntoDetails(details, schedule)
+          : Object.assign(details, schedule);
+    }
 
     const row = {
       branch_key: normalizeText(input.branch),
@@ -581,6 +683,12 @@
       visit_time_to: isHealth ? visitTimeTo || null : "",
     };
     if (input.id != null && Number(input.id) > 0) row.id = Number(input.id);
+    if (schedule) {
+      if (schedule.show_at) row.show_at = schedule.show_at;
+      if (schedule.end_at) row.end_at = schedule.end_at;
+      if (schedule.show_before_days != null) row.show_before_days = schedule.show_before_days;
+      row.manual_hidden = !!schedule.manual_hidden;
+    }
     return row;
   }
 

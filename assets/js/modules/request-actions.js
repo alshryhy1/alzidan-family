@@ -857,6 +857,7 @@
         return row;
       }
       const sch = Vis.buildScheduleFields({
+        type: row.type || "",
         event_date: row.event_date || "",
         date_label: row.date_label || "",
         date: row.date_label || row.date || "",
@@ -936,6 +937,13 @@
         ok: false,
         message: "تعذر نشر المناسبة. تحقق من صلاحية الإدارة.",
       };
+    try {
+      if (row && row.id != null) {
+        await sb.rpc("bind_approval_request_sender_phone_v1", {
+          p_id: Number(row.id),
+        });
+      }
+    } catch (_) {}
     // Callers that also send status_changed to the submitter should pass
     // skipFamilyPush:true, then notify the submitter, then call notifyFamilyEventPush
     // — otherwise a dead Expo token disabled during family broadcast can block approval push.
@@ -3544,6 +3552,101 @@
     };
   }
 
+  async function bindRequestSenderPhoneToAppliedPerson(sb, reqRow, appliedRows) {
+    const phone = normalizeAdminPhone(
+      (reqRow && reqRow.phone) ||
+        (reqRow && reqRow.submitter && reqRow.submitter.phone) ||
+        "",
+    );
+    const list = Array.isArray(appliedRows) ? appliedRows : [];
+    const leaf = list.length ? list[list.length - 1] : null;
+    if (!sb || !phone || !leaf) return { ok: false, skipped: true };
+    let hit = null;
+    try {
+      hit = await fetchTreeCardChildRow(sb, leaf);
+    } catch (_) {
+      hit = null;
+    }
+    const personId = String(
+      (hit && hit.person_id) || (leaf && leaf.person_id) || "",
+    ).trim();
+    const treeChildId = hit && hit.id != null ? Number(hit.id) : 0;
+    if (!personId && !treeChildId) return { ok: false, skipped: true };
+    try {
+      const rpc = await sb.rpc("bind_sender_phone_to_person_v1", {
+        p_phone: phone,
+        p_person_id: personId || null,
+        p_tree_child_id: treeChildId || null,
+      });
+      if (!rpc.error && rpc.data && rpc.data.ok !== false) {
+        return { ok: true, via: "rpc", data: rpc.data };
+      }
+    } catch (_) {}
+    const branch = normalizeTreeCardText(
+      (hit && hit.branch_key) || (leaf && leaf.branch_key) || reqRow.branch_key || "",
+    );
+    const path = normalizeTreeCardText(
+      (hit && (hit.child_name || hit.name)) || (leaf && leaf.child_name) || "",
+    );
+    const displayName = relationLeafName(path) || path;
+    const row = {
+      phone,
+      branch_key: branch,
+      tree_child_id: treeChildId || null,
+      person_id: personId || null,
+      display_name: displayName || null,
+      status: "active",
+      updated_at: new Date().toISOString(),
+    };
+    let existingId = 0;
+    try {
+      if (treeChildId) {
+        const byChild = await sb
+          .from("member_profiles")
+          .select("id")
+          .eq("tree_child_id", treeChildId)
+          .limit(1)
+          .maybeSingle();
+        if (byChild.data && byChild.data.id) existingId = Number(byChild.data.id);
+      }
+      if (!existingId && personId) {
+        const byPid = await sb
+          .from("member_profiles")
+          .select("id")
+          .eq("person_id", personId)
+          .limit(1)
+          .maybeSingle();
+        if (byPid.data && byPid.data.id) existingId = Number(byPid.data.id);
+      }
+      if (!existingId) {
+        const byPhone = await sb
+          .from("member_profiles")
+          .select("id,person_id")
+          .eq("phone", phone)
+          .limit(1)
+          .maybeSingle();
+        if (byPhone.data && byPhone.data.id) {
+          const other = String(byPhone.data.person_id || "").trim();
+          if (other && personId && other !== personId) {
+            return { ok: false, conflict: true };
+          }
+          existingId = Number(byPhone.data.id);
+        }
+      }
+      if (existingId) {
+        const upd = await sb.from("member_profiles").update(row).eq("id", existingId);
+        if (upd.error) return { ok: false, error: upd.error };
+        return { ok: true, via: "update" };
+      }
+      row.created_at = new Date().toISOString();
+      const ins = await sb.from("member_profiles").insert(row);
+      if (ins.error) return { ok: false, error: ins.error };
+      return { ok: true, via: "insert" };
+    } catch (err) {
+      return { ok: false, error: err };
+    }
+  }
+
   /**
    * Patch 2+ — Verified apply for tree_card / add-son.
    * If father/ancestors already exist → reuse them; insert only missing children.
@@ -3829,6 +3932,9 @@
     parts.push("تحديث: " + String(updatedTotal));
     if (skippedTotal) parts.push("موجود مسبقاً: " + String(skippedTotal));
     parts.push("متحقق: " + String(verify.verified));
+    try {
+      await bindRequestSenderPhoneToAppliedPerson(sb, reqRow, appliedRows);
+    } catch (_) {}
     return {
       ok: true,
       code: "",

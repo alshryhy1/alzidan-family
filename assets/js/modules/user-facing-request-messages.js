@@ -173,6 +173,8 @@
       event_death: "إشعار وفاة",
       tree_card: "طلب إضافة فرد",
       tree_edit: "طلب تصحيح بيانات",
+      member_registration: "تسجيل جوال عضو",
+      member_phone_register: "تسجيل جوال عضو",
       memory_card: "طلب ذكرى",
       special_card: "طلب بطاقة",
       tree_founder: "طلب مؤسس في الشجرة",

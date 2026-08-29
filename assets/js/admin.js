@@ -387,6 +387,9 @@ const eventsSourceBurialPlace = document.getElementById("events-source-burial-pl
 const eventsSourceCondolencePlace = document.getElementById("events-source-condolence-place");
 
 const eventsSourceVideo = document.getElementById("events-source-video");
+  const eventsSourcePlaceKind = document.getElementById("events-source-place-kind");
+  const eventsSourcePlaceName = document.getElementById("events-source-place-name");
+  const eventsSourceCoords = document.getElementById("events-source-coords");
   const eventsSourceDelete = document.getElementById("events-source-delete");
   
 const eventsSourceStatus = document.getElementById("events-source-status");
@@ -413,6 +416,19 @@ function toggleAdminEventFields() {
     "events-source-condolence-place"
   ];
 
+  const venue = [
+    "events-source-place-kind",
+    "events-source-place-name",
+    "events-source-coords"
+  ];
+
+  var family = "";
+  try {
+    var Events = window.AlzidanEvents || {};
+    if (typeof Events.eventFamilyFromType === "function") family = Events.eventFamilyFromType(t);
+  } catch (eFam) {}
+  var showVenue = family === "occasion" || (!t);
+
   sick.forEach(id=>{
     const e=document.getElementById(id);
     if(e && e.closest(".field"))
@@ -426,6 +442,13 @@ function toggleAdminEventFields() {
       e.closest(".field").style.display =
         (t==="death") ? "" : "none";
   });
+
+  venue.forEach(id=>{
+    const e=document.getElementById(id);
+    if(e && e.closest(".field"))
+      e.closest(".field").style.display = showVenue ? "" : "none";
+  });
+  syncAdminEventTypePicker();
 }
 
   let eventsSourceRows = [];
@@ -1176,32 +1199,8 @@ where c.id = matches.id; commit;
     }
   }
   function getClient() {
-    if (sbClient) return sbClient;
-
-    if (
-      window.__alzidanConfig &&
-      typeof window.__alzidanConfig.getClient === "function"
-    ) {
-      const shared = window.__alzidanConfig.getClient();
-      if (shared) {
-        sbClient = shared;
-        window.__alzidanSupabaseClient = shared;
-        window.__alzidanالخدمةClient = shared;
-        return sbClient;
-      }
-    }
-
-    if (window.__alzidanSupabaseClient) {
-      sbClient = window.__alzidanSupabaseClient;
-      window.__alzidanالخدمةClient = sbClient;
-      return sbClient;
-    }
-
-    if (window.__alzidanالخدمةClient) {
-      sbClient = window.__alzidanالخدمةClient;
-      window.__alzidanSupabaseClient = sbClient;
-      return sbClient;
-    }
+    const tokenNow = String(getAdminToken() || "").trim();
+    if (sbClient && sbClient.__alzidanAdminToken === tokenNow) return sbClient;
 
     const url = String(SUPABASE_URL || "").trim();
     const anonKey = String(SUPABASE_ANON_KEY || "").trim();
@@ -1209,14 +1208,17 @@ where c.id = matches.id; commit;
     if (!window.supabase || typeof window.supabase.createClient !== "function")
       return null;
 
-    // Admin RPCs auth via p_token — disable session lock that can hang sb.rpc with no Network.
     sbClient = window.supabase.createClient(url, anonKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false,
       },
+      global: {
+        headers: tokenNow ? { "X-Alzidan-Admin-Token": tokenNow } : {},
+      },
     });
+    sbClient.__alzidanAdminToken = tokenNow;
     window.__alzidanSupabaseClient = sbClient;
     window.__alzidanالخدمةClient = sbClient;
     return sbClient;
@@ -1327,6 +1329,9 @@ where c.id = matches.id; commit;
             Authorization: "Bearer " + anonKey,
             "Content-Type": "application/json",
             Prefer: "return=representation",
+            ...(getAdminToken()
+              ? { "X-Alzidan-Admin-Token": getAdminToken() }
+              : {}),
           },
           body,
           signal: controller ? controller.signal : undefined,
@@ -1397,12 +1402,13 @@ where c.id = matches.id; commit;
       return Events.eventTypeArabicLabel(type);
     }
     const map = {
-      birth: "عقيقة مولود",
+      birth: "مولود جديد",
       marriage: "زواج",
       graduation: "حفل تخرج",
       promotion: "حفل ترقية",
-      promotion_notice: "تهنئة ترقية",
+      promotion_notice: "ترقية",
       graduation_notice: "تخرج",
+      success: "نجاح",
       achievement: "تكريم وإنجاز",
       appointment: "تعيين / منصب",
       retirement_notice: "تقاعد",
@@ -1412,25 +1418,28 @@ where c.id = matches.id; commit;
       safety: "سلامة",
       condolence: "تعزية",
       wedding: "حفل زواج",
+      contract: "عقد قران",
       aqiqa: "عقيقة",
       feast: "وليمة",
       family_meetup: "لقاء عائلي",
+      finjal_asr: "فنجال بعد صلاة العصر",
+      finjal_isha: "فنجال بعد صلاة العشاء",
+      finjal_hawlna: "فنجال والم اللي حولنا",
       retirement: "حفل تقاعد",
       dinner: "دعوة عشاء",
       lunch: "دعوة غداء",
-
-      congratulation: "تهنئة عائلية",
-      invitation: "دعوة عائلية",
+      congratulation: "خبر عائلي",
+      invitation: "دعوة عشاء",
       new_house: "منزل جديد",
       gathering: "اجتماع عائلي",
       general: "مناسبة عامة",
       sick: "مريض",
       operation: "عملية",
       discharge: "خروج من المستشفى",
-      death: "وفاة",
-      happy: "فرح",
-      meeting: "اجتماع",
-      other: "أخرى",
+      death: "إعلان وفاة",
+      happy: "خبر عائلي",
+      meeting: "اجتماع عائلي",
+      other: "مناسبة عامة",
     };
     return map[type] || "مناسبة عامة";
   }
@@ -5292,8 +5301,19 @@ where c.id = matches.id; commit;
     if (eventsSourceGregorian)
       eventsSourceGregorian.value = row.event_date || "";
     if (eventsSourceText)
-      eventsSourceText.value =
-        details.notes || details.text || details.extra || "";
+      eventsSourceText.value = details.notes || details.text || "";
+    if (eventsSourcePlaceKind)
+      eventsSourcePlaceKind.value = details.place_kind || details.placeKind || "";
+    if (eventsSourcePlaceName)
+      eventsSourcePlaceName.value = details.extra || details.place || details.placeName || "";
+    if (eventsSourceCoords) {
+      const lat = details.lat;
+      const lng = details.lng;
+      eventsSourceCoords.value =
+        lat != null && lng != null && lat !== "" && lng !== ""
+          ? String(lat) + ", " + String(lng)
+          : details.coords || details.coordinates || "";
+    }
     if (eventsSourceImage)
       eventsSourceImage.value =
         details.imageUrl ||
@@ -5339,6 +5359,9 @@ where c.id = matches.id; commit;
     if (eventsSourceTitle) eventsSourceTitle.value = "";
     if (eventsSourceGregorian) eventsSourceGregorian.value = "";
     if (eventsSourceText) eventsSourceText.value = "";
+    if (eventsSourcePlaceKind) eventsSourcePlaceKind.value = "";
+    if (eventsSourcePlaceName) eventsSourcePlaceName.value = "";
+    if (eventsSourceCoords) eventsSourceCoords.value = "";
     if (eventsSourceImage) eventsSourceImage.value = "";
     if (eventsSourceVideo) eventsSourceVideo.value = "";
 
@@ -5489,7 +5512,11 @@ where c.id = matches.id; commit;
       prayerPlace: eventsSourcePrayerPlace?.value || "",
       burialPlace: eventsSourceBurialPlace?.value || "",
       condolencePlace: eventsSourceCondolencePlace?.value || "",
+      extra: eventsSourcePlaceName?.value || "",
+      placeKind: eventsSourcePlaceKind?.value || "",
+      coords: eventsSourceCoords?.value || "",
       oldDetails,
+      createdAt: selected.created_at || "",
     });
   }
   function formatPushNotifyAdminMessage(pushResult) {
@@ -6204,8 +6231,127 @@ where c.id = matches.id; commit;
     }
   });
 
+  function syncAdminEventTypePicker() {
+    if (!eventsSourceType) return;
+    const wrap = eventsSourceType.closest(".event-type-picker");
+    if (!wrap) return;
+    const btn = wrap.querySelector(".event-type-picker-btn");
+    const opt = eventsSourceType.options[eventsSourceType.selectedIndex];
+    const label = opt && String(opt.textContent || "").trim();
+    if (btn) btn.textContent = label || "اختر النوع";
+    wrap.querySelectorAll("[data-type-key]").forEach(function (el) {
+      el.classList.toggle("is-selected", el.getAttribute("data-type-key") === eventsSourceType.value);
+    });
+  }
+
+  function closeAdminEventTypePicker() {
+    if (!eventsSourceType) return;
+    const wrap = eventsSourceType.closest(".event-type-picker");
+    if (!wrap) return;
+    const panel = wrap.querySelector(".event-type-picker-panel");
+    if (panel) panel.hidden = true;
+    wrap.classList.remove("is-open");
+  }
+
+  function mountAdminEventTypePicker() {
+    if (!eventsSourceType) return;
+    const Events = window.AlzidanEvents || {};
+    const catalog = Events.EVENT_TYPE_CATALOG;
+    if (!Array.isArray(catalog) || !catalog.length) return;
+    const groups = {
+      news: "تهاني وأخبار",
+      occasion: "مناسبات ودعوات",
+      health: "صحة وعافية",
+      death: "وفاة وتعزية",
+    };
+    let wrap = eventsSourceType.closest(".event-type-picker");
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.className = "event-type-picker";
+      eventsSourceType.parentNode.insertBefore(wrap, eventsSourceType);
+      wrap.appendChild(eventsSourceType);
+      eventsSourceType.classList.add("event-type-picker-native");
+      eventsSourceType.setAttribute("tabindex", "-1");
+      eventsSourceType.setAttribute("aria-hidden", "true");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "event-type-picker-btn";
+      btn.setAttribute("aria-haspopup", "listbox");
+      const panel = document.createElement("div");
+      panel.className = "event-type-picker-panel";
+      panel.setAttribute("role", "listbox");
+      panel.hidden = true;
+      wrap.appendChild(btn);
+      wrap.appendChild(panel);
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        if (panel.hidden) {
+          panel.hidden = false;
+          wrap.classList.add("is-open");
+        } else {
+          closeAdminEventTypePicker();
+        }
+      });
+      document.addEventListener("click", function (e) {
+        if (!wrap.contains(e.target)) closeAdminEventTypePicker();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") closeAdminEventTypePicker();
+      });
+    }
+    const panel = wrap.querySelector(".event-type-picker-panel");
+    panel.innerHTML = "";
+    ["news", "occasion", "health", "death"].forEach(function (family) {
+      const items = catalog.filter(function (def) {
+        return def.family === family;
+      });
+      if (!items.length) return;
+      const h = document.createElement("div");
+      h.className = "event-type-picker-group";
+      h.textContent = groups[family];
+      panel.appendChild(h);
+      items.forEach(function (def) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "event-type-picker-option";
+        b.setAttribute("data-type-key", def.key);
+        b.setAttribute("role", "option");
+        b.textContent = def.label;
+        b.addEventListener("click", function () {
+          eventsSourceType.value = def.key;
+          eventsSourceType.dispatchEvent(new Event("change", { bubbles: true }));
+          closeAdminEventTypePicker();
+        });
+        panel.appendChild(b);
+      });
+    });
+    syncAdminEventTypePicker();
+  }
+
   if (eventsSourceType)
     eventsSourceType.addEventListener("change", toggleAdminEventFields);
+  (function fillAdminEventTypeSelect() {
+    const Events = window.AlzidanEvents || {};
+    const catalog = Events.EVENT_TYPE_CATALOG;
+    if (!eventsSourceType || !Array.isArray(catalog) || !catalog.length) return;
+    const selected = eventsSourceType.value || "";
+    let html = "";
+    ["news", "occasion", "health", "death"].forEach(function (family) {
+      const items = catalog.filter(function (def) { return def.family === family; });
+      items.forEach(function (def) {
+        html +=
+          '<option value="' +
+          String(def.key).replace(/"/g, "&quot;") +
+          '">' +
+          String(def.label).replace(/</g, "&lt;") +
+          "</option>";
+      });
+    });
+    eventsSourceType.innerHTML = html;
+    if (selected) eventsSourceType.value = selected;
+    mountAdminEventTypePicker();
+  })();
+  toggleAdminEventFields();
 
   toggleAdminEventFields();
 

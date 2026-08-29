@@ -55,6 +55,9 @@
         "dinner",
         "lunch",
         "general",
+        "finjal_asr",
+        "finjal_isha",
+        "finjal_hawlna",
       ].indexOf(t) >= 0
     ) {
       return "occasion";
@@ -171,12 +174,12 @@
 
   /** صياغة للمستلم: ترقيتك / تخرجك / حالتك الصحية … (كل الأنواع مثل ترقية مزيد) */
   function yourOccasionPhrase(type) {
-    var t = normalizeText(type).toLowerCase();
-    if (t === "promotion_notice" || t === "promotion") return "ترقيتك";
-    if (t === "graduation_notice" || t === "graduation") return "تخرجك";
-    if (t === "retirement_notice" || t === "retirement") return "تقاعدك";
-    if (t === "marriage" || t === "wedding" || t === "contract") return "زواجك";
-    if (t === "birth" || t === "aqiqa") return "مولودكم";
+    var t = canonicalEventType(type);
+    if (t === "promotion_notice") return "ترقيتك";
+    if (t === "graduation_notice") return "تخرجك";
+    if (t === "retirement_notice") return "تقاعدك";
+    if (t === "marriage") return "زواجك";
+    if (t === "birth") return "مولودكم";
     if (t === "new_house") return "منزلك الجديد";
     if (t === "success") return "نجاحك";
     if (t === "achievement") return "إنجازك";
@@ -187,7 +190,25 @@
       return "حالتك الصحية";
     }
     if (t === "death" || t === "condolence") return "مناسبة العزاء";
-    if (["feast", "gathering", "family_meetup", "dinner", "lunch", "general"].indexOf(t) >= 0) {
+    if (
+      [
+        "feast",
+        "gathering",
+        "family_meetup",
+        "dinner",
+        "lunch",
+        "general",
+        "wedding",
+        "contract",
+        "graduation",
+        "promotion",
+        "retirement",
+        "aqiqa",
+        "finjal_asr",
+        "finjal_isha",
+        "finjal_hawlna",
+      ].indexOf(t) >= 0
+    ) {
       return "دعوتك";
     }
     var ar = occasionTypeArabic(type);
@@ -201,28 +222,92 @@
     return "";
   }
 
+  var RSVP_TYPES = {
+    feast: true,
+    gathering: true,
+    family_meetup: true,
+    dinner: true,
+    lunch: true,
+    general: true,
+    finjal_asr: true,
+    finjal_isha: true,
+    finjal_hawlna: true,
+  };
+  var CEREMONY_TYPES = {
+    wedding: true,
+    contract: true,
+    graduation: true,
+    promotion: true,
+    retirement: true,
+    aqiqa: true,
+  };
+  var DROP_REPLY_KEYS = { inv_details: true, inv_contact: true };
+
+  function canonicalEventType(type) {
+    var Events = root.AlzidanEvents || {};
+    if (typeof Events.normalizeEventType === "function") {
+      return Events.normalizeEventType(type);
+    }
+    return normalizeText(type).toLowerCase();
+  }
+
+  function isRsvpType(type) {
+    return !!RSVP_TYPES[canonicalEventType(type)];
+  }
+
+  function isCeremonyType(type) {
+    return !!CEREMONY_TYPES[canonicalEventType(type)];
+  }
+
+  function filterCatalogForType(items, type) {
+    var typeKey = canonicalEventType(type);
+    var list = Array.isArray(items) ? items.slice() : [];
+    list = list.filter(function (item) {
+      if (!item || DROP_REPLY_KEYS[item.key]) return false;
+      var types = item.applies_to_types;
+      if (Array.isArray(types) && types.length) {
+        return types.indexOf(typeKey) >= 0;
+      }
+      return true;
+    });
+    if (isRsvpType(typeKey)) {
+      list = list.filter(function (item) {
+        return (
+          item.key === "inv_yes" ||
+          item.key === "inv_no" ||
+          item.key === "inv_maybe" ||
+          item.allows_message
+        );
+      });
+    }
+    return list;
+  }
+
   function ctaTitleForType(type, person) {
     var family = eventFamilyFromType(type);
     var name = personNameWithFather(person) || "صاحب المناسبة";
     if (family === "health") return "شارك في الدعاء لـ " + name;
     if (family === "death") return "شارك الدعاء والمواساة";
-    if (family === "occasion") {
-      var t = normalizeText(type).toLowerCase();
-      if (["feast", "gathering", "family_meetup", "dinner", "lunch", "general"].indexOf(t) >= 0) {
-        return "رد على دعوة " + name;
-      }
+    if (family === "occasion" || isRsvpType(type) || isCeremonyType(type)) {
+      return "رد على دعوة " + name;
     }
-    return "شارك " + name + " فرحته";
+    return "شارك " + name + " تهنئته";
+  }
+
+  function catalogLooksLikeInvite(items) {
+    return (items || []).some(function (item) {
+      return item && (item.key === "inv_yes" || item.key === "inv_no" || item.key === "inv_maybe");
+    });
   }
 
   async function fetchCatalog(eventType) {
     var sb = getSb();
     if (!sb) return [];
     var family = eventFamilyFromType(eventType);
-    var typeKey = normalizeText(eventType).toLowerCase();
+    var typeKey = canonicalEventType(eventType);
     try {
       var res = await sb.rpc("occasion_interaction_catalog_v1", {
-        p_event_type: eventType || "",
+        p_event_type: typeKey,
         p_family: family,
       });
       if (!res.error) {
@@ -234,7 +319,9 @@
             data = [];
           }
         }
-        if (Array.isArray(data) && data.length) return data;
+        if (Array.isArray(data) && data.length) {
+          return filterCatalogForType(data, typeKey);
+        }
       } else {
         console.warn("[occasion-interactions] catalog rpc", res.error);
       }
@@ -249,16 +336,7 @@
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
       if (q.error || !Array.isArray(q.data)) return [];
-      return q.data.filter(function (row) {
-        var types = row.applies_to_types || [];
-        if (Array.isArray(types) && types.length) {
-          if (types.indexOf(typeKey) >= 0) return true;
-          if (typeKey === "family_meetup" && types.indexOf("gathering") >= 0) return true;
-          if (typeKey === "gathering" && types.indexOf("family_meetup") >= 0) return true;
-          return false;
-        }
-        return normalizeText(row.family).toLowerCase() === family;
-      });
+      return filterCatalogForType(q.data, typeKey);
     } catch (e2) {
       console.warn("[occasion-interactions] catalog fallback", e2);
       return [];
@@ -470,8 +548,12 @@
 
     msgWrap.querySelector(".oi-send-msg").addEventListener("click", function () {
       var ta = msgWrap.querySelector(".oi-message");
-      var msg = ta ? ta.value : "";
+      var msg = ta ? String(ta.value || "").replace(/\s+/g, " ").trim() : "";
       if (!selectedKey) return;
+      if (!msg) {
+        setStatus("اكتب رسالتك ثم اضغط إرسال.", false);
+        return;
+      }
       doSubmit(selectedKey, msg);
     });
 
@@ -483,6 +565,9 @@
         } catch (e) {}
         return;
       }
+      title.textContent = catalogLooksLikeInvite(catalog)
+        ? "رد على دعوة " + (personNameWithFather(row.person) || "صاحب المناسبة")
+        : ctaTitleForType(row.type, row.person);
       root.style.display = "";
       root.setAttribute("data-oi-ready", "1");
       var mine = await fetchMyInteraction(row.id, readMemberPhone());
@@ -751,6 +836,8 @@
     attachToRenderedEvents: attachToRenderedEvents,
     enhanceEventLists: enhanceEventLists,
     renderInboxInto: renderInboxInto,
+    filterCatalogForType: filterCatalogForType,
+    canonicalEventType: canonicalEventType,
     ctaTitleForType: ctaTitleForType,
     yourOccasionPhrase: yourOccasionPhrase,
     eventFamilyFromType: eventFamilyFromType,

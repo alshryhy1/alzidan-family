@@ -1543,6 +1543,23 @@
   function routeRequest(row) {
     var kind = text(row && row.kind);
     var message = String((row && row.message) || "");
+    if (
+      kind === "member_registration" ||
+      kind === "member_phone_register" ||
+      message.indexOf("MEMBER_PHONE_REGISTER_V1") >= 0
+    ) {
+      return {
+        route: "member_phone_register",
+        open: "member_phone_register",
+        blockTreeCardApply: true,
+        blockTreeCardEditor: true,
+        label: "تسجيل جوال عضو",
+        review_state: "ready",
+        reasons: [],
+        payload: null,
+        operation: "member_phone_register",
+      };
+    }
     var legacy = classifyLegacyCorrection(row);
     if (legacy.route === "reorder_children") {
       return {

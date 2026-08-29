@@ -45,6 +45,9 @@
   const V2_PRESET_ID = "maint.sql_workspace_run_v2";
   const V2_SUPABASE_HINT =
     "المنفّذ الحالي (v1) يرفض أكثر من أمر. الصق ملف COPY-ME-admin-sql-workspace-run-v2.sql مرة واحدة في Supabase SQL Editor أولًا (CREATE OR REPLACE فقط)، ثم ارجع وشغّل بطاقة «تثبيت منفّذ SQL Workspace v2».";
+  const DONE_SETTING_KEY = "sql_ws_presets_done_v1";
+  let remoteDoneReady = false;
+  let remoteDonePushTimer = null;
 
   function isRetiredPresetId(id) {
     const s = String(id || "").trim();
@@ -109,6 +112,242 @@
     const token = getToken();
     if (token) return "إدارة (" + token.slice(0, 8) + "…)";
     return "إدارة";
+  }
+
+  function getSbClient() {
+    try {
+      const core = window.AlzidanAdminCore || {};
+      if (typeof core.getClient === "function") return core.getClient();
+    } catch (_) {}
+    return null;
+  }
+
+  function parseDoneMap(raw) {
+    if (!raw) return {};
+    if (typeof raw === "object" && !Array.isArray(raw)) return raw;
+    try {
+      let v = raw;
+      if (typeof v === "string") v = JSON.parse(v);
+      if (typeof v === "string") v = JSON.parse(v);
+      return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function isDoneRecord(row) {
+    const api = presetsApi();
+    if (api && typeof api.isDoneRecord === "function") return api.isDoneRecord(row);
+    if (row === true || row === 1) return true;
+    if (typeof row === "string" && row) return true;
+    if (!row || typeof row !== "object") return false;
+    if (row.ok === false) return false;
+    return !!(row.ok || row.archived || row.permanent || row.at);
+  }
+
+  function mergeDoneMaps(a, b) {
+    const out = {};
+    [a, b].forEach(function (src) {
+      Object.keys(src || {}).forEach(function (id) {
+        const row = src[id];
+        if (!isDoneRecord(row)) return;
+        const prev = out[id];
+        const nextAt = String((row && row.at) || "");
+        const prevAt = String((prev && prev.at) || "");
+        if (!prev || nextAt >= prevAt) out[id] = row;
+      });
+    });
+    return out;
+  }
+
+  function writeLocalDoneMap(map) {
+    const api = presetsApi();
+    if (api && typeof api.saveDone === "function") {
+      api.saveDone(map);
+      return;
+    }
+    if (!api || typeof api.markDone !== "function") return;
+    Object.keys(map || {}).forEach(function (id) {
+      if (!api.isDone(id)) api.markDone(id, map[id]);
+    });
+  }
+
+  async function fetchRemoteDoneMap() {
+    const sb = getSbClient();
+    if (!sb || typeof sb.from !== "function") return {};
+    try {
+      const res = await sb
+        .from("site_settings")
+        .select("value")
+        .eq("key", DONE_SETTING_KEY)
+        .limit(1);
+      if (res.error || !res.data || !res.data[0]) return {};
+      return parseDoneMap(res.data[0].value);
+    } catch (_) {
+      return {};
+    }
+  }
+
+  async function pushRemoteDoneMap(map) {
+    const token = getToken();
+    if (!token) return;
+    try {
+      await invokeRpc("admin_site_setting_set_v1", {
+        p_token: token,
+        p_key: DONE_SETTING_KEY,
+        p_value: JSON.stringify(map || {}),
+      });
+    } catch (_) {}
+  }
+
+  function schedulePushRemoteDone() {
+    if (!remoteDoneReady) return;
+    const api = presetsApi();
+    if (!api || typeof api.loadDone !== "function") return;
+    if (remoteDonePushTimer) clearTimeout(remoteDonePushTimer);
+    remoteDonePushTimer = setTimeout(function () {
+      pushRemoteDoneMap(api.loadDone()).catch(function () {});
+    }, 250);
+  }
+
+  function wrapDonePersistence() {
+    const api = presetsApi();
+    if (!api || api._donePersistWrapped) return;
+    const origMark = api.markDone;
+    const origClear = api.clearDone;
+    if (typeof origMark === "function") {
+      api.markDone = function (id, meta) {
+        origMark(id, meta);
+        schedulePushRemoteDone();
+      };
+    }
+    if (typeof origClear === "function") {
+      api.clearDone = function (id) {
+        origClear(id);
+        schedulePushRemoteDone();
+      };
+    }
+    api._donePersistWrapped = true;
+  }
+
+  async function hydrateDoneFromRemote() {
+    wrapDonePersistence();
+    const api = presetsApi();
+    if (!api || typeof api.loadDone !== "function") {
+      remoteDoneReady = true;
+      return;
+    }
+    const remote = await fetchRemoteDoneMap();
+    const local = api.loadDone() || {};
+    const merged = mergeDoneMaps(local, remote);
+    writeLocalDoneMap(merged);
+    remoteDoneReady = true;
+    const remoteKeys = Object.keys(remote);
+    const mergedKeys = Object.keys(merged);
+    if (
+      mergedKeys.length &&
+      (mergedKeys.length !== remoteKeys.length ||
+        JSON.stringify(merged) !== JSON.stringify(remote))
+    ) {
+      await pushRemoteDoneMap(merged);
+    }
+  }
+
+  function extractPublicFnNames(sql) {
+    const names = [];
+    const seen = {};
+    const re = /create\s+(?:or\s+replace\s+)?function\s+public\.([a-zA-Z0-9_]+)/gi;
+    let m;
+    while ((m = re.exec(String(sql || "")))) {
+      const n = String(m[1] || "").toLowerCase();
+      if (!n || seen[n]) continue;
+      seen[n] = true;
+      names.push(n);
+    }
+    return names;
+  }
+
+  async function resolvePresetFnNames(api, p) {
+    if (Array.isArray(p.onceFns) && p.onceFns.length) {
+      return p.onceFns.map(function (n) {
+        return String(n || "").toLowerCase();
+      }).filter(Boolean);
+    }
+    let names = extractPublicFnNames(p.sql || "");
+    if (names.length) return names;
+    if (!p.file || typeof api.fetchPresetSql !== "function") return [];
+    try {
+      const sql = await api.fetchPresetSql(p);
+      return extractPublicFnNames(sql);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async function autoArchiveInstalledOncePresets(token) {
+    if (!token || !executorReady) return;
+    const api = presetsApi();
+    if (!api || !Array.isArray(api.PRESETS) || typeof api.isDone !== "function") {
+      return;
+    }
+    const pending = api.PRESETS.filter(function (p) {
+      return p && p.id && !api.isDone(p.id) && p.liveDetect !== false;
+    });
+    if (!pending.length) return;
+    const resolved = await Promise.all(
+      pending.map(async function (p) {
+        const names = await resolvePresetFnNames(api, p);
+        return { id: p.id, names: names };
+      }),
+    );
+    const byPreset = [];
+    const allNames = [];
+    const seen = {};
+    resolved.forEach(function (item) {
+      if (!item.names || !item.names.length) return;
+      byPreset.push(item);
+      item.names.forEach(function (n) {
+        if (seen[n]) return;
+        seen[n] = true;
+        allNames.push(n);
+      });
+    });
+    if (!allNames.length) return;
+    const lit = allNames
+      .map(function (n) {
+        return "'" + String(n).replace(/'/g, "''") + "'";
+      })
+      .join(",");
+    const sql =
+      "select p.proname as n from pg_catalog.pg_proc p " +
+      "join pg_catalog.pg_namespace ns on ns.oid = p.pronamespace " +
+      "where ns.nspname = 'public' and p.proname = any(array[" +
+      lit +
+      "]::text[])";
+    try {
+      const step = await invokeWorkspaceSql(token, sql, false);
+      const payload =
+        step.data && typeof step.data === "object" && !Array.isArray(step.data)
+          ? step.data
+          : null;
+      if (step.error || !payload || payload.ok === false) return;
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      const present = {};
+      rows.forEach(function (r) {
+        const n = String((r && (r.n || r.proname)) || "").toLowerCase();
+        if (n) present[n] = true;
+      });
+      byPreset.forEach(function (item) {
+        if (!item.names.every(function (n) { return present[n]; })) return;
+        if (typeof api.markDone === "function") {
+          api.markDone(item.id, {
+            via: "live-detect",
+            actor: getActorLabel(),
+            permanent: true,
+          });
+        }
+      });
+    } catch (_) {}
   }
 
   function readLinkedRequestId() {
@@ -418,46 +657,10 @@
     return true;
   }
 
-  function looksLikeFalseArchiveMeta(meta, presetId) {
-    const m = meta && typeof meta === "object" ? meta : {};
-    if (m.manual) return true;
-    if (presetId === V2_PRESET_ID) {
-      // Marked done but probe says missing → not really installed.
-      return !m.via && !m.already;
-    }
-    // Maintenance cards that need v2 cannot have succeeded without it.
-    if (!m.via && !m.statements && !m.rowCount && !m.bootstrap) return true;
-    return false;
-  }
-
   /**
-   * If v2 RPC is absent, reverse false «تعليم كمُنفذ» archive marks and
-   * force a single blocking install card.
+   * Never un-archive a finished maintenance card.
+   * v2 missing only keeps the v2 install card visible.
    */
-  function forceResurfaceDelegateInboxExpand() {
-    const api = presetsApi();
-    if (!api || typeof api.clearDone !== "function") return;
-    // Old expand cards often archived as «منفذ» while live RPC still events-only.
-    ["maint.delegate_branch_requests_expand_v1",
-     "maint.delegate_branch_requests_expand_v2",
-     "maint.delegate_list_branch_requests_v2"].forEach(function (id) {
-      try { api.clearDone(id); } catch (e) {}
-      try { if (typeof api.clearFail === "function") api.clearFail(id); } catch (e) {}
-    });
-    // Drop false archive rows for those ids
-    try {
-      const arch = loadJsonArray(ARCHIVE_KEY, localStorage).filter(function (raw) {
-        const it = normalizeEntry(raw);
-        const id = String(it.presetId || "");
-        return (
-          id !== "maint.delegate_branch_requests_expand_v1" &&
-          id !== "maint.delegate_branch_requests_expand_v2"
-        );
-      });
-      saveJsonArray(ARCHIVE_KEY, localStorage, arch, ARCHIVE_MAX);
-    } catch (e) {}
-  }
-
   function reconcileArchiveWithExecutorReady() {
     const api = presetsApi();
     if (!api) return { cleared: [] };
@@ -465,30 +668,30 @@
       v2InstallRequiredBanner = false;
       return { cleared: [] };
     }
-    const done =
-      typeof api.loadDone === "function" ? api.loadDone() || {} : {};
-    const cleared = [];
-    Object.keys(done).forEach(function (id) {
-      const meta = done[id];
-      if (!meta || !meta.ok) return;
-      if (!looksLikeFalseArchiveMeta(meta, id) && id !== V2_PRESET_ID) return;
-      // Without v2, archived maintenance presets are not trustworthy.
-      if (typeof api.clearDone === "function") api.clearDone(id);
-      cleared.push(id);
-    });
-    if (cleared.length) {
-      const arch = loadJsonArray(ARCHIVE_KEY, localStorage).filter(function (raw) {
-        const it = normalizeEntry(raw);
-        if (cleared.indexOf(it.presetId) >= 0) return false;
-        if (isRetiredDailyEntry(it)) return false;
-        return true;
-      });
-      saveJsonArray(ARCHIVE_KEY, localStorage, arch, ARCHIVE_MAX);
-      v2InstallRequiredBanner = true;
-    } else {
-      v2InstallRequiredBanner = !executorReady;
+    v2InstallRequiredBanner = true;
+    if (typeof api.clearDone === "function") {
+      try {
+        api.clearDone(V2_PRESET_ID);
+      } catch (e) {}
     }
-    return { cleared: cleared };
+    return { cleared: [] };
+  }
+
+  function hydrateDoneFromArchive() {
+    const api = presetsApi();
+    if (!api || typeof api.markDone !== "function") return;
+    loadArchive().forEach(function (raw) {
+      const it = normalizeEntry(raw);
+      if (!it.ok || !it.presetId) return;
+      if (typeof api.isDone === "function" && api.isDone(it.presetId)) return;
+      api.markDone(it.presetId, {
+        via: "archive",
+        permanent: true,
+        actor: it.actor || "",
+        at: it.at,
+        requestId: it.requestId || "",
+      });
+    });
   }
 
   function makeId() {
@@ -711,7 +914,9 @@
         requestId: item.requestId,
         version: item.version || item.presetId,
         archived: true,
-        statements: item.rowCount,
+        via: "workspace",
+        permanent: true,
+        statements: item.rowCount != null ? item.rowCount : 1,
       });
     }
     const items = loadArchive().filter((x) => {
@@ -1026,7 +1231,7 @@
     const items = listDailyWorkItems();
     if (!items.length) {
       els.queue.innerHTML =
-        '<div class="hint">لا أوامر بانتظار التنفيذ. الشاشة اليومية نظيفة — الأوامر الناجحة في الأرشيف.</div>';
+        '<div class="hint">لا أوامر بانتظار التنفيذ. الشاشة اليومية نظيفة.</div>';
       return;
     }
     els.queue.innerHTML = items
@@ -1057,24 +1262,9 @@
 
   function renderArchive() {
     if (!els.archive) return;
-    const local = loadArchive();
-    const fromPresets = archiveFromPresets();
-    const byKey = new Map();
-    fromPresets.concat(local).forEach((it) => {
-      const key = it.presetId
-        ? "p:" + it.presetId
-        : it.id || "a:" + it.at + ":" + (it.sql || "").slice(0, 40);
-      if (!byKey.has(key)) byKey.set(key, it);
-    });
-    const items = Array.from(byKey.values()).sort((a, b) =>
-      String(b.at || "").localeCompare(String(a.at || "")),
-    );
-    if (!items.length) {
-      els.archive.innerHTML =
-        '<div class="hint">الأرشيف فارغ بعد. بعد نجاح أي تنفيذ يظهر هنا مع التاريخ والمنفّذ.</div>';
-      return;
-    }
-    els.archive.innerHTML = items.map((it) => renderOpCard(it, { archive: true })).join("");
+    // Executed commands are gone from the operator surface. Keep storage
+    // only so hydrateDoneFromArchive can hide them from the pending list.
+    els.archive.innerHTML = "";
   }
 
   async function refreshArchiveFromAudit() {
@@ -1687,7 +1877,7 @@
       auditId: payload.audit_id,
     });
 
-    let statusMsg = "✅ تم التنفيذ — نُقل إلى الأرشيف";
+    let statusMsg = "✅ تم التنفيذ — حُذف من القائمة ولن يعود";
     if (pendingHealthRepair) {
       const hr = pendingHealthRepair;
       pendingHealthRepair = null;
@@ -6084,10 +6274,22 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
     const api = {
       PRESETS: FALLBACK_PRESETS.slice(),
       loadDone: function () { return loadMap(DONE_KEY); },
+      saveDone: function (map) { saveMap(DONE_KEY, map); },
+      isDoneRecord: function (row) {
+        if (row === true || row === 1) return true;
+        if (typeof row === "string" && row) return true;
+        if (!row || typeof row !== "object") return false;
+        if (row.ok === false) return false;
+        return !!(row.ok || row.archived || row.permanent || row.at);
+      },
       loadFail: function () { return loadMap(FAIL_KEY); },
       isDone: function (id) {
         const row = loadMap(DONE_KEY)[id];
-        return !!(row && row.ok);
+        if (row === true || row === 1) return true;
+        if (typeof row === "string" && row) return true;
+        if (!row || typeof row !== "object") return false;
+        if (row.ok === false) return false;
+        return !!(row.ok || row.archived || row.permanent || row.at);
       },
       getFail: function (id) {
         if (api.isDone(id)) return null;
@@ -6112,6 +6314,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
         saveMap(FAIL_KEY, map);
       },
       clearDone: function (id) {
+        if (String(id || "") !== "maint.sql_workspace_run_v2") return;
         const map = loadMap(DONE_KEY);
         delete map[id];
         saveMap(DONE_KEY, map);
@@ -6127,7 +6330,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
       },
       listArchivedPresets: function () {
         const done = api.loadDone();
-        return api.PRESETS.filter(function (p) { return !!(done[p.id] && done[p.id].ok); })
+        return api.PRESETS.filter(function (p) { return !!(done[p.id] && (done[p.id].ok || done[p.id].archived || done[p.id].at || done[p.id] === true)); })
           .map(function (p) { return { preset: p, meta: done[p.id] }; });
       },
       splitSqlStatements: function (sql) {
@@ -6162,6 +6365,8 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
   }
 
   function renderPresets() {
+    wrapDonePersistence();
+    hydrateDoneFromArchive();
     const host = document.getElementById("sql-ws-presets");
     const countEl = document.getElementById("sql-ws-presets-count");
     if (!host) return;
@@ -6170,14 +6375,9 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
       typeof api.listActivePresets === "function"
         ? api.listActivePresets()
         : (api.PRESETS || []).filter(function (p) { return !api.isDone(p.id); });
-    const archivedN =
-      typeof api.listArchivedPresets === "function"
-        ? api.listArchivedPresets().length
-        : 0;
     if (countEl) {
       countEl.textContent =
         (items.length ? items.length + " بانتظار التنفيذ" : "لا أوامر معلّقة") +
-        (archivedN ? " · " + archivedN + " في الأرشيف" : "") +
         (executorReady ? " · المنفّذ v2 جاهز" : " · المنفّذ v2 غير مفعّل");
     }
     if (!items.length) {
@@ -6190,7 +6390,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
         return;
       }
       host.innerHTML =
-        '<div class="hint">لا أوامر صيانة بانتظار التنفيذ الآن. الأوامر المُنفَّذة في «سجل التنفيذ / الأرشيف» أدناه — أو ألغِ «مُنفذ» من الأرشيف إن احتجت إعادة تشغيل.</div>';
+        '<div class="hint">لا أوامر صيانة بانتظار التنفيذ الآن. المُنفَّذ محذوف من هذه القائمة ولا يعود.</div>';
       return;
     }
     const gateBanner = !executorReady
@@ -6260,7 +6460,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
             '">عرض في المحرر</button>' +
             '<button type="button" class="btn btn-outline btn-sm" data-preset-done="' +
             escapeHtml(p.id) +
-            '" title="تعليم يدوي كمُنفذ ونقله للأرشيف">تعليم كمُنفذ</button>' +
+            '" title="إخفاء نهائي — لا يعود إلى قائمة الانتظار">إخفاء نهائيًا</button>' +
             "</div></div>"
           );
         })
@@ -6344,8 +6544,8 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
         setStatus(
           "ok",
           boot.skipped
-            ? "✅ المنفّذ v2 جاهز مسبقًا — نُقل إلى الأرشيف"
-            : "✅ تم تثبيت منفّذ SQL Workspace v2 — نُقل إلى الأرشيف",
+            ? "✅ المنفّذ v2 جاهز مسبقًا — حُذف من القائمة"
+            : "✅ تم تثبيت منفّذ SQL Workspace v2 — حُذف من القائمة",
         );
         setError("");
         setEditorVisible(false);
@@ -6462,17 +6662,36 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
     setEditorVisible(true);
 
     if (els.run) els.run.disabled = true;
-    setStatus("busy", "تشغيل عبر منفّذ Workspace v2…");
-    let { data, error } = await invokeWorkspaceSql(token, sql, true);
-    let payload =
-      data && typeof data === "object" && !Array.isArray(data) ? data : null;
+    const seqStmts =
+      typeof api.splitSqlStatements === "function"
+        ? api.splitSqlStatements(sql)
+        : [];
+    const useSequential = !!p.sequential && seqStmts.length > 1;
+    setStatus(
+      "busy",
+      useSequential
+        ? "تشغيل متسلسل عبر منفّذ Workspace…"
+        : "تشغيل عبر منفّذ Workspace v2…",
+    );
+    let data = null;
+    let error = null;
+    let payload = null;
     let doneCount = 0;
 
+    if (!useSequential) {
+      const bulk = await invokeWorkspaceSql(token, sql, true);
+      data = bulk.data;
+      error = bulk.error;
+      payload =
+        data && typeof data === "object" && !Array.isArray(data) ? data : null;
+    }
+
     if (
-      (isMissingRpcError(error, payload) || isMultiError(payload, error)) &&
-      !executorReady
+      useSequential ||
+      ((isMissingRpcError(error, payload) || isMultiError(payload, error)) &&
+        !executorReady)
     ) {
-      const stmts = api.splitSqlStatements(sql);
+      const stmts = seqStmts.length ? seqStmts : api.splitSqlStatements(sql);
       if (!stmts.length) {
         inProgress = null;
         setStatus("err", "فارغ");
@@ -6585,7 +6804,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
     let statusMsg =
       "✅ تم تنفيذ الأمر الجاهز (" +
       doneCount +
-      " أوامر) — نُقل إلى الأرشيف";
+      " أوامر) — حُذف من القائمة ولن يعود";
     if (requestId) {
       const closed = await closeLinkedRequest(requestId, at);
       if (closed.ok) {
@@ -6661,11 +6880,11 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
           setStatus("err", "متقاعد — لا يُشغَّل");
           return;
         }
-        if (!executorReady) {
-          v2InstallRequiredBanner = true;
-          setError(V2_BLOCK_CARD_AR);
-          setStatus("err", "تثبيت v2 مطلوب");
-          renderPresets();
+        if (
+          !window.confirm(
+            "إخفاء هذا الأمر نهائيًا؟ لن يظهر مرة أخرى في قائمة الانتظار.",
+          )
+        ) {
           return;
         }
         archivePresetSuccess(id, {
@@ -6674,7 +6893,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
           requestId: readLinkedRequestId(),
           version: id,
         });
-        setStatus("ok", "عُلّم كمُنفذ ونُقل إلى الأرشيف");
+        setStatus("ok", "أُخفي نهائيًا ولن يعود إلى القائمة");
       }
     });
     renderPresets();
@@ -6727,12 +6946,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
     }
     if (els.archive) {
       els.archive.addEventListener("click", (e) => {
-        const btn = e.target.closest("[data-arch-id]");
-        if (!btn) return;
-        const id = btn.getAttribute("data-arch-id");
-        const items = loadArchive().concat(archiveFromPresets());
-        const it = items.find((x) => x.id === id);
-        restoreFromEntry(it);
+        e.preventDefault();
       });
     }
 
@@ -6749,6 +6963,7 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
     scrubRetiredEditorContent({ quiet: true });
 
     (async function probeExecutorOnBind() {
+      wrapDonePersistence();
       const token = getToken();
       if (!token) {
         scrubRetiredEditorContent({ quiet: true });
@@ -6758,13 +6973,18 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
         return;
       }
       try {
+        await hydrateDoneFromRemote();
+      } catch (_) {}
+      try {
         const probe = await probeExecutorReady(token);
         executorReady = !!probe.ready;
         if (executorReady) {
           v2InstallRequiredBanner = false;
           clearMultiFailNoise();
+          try {
+            await autoArchiveInstalledOncePresets(token);
+          } catch (_) {}
         } else {
-          forceResurfaceDelegateInboxExpand();
           reconcileArchiveWithExecutorReady();
         }
       } catch (_) {}
@@ -6787,13 +7007,18 @@ returning e.id, e.type, e.person, e.date_label, e.event_date, e.created_at;
           const token = getToken();
           if (token) {
             try {
+              await hydrateDoneFromRemote();
+            } catch (_) {}
+            try {
               const probe = await probeExecutorReady(token);
               executorReady = !!probe.ready;
               if (executorReady) {
                 v2InstallRequiredBanner = false;
                 clearMultiFailNoise();
+                try {
+                  await autoArchiveInstalledOncePresets(token);
+                } catch (_) {}
               } else {
-                forceResurfaceDelegateInboxExpand();
                 reconcileArchiveWithExecutorReady();
               }
             } catch (_) {}

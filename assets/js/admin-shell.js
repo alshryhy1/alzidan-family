@@ -41,9 +41,9 @@
     {
       id: "members",
       title: "الأعضاء",
-      desc: "جودة بيانات الأعضاء ومراجعة الشجرة",
+      desc: "أجهزة الدخول ومنح إدارة العائلة في التطبيق",
       icon: "👤",
-      sections: ["admin-quality-center"],
+      sections: ["admin-device-trust-section", "admin-family-admin-grant-section", "admin-quality-center"],
       group: "data",
     },
     {

@@ -77,7 +77,7 @@ assert(emptyHealth.ok === false, "empty health date rejected");
 
 // 2) Schedule: future event not public until show window
 const farFuture = {
-  type: "marriage",
+  type: "gathering",
   event_date: dayOffsetIso(20),
   created_at: new Date().toISOString(),
   details: JSON.stringify({
@@ -96,7 +96,7 @@ assert(
 );
 
 const soon = {
-  type: "marriage",
+  type: "gathering",
   event_date: dayOffsetIso(2),
   created_at: new Date().toISOString(),
   details: JSON.stringify({
@@ -112,7 +112,7 @@ assert(
 assert(vis.isFamilyEventPubliclyVisible(soon) === true, "near event public");
 
 const ended = {
-  type: "marriage",
+  type: "gathering",
   event_date: dayOffsetIso(-1),
   created_at: new Date().toISOString(),
   details: JSON.stringify({
@@ -294,6 +294,34 @@ assert(
   }) === true,
   "permanent banner visible"
 );
+
+const birthPublishedToday = {
+  type: "birth",
+  event_date: dayOffsetIso(-3),
+  created_at: new Date().toISOString(),
+  end_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  details: JSON.stringify({
+    v: 1,
+    kind: "happy_notice",
+    showDays: 7,
+    end_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  }),
+};
+assert(
+  vis.deriveEventLifecycleState(birthPublishedToday) === "visible",
+  "birth news visible 3 days after birth when published today"
+);
+assert(
+  vis.isFamilyEventPubliclyVisible(birthPublishedToday) === true,
+  "birth news public despite stale end_at"
+);
+
+const birthPastDate = vis.validateEventDateForSubmit(dayOffsetIso(-3), {
+  category: "happy",
+  type: "birth",
+  required: false,
+});
+assert(birthPastDate.ok === true, "news birth date in the past is allowed");
 
 if (process.exitCode) {
   console.error("\nVerification failed.");

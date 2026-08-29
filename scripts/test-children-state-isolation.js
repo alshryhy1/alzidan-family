@@ -118,6 +118,60 @@ assert(
   "Salem list includes عبيد and حضيري",
 );
 
+const majed = "لحمة بن مطلق بن زيدان/نداء/طعيسان/حمد/محمد/ماجد";
+const ezz = majed + "/عز";
+const majedPid = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+const otherPid = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+const ezzMap = {
+  ماجد: [{ name: ezz, personId: "p-ezz", parentPersonId: otherPid }],
+};
+const forMajed = FM.childrenForSelectedParent(ezzMap, majed, {
+  normalizePersonName: norm,
+  parentPersonId: majedPid,
+});
+assert(forMajed.list.length === 1, "Majed path shows Ezz even if keyed under leaf / UUID mismatch");
+assert(forMajed.list[0].name === ezz, "Majed list is Ezz by path");
+const forEzz = FM.childrenForSelectedParent(ezzMap, ezz, {
+  normalizePersonName: norm,
+  parentPersonId: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+});
+assert(forEzz.list.length === 0, "Ezz himself has no children");
+
+const furaih = "لاحم بن مطلق بن زيدان/هليل/فريح";
+const furaihPid = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+const otherFuraihPid = "11111111-1111-1111-1111-111111111111";
+const furaihMap = {
+  [furaih]: [
+    { name: furaih + "/غضيان", personId: "p-ghad", parentPersonId: furaihPid },
+  ],
+  فريح: [
+    { name: "فريح/غضيان", personId: "p-ghad-dup", parentPersonId: furaihPid },
+    { name: "فريح/فرحان", personId: "p-farhan-other", parentPersonId: otherFuraihPid },
+    { name: "فريح/محمد", personId: "p-moh-empty", parentPersonId: "" },
+  ],
+};
+const forFuraih = FM.childrenForSelectedParent(furaihMap, furaih, {
+  normalizePersonName: norm,
+  parentPersonId: furaihPid,
+});
+assert(forFuraih.list.length === 2, "full-path فريح UUID-union keeps his rows, not every leaf dump");
+assert(
+  forFuraih.list.every(function (c) {
+    return String(c.parentPersonId || "") === furaihPid;
+  }),
+  "full-path فريح keeps only his UUID",
+);
+const forFuraihLeaf = FM.childrenForSelectedParent(furaihMap, "فريح", {
+  normalizePersonName: norm,
+  parentPersonId: furaihPid,
+});
+assert(
+  forFuraihLeaf.list.every(function (c) {
+    return String(c.parentPersonId || "") === furaihPid;
+  }),
+  "leaf فريح selection does not take other fathers' children",
+);
+
 // Shared array reference must be broken by isolateChildrenMapArrays
 const shared = [{ name: "x" }];
 const leaky = { [A]: shared, [B]: shared };

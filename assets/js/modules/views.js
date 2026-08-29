@@ -35,7 +35,15 @@
 		"memory/person": "صفحة شخص في الذاكرة",
 		"memory/admin": "إدارة الذاكرة",
 		"app/mobile": "تطبيق الجوال",
+		"app/mobile/pulse": "نبض التطبيق",
 		"app/mobile/memory": "ذاكرة التطبيق",
+		"app/mobile/events": "مناسبات التطبيق",
+		"app/mobile/tree": "شجرة التطبيق",
+		"app/mobile/branches": "فروع التطبيق",
+		"app/mobile/profile": "ملف التطبيق",
+		"app/mobile/person": "بطاقة شخص في التطبيق",
+		"app/mobile/about": "عن التطبيق",
+		"app/mobile/additions": "إضافات التطبيق",
 		mobile: "تطبيق الجوال",
 		admin: "صفحة الإدارة",
 		contact: "تواصل معنا",
@@ -45,6 +53,7 @@
 		"alzidan-tree": "شجرة العائلة",
 		person: "صفحة شخص",
 		delegate: "لوحة المندوب",
+		pulse: "نبض",
 	};
 
 	const VISIT_SLUG_LABELS = {
@@ -61,6 +70,7 @@
 		"alzidan-tree": "شجرة العائلة",
 		delegate: "لوحة المندوب",
 		app: "التطبيق",
+		pulse: "نبض",
 	};
 
 	function normalizeVisitPath(value) {

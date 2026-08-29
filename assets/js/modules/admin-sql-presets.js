@@ -3953,12 +3953,33 @@ using (
 revoke insert, update, delete on table public.tree_children from anon, authenticated;
 grant select on table public.tree_children to anon, authenticated;
 
-create or replace function public.admin_tree_children_list_v1(
-  p_token text,
-  p_branch_key text
+drop function if exists public.admin_tree_children_list_v1(text, text);
+
+create function public.admin_tree_children_list_v1(p_token text, p_branch_key text)
+returns table(
+  id bigint,
+  person_id text,
+  parent_person_id text,
+  parent_name text,
+  parent text,
+  child_name text,
+  name text,
+  branch_key text,
+  gender text,
+  photo_url text,
+  birth_date_g text,
+  birth_date_h text,
+  birth_year integer,
+  birth_order integer,
+  death_date_g text,
+  death_date_h text,
+  city text,
+  area text,
+  is_deceased boolean,
+  deceased boolean
 )
-returns setof public.tree_children
 language plpgsql
+stable
 security definer
 set search_path = public
 as $fn$
@@ -3973,7 +3994,27 @@ begin
     return;
   end if;
   return query
-    select c.*
+    select
+      c.id,
+      nullif(btrim(coalesce(to_jsonb(c)->>'person_id', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'parent_person_id', '')), ''),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      c.child_name,
+      coalesce(c.name, c.child_name),
+      c.branch_key,
+      c.gender,
+      nullif(btrim(coalesce(to_jsonb(c)->>'photo_url', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_h', '')), ''),
+      nullif(to_jsonb(c)->>'birth_year', '')::integer,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_h', '')), ''),
+      c.city,
+      c.area,
+      c.is_deceased,
+      nullif(to_jsonb(c)->>'deceased', '')::boolean
     from public.tree_children c
     where c.branch_key = v_branch
     order by c.id
@@ -3983,14 +4024,38 @@ $fn$;
 
 grant execute on function public.admin_tree_children_list_v1(text, text) to anon, authenticated;
 
-create or replace function public.tree_children_list_v1(
+drop function if exists public.tree_children_list_v1(text, text, text, text);
+
+create function public.tree_children_list_v1(
   p_branch_key text,
   p_phone text,
   p_email text,
   p_secret_hash text
 )
-returns setof public.tree_children
+returns table(
+  id bigint,
+  person_id text,
+  parent_person_id text,
+  parent_name text,
+  parent text,
+  child_name text,
+  name text,
+  branch_key text,
+  gender text,
+  photo_url text,
+  birth_date_g text,
+  birth_date_h text,
+  birth_year integer,
+  birth_order integer,
+  death_date_g text,
+  death_date_h text,
+  city text,
+  area text,
+  is_deceased boolean,
+  deceased boolean
+)
 language plpgsql
+stable
 security definer
 set search_path = public
 as $fn$
@@ -4005,7 +4070,27 @@ begin
     raise exception 'not allowed';
   end if;
   return query
-    select c.*
+    select
+      c.id,
+      nullif(btrim(coalesce(to_jsonb(c)->>'person_id', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'parent_person_id', '')), ''),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      c.child_name,
+      coalesce(c.name, c.child_name),
+      c.branch_key,
+      c.gender,
+      nullif(btrim(coalesce(to_jsonb(c)->>'photo_url', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_h', '')), ''),
+      nullif(to_jsonb(c)->>'birth_year', '')::integer,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_h', '')), ''),
+      c.city,
+      c.area,
+      c.is_deceased,
+      nullif(to_jsonb(c)->>'deceased', '')::boolean
     from public.tree_children c
     where c.branch_key = v_branch
     order by c.id
@@ -6394,6 +6479,51 @@ select
       order: 55,
     },
     {
+      id: "maint.news_end_at_store_clients_v1",
+      title: "إظهار الأخبار الحديثة على نسخة آب ستور",
+      desc:
+        "آمن لإعادة التشغيل: يمدّد show_at/end_at لأخبار وصحة آخر 10 أيام إذا كان الانتهاء قديماً. نسخة المتجر ما زالت تعامل الخبر كمناسبة منتهية. بعد التشغيل أغلق التطبيق من المتجر تماماً ثم افتحه.",
+      file: "../supabase/sql/COPY-ME-news-end-at-store-clients-v1.sql",
+      sql: `-- Preset: maint.news_end_at_store_clients_v1
+-- Safe to re-run.
+-- Must start with UPDATE. Workspace treats WITH as a SELECT and rejects the write.
+
+update public.family_events e
+set
+  show_at = least(coalesce(e.created_at, now()), now()),
+  end_at = greatest(coalesce(e.created_at, now()), now()) + interval '7 days'
+where coalesce(e.manual_hidden, false) = false
+  and e.created_at > now() - interval '10 days'
+  and e.type in (
+    'birth',
+    'marriage',
+    'promotion_notice',
+    'graduation_notice',
+    'success',
+    'achievement',
+    'appointment',
+    'retirement_notice',
+    'certification',
+    'new_house',
+    'family_news',
+    'congratulation',
+    'travel',
+    'happy',
+    'sick',
+    'operation',
+    'discharge',
+    'healing',
+    'safety'
+  )
+  and (
+    e.end_at is null
+    or e.end_at < now()
+  )
+returning e.id, e.person, e.type, e.show_at, e.end_at;
+`,
+      order: 55.2,
+    },
+    {
       id: "maint.admin_delete_request_unpublish_event_v1",
       title: "حذف الطلب يلغي نشر المناسبة (family_events)",
       desc:
@@ -7803,13 +7933,2211 @@ where e.id = r.occasion_id
 `,
       order: 55.6,
     },
+    {
+      id: "maint.occasion_replies_by_type_v1",
+      title: "ردود المناسبات حسب نوع الدعوة",
+      desc:
+        "اجتماع/غداء/عشاء: حاضر · أعتذر · أحاول. حفل زواج/تخرج: تهنئة + حضور. إيقاف «أحتاج تفاصيل» و«سأتواصل معك».",
+      file: "../supabase/sql/COPY-ME-occasion-replies-by-type-v1.sql",
+      sql: `-- Preset id: maint.occasion_replies_by_type_v1
+create or replace function public.occasion_normalize_event_type_v1(p text)
+returns text
+language plpgsql
+immutable
+as $fn$
+declare
+  v text := lower(nullif(btrim(coalesce(p, '')), ''));
+begin
+  if v is null then
+    return 'general';
+  end if;
+  v := case v
+    when 'اجتماع عائلي' then 'gathering'
+    when 'اجتماع' then 'gathering'
+    when 'meeting' then 'gathering'
+    when 'لقاء عائلي' then 'family_meetup'
+    when 'دعوة عائلية' then 'dinner'
+    when 'دعوة' then 'dinner'
+    when 'invitation' then 'dinner'
+    when 'دعوة عشاء' then 'dinner'
+    when 'دعوة غداء' then 'lunch'
+    when 'وليمة' then 'feast'
+    when 'فنجال بعد صلاة العصر' then 'finjal_asr'
+    when 'فنجال العصر' then 'finjal_asr'
+    when 'فنجال بعد صلاة العشاء' then 'finjal_isha'
+    when 'فنجال العشاء' then 'finjal_isha'
+    when 'فنجال والم اللي حولنا' then 'finjal_hawlna'
+    when 'فنجال والم الي حولنا' then 'finjal_hawlna'
+    when 'حيا الله' then 'hayya_allah'
+    when 'حياه الله' then 'hayya_allah'
+    when 'مناسبة عامة' then 'general'
+    when 'other' then 'general'
+    when 'حفل زواج' then 'wedding'
+    when 'عقد قران' then 'contract'
+    when 'زواج' then 'marriage'
+    when 'مولود جديد' then 'birth'
+    when 'حفل تخرج' then 'graduation'
+    when 'تخرج' then 'graduation_notice'
+    when 'حفل ترقية' then 'promotion'
+    when 'ترقية' then 'promotion_notice'
+    when 'حفل تقاعد' then 'retirement'
+    when 'تقاعد' then 'retirement_notice'
+    when 'عقيقة' then 'aqiqa'
+    when 'وفاة' then 'death'
+    when 'تعزية' then 'condolence'
+    else v
+  end;
+  return v;
+end;
+$fn$;
+
+create or replace function public.occasion_interaction_catalog_v1(
+  p_event_type text,
+  p_family text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_type text := public.occasion_normalize_event_type_v1(p_event_type);
+begin
+  return coalesce((
+    select jsonb_agg(to_jsonb(t) order by t.sort_order, t.id)
+    from public.occasion_interaction_types t
+    where t.is_active
+      and v_type = any (t.applies_to_types)
+  ), '[]'::jsonb);
+end;
+$fn$;
+
+revoke all on function public.occasion_interaction_catalog_v1(text, text) from public;
+grant execute on function public.occasion_interaction_catalog_v1(text, text) to anon, authenticated, service_role;
+
+update public.occasion_interaction_types
+set is_active = false
+where key in ('inv_details', 'inv_contact');
+
+update public.occasion_interaction_types
+set label = 'بإذن الله حاضر',
+    full_text = 'بإذن الله سأحضر',
+    applies_to_types = array[
+      'feast','gathering','family_meetup','dinner','lunch','general',
+      'wedding','contract','graduation','promotion','retirement','aqiqa',
+      'finjal_asr','finjal_isha','finjal_hawlna','hayya_allah'
+    ]::text[],
+    sort_order = 10,
+    is_active = true
+where key = 'inv_yes';
+
+update public.occasion_interaction_types
+set label = 'أعتذر',
+    full_text = 'أعتذر عن الحضور',
+    applies_to_types = array[
+      'feast','gathering','family_meetup','dinner','lunch','general',
+      'wedding','contract','graduation','promotion','retirement','aqiqa',
+      'finjal_asr','finjal_isha','finjal_hawlna','hayya_allah'
+    ]::text[],
+    sort_order = 20,
+    is_active = true
+where key = 'inv_no';
+
+update public.occasion_interaction_types
+set label = 'إن شاء الله أحاول',
+    full_text = 'إن شاء الله أحاول الحضور',
+    applies_to_types = array[
+      'feast','gathering','family_meetup','dinner','lunch','general',
+      'wedding','contract','graduation','promotion','retirement','aqiqa',
+      'finjal_asr','finjal_isha','finjal_hawlna','hayya_allah'
+    ]::text[],
+    sort_order = 30,
+    is_active = true
+where key = 'inv_maybe';
+
+update public.occasion_interaction_types
+set is_active = false
+where key in ('w_barak_alaykuma', 'w_jamaa', 'w_mubarak');
+
+update public.occasion_interaction_types
+set is_active = true, sort_order = 5
+where key = 'w_barak_lakuma';
+
+update public.occasion_interaction_types t
+set applies_to_types = array(
+  select x from unnest(coalesce(t.applies_to_types, '{}'::text[])) as x
+  where x not in ('promotion', 'graduation', 'retirement')
+)
+where t.family = 'news'
+  and t.is_active
+  and t.applies_to_types && array['promotion','graduation','retirement']::text[];
+
+insert into public.occasion_interaction_types as t
+  (key, family, applies_to_types, track, label, full_text, allows_message, sort_order, is_active)
+values
+  ('cer_barak', 'occasion', array['graduation','promotion','retirement']::text[], null, 'بارك الله لك', 'بارك الله لك', false, 5, true)
+on conflict (key) do update set
+  family = excluded.family,
+  applies_to_types = excluded.applies_to_types,
+  label = excluded.label,
+  full_text = excluded.full_text,
+  allows_message = excluded.allows_message,
+  sort_order = excluded.sort_order,
+      is_active = true;
+`,
+      order: 55.7,
+    },
+    {
+      id: "maint.occasion_finjal_v1",
+      title: "فنجال بعد صلاة العصر والعشاء — ردود الحضور",
+      desc:
+        "يضيف فنجال بعد صلاة العصر، فنجال بعد صلاة العشاء، فنجال والم اللي حولنا، وحيا الله إلى أزرار حاضر · أعتذر · أحاول.",
+      file: "../supabase/sql/COPY-ME-occasion-finjal-v1.sql",
+      sql: `-- Preset id: maint.occasion_finjal_v1
+create or replace function public.occasion_normalize_event_type_v1(p text)
+returns text
+language plpgsql
+immutable
+as $fn$
+declare
+  v text := lower(nullif(btrim(coalesce(p, '')), ''));
+begin
+  if v is null then
+    return 'general';
+  end if;
+  v := case v
+    when 'اجتماع عائلي' then 'gathering'
+    when 'اجتماع' then 'gathering'
+    when 'meeting' then 'gathering'
+    when 'لقاء عائلي' then 'family_meetup'
+    when 'دعوة عائلية' then 'dinner'
+    when 'دعوة' then 'dinner'
+    when 'invitation' then 'dinner'
+    when 'دعوة عشاء' then 'dinner'
+    when 'دعوة غداء' then 'lunch'
+    when 'وليمة' then 'feast'
+    when 'فنجال بعد صلاة العصر' then 'finjal_asr'
+    when 'فنجال العصر' then 'finjal_asr'
+    when 'فنجال بعد صلاة العشاء' then 'finjal_isha'
+    when 'فنجال العشاء' then 'finjal_isha'
+    when 'فنجال والم اللي حولنا' then 'finjal_hawlna'
+    when 'فنجال والم الي حولنا' then 'finjal_hawlna'
+    when 'حيا الله' then 'hayya_allah'
+    when 'حياه الله' then 'hayya_allah'
+    when 'مناسبة عامة' then 'general'
+    when 'other' then 'general'
+    when 'حفل زواج' then 'wedding'
+    when 'عقد قران' then 'contract'
+    when 'زواج' then 'marriage'
+    when 'مولود جديد' then 'birth'
+    when 'حفل تخرج' then 'graduation'
+    when 'تخرج' then 'graduation_notice'
+    when 'حفل ترقية' then 'promotion'
+    when 'ترقية' then 'promotion_notice'
+    when 'حفل تقاعد' then 'retirement'
+    when 'تقاعد' then 'retirement_notice'
+    when 'عقيقة' then 'aqiqa'
+    when 'وفاة' then 'death'
+    when 'تعزية' then 'condolence'
+    else v
+  end;
+  return v;
+end;
+$fn$;
+
+update public.occasion_interaction_types
+set applies_to_types = array[
+      'feast','gathering','family_meetup','dinner','lunch','general',
+      'wedding','contract','graduation','promotion','retirement','aqiqa',
+      'finjal_asr','finjal_isha','finjal_hawlna','hayya_allah'
+    ]::text[],
+    is_active = true
+where key in ('inv_yes', 'inv_no', 'inv_maybe');
+`,
+      order: 55.8,
+    },
+    {
+      id: "maint.occasion_custom_message_v1",
+      title: "رسالة خاصة على كل دعوة وفنجال",
+      desc:
+        "يضيف زر «رسالة خاصة» يكتب فيه المرسل ما يشاء على الوليمة والاجتماع والفنجال وحفل التخرج/الترقية/التقاعد. الأنواع التي لديها رسالة مسبقاً لا تُكرر.",
+      file: "../supabase/sql/COPY-ME-occasion-custom-message-v1.sql",
+      sql: `-- Preset id: maint.occasion_custom_message_v1
+insert into public.occasion_interaction_types as t
+  (key, family, applies_to_types, track, label, full_text, allows_message, sort_order, is_active)
+values
+  (
+    'msg_custom',
+    'occasion',
+    array[
+      'feast','gathering','family_meetup','dinner','lunch','general',
+      'finjal_asr','finjal_isha','finjal_hawlna','hayya_allah',
+      'graduation','promotion','retirement'
+    ]::text[],
+    null,
+    'رسالة خاصة',
+    'رسالة خاصة',
+    true,
+    90,
+    true
+  )
+on conflict (key) do update set
+  family = excluded.family,
+  applies_to_types = excluded.applies_to_types,
+  label = excluded.label,
+  full_text = excluded.full_text,
+  allows_message = true,
+  sort_order = excluded.sort_order,
+  is_active = true;
+`,
+      order: 55.9,
+    },
+    {
+      id: "maint.pulse_presence_v1",
+      title: "نبض: المتواجدون الآن (حضور مجهول)",
+      desc:
+        "جدول نبضات بدون اسم ولا جوال. التطبيق يعدّ من فتح التطبيق في آخر 3 دقائق. لا يعرض اتجاهات السلوك في النبض.",
+      file: "../supabase/sql/COPY-ME-pulse-presence-v1.sql",
+      sql: `-- Pulse presence: anonymous foreground sessions.
+create table if not exists public.pulse_presence (
+  session_id uuid primary key,
+  last_seen timestamptz not null default now()
+);
+comment on table public.pulse_presence is
+  'Anonymous in-app presence for Pulse. session_id is a device-local random uuid; never bind to phone.';
+create index if not exists pulse_presence_last_seen_idx
+  on public.pulse_presence (last_seen desc);
+alter table public.pulse_presence enable row level security;
+revoke all on table public.pulse_presence from public, anon, authenticated;
+
+create or replace function public.pulse_heartbeat_v1(p_session_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_online int := 0;
+begin
+  if p_session_id is null then
+    return jsonb_build_object('ok', false, 'online', 0);
+  end if;
+  insert into public.pulse_presence (session_id, last_seen)
+  values (p_session_id, now())
+  on conflict (session_id) do update
+    set last_seen = now();
+  delete from public.pulse_presence
+  where last_seen < now() - interval '15 minutes';
+  select count(*)::int into v_online
+  from public.pulse_presence
+  where last_seen > now() - interval '3 minutes';
+  return jsonb_build_object('ok', true, 'online', v_online);
+end;
+$fn$;
+revoke all on function public.pulse_heartbeat_v1(uuid) from public;
+grant execute on function public.pulse_heartbeat_v1(uuid) to anon, authenticated;
+`,
+      order: 56,
+    },
+    {
+      id: "maint.pulse_family_board_v1",
+      title: "نبض: شريط الإضافة والتعديل — بدون قائمة المناديب",
+      desc:
+        "إشعار ثلاث ساعات: رقم عضو / ابن جديد / تعديل اسم (ذكور فقط). إضافة مندوب تُعرض يوماً واحداً فقط. إن لم يوجد شيء تظهر أدعية قصيرة في التطبيق — ليست قائمة المناديب. شغّل البطاقة ثم أعد فتح التطبيق.",
+      file: "../supabase/sql/COPY-ME-pulse-family-board-v1.sql",
+      order: 56.05,
+    },
+    {
+      id: "maint.pulse_register_phone_v1",
+      title: "نبض: تسجيل الجوال + الذكور فقط في الشريط",
+      desc:
+        "يحفظ جوال مرسل الطلب/المناسبة إن لم يكن مسجّلًا. شريط النبض للأعضاء الذكور فقط — الأم والابنة والزوجة لا يظهرن فيه. شغّل ثم أعد فتح التطبيق.",
+      file: "../supabase/sql/COPY-ME-pulse-register-phone-v1.sql",
+      order: 56.06,
+    },
+    {
+      id: "maint.bind_sender_phone_v1",
+      title: "ربط جوال كل مرسل خبر/مناسبة بشجرته",
+      desc:
+        "تثبيت مرة للنظام كله: كل خبر أو مناسبة لاحقة يحفظ جوال المرسل على ورقته في الشجرة تلقائياً (الاسم الأول + الآباء في المسار). لا يُكتب على اسم صاحب المناسبة إن كان غيره. البطاقة تعيد ربط الطلبات المنشورة السابقة أيضاً.",
+      file: "../supabase/sql/COPY-ME-bind-sender-phone-v1.sql",
+      order: 56.065,
+    },
+    {
+      id: "maint.member_phone_register_v2",
+      title: "عزل طلب تسجيل الجوال عن باقي الطلبات",
+      desc:
+        "طلب تسجيل الرقم ليس تصحيحاً ولا يُربَط بالاسم تلقائياً. يلغي الدخول الذي فُتح من طلب معلّق لم يُقبل. شغّل هذه البطاقة حتى لو شغّلت السابقة، ثم أعد فتح التطبيق.",
+      file: "../supabase/sql/COPY-ME-member-phone-register-v1.sql",
+      order: 56.07,
+      sql: `-- COPY-ME: Preset id: maint.member_phone_register_v2
+-- طلب تسجيل الجوال ليس تصحيحاً ولا مناسبة ولا بطاقة شجرة.
+-- لا ربط تلقائي بالاسم. لا دخول قبل أن تسجّل الإدارة/المندوب الرقم على شخص بالاسم والأيدي.
+
+create or replace function public.is_member_phone_register_request_v1(p_kind text, p_message text)
+returns boolean
+language sql
+immutable
+as $$
+  select
+    btrim(coalesce(p_kind, '')) in ('member_registration', 'member_phone_register')
+    or position('MEMBER_PHONE_REGISTER_V1' in coalesce(p_message, '')) > 0
+$$;
+
+create or replace function public.trg_approval_request_register_phone()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+begin
+  if nullif(btrim(coalesce(NEW.phone, '')), '') is null then
+    return NEW;
+  end if;
+  if public.is_member_phone_register_request_v1(NEW.kind, NEW.message) then
+    return NEW;
+  end if;
+  begin
+    perform public.register_sender_phone_v1(
+      NEW.phone,
+      coalesce(NEW.name, ''),
+      NEW.branch_key,
+      null
+    );
+  exception when others then
+    null;
+  end;
+  begin
+    if to_regprocedure('public.bind_approval_request_sender_phone_v1(bigint)') is not null then
+      perform public.bind_approval_request_sender_phone_v1(NEW.id);
+    end if;
+  exception when others then
+    null;
+  end;
+  return NEW;
+end;
+$fn$;
+
+create or replace function public.trg_approval_request_bind_sender_phone()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+begin
+  if nullif(btrim(coalesce(NEW.phone, '')), '') is null then
+    return NEW;
+  end if;
+  if public.is_member_phone_register_request_v1(NEW.kind, NEW.message) then
+    return NEW;
+  end if;
+  begin
+    perform public.bind_approval_request_sender_phone_v1(NEW.id);
+  exception when others then
+    null;
+  end;
+  return NEW;
+end;
+$fn$;
+
+alter table public.approval_requests drop constraint if exists kind_check;
+alter table public.approval_requests add constraint kind_check check (
+  kind is null or length(btrim(kind)) > 0
+);
+
+drop trigger if exists trg_approval_request_register_phone on public.approval_requests;
+drop trigger if exists trg_approval_request_bind_sender_phone on public.approval_requests;
+create trigger trg_approval_request_register_phone
+after insert or update of phone, status, message, kind, branch_key, name
+on public.approval_requests
+for each row
+execute function public.trg_approval_request_register_phone();
+
+update public.approval_requests
+set kind = 'member_phone_register'
+where public.is_member_phone_register_request_v1(kind, message)
+  and btrim(coalesce(kind, '')) is distinct from 'member_phone_register';
+
+delete from public.member_profiles mp
+where exists (
+  select 1
+  from public.approval_requests r
+  where r.status = 'pending'
+    and public.is_member_phone_register_request_v1(r.kind, r.message)
+    and nullif(btrim(coalesce(r.phone, '')), '') is not null
+    and char_length(right(regexp_replace(coalesce(r.phone, ''), '\\D', '', 'g'), 9)) = 9
+    and right(regexp_replace(coalesce(mp.phone, ''), '\\D', '', 'g'), 9)
+      = right(regexp_replace(coalesce(r.phone, ''), '\\D', '', 'g'), 9)
+);
+`,
+    },
+    {
+      id: "maint.member_phone_register_match_v1",
+      title: "تسجيل الجوال فقط إذا وُجد الاسم الثلاثي في الشجرة",
+      desc:
+        "طلب تسجيل الرقم لا يُرسل للإدارة ولا للمناديب إلا إذا طابق الاسم الثلاثي شخصاً في الفرع المختار. الاسم غير الموجود يُرفض ولا يُنشئ طلباً.",
+      file: "../supabase/sql/COPY-ME-member-phone-register-v1.sql",
+      order: 56.08,
+      sql: `-- COPY-ME: Preset id: maint.member_phone_register_match_v1
+create or replace function public.is_member_phone_register_request_v1(p_kind text, p_message text)
+returns boolean
+language sql
+immutable
+as $$
+  select
+    btrim(coalesce(p_kind, '')) in ('member_registration', 'member_phone_register')
+    or position('MEMBER_PHONE_REGISTER_V1' in coalesce(p_message, '')) > 0
+$$;
+
+create or replace function public.member_phone_fold_ar_v1(p text)
+returns text
+language sql
+immutable
+as $$
+  select nullif(btrim(regexp_replace(
+    replace(replace(replace(replace(replace(replace(replace(replace(
+      regexp_replace(coalesce(p, ''), '[\\u064B-\\u065F\\u0670\\u0640]', '', 'g'),
+      'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ٱ', 'ا'),
+      'ى', 'ي'), 'ة', 'ه'), 'ؤ', 'و'), 'ئ', 'ي')
+  , '\\s+', ' ', 'g')), '');
+$$;
+
+create or replace function public.member_phone_register_name_in_tree_v1(p_branch text, p_name text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_branch text := nullif(btrim(coalesce(p_branch, '')), '');
+  v_tokens text[];
+begin
+  if v_branch is null then
+    return false;
+  end if;
+  select coalesce(array(
+    select t from (
+      select public.member_phone_fold_ar_v1(x) as t
+      from unnest(regexp_split_to_array(btrim(coalesce(p_name, '')), '\\s+')) as x
+    ) s
+    where t is not null and t not in ('بن', 'ابن')
+    limit 3
+  ), '{}'::text[]) into v_tokens;
+  if coalesce(array_length(v_tokens, 1), 0) < 3 then
+    return false;
+  end if;
+
+  return exists (
+    select 1
+    from (
+      select
+        public.member_phone_fold_ar_v1(
+          replace(
+            case
+              when position('/' in coalesce(c.child_name, c.name, '')) > 0
+                then coalesce(c.child_name, c.name, '')
+              else btrim(coalesce(c.parent_name, '') || '/' || coalesce(c.child_name, c.name, ''), '/')
+            end,
+            '/',
+            ' '
+          )
+        ) as hay,
+        public.member_phone_fold_ar_v1(
+          nullif(btrim(regexp_replace(
+            btrim(coalesce(c.child_name, c.name, '')),
+            '^.*/',
+            ''
+          )), '')
+        ) as leaf
+      from public.tree_children c
+      where btrim(coalesce(c.branch_key, '')) = v_branch
+    ) s
+    where s.leaf = v_tokens[1]
+      and position(v_tokens[1] in coalesce(s.hay, '')) > 0
+      and position(v_tokens[2] in coalesce(s.hay, '')) > 0
+      and position(v_tokens[3] in coalesce(s.hay, '')) > 0
+  );
+end;
+$fn$;
+
+create or replace function public.trg_member_phone_register_require_tree_name()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+begin
+  if not public.is_member_phone_register_request_v1(NEW.kind, NEW.message) then
+    return NEW;
+  end if;
+  if public.member_phone_register_name_in_tree_v1(NEW.branch_key, NEW.name) then
+    return NEW;
+  end if;
+  raise exception 'الاسم الثلاثي غير موجود في هذا الفرع';
+end;
+$fn$;
+
+drop trigger if exists trg_member_phone_register_require_tree_name on public.approval_requests;
+create trigger trg_member_phone_register_require_tree_name
+before insert or update of kind, name, branch_key, message
+on public.approval_requests
+for each row
+execute function public.trg_member_phone_register_require_tree_name();
+
+revoke all on function public.member_phone_register_name_in_tree_v1(text, text) from public;
+grant execute on function public.member_phone_register_name_in_tree_v1(text, text) to anon, authenticated;
+`,
+    },
+    {
+      id: "maint.member_relations_journey_audit_v1",
+      title: "اختبار رحلة عضو غير ظاهر للعامة",
+      desc:
+        "قراءة فقط. v2: زواج الابنة من tree_spouses بهوية نسب مطبّعة (ة↔ه)، والأبناء من mother_links وصف الزوج. لا يغيّر بيانات.",
+      file: "../supabase/sql/COPY-ME-member-relations-journey-audit-v1.sql",
+      order: 56.09,
+      sql: `-- COPY-ME: Preset id: maint.member_relations_journey_audit_v1
+-- قراءة فقط. لا ينشئ جداول ولا يغيّر صفوفًا ولا يبني واجهة.
+-- v2: زواج الابنة = صف tree_spouses حيث هي الزوجة (husband_id = الزوج).
+--     المطابقة بهوية نسب مطبّعة (ة↔ه) لا بـ wife_person_id ولا بـ position خام.
+--     الأبناء: mother_links + أبناء صف الزوج في الشجرة، لا spouse_id وحده.
+
+create or replace function public.maint_rel_ar_norm_v1(p text)
+returns text
+language sql
+immutable
+as $$
+  select lower(btrim(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(coalesce(p, ''), '[\\u064B-\\u065F\\u0670]', '', 'g'),
+            'ـ', '', 'g'),
+          '[أإآ]', 'ا', 'g'),
+        'ة', 'ه', 'g'),
+      'ى', 'ي', 'g')
+  ));
+$$;
+
+create or replace function public.maint_rel_leaf_v1(p text)
+returns text
+language sql
+immutable
+as $$
+  select public.maint_rel_ar_norm_v1(
+    nullif(btrim(regexp_replace(coalesce(p, ''), '^.*/', '')), '')
+  );
+$$;
+
+create or replace function public.maint_member_relations_journey_audit_v1()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_has_mp boolean := to_regclass('public.member_profiles') is not null;
+  v_has_tree boolean := to_regclass('public.tree_children') is not null;
+  v_has_mothers boolean := to_regclass('public.tree_mother_links') is not null;
+  v_has_spouses boolean := to_regclass('public.tree_spouses') is not null;
+  v_has_approval boolean := to_regclass('public.approval_requests') is not null;
+  v_has_events boolean := to_regclass('public.family_events') is not null;
+  v_has_delegates boolean := to_regclass('public.delegates_v2') is not null;
+  v_has_live_gifts boolean := to_regclass('public.live_gifts') is not null;
+  v_related jsonb := '[]'::jsonb;
+  v_id bigint;
+  v_person text;
+  v_branch text;
+  v_path text;
+  v_parent text;
+  v_leaf text;
+  v_phone_tail text;
+  v_login text;
+  v_father_id bigint;
+  v_segs int;
+  v_mother_name text;
+  v_mother_family boolean;
+  v_mother_conf text;
+  v_brothers int := 0;
+  v_sisters int := 0;
+  v_spouse_id bigint;
+  v_husband_id bigint;
+  v_husband_path text;
+  v_husband_branch text;
+  v_wife_family boolean;
+  v_wife_name text;
+  v_wife_lineage text;
+  v_spouse_status text;
+  v_match_rule text;
+  v_kids int := 0;
+  v_kids_by_link int := 0;
+  v_kids_by_parent int := 0;
+  v_child_leaves text[] := '{}';
+  v_npath text;
+  v_nleaf text;
+  v_nparent_leaf text;
+  v_source text;
+  v_note text;
+begin
+  select coalesce(jsonb_agg(c.relname order by c.relname), '[]'::jsonb)
+    into v_related
+  from pg_catalog.pg_class c
+  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public'
+    and c.relkind in ('r', 'v', 'm', 'p')
+    and c.relname ~* '(tree|child|member|spouse|mother|nasab|person|approval|family_event|delegate|live_gift|live_session)';
+
+  v_source := case
+    when v_has_live_gifts and not v_has_tree then 'ليس مصدر شجرة العائلة (جداول بث حي)'
+    when v_has_tree then 'مصدر شجرة العائلة'
+    when v_has_approval or v_has_events or v_has_delegates then 'مصدر عائلة بلا جدول tree_children'
+    else 'مصدر بلا جداول الشجرة المعروفة'
+  end;
+
+  if v_has_mp and v_has_tree then
+    execute $q$
+      select c.id, c.person_id::text, c.branch_key,
+             coalesce(c.child_name, c.name),
+             coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+             right(regexp_replace(coalesce(mp.phone, ''), '\\D', '', 'g'), 4)
+      from public.member_profiles mp
+      join public.tree_children c on c.id = mp.tree_child_id
+      where coalesce(mp.status, 'active') = 'active'
+        and nullif(btrim(coalesce(mp.phone, '')), '') is not null
+        and mp.tree_child_id is not null
+        and lower(btrim(coalesce(c.gender, ''))) in
+            ('daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت')
+      order by mp.id desc
+      limit 1
+    $q$ into v_id, v_person, v_branch, v_path, v_parent, v_phone_tail;
+    if v_id is not null then
+      v_login := 'موجودة ومؤكدة';
+    end if;
+  end if;
+
+  if v_id is null and v_has_tree then
+    execute $q$
+      select c.id, c.person_id::text, c.branch_key,
+             coalesce(c.child_name, c.name),
+             coalesce(c.parent_name, to_jsonb(c)->>'parent')
+      from public.tree_children c
+      where lower(btrim(coalesce(c.gender, ''))) in
+            ('daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت')
+      order by c.id desc
+      limit 1
+    $q$ into v_id, v_person, v_branch, v_path, v_parent;
+    v_login := case
+      when not v_has_mp then 'غير موجودة'
+      else 'موجودة لكن غير مربوطة'
+    end;
+    v_phone_tail := null;
+  end if;
+
+  if not v_has_tree then
+    v_note := case
+      when v_has_live_gifts then
+        'جدول tree_children غير موجود هنا. هذا المصدر يظهر جداول بث حي — شغّل البطاقة من إدارة عائلة الزيدان (alzidan.org) لا من مشروع آخر.'
+      else
+        'جدول tree_children غير موجود في هذا المصدر. لا إنشاء جداول من هذا الأمر.'
+    end;
+    return jsonb_build_object(
+      'ok', true,
+      'rows', 0,
+      'audit_revision', 'v2-spouse-identity-norm',
+      'has_member_profiles', v_has_mp,
+      'has_tree_children', v_has_tree,
+      'has_tree_mother_links', v_has_mothers,
+      'has_tree_spouses', v_has_spouses,
+      'has_approval_requests', v_has_approval,
+      'has_family_events', v_has_events,
+      'has_delegates_v2', v_has_delegates,
+      'has_live_gifts', v_has_live_gifts,
+      'source', v_source,
+      'related_tables', v_related,
+      'note', v_note
+    );
+  end if;
+
+  if v_id is null then
+    return jsonb_build_object(
+      'ok', true,
+      'audit_revision', 'v2-spouse-identity-norm',
+      'has_member_profiles', v_has_mp,
+      'has_tree_children', v_has_tree,
+      'source', v_source,
+      'related_tables', v_related,
+      'rows', 0,
+      'note', 'لا صف ابنة/أنثى في الشجرة لاختبار الرحلة'
+    );
+  end if;
+
+  v_leaf := nullif(btrim(regexp_replace(coalesce(v_path, ''), '^.*/', '')), '');
+  v_segs := coalesce(cardinality(array_remove(string_to_array(btrim(coalesce(v_path, '')), '/'), '')), 0);
+  v_npath := public.maint_rel_ar_norm_v1(v_path);
+  v_nleaf := public.maint_rel_leaf_v1(v_path);
+  v_nparent_leaf := public.maint_rel_leaf_v1(v_parent);
+
+  if nullif(btrim(coalesce(v_parent, '')), '') is not null then
+    execute $q$
+      select f.id
+      from public.tree_children f
+      where f.branch_key is not distinct from $1
+        and coalesce(f.child_name, f.name) = $2
+      order by f.id
+      limit 1
+    $q$ into v_father_id using v_branch, v_parent;
+
+    execute $q$
+      select
+        count(*) filter (
+          where lower(btrim(coalesce(s.gender, ''))) not in
+            ('daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت')
+        ),
+        count(*) filter (
+          where lower(btrim(coalesce(s.gender, ''))) in
+            ('daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت')
+        )
+      from public.tree_children s
+      where s.id is distinct from $1
+        and s.branch_key is not distinct from $2
+        and coalesce(s.parent_name, to_jsonb(s)->>'parent') = $3
+    $q$ into v_brothers, v_sisters using v_id, v_branch, v_parent;
+  end if;
+
+  if v_has_mothers then
+    execute $q$
+      select l.mother_name, coalesce(l.mother_is_family_member, false), l.confidence
+      from public.tree_mother_links l
+      where l.child_id = $1
+      order by l.child_id
+      limit 1
+    $q$ into v_mother_name, v_mother_family, v_mother_conf using v_id;
+  end if;
+
+  if v_has_spouses then
+    execute $q$
+      select
+        sp.id,
+        sp.husband_id,
+        coalesce(sp.wife_is_family_member, false),
+        coalesce(sp.wife_name, ''),
+        coalesce(sp.wife_lineage, ''),
+        coalesce(sp.status, 'active'),
+        case
+          when $4 is not null
+           and nullif(to_jsonb(sp)->>'wife_person_id', '') = $4
+            then 'wife_person_id'
+          when public.maint_rel_ar_norm_v1(sp.wife_lineage) = $1
+            then 'wife_lineage_eq_path'
+          when replace(public.maint_rel_ar_norm_v1(sp.wife_lineage), '/', ' ')
+             = replace($1, '/', ' ')
+            then 'wife_lineage_eq_path_spaces'
+          when public.maint_rel_leaf_v1(coalesce(sp.wife_lineage, sp.wife_name)) = $2
+           and $3 is not null
+           and position(
+                 $3 in replace(
+                   public.maint_rel_ar_norm_v1(
+                     coalesce(sp.wife_lineage, '') || ' ' || coalesce(sp.wife_name, '')
+                   ),
+                   '/',
+                   ' '
+                 )
+               ) > 0
+            then 'leaf_plus_father'
+          when public.maint_rel_leaf_v1(sp.wife_name) = $2
+           and $3 is not null
+           and public.maint_rel_ar_norm_v1(sp.wife_branch_key)
+             = public.maint_rel_ar_norm_v1($5)
+            then 'wife_name_leaf_same_branch'
+          else 'matched'
+        end
+      from public.tree_spouses sp
+      where
+        (
+          $4 is not null
+          and nullif(to_jsonb(sp)->>'wife_person_id', '') = $4
+        )
+        or public.maint_rel_ar_norm_v1(sp.wife_lineage) = $1
+        or replace(public.maint_rel_ar_norm_v1(sp.wife_lineage), '/', ' ')
+           = replace($1, '/', ' ')
+        or (
+          public.maint_rel_leaf_v1(coalesce(sp.wife_lineage, sp.wife_name)) = $2
+          and $3 is not null
+          and position(
+                $3 in replace(
+                  public.maint_rel_ar_norm_v1(
+                    coalesce(sp.wife_lineage, '') || ' ' || coalesce(sp.wife_name, '')
+                  ),
+                  '/',
+                  ' '
+                )
+              ) > 0
+        )
+        or (
+          public.maint_rel_leaf_v1(sp.wife_name) = $2
+          and $3 is not null
+          and public.maint_rel_ar_norm_v1(sp.wife_branch_key)
+            = public.maint_rel_ar_norm_v1($5)
+        )
+      order by
+        case when lower(btrim(coalesce(sp.status, 'active'))) in ('', 'active') then 0 else 1 end,
+        sp.id
+      limit 1
+    $q$ into
+      v_spouse_id, v_husband_id, v_wife_family, v_wife_name, v_wife_lineage,
+      v_spouse_status, v_match_rule
+    using v_npath, v_nleaf, v_nparent_leaf, v_person, v_branch;
+  end if;
+
+  if v_husband_id is not null then
+    execute $q$
+      select coalesce(h.child_name, h.name), h.branch_key
+      from public.tree_children h
+      where h.id = $1
+      limit 1
+    $q$ into v_husband_path, v_husband_branch using v_husband_id;
+  end if;
+
+  if v_has_mothers then
+    execute $q$
+      select coalesce(array_agg(distinct public.maint_rel_leaf_v1(coalesce(c.child_name, c.name))
+                                order by public.maint_rel_leaf_v1(coalesce(c.child_name, c.name))), '{}'),
+             count(distinct l.child_id)
+      from public.tree_mother_links l
+      left join public.tree_children c on c.id = l.child_id
+      where
+        ($1 is not null and l.spouse_id = $1)
+        or public.maint_rel_ar_norm_v1(l.mother_lineage) = $2
+        or (
+          public.maint_rel_leaf_v1(coalesce(l.mother_name, l.mother_lineage)) = $3
+          and $4 is not null
+          and position(
+                $4 in replace(
+                  public.maint_rel_ar_norm_v1(
+                    coalesce(l.mother_lineage, '') || ' ' || coalesce(l.mother_name, '')
+                  ),
+                  '/',
+                  ' '
+                )
+              ) > 0
+        )
+    $q$ into v_child_leaves, v_kids_by_link
+    using v_spouse_id, v_npath, v_nleaf, v_nparent_leaf;
+  end if;
+
+  if v_husband_id is not null and v_husband_path is not null then
+    execute $q$
+      select count(*)
+      from public.tree_children c
+      where c.id is distinct from $1
+        and c.branch_key is not distinct from $2
+        and (
+          coalesce(c.parent_name, to_jsonb(c)->>'parent') = $3
+          or public.maint_rel_ar_norm_v1(coalesce(c.parent_name, to_jsonb(c)->>'parent'))
+             = public.maint_rel_ar_norm_v1($3)
+        )
+    $q$ into v_kids_by_parent using v_id, v_husband_branch, v_husband_path;
+
+    execute $q$
+      select coalesce(
+        $1 || array_agg(public.maint_rel_leaf_v1(coalesce(c.child_name, c.name)) order by c.id),
+        $1
+      )
+      from public.tree_children c
+      where c.id is distinct from $2
+        and c.branch_key is not distinct from $3
+        and (
+          coalesce(c.parent_name, to_jsonb(c)->>'parent') = $4
+          or public.maint_rel_ar_norm_v1(coalesce(c.parent_name, to_jsonb(c)->>'parent'))
+             = public.maint_rel_ar_norm_v1($4)
+        )
+    $q$ into v_child_leaves using v_child_leaves, v_id, v_husband_branch, v_husband_path;
+  end if;
+
+  v_kids := greatest(coalesce(v_kids_by_link, 0), coalesce(v_kids_by_parent, 0));
+  if v_child_leaves is not null then
+    select coalesce(array_agg(distinct x), '{}') into v_child_leaves
+    from unnest(v_child_leaves) as x
+    where nullif(btrim(coalesce(x, '')), '') is not null;
+  end if;
+
+  if not v_has_mp then
+    v_login := coalesce(v_login, 'غير موجودة');
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'audit_revision', 'v2-spouse-identity-norm',
+    'previous_miss', jsonb_build_object(
+      'why', 'الاستعلام السابق طلب wife_person_id (غالبًا غير موجود)، وطابق المسار/الاسم بلا تطبيع ة↔ه، وفلتر status=active فقط، وعدّ الأبناء فقط عبر mother_links.spouse_id بعد فشل صف الزواج',
+      'do_not_use_v1_for_build', true
+    ),
+    'has_member_profiles', v_has_mp,
+    'has_tree_children', v_has_tree,
+    'source', v_source,
+    'related_tables', v_related,
+    'tree_child_id', v_id,
+    'branch_key', v_branch,
+    'phone_last4', v_phone_tail,
+    'leaf_name', v_leaf,
+    'spouse_capture', jsonb_build_object(
+      'spouse_id', v_spouse_id,
+      'husband_id', v_husband_id,
+      'husband_path', v_husband_path,
+      'husband_branch', v_husband_branch,
+      'wife_name', v_wife_name,
+      'wife_lineage', v_wife_lineage,
+      'wife_is_family_member', v_wife_family,
+      'status', v_spouse_status,
+      'match_rule', v_match_rule
+    ),
+    'children_capture', jsonb_build_object(
+      'by_mother_links', coalesce(v_kids_by_link, 0),
+      'by_husband_parent', coalesce(v_kids_by_parent, 0),
+      'leaves', to_jsonb(coalesce(v_child_leaves, '{}'))
+    ),
+    'journey', jsonb_build_array(
+      jsonb_build_object(
+        'ring', 'دخول بجوال',
+        'status', v_login,
+        'note', case
+          when not v_has_mp then 'جدول member_profiles غير موجود في المصدر'
+          when v_phone_tail is not null then 'جوال مربوط'
+          else 'صف شجرة بلا دخول'
+        end
+      ),
+      jsonb_build_object('ring', 'أنا (صف الشجرة)', 'status', 'موجودة ومؤكدة', 'note', coalesce(v_path, '')),
+      jsonb_build_object(
+        'ring', 'أبي',
+        'status', case
+          when nullif(btrim(coalesce(v_parent, '')), '') is null then 'غير موجودة'
+          when v_father_id is not null then 'موجودة ومؤكدة'
+          else 'موجودة لكن غير مربوطة'
+        end,
+        'note', coalesce(v_parent, '')
+      ),
+      jsonb_build_object(
+        'ring', 'جدي / فرعي',
+        'status', case
+          when v_segs >= 3 then 'موجودة ومؤكدة'
+          when v_segs >= 2 then 'موجودة لكن غير مربوطة'
+          else 'غير موجودة'
+        end,
+        'note', coalesce(v_branch, '') || ' · أجزاء المسار ' || v_segs::text
+      ),
+      jsonb_build_object(
+        'ring', 'أمي',
+        'status', case
+          when not v_has_mothers then 'غير موجودة'
+          when v_mother_name is null and v_mother_family is not true then 'غير موجودة'
+          when v_mother_family = true
+           and lower(btrim(coalesce(v_mother_conf, 'confirmed'))) in ('', 'confirmed')
+            then 'موجودة ومؤكدة'
+          else 'موجودة لكن غير مربوطة'
+        end,
+        'note', coalesce(v_mother_name, '')
+      ),
+      jsonb_build_object(
+        'ring', 'إخوتي الذكور',
+        'status', case when v_brothers > 0 then 'موجودة ومؤكدة' else 'غير موجودة' end,
+        'note', v_brothers::text || ' أخ'
+      ),
+      jsonb_build_object(
+        'ring', 'أخواتي',
+        'status', case when v_sisters > 0 then 'موجودة ومؤكدة' else 'غير موجودة' end,
+        'note', v_sisters::text || ' أخت في الشجرة (مخفيات عن العامة)'
+      ),
+      jsonb_build_object(
+        'ring', 'زواجي',
+        'status', case
+          when not v_has_spouses then 'غير موجودة'
+          when v_spouse_id is null then 'غير موجودة'
+          when v_husband_id is not null then 'موجودة ومؤكدة'
+          else 'موجودة لكن غير مربوطة'
+        end,
+        'note', coalesce(
+          nullif(btrim(coalesce(v_husband_path, '')), ''),
+          v_wife_name,
+          v_wife_lineage,
+          ''
+        ) || coalesce(' · ' || v_match_rule, '')
+      ),
+      jsonb_build_object(
+        'ring', 'أسرتي / أبنائي',
+        'status', case
+          when v_kids > 0 then 'موجودة ومؤكدة'
+          when v_spouse_id is not null then 'موجودة لكن غير مربوطة'
+          else 'غير موجودة'
+        end,
+        'note', coalesce(v_kids_by_link, 0)::text || ' من أمومة · '
+             || coalesce(v_kids_by_parent, 0)::text || ' تحت صف الزوج'
+      )
+    )
+  );
+end;
+$fn$;
+
+revoke all on function public.maint_rel_ar_norm_v1(text) from public;
+revoke all on function public.maint_rel_leaf_v1(text) from public;
+revoke all on function public.maint_member_relations_journey_audit_v1() from public;
+grant execute on function public.maint_rel_ar_norm_v1(text) to authenticated;
+grant execute on function public.maint_rel_leaf_v1(text) to authenticated;
+grant execute on function public.maint_member_relations_journey_audit_v1() to authenticated;
+
+select public.maint_member_relations_journey_audit_v1() as journey;
+`,
+    },
+    {
+      id: "maint.tree_self_children_v1",
+      title: "بنات مسار الذات (حساب الدخول فقط)",
+      desc:
+        "يظهر بنات الحساب داخل مسار الذات بعد الدخول. لا يغيّر الفروع ولا البحث العام. شغّله مرة ثم أعد فتح البطاقة.",
+      file: "../supabase/sql/COPY-ME-tree-self-children-v1.sql",
+      order: 56.095,
+      sql: `-- COPY-ME: Preset id: maint.tree_self_children_v1
+-- مسار الذات فقط: أبناء/بنات الحساب بعد الدخول. الفروع والبحث العام لا يتغيّران.
+-- المصاهرة: husband_id = هذا الشخص، أو الزوجة هي الحساب (مسار أو اسمها+أبوها).
+-- الأخت تُستثنى فقط إذا مسار الزوجة يطابق صف شقيق، لا لأن النسب يذكر الأب.
+-- SECURITY DEFINER. آمن لإعادة التشغيل.
+
+create or replace function public.tree_self_children_v1(p_phone text)
+returns table(
+  id bigint,
+  leaf_name text,
+  gender text,
+  birth_order integer
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_digits text;
+  v_id bigint;
+  v_path text;
+  v_parent text;
+  v_branch text;
+  v_leaf text;
+  v_parent_leaf text;
+  v_husband_id bigint;
+  v_husband_path text;
+  v_husband_branch text;
+begin
+  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');
+  if v_digits is null or char_length(v_digits) < 9 then
+    return;
+  end if;
+
+  select mp.tree_child_id
+    into v_id
+  from public.member_profiles mp
+  where coalesce(mp.status, 'active') = 'active'
+    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    and coalesce(mp.tree_child_id, 0) > 0
+  order by mp.updated_at desc nulls last, mp.id desc
+  limit 1;
+
+  if v_id is null then
+    return;
+  end if;
+
+  select
+    coalesce(c.child_name, c.name),
+    coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+    c.branch_key
+  into v_path, v_parent, v_branch
+  from public.tree_children c
+  where c.id = v_id
+  limit 1;
+
+  if v_path is null then
+    return;
+  end if;
+
+  v_path := nullif(btrim(v_path), '');
+  v_parent := nullif(btrim(coalesce(v_parent, '')), '');
+  if v_parent is null and v_path is not null and position('/' in v_path) > 0 then
+    v_parent := regexp_replace(v_path, '/[^/]+$', '');
+  end if;
+  v_leaf := public.tree_path_leaf_v1(v_path);
+  v_parent_leaf := public.tree_path_leaf_v1(v_parent);
+
+  select s.husband_id
+    into v_husband_id
+  from public.tree_spouses s
+  where s.husband_id = v_id
+    and not exists (
+      select 1
+      from public.tree_children sib
+      where sib.id is distinct from v_id
+        and (v_branch is null or sib.branch_key is not distinct from v_branch)
+        and v_parent is not null
+        and coalesce(sib.parent_name, to_jsonb(sib)->>'parent') is not distinct from v_parent
+        and public.tree_arabic_norm_v1(replace(coalesce(s.wife_lineage, ''), '/', ' '))
+          = public.tree_arabic_norm_v1(replace(coalesce(sib.child_name, sib.name, ''), '/', ' '))
+    )
+  order by
+    case when lower(btrim(coalesce(s.status, 'active'))) in ('', 'active') then 0 else 1 end,
+    s.id
+  limit 1;
+
+  if v_husband_id is null then
+    select s.husband_id
+      into v_husband_id
+    from public.tree_spouses s
+    where coalesce(s.wife_is_family_member, false) = true
+      and (
+        public.tree_arabic_norm_v1(replace(coalesce(s.wife_lineage, ''), '/', ' '))
+          = public.tree_arabic_norm_v1(replace(coalesce(v_path, ''), '/', ' '))
+        or (
+          v_leaf is not null
+          and v_parent_leaf is not null
+          and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1)
+            = v_leaf
+          and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 2)
+            = v_parent_leaf
+        )
+      )
+      and s.husband_id is distinct from v_id
+      and not exists (
+        select 1
+        from public.tree_children h
+        where h.id = s.husband_id
+          and v_parent is not null
+          and public.tree_arabic_norm_v1(coalesce(h.parent_name, to_jsonb(h)->>'parent', ''))
+            = public.tree_arabic_norm_v1(v_parent)
+      )
+    order by
+      case when lower(btrim(coalesce(s.status, 'active'))) in ('', 'active') then 0 else 1 end,
+      s.id
+    limit 1;
+  end if;
+
+  if v_husband_id is not null then
+    if v_husband_id = v_id then
+      v_husband_path := v_path;
+      v_husband_branch := v_branch;
+    else
+      select coalesce(h.child_name, h.name), h.branch_key
+        into v_husband_path, v_husband_branch
+      from public.tree_children h
+      where h.id = v_husband_id
+      limit 1;
+    end if;
+  end if;
+
+  return query
+  with matching_spouses as (
+    select s.id
+    from public.tree_spouses s
+    where
+      (
+        s.husband_id = v_id
+        or (
+          coalesce(s.wife_is_family_member, false) = true
+          and (
+            public.tree_arabic_norm_v1(replace(coalesce(s.wife_lineage, ''), '/', ' '))
+              = public.tree_arabic_norm_v1(replace(coalesce(v_path, ''), '/', ' '))
+            or (
+              v_leaf is not null
+              and v_parent_leaf is not null
+              and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 1)
+                = v_leaf
+              and public.tree_nasab_nth_v1(public.tree_wife_nasab_text_v1(s.wife_name, s.wife_lineage), 2)
+                = v_parent_leaf
+            )
+          )
+        )
+      )
+      and not exists (
+        select 1
+        from public.tree_children sib
+        where sib.id is distinct from v_id
+          and (v_branch is null or sib.branch_key is not distinct from v_branch)
+          and v_parent is not null
+          and coalesce(sib.parent_name, to_jsonb(sib)->>'parent') is not distinct from v_parent
+          and public.tree_arabic_norm_v1(replace(coalesce(s.wife_lineage, ''), '/', ' '))
+            = public.tree_arabic_norm_v1(replace(coalesce(sib.child_name, sib.name, ''), '/', ' '))
+      )
+  ),
+  from_links as (
+    select distinct
+      c.id,
+      coalesce(c.child_name, c.name) as path,
+      c.gender,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer as birth_order
+    from public.tree_mother_links l
+    join public.tree_children c on c.id = l.child_id
+    where lower(btrim(coalesce(l.confidence, 'confirmed'))) in ('', 'confirmed')
+      and (
+        l.spouse_id in (select ms.id from matching_spouses ms)
+        or public.tree_arabic_norm_v1(replace(coalesce(l.mother_lineage, ''), '/', ' '))
+             = public.tree_arabic_norm_v1(replace(coalesce(v_path, ''), '/', ' '))
+      )
+  ),
+  from_parent as (
+    select
+      c.id,
+      coalesce(c.child_name, c.name) as path,
+      c.gender,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer as birth_order
+    from public.tree_children c
+    where v_husband_path is not null
+      and c.id is distinct from v_id
+      and c.id is distinct from v_husband_id
+      and (v_husband_branch is null or c.branch_key is not distinct from v_husband_branch)
+      and (
+        coalesce(c.parent_name, to_jsonb(c)->>'parent') = v_husband_path
+        or public.tree_arabic_norm_v1(coalesce(c.parent_name, to_jsonb(c)->>'parent', ''))
+           = public.tree_arabic_norm_v1(v_husband_path)
+      )
+  ),
+  united as (
+    select * from from_links
+    union
+    select * from from_parent
+  )
+  select
+    u.id,
+    nullif(btrim(regexp_replace(coalesce(u.path, ''), '^.*/', '')), ''),
+    u.gender,
+    u.birth_order
+  from united u
+  where u.id is distinct from v_id
+  order by u.birth_order nulls last, u.id
+  limit 80;
+end;
+$fn$;
+
+grant execute on function public.tree_self_children_v1(text) to anon, authenticated;
+notify pgrst, 'reload schema';
+
+select
+  (to_regprocedure('public.tree_self_children_v1(text)') is not null) as has_self_children_rpc;
+`,
+    },
+    {
+      id: "maint.tree_external_offspring_v1",
+      title: "أبناء خارج نطاق العائلة (ليسوا عقد شجرة)",
+      desc:
+        "جدول جديد: أم من العائلة → ابن خارج النطاق. ليس tree_children ولا يدخل الفروع أو البحث أو العدادات. شغّله مرة ثم حدّث صفحة الإدارة.",
+      file: "../supabase/sql/COPY-ME-tree-external-offspring-v1.sql",
+      order: 56.097,
+      sql: `-- COPY-ME: Preset id: maint.tree_external_offspring_v1
+-- Option A: mother (family tree person) → child outside family scope.
+-- NOT tree_children. NOT tree_mother_links. NOT tree_spouses.
+-- Does not enter branches, search, counts, or birth order.
+-- Safe to re-run.
+
+create table if not exists public.tree_external_offspring (
+  id bigint generated always as identity primary key,
+  offspring_id uuid not null default gen_random_uuid(),
+  mother_tree_child_id bigint not null references public.tree_children(id) on delete cascade,
+  mother_person_id uuid,
+  child_name text not null,
+  gender text,
+  father_name text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists tree_external_offspring_offspring_id_uidx
+  on public.tree_external_offspring (offspring_id);
+
+create index if not exists tree_external_offspring_mother_idx
+  on public.tree_external_offspring (mother_tree_child_id);
+
+comment on table public.tree_external_offspring is
+  'Mother in the family tree → child outside family membership. Never a tree node.';
+comment on column public.tree_external_offspring.offspring_id is
+  'Stable identity. Do not key uniqueness by name+mother alone.';
+comment on column public.tree_external_offspring.father_name is
+  'Optional external father as text. Not a Zidan tree node.';
+
+alter table public.tree_external_offspring enable row level security;
+revoke all on table public.tree_external_offspring from public, anon, authenticated;
+
+create or replace function public.admin_tree_external_offspring_list_v1(
+  p_token text,
+  p_mother_tree_child_id bigint
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+  if p_mother_tree_child_id is null or p_mother_tree_child_id < 1 then
+    return '[]'::jsonb;
+  end if;
+  return coalesce((
+    select jsonb_agg(to_jsonb(r) order by r.id)
+    from (
+      select
+        e.id,
+        e.offspring_id,
+        e.mother_tree_child_id,
+        e.mother_person_id,
+        e.child_name,
+        e.gender,
+        e.father_name
+      from public.tree_external_offspring e
+      where e.mother_tree_child_id = p_mother_tree_child_id
+    ) r
+  ), '[]'::jsonb);
+end;
+$fn$;
+
+create or replace function public.admin_tree_external_offspring_save_v1(
+  p_token text,
+  p_row jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_id bigint;
+  v_mother_id bigint;
+  v_name text;
+  v_gender text;
+  v_father text;
+  v_mother public.tree_children%rowtype;
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+  if p_row is null or jsonb_typeof(p_row) <> 'object' then
+    return jsonb_build_object('ok', false, 'error', 'bad_row');
+  end if;
+
+  v_id := nullif(btrim(coalesce(p_row->>'id', '')), '')::bigint;
+  v_mother_id := nullif(btrim(coalesce(p_row->>'mother_tree_child_id', '')), '')::bigint;
+  v_name := nullif(btrim(coalesce(p_row->>'child_name', '')), '');
+  v_gender := lower(btrim(coalesce(p_row->>'gender', '')));
+  if v_gender not in ('son', 'daughter') then
+    v_gender := null;
+  end if;
+  v_father := nullif(btrim(coalesce(p_row->>'father_name', '')), '');
+
+  if v_mother_id is null or v_name is null then
+    return jsonb_build_object('ok', false, 'error', 'missing_mother_or_name');
+  end if;
+
+  select * into v_mother from public.tree_children where id = v_mother_id limit 1;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'mother_not_found');
+  end if;
+
+  if v_id is not null then
+    update public.tree_external_offspring e
+    set
+      child_name = v_name,
+      gender = v_gender,
+      father_name = v_father,
+      mother_person_id = coalesce(v_mother.person_id, e.mother_person_id),
+      updated_at = now()
+    where e.id = v_id
+      and e.mother_tree_child_id = v_mother_id;
+    if not found then
+      return jsonb_build_object('ok', false, 'error', 'not_found');
+    end if;
+    return jsonb_build_object('ok', true, 'id', v_id, 'action', 'updated');
+  end if;
+
+  insert into public.tree_external_offspring (
+    mother_tree_child_id, mother_person_id, child_name, gender, father_name
+  ) values (
+    v_mother_id, v_mother.person_id, v_name, v_gender, v_father
+  )
+  returning id into v_id;
+
+  return jsonb_build_object('ok', true, 'id', v_id, 'action', 'inserted');
+end;
+$fn$;
+
+create or replace function public.admin_tree_external_offspring_delete_v1(
+  p_token text,
+  p_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+  if p_id is null or p_id < 1 then
+    return jsonb_build_object('ok', false);
+  end if;
+  delete from public.tree_external_offspring where id = p_id;
+  return jsonb_build_object('ok', found, 'id', p_id);
+end;
+$fn$;
+
+-- Mother's own login only. Never used by public tree/search/counts.
+create or replace function public.tree_external_offspring_for_self_v1(p_phone text)
+returns table(
+  id bigint,
+  offspring_id uuid,
+  child_name text,
+  gender text,
+  father_name text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_digits text;
+  v_mother_id bigint;
+  v_person_id uuid;
+begin
+  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');
+  if v_digits is null or char_length(v_digits) < 9 then
+    return;
+  end if;
+  select mp.tree_child_id
+    into v_mother_id
+  from public.member_profiles mp
+  where coalesce(mp.status, 'active') = 'active'
+    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    and coalesce(mp.tree_child_id, 0) > 0
+  order by mp.updated_at desc nulls last, mp.id desc
+  limit 1;
+  if v_mother_id is null then
+    return;
+  end if;
+
+  select c.person_id
+    into v_person_id
+  from public.tree_children c
+  where c.id = v_mother_id
+  limit 1;
+
+  return query
+  select e.id, e.offspring_id, e.child_name, e.gender, e.father_name
+  from public.tree_external_offspring e
+  where e.mother_tree_child_id = v_mother_id
+     or (v_person_id is not null and e.mother_person_id is not distinct from v_person_id)
+  order by e.id;
+end;
+$fn$;
+
+revoke all on function public.admin_tree_external_offspring_list_v1(text, bigint) from public;
+revoke all on function public.admin_tree_external_offspring_save_v1(text, jsonb) from public;
+revoke all on function public.admin_tree_external_offspring_delete_v1(text, bigint) from public;
+revoke all on function public.tree_external_offspring_for_self_v1(text) from public;
+
+grant execute on function public.admin_tree_external_offspring_list_v1(text, bigint) to anon, authenticated;
+grant execute on function public.admin_tree_external_offspring_save_v1(text, jsonb) to anon, authenticated;
+grant execute on function public.admin_tree_external_offspring_delete_v1(text, bigint) to anon, authenticated;
+grant execute on function public.tree_external_offspring_for_self_v1(text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+select
+  to_regclass('public.tree_external_offspring') is not null as has_table,
+  to_regprocedure('public.admin_tree_external_offspring_save_v1(text, jsonb)') is not null as has_save;
+`,
+    },
+    {
+      id: "maint.tree_external_offspring_self_v2",
+      title: "مسار الذات: أبناء خارج النطاق (مطابقة الأم)",
+      desc:
+        "إن ظهر الصف في الإدارة ولم يظهر في مسار الذات: شغّل هذه البطاقة ثم أعد فتح بطاقة الأم في التطبيق.",
+      file: "../supabase/sql/COPY-ME-tree-external-offspring-self-v2.sql",
+      order: 56.098,
+      sql: `-- COPY-ME: Preset id: maint.tree_external_offspring_self_v2
+-- Same signature. Wider match so the mother\'s self-path finds rows
+-- saved against a duplicate tree_children id of the same person.
+-- Safe to re-run. Does not touch tree_children.
+
+create or replace function public.tree_external_offspring_for_self_v1(p_phone text)
+returns table(
+  id bigint,
+  offspring_id uuid,
+  child_name text,
+  gender text,
+  father_name text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_digits text;
+  v_mother_id bigint;
+  v_person_id uuid;
+begin
+  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');
+  if v_digits is null or char_length(v_digits) < 9 then
+    return;
+  end if;
+  select mp.tree_child_id
+    into v_mother_id
+  from public.member_profiles mp
+  where coalesce(mp.status, 'active') = 'active'
+    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    and coalesce(mp.tree_child_id, 0) > 0
+  order by mp.updated_at desc nulls last, mp.id desc
+  limit 1;
+  if v_mother_id is null then
+    return;
+  end if;
+
+  select c.person_id
+    into v_person_id
+  from public.tree_children c
+  where c.id = v_mother_id
+  limit 1;
+
+  return query
+  select e.id, e.offspring_id, e.child_name, e.gender, e.father_name
+  from public.tree_external_offspring e
+  where e.mother_tree_child_id = v_mother_id
+     or (v_person_id is not null and e.mother_person_id is not distinct from v_person_id)
+  order by e.id;
+end;
+$fn$;
+
+grant execute on function public.tree_external_offspring_for_self_v1(text) to anon, authenticated;
+notify pgrst, 'reload schema';
+
+select to_regprocedure('public.tree_external_offspring_for_self_v1(text)') is not null as has_self_rpc;
+`,
+    },
+    {
+      id: "maint.women_manager_role_v1",
+      title: "صلاحية مسؤولة نسائية (women_manager)",
+      desc:
+        "تعيين/إيقاف مسؤولة نسائية من بطاقة العضوة في الإدارة. جدول أدوار مستقل وليس شجرة نساء. شغّله مرة ثم حدّث صفحة الإدارة.",
+      file: "../supabase/sql/COPY-ME-women-manager-role-v1.sql",
+      supabaseOnce: true,
+      order: 56.099,
+      sql: "-- COPY-ME: Preset id: maint.women_manager_role_v1\n-- Independent women_manager grant. Not gender-alone. Not admin_token in the app.\n-- Does not alter tree_children rows or tree structure.\n-- Safe to re-run.\n\ncreate table if not exists public.member_role_grants (\n  id bigint generated always as identity primary key,\n  role_key text not null,\n  tree_child_id bigint not null references public.tree_children(id) on delete cascade,\n  person_id uuid,\n  status text not null default 'active',\n  assigned_at timestamptz not null default now(),\n  assigned_by text,\n  updated_at timestamptz not null default now(),\n  constraint member_role_grants_status_chk check (status in ('active', 'suspended')),\n  constraint member_role_grants_role_child_uidx unique (tree_child_id, role_key)\n);\n\ncreate index if not exists member_role_grants_person_idx\n  on public.member_role_grants (person_id)\n  where person_id is not null;\n\ncreate index if not exists member_role_grants_role_status_idx\n  on public.member_role_grants (role_key, status);\n\ncomment on table public.member_role_grants is\n  'Independent member roles (e.g. women_manager). Not a women tree. Not gender.';\n\nalter table public.member_role_grants enable row level security;\nrevoke all on table public.member_role_grants from public, anon, authenticated;\n\ncreate or replace function public.member_role_is_daughter_gender_v1(p_gender text)\nreturns boolean\nlanguage sql\nimmutable\nas $fn$\n  select lower(btrim(coalesce(p_gender, ''))) in (\n    'daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت'\n  );\n$fn$;\n\ncreate or replace function public.women_manager_eligibility_v1(p_tree_child_id bigint)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_child public.tree_children%rowtype;\n  v_mp public.member_profiles%rowtype;\n  v_digits text;\nbegin\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n\n  select * into v_child from public.tree_children c where c.id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n\n  if not public.member_role_is_daughter_gender_v1(v_child.gender) then\n    return jsonb_build_object(\n      'ok', false,\n      'error', 'not_daughter',\n      'person_id', v_child.person_id,\n      'tree_child_id', v_child.id\n    );\n  end if;\n\n  select mp.*\n    into v_mp\n  from public.member_profiles mp\n  where coalesce(mp.tree_child_id, 0) = v_child.id\n     or (v_child.person_id is not null and mp.person_id is not distinct from v_child.person_id)\n  order by\n    case when coalesce(mp.tree_child_id, 0) = v_child.id then 0 else 1 end,\n    mp.updated_at desc nulls last,\n    mp.id desc\n  limit 1;\n\n  if not found then\n    return jsonb_build_object(\n      'ok', false,\n      'error', 'no_phone',\n      'person_id', v_child.person_id,\n      'tree_child_id', v_child.id\n    );\n  end if;\n\n  v_digits := nullif(right(regexp_replace(coalesce(v_mp.phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null or char_length(v_digits) < 9 then\n    return jsonb_build_object(\n      'ok', false,\n      'error', 'no_phone',\n      'person_id', v_child.person_id,\n      'tree_child_id', v_child.id\n    );\n  end if;\n\n  if coalesce(nullif(btrim(coalesce(v_mp.status, '')), ''), 'active') is distinct from 'active' then\n    return jsonb_build_object(\n      'ok', false,\n      'error', 'account_inactive',\n      'person_id', v_child.person_id,\n      'tree_child_id', v_child.id,\n      'member_status', v_mp.status\n    );\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'person_id', v_child.person_id,\n    'tree_child_id', v_child.id,\n    'phone', v_mp.phone,\n    'member_status', coalesce(v_mp.status, 'active')\n  );\nend;\n$fn$;\n\ncreate or replace function public.admin_women_manager_get_v1(\n  p_token text,\n  p_tree_child_id bigint\n)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_elig jsonb;\n  v_grant public.member_role_grants%rowtype;\n  v_status text := 'inactive';\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n\n  v_elig := public.women_manager_eligibility_v1(p_tree_child_id);\n\n  select g.*\n    into v_grant\n  from public.member_role_grants g\n  where g.tree_child_id = p_tree_child_id\n    and g.role_key = 'women_manager'\n  limit 1;\n\n  if found then\n    v_status := v_grant.status;\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'role_key', 'women_manager',\n    'status', v_status,\n    'eligible', coalesce((v_elig->>'ok')::boolean, false),\n    'eligibility_error', v_elig->>'error',\n    'tree_child_id', p_tree_child_id,\n    'person_id', coalesce(v_grant.person_id, nullif(v_elig->>'person_id', '')::uuid),\n    'assigned_at', v_grant.assigned_at,\n    'assigned_by', v_grant.assigned_by,\n    'updated_at', v_grant.updated_at\n  );\nend;\n$fn$;\n\ncreate or replace function public.admin_women_manager_set_v1(\n  p_token text,\n  p_tree_child_id bigint,\n  p_action text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_action text := lower(btrim(coalesce(p_action, '')));\n  v_elig jsonb;\n  v_grant public.member_role_grants%rowtype;\n  v_prev text := 'inactive';\n  v_person_id uuid;\n  v_now timestamptz := now();\n  v_actor text := 'admin';\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n\n  if v_action not in ('assign', 'suspend') then\n    return jsonb_build_object('ok', false, 'error', 'bad_action');\n  end if;\n\n  v_elig := public.women_manager_eligibility_v1(p_tree_child_id);\n\n  select g.*\n    into v_grant\n  from public.member_role_grants g\n  where g.tree_child_id = p_tree_child_id\n    and g.role_key = 'women_manager'\n  limit 1;\n  if found then\n    v_prev := v_grant.status;\n  end if;\n\n  if v_action = 'assign' then\n    if coalesce((v_elig->>'ok')::boolean, false) is not true then\n      return jsonb_build_object(\n        'ok', false,\n        'error', coalesce(v_elig->>'error', 'not_eligible'),\n        'status', v_prev\n      );\n    end if;\n    v_person_id := nullif(v_elig->>'person_id', '')::uuid;\n    insert into public.member_role_grants (\n      role_key, tree_child_id, person_id, status, assigned_at, assigned_by, updated_at\n    ) values (\n      'women_manager', p_tree_child_id, v_person_id, 'active', v_now, v_actor, v_now\n    )\n    on conflict (tree_child_id, role_key) do update\n    set\n      status = 'active',\n      person_id = coalesce(excluded.person_id, public.member_role_grants.person_id),\n      assigned_at = v_now,\n      assigned_by = v_actor,\n      updated_at = v_now;\n  else\n    if v_prev = 'inactive' then\n      return jsonb_build_object('ok', true, 'status', 'inactive', 'action', 'noop');\n    end if;\n    update public.member_role_grants\n    set status = 'suspended', assigned_by = v_actor, updated_at = v_now\n    where tree_child_id = p_tree_child_id\n      and role_key = 'women_manager';\n  end if;\n\n  begin\n    if to_regprocedure('public.admin_audit_write_v1(text,text,text,text,text,text,jsonb)') is not null then\n      perform public.admin_audit_write_v1(\n        'admin',\n        v_actor,\n        case when v_action = 'assign' then 'women_manager.assign' else 'women_manager.suspend' end,\n        'member_role_grant',\n        p_tree_child_id::text,\n        null,\n        jsonb_build_object(\n          'role_key', 'women_manager',\n          'action', v_action,\n          'previous_status', v_prev,\n          'tree_child_id', p_tree_child_id,\n          'person_id', v_person_id\n        )\n      );\n    end if;\n  exception when others then\n    null;\n  end;\n\n  return public.admin_women_manager_get_v1(p_token, p_tree_child_id)\n    || jsonb_build_object('ok', true, 'action', v_action);\nend;\n$fn$;\n\n-- App session: phone only. No admin_token.\ncreate or replace function public.women_manager_session_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_mp public.member_profiles%rowtype;\n  v_grant public.member_role_grants%rowtype;\n  v_gender text;\nbegin\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null or char_length(v_digits) < 9 then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'bad_phone');\n  end if;\n\n  if to_regclass('public.member_profiles') is null then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'no_profiles');\n  end if;\n\n  select mp.*\n    into v_mp\n  from public.member_profiles mp\n  where coalesce(nullif(btrim(coalesce(mp.status, '')), ''), 'active') = 'active'\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n\n  if not found then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'not_member');\n  end if;\n\n  if to_regclass('public.member_role_grants') is null then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'no_grants');\n  end if;\n\n  select g.*\n    into v_grant\n  from public.member_role_grants g\n  where g.role_key = 'women_manager'\n    and g.status = 'active'\n    and (\n      (coalesce(v_mp.tree_child_id, 0) > 0 and g.tree_child_id = v_mp.tree_child_id)\n      or (v_mp.person_id is not null and g.person_id is not distinct from v_mp.person_id)\n    )\n  order by g.updated_at desc nulls last, g.id desc\n  limit 1;\n\n  if not found then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'no_grant');\n  end if;\n\n  select c.gender into v_gender from public.tree_children c where c.id = v_grant.tree_child_id limit 1;\n  if not public.member_role_is_daughter_gender_v1(v_gender) then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'not_daughter');\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'enabled', true,\n    'role_key', 'women_manager',\n    'tree_child_id', v_grant.tree_child_id,\n    'person_id', v_grant.person_id\n  );\nend;\n$fn$;\n\nrevoke all on function public.member_role_is_daughter_gender_v1(text) from public, anon, authenticated;\nrevoke all on function public.women_manager_eligibility_v1(bigint) from public, anon, authenticated;\nrevoke all on function public.admin_women_manager_get_v1(text, bigint) from public;\nrevoke all on function public.admin_women_manager_set_v1(text, bigint, text) from public;\nrevoke all on function public.women_manager_session_v1(text) from public;\n\ngrant execute on function public.admin_women_manager_get_v1(text, bigint) to anon, authenticated;\ngrant execute on function public.admin_women_manager_set_v1(text, bigint, text) to anon, authenticated;\ngrant execute on function public.women_manager_session_v1(text) to anon, authenticated;\n\nnotify pgrst, 'reload schema';\n\nselect\n  to_regclass('public.member_role_grants') is not null as has_grants_table,\n  to_regprocedure('public.admin_women_manager_set_v1(text, bigint, text)') is not null as has_admin_set,\n  to_regprocedure('public.women_manager_session_v1(text)') is not null as has_session;\n",
+    },
+    {
+      id: "maint.women_manager_phone_requests_v1",
+      title: "طلبات الجوال للمسؤولة النسائية",
+      desc:
+        "قائمة طلبات ربط الجوال وبحث العضوات والربط والتفعيل من تطبيق المسؤولة. لا يعدّل الاسم أو النسب. شغّله بعد صلاحية المسؤولة ثم حدّث التطبيق.",
+      file: "../supabase/sql/COPY-ME-women-manager-phone-requests-v1.sql",
+      supabaseOnce: true,
+      order: 56.0995,
+    },
+    {
+      id: "maint.women_manager_members_v1",
+      title: "العضوات للمسؤولة النسائية",
+      desc:
+        "بحث العضوات وحفظ الجوال وتفعيل العضوية من التطبيق. لا يعدّل الاسم أو النسب. شغّله بعد طلبات الجوال ثم حدّث التطبيق.",
+      file: "../supabase/sql/COPY-ME-women-manager-members-v1.sql",
+      supabaseOnce: true,
+      order: 56.0996,
+    },
+    {
+      id: "maint.women_pending_family_v1",
+      title: "عضوات بانتظار التثبيت العائلي",
+      desc:
+        "إضافة عضوة بالاسم الكامل دون نسب، وظهورها للإدارة الأصلية للتثبيت على شخص الشجرة. الدخول الكامل بعد الربط فقط. شغّله ثم حدّث الإدارة والتطبيق.",
+      file: "../supabase/sql/COPY-ME-women-pending-family-v1.sql",
+      sequential: true,
+      supabaseOnce: true,
+      order: 56.0997,
+    },
+    {
+      id: "maint.women_add_pending_now_v1",
+      title: "حفظ عضوة معلّقة",
+      desc:
+        "أمر صيانة واحد من مساحة SQL: يفك قيود الجوال والحالة ثم يعرّف إضافة العضوة دون فحص الشجرة. شغّل البطاقة ثم أعد تحميل التطبيق. ليس لصقًا في محرر Supabase.",
+      file: "../supabase/sql/COPY-ME-women-add-pending-now-v1.sql",
+      sql: `-- Preset: maint.women_add_pending_now_v1
+-- Run from Admin SQL Workspace (sequential v2). Safe to re-run.
+
+do $fix$
+declare
+  v_con text;
+begin
+  begin
+    alter table public.member_profiles alter column phone drop not null;
+  exception when others then
+    null;
+  end;
+  begin
+    alter table public.member_profiles alter column branch_key drop not null;
+  exception when others then
+    null;
+  end;
+  begin
+    alter table public.member_profiles alter column tree_child_id drop not null;
+  exception when others then
+    null;
+  end;
+  begin
+    alter table public.member_profiles alter column person_id drop not null;
+  exception when others then
+    null;
+  end;
+  begin
+    alter table public.member_profiles alter column display_name drop not null;
+  exception when others then
+    null;
+  end;
+
+  for v_con in
+    select c.conname
+    from pg_constraint c
+    where c.conrelid = 'public.member_profiles'::regclass
+      and c.contype = 'c'
+      and pg_get_constraintdef(c.oid) ~* 'status'
+      and pg_get_constraintdef(c.oid) !~* 'pending_family'
+  loop
+    execute format('alter table public.member_profiles drop constraint %I', v_con);
+  end loop;
+end;
+$fix$;
+
+create or replace function public.women_manager_add_member_v1(
+  p_phone text,
+  p_full_name text,
+  p_member_phone text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $add$
+declare
+  v_session jsonb;
+  v_name text;
+  v_fold text;
+  v_member_phone text;
+  v_digits text;
+  v_existing public.member_profiles%rowtype;
+  v_keep_id bigint;
+  v_err text;
+  v_state text;
+begin
+  if to_regprocedure('public.women_manager_session_v1(text)') is null
+     or to_regclass('public.member_profiles') is null then
+    return jsonb_build_object('ok', false, 'error', 'sql_missing');
+  end if;
+
+  v_session := public.women_manager_session_v1(p_phone);
+  if coalesce((v_session->>'enabled')::boolean, false) is not true then
+    return jsonb_build_object('ok', false, 'error', 'not_allowed');
+  end if;
+
+  v_name := nullif(btrim(coalesce(p_full_name, '')), '');
+  if v_name is null or char_length(v_name) < 2 then
+    return jsonb_build_object('ok', false, 'error', 'bad_name');
+  end if;
+
+  if to_regprocedure('public.women_member_name_fold_v1(text)') is not null then
+    v_fold := public.women_member_name_fold_v1(v_name);
+  else
+    v_fold := lower(btrim(v_name));
+  end if;
+
+  v_member_phone := nullif(btrim(coalesce(p_member_phone, '')), '');
+  if v_member_phone is not null then
+    v_digits := right(regexp_replace(v_member_phone, '[^0-9]', '', 'g'), 9);
+    if char_length(coalesce(v_digits, '')) < 9 then
+      return jsonb_build_object('ok', false, 'error', 'bad_phone');
+    end if;
+  end if;
+
+  if v_digits is not null then
+    select mp.* into v_existing
+    from public.member_profiles mp
+    where char_length(right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9)) = 9
+      and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    order by (coalesce(mp.tree_child_id, 0) > 0) desc, mp.id
+    limit 1;
+    if found then
+      if coalesce(v_existing.tree_child_id, 0) > 0 then
+        return jsonb_build_object('ok', false, 'error', 'phone_conflict', 'tree_child_id', v_existing.tree_child_id);
+      end if;
+      if coalesce(v_existing.status, '') = 'pending_family' then
+        update public.member_profiles
+        set display_name = coalesce(nullif(btrim(coalesce(display_name, '')), ''), v_name),
+            phone = v_member_phone,
+            status = 'pending_family',
+            updated_at = now()
+        where id = v_existing.id;
+        return jsonb_build_object('ok', true, 'action', 'existing_pending', 'member_id', v_existing.id, 'kind', 'pending');
+      end if;
+      return jsonb_build_object('ok', false, 'error', 'phone_conflict');
+    end if;
+  end if;
+
+  begin
+    select mp.* into v_existing
+    from public.member_profiles mp
+    where coalesce(mp.tree_child_id, 0) = 0
+      and coalesce(mp.status, '') = 'pending_family'
+      and lower(btrim(coalesce(mp.display_name, ''))) is not distinct from lower(btrim(v_name))
+    order by mp.id
+    limit 1;
+  exception when others then
+    v_existing := null;
+  end;
+  if v_existing.id is not null then
+    if v_member_phone is not null then
+      update public.member_profiles
+      set phone = v_member_phone, updated_at = now()
+      where id = v_existing.id
+        and nullif(btrim(coalesce(phone, '')), '') is null;
+    end if;
+    return jsonb_build_object('ok', true, 'action', 'existing_pending', 'member_id', v_existing.id, 'kind', 'pending');
+  end if;
+
+  begin
+    insert into public.member_profiles (phone, display_name, status, created_at, updated_at)
+    values (v_member_phone, v_name, 'pending_family', now(), now())
+    returning id into v_keep_id;
+  exception when others then
+    v_err := SQLERRM;
+    v_state := SQLSTATE;
+    begin
+      insert into public.member_profiles (display_name, status)
+      values (v_name, 'pending_family')
+      returning id into v_keep_id;
+    exception when others then
+      v_err := SQLERRM;
+      v_state := SQLSTATE;
+      begin
+        insert into public.member_profiles (display_name)
+        values (v_name)
+        returning id into v_keep_id;
+        begin
+          update public.member_profiles
+          set status = 'pending_family', updated_at = now()
+          where id = v_keep_id;
+        exception when others then
+          null;
+        end;
+      exception when others then
+        return jsonb_build_object(
+          'ok', false,
+          'error', 'save_failed',
+          'sqlstate', SQLSTATE,
+          'detail', left(SQLERRM, 180)
+        );
+      end;
+    end;
+  end;
+
+  if v_keep_id is null then
+    return jsonb_build_object('ok', false, 'error', 'save_failed', 'sqlstate', v_state, 'detail', left(coalesce(v_err, ''), 180));
+  end if;
+
+  begin
+    update public.member_profiles
+    set status = 'pending_family',
+        display_name = coalesce(nullif(btrim(coalesce(display_name, '')), ''), v_name),
+        updated_at = now()
+    where id = v_keep_id;
+  exception when others then
+    null;
+  end;
+
+  return jsonb_build_object('ok', true, 'action', 'created_pending', 'member_id', v_keep_id, 'kind', 'pending');
+exception
+  when others then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'save_failed',
+      'sqlstate', SQLSTATE,
+      'detail', left(SQLERRM, 180)
+    );
+end;
+$add$;
+
+grant execute on function public.women_manager_add_member_v1(text, text, text) to anon, authenticated;
+notify pgrst, 'reload schema';
+select to_regprocedure('public.women_manager_add_member_v1(text, text, text)') is not null as has_add;
+`,
+      sequential: true,
+      liveDetect: false,
+      order: 56.09965,
+    },
+    {
+      id: "maint.women_add_direct_lineage_v1",
+      title: "إضافة عضوة إذا صح الأب والجد والعائلة",
+      desc:
+        "إن طابق الاسم أبًا وجدًا وعائلة واحدًا في الشجرة تُضاف كابنة مباشرة. إن وُجد خطأ تُرسل للتثبيت العائلي للتعديل والحفظ. شغّل البطاقة ثم أعد تحميل التطبيق.",
+      file: "../supabase/sql/COPY-ME-women-add-direct-lineage-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.09966,
+    },
+    {
+      id: "maint.women_manager_search_match_v1",
+      title: "مطابقة أسماء العضوات",
+      desc:
+        "بحث الأسماء في الشجرة. ليس بديلًا عن حفظ العضوة المعلّقة.",
+      file: "../supabase/sql/COPY-ME-women-manager-search-match-v1.sql",
+      sequential: true,
+      supabaseOnce: true,
+      order: 56.09975,
+    },
+    {
+      id: "maint.women_manager_mothers_v1",
+      title: "الأمهات للمسؤولة النسائية",
+      desc:
+        "ربط أم موجودة في الشجرة بابن موجود في الشجرة عبر tree_mother_links فقط. لا يُنشئ شخصًا ولا زواجًا ولا يُدخل ابنًا خارج النطاق. شغّله بعد عضوات بانتظار التثبيت ثم حدّث التطبيق.",
+      file: "../supabase/sql/COPY-ME-women-manager-mothers-v1.sql",
+      sequential: true,
+      supabaseOnce: true,
+      order: 56.0998,
+    },
+    {
+      id: "maint.member_trusted_device_v1",
+      title: "جهاز موثوق — إغلاق الدخول بالرقم وحده",
+      desc:
+        "المرحلة 1: جهاز واحد موثوق لكل حساب على السيرفر. أول ربط برمز الإدارة، تغيير الجهاز إثبات + موافقة، الخروج يلغي الثقة. يغلق الدخول بالرقم وحده ومسار member_profiles بدون إثبات إدارة/مندوب. لا يضيف Face ID.",
+      file: "../supabase/sql/COPY-ME-member-trusted-device-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.0999,
+    },
+    {
+      id: "maint.member_trusted_device_auto_v1",
+      title: "أول دخول يربط الجهاز تلقائيًا — بلا رمز",
+      desc:
+        "أي عضو أو مندوب: أول دخول بالرقم يربط هذا الجهاز. لا OTP ولا رمز إدارة. الجهاز الثاني مرفوض حتى تلغي الإدارة الجهاز القديم أو توافق النقل. شغّله بعد بطاقة الجهاز الموثوق ثم حدّث التطبيق.",
+      file: "../supabase/sql/COPY-ME-member-trusted-device-auto-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.09991,
+    },
+    {
+      id: "maint.member_trusted_device_lock_v1",
+      title: "الجهاز يُقفل على أول رقم — لا حساب زوج/زوجة عليه",
+      desc:
+        "أول دخول يوثّق الرقم لهذا الجهاز. بعده لا يُقبل أي رقم آخر على نفس الجهاز، حتى بعد تسجيل الخروج. الخروج ينهي الجلسة فقط. تغيير الجهاز يبقى بموافقة الإدارة. شغّله بعد بطاقة الربط التلقائي ثم حدّث التطبيق.",
+      file: "../supabase/sql/COPY-ME-member-trusted-device-lock-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.09992,
+    },
+    {
+      id: "maint.member_trusted_device_admin_unbind_v1",
+      title: "حذف ربط الجهاز من الإدارة",
+      desc:
+        "لوحة الأعضاء: عرض الأجهزة المربوطة وحذف الربط عند تغيير الجهاز أو إدخال رقم غلط. بعد الحذف يدخل العضو بالرقم الصحيح. شغّله بعد بطاقة قفل الجهاز ثم حدّث صفحة الإدارة.",
+      file: "../supabase/sql/COPY-ME-member-trusted-device-admin-unbind-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.09993,
+    },
+    {
+      id: "maint.family_admin_app_v1",
+      title: "إدارة العائلة في التطبيق",
+      desc:
+        "منح family_admin على جدول الأدوار الحالي. التطبيق يدخل برقمك والجهاز الموثوق دون رمز الويب. أشخاص وجوالات وطلبات وربط الجهاز. شغّله مرة ثم امنح الدور من بطاقة الشخص وحدّث التطبيق.",
+      file: "../supabase/sql/COPY-ME-family-admin-app-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.09994,
+      sql: "-- COPY-ME: Preset id: maint.family_admin_app_v1\n-- App family admin: role_key family_admin on existing member_role_grants.\n-- No admin_token in the app. Writes require trusted device + grant.\n-- Daily: person name/gender/deceased, phones, phone/membership requests, device unbind.\n-- Wives, mothers, SQL workspace, import stay on the web. Safe to re-run.\n\ncreate or replace function public.family_admin_session_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_mp public.member_profiles%rowtype;\n  v_grant public.member_role_grants%rowtype;\nbegin\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null or char_length(v_digits) < 9 then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'bad_phone');\n  end if;\n  if to_regclass('public.member_profiles') is null or to_regclass('public.member_role_grants') is null then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'no_grants');\n  end if;\n\n  select mp.*\n    into v_mp\n  from public.member_profiles mp\n  where coalesce(nullif(btrim(coalesce(mp.status, '')), ''), 'active') = 'active'\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n  if not found then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'not_member');\n  end if;\n\n  select g.*\n    into v_grant\n  from public.member_role_grants g\n  where g.role_key = 'family_admin'\n    and g.status = 'active'\n    and (\n      (coalesce(v_mp.tree_child_id, 0) > 0 and g.tree_child_id = v_mp.tree_child_id)\n      or (v_mp.person_id is not null and g.person_id is not distinct from v_mp.person_id)\n    )\n  order by g.updated_at desc nulls last, g.id desc\n  limit 1;\n  if not found then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'no_grant');\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'enabled', true,\n    'role_key', 'family_admin',\n    'tree_child_id', v_grant.tree_child_id,\n    'person_id', v_grant.person_id\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_require_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_session jsonb;\nbegin\n  v_session := public.family_admin_session_v1(p_phone);\n  if coalesce((v_session->>'enabled')::boolean, false) is not true then\n    return jsonb_build_object('ok', false, 'error', 'not_allowed');\n  end if;\n  if to_regprocedure('public.member_device_allows_phone_v1(text)') is not null\n     and public.member_device_allows_phone_v1(p_phone) is not true then\n    return jsonb_build_object('ok', false, 'error', 'device_required');\n  end if;\n  return v_session;\nend;\n$fn$;\n\ncreate or replace function public.admin_family_admin_get_v1(p_token text, p_tree_child_id bigint)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_grant public.member_role_grants%rowtype;\n  v_status text := 'inactive';\n  v_child public.tree_children%rowtype;\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select * into v_child from public.tree_children c where c.id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select g.* into v_grant\n  from public.member_role_grants g\n  where g.tree_child_id = p_tree_child_id and g.role_key = 'family_admin'\n  limit 1;\n  if found then\n    v_status := v_grant.status;\n  end if;\n  return jsonb_build_object(\n    'ok', true,\n    'role_key', 'family_admin',\n    'status', v_status,\n    'tree_child_id', p_tree_child_id,\n    'person_id', coalesce(v_grant.person_id, v_child.person_id),\n    'assigned_at', v_grant.assigned_at,\n    'assigned_by', v_grant.assigned_by\n  );\nend;\n$fn$;\n\ncreate or replace function public.admin_family_admin_set_v1(\n  p_token text,\n  p_tree_child_id bigint,\n  p_action text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_action text := lower(btrim(coalesce(p_action, '')));\n  v_prev text := 'inactive';\n  v_child public.tree_children%rowtype;\n  v_now timestamptz := now();\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  if v_action not in ('assign', 'suspend') then\n    return jsonb_build_object('ok', false, 'error', 'bad_action');\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select * into v_child from public.tree_children c where c.id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select g.status into v_prev\n  from public.member_role_grants g\n  where g.tree_child_id = p_tree_child_id and g.role_key = 'family_admin'\n  limit 1;\n  v_prev := coalesce(v_prev, 'inactive');\n\n  if v_action = 'assign' then\n    insert into public.member_role_grants (\n      role_key, tree_child_id, person_id, status, assigned_at, assigned_by, updated_at\n    ) values (\n      'family_admin', p_tree_child_id, v_child.person_id, 'active', v_now, 'admin', v_now\n    )\n    on conflict (tree_child_id, role_key) do update\n    set\n      status = 'active',\n      person_id = coalesce(excluded.person_id, public.member_role_grants.person_id),\n      assigned_at = v_now,\n      assigned_by = 'admin',\n      updated_at = v_now;\n  else\n    if v_prev = 'inactive' then\n      return jsonb_build_object('ok', true, 'status', 'inactive', 'action', 'noop');\n    end if;\n    update public.member_role_grants\n    set status = 'suspended', assigned_by = 'admin', updated_at = v_now\n    where tree_child_id = p_tree_child_id and role_key = 'family_admin';\n  end if;\n\n  return public.admin_family_admin_get_v1(p_token, p_tree_child_id)\n    || jsonb_build_object('ok', true, 'action', v_action);\nend;\n$fn$;\n\ncreate or replace function public.admin_family_admin_set_by_phone_v1(\n  p_token text,\n  p_phone text,\n  p_action text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_id bigint;\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null then\n    return jsonb_build_object('ok', false, 'error', 'bad_phone');\n  end if;\n  select mp.tree_child_id into v_id\n  from public.member_profiles mp\n  where coalesce(mp.tree_child_id, 0) > 0\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n  if v_id is null then\n    return jsonb_build_object('ok', false, 'error', 'no_tree_person');\n  end if;\n  return public.admin_family_admin_set_v1(p_token, v_id, p_action);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_search_people_v1(\n  p_phone text,\n  p_query text,\n  p_branch_key text\n)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_q text;\n  v_branch text;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate || jsonb_build_object('rows', '[]'::jsonb);\n  end if;\n  v_q := nullif(btrim(coalesce(p_query, '')), '');\n  v_branch := nullif(btrim(coalesce(p_branch_key, '')), '');\n  if v_q is not null then\n    v_q := replace(replace(v_q, '%', ''), '_', '');\n  end if;\n  if v_q is null or char_length(v_q) < 2 then\n    return jsonb_build_object('ok', true, 'need_query', true, 'rows', '[]'::jsonb);\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'rows', coalesce((\n      select jsonb_agg(to_jsonb(r) order by r.display_name)\n      from (\n        select\n          c.id,\n          c.person_id,\n          c.branch_key,\n          nullif(btrim(regexp_replace(coalesce(c.child_name, to_jsonb(c)->>'name', ''), '^.*/', '')), '') as display_name,\n          nullif(btrim(coalesce(c.child_name, to_jsonb(c)->>'name', '')), '') as path,\n          c.gender,\n          coalesce(c.is_deceased, false) as is_deceased,\n          mp.phone,\n          mp.status\n        from public.tree_children c\n        left join lateral (\n          select p.phone, p.status\n          from public.member_profiles p\n          where p.tree_child_id = c.id\n             or (c.person_id is not null and p.person_id is not distinct from c.person_id)\n          order by p.updated_at desc nulls last, p.id desc\n          limit 1\n        ) mp on true\n        where (v_branch is null or c.branch_key = v_branch)\n          and (\n            position(v_q in coalesce(c.child_name, to_jsonb(c)->>'name', '')) > 0\n            or coalesce(c.child_name, to_jsonb(c)->>'name', '') ilike '%' || v_q || '%'\n          )\n        order by c.id desc\n        limit 40\n      ) r\n    ), '[]'::jsonb)\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_update_person_v1(\n  p_phone text,\n  p_tree_child_id bigint,\n  p_display_name text,\n  p_gender text,\n  p_is_deceased boolean\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_child public.tree_children%rowtype;\n  v_leaf text;\n  v_path text;\n  v_new_path text;\n  v_gender text;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  select * into v_child from public.tree_children where id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n\n  v_path := coalesce(v_child.child_name, to_jsonb(v_child)->>'name', '');\n  v_leaf := nullif(btrim(coalesce(p_display_name, '')), '');\n  if v_leaf is not null then\n    v_leaf := regexp_replace(v_leaf, '[/\\\\]', ' ', 'g');\n    if v_path like '%/%' then\n      v_new_path := regexp_replace(v_path, '[^/]+$', v_leaf);\n    else\n      v_new_path := v_leaf;\n    end if;\n  else\n    v_new_path := v_path;\n  end if;\n\n  if to_regprocedure('public.tree_child_normalize_gender(text)') is not null then\n    v_gender := public.tree_child_normalize_gender(p_gender);\n  else\n    v_gender := case\n      when lower(btrim(coalesce(p_gender, ''))) in ('daughter', 'female', 'f', '\u0623\u0646\u062b\u0649', '\u0627\u0646\u062b\u0649', '\u0627\u0628\u0646\u0629', '\u0628\u0646\u062a') then 'daughter'\n      when lower(btrim(coalesce(p_gender, ''))) in ('son', 'male', 'm', '\u0630\u0643\u0631', '\u0627\u0628\u0646', '\u0648\u0644\u062f') then 'son'\n      else null\n    end;\n  end if;\n\n  update public.tree_children c\n  set\n    child_name = coalesce(nullif(btrim(v_new_path), ''), c.child_name),\n    name = coalesce(nullif(btrim(v_new_path), ''), c.name),\n    gender = coalesce(v_gender, c.gender),\n    is_deceased = coalesce(p_is_deceased, c.is_deceased, false)\n  where c.id = p_tree_child_id;\n\n  return jsonb_build_object('ok', true, 'id', p_tree_child_id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_set_phone_v1(\n  p_phone text,\n  p_tree_child_id bigint,\n  p_member_phone text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_child public.tree_children%rowtype;\n  v_bind jsonb;\n  v_member_phone text;\n  v_digits text;\n  v_keep_id bigint;\n  v_leaf text;\n  v_other_pid text;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  v_member_phone := nullif(btrim(coalesce(p_member_phone, '')), '');\n  if v_member_phone is null then\n    return jsonb_build_object('ok', false, 'error', 'bad_phone');\n  end if;\n  select * into v_child from public.tree_children where id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n\n  if to_regprocedure('public.bind_sender_phone_to_person_v1(text, text, bigint)') is not null then\n    v_bind := public.bind_sender_phone_to_person_v1(\n      v_member_phone,\n      coalesce(v_child.person_id::text, ''),\n      v_child.id\n    );\n    if coalesce((v_bind->>'ok')::boolean, false) is not true then\n      return jsonb_build_object('ok', false, 'error', coalesce(v_bind->>'error', 'bind_failed'), 'detail', v_bind);\n    end if;\n  else\n    v_digits := right(regexp_replace(v_member_phone, '[^0-9]', '', 'g'), 9);\n    if char_length(coalesce(v_digits, '')) < 9 then\n      return jsonb_build_object('ok', false, 'error', 'bad_phone');\n    end if;\n    v_leaf := nullif(btrim(regexp_replace(coalesce(v_child.child_name, to_jsonb(v_child)->>'name', ''), '^.*/', '')), '');\n    select nullif(btrim(coalesce(mp.person_id::text, '')), '')\n      into v_other_pid\n    from public.member_profiles mp\n    where char_length(v_digits) = 9\n      and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n    order by mp.id\n    limit 1;\n    if v_other_pid is not null\n       and v_child.person_id is not null\n       and v_other_pid is distinct from v_child.person_id::text then\n      return jsonb_build_object('ok', false, 'error', 'phone_conflict');\n    end if;\n    select mp.id into v_keep_id\n    from public.member_profiles mp\n    where mp.tree_child_id = v_child.id\n       or (v_child.person_id is not null and mp.person_id is not distinct from v_child.person_id)\n       or (\n         char_length(v_digits) = 9\n         and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n       )\n    order by (mp.tree_child_id is not distinct from v_child.id) desc, mp.id desc\n    limit 1;\n    if v_keep_id is not null then\n      update public.member_profiles\n      set\n        phone = v_member_phone,\n        branch_key = coalesce(nullif(btrim(coalesce(v_child.branch_key, '')), ''), branch_key),\n        tree_child_id = v_child.id,\n        person_id = v_child.person_id,\n        display_name = coalesce(nullif(btrim(coalesce(display_name, '')), ''), v_leaf),\n        status = 'active',\n        updated_at = now()\n      where id = v_keep_id;\n    else\n      insert into public.member_profiles (\n        phone, branch_key, tree_child_id, person_id, display_name, status, created_at, updated_at\n      ) values (\n        v_member_phone, v_child.branch_key, v_child.id, v_child.person_id, v_leaf, 'active', now(), now()\n      );\n    end if;\n  end if;\n\n  update public.member_profiles\n  set status = 'active', updated_at = now()\n  where tree_child_id = v_child.id\n     or (v_child.person_id is not null and person_id is not distinct from v_child.person_id);\n\n  return jsonb_build_object('ok', true, 'tree_child_id', v_child.id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_requests_list_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate || jsonb_build_object('rows', '[]'::jsonb);\n  end if;\n  if to_regclass('public.approval_requests') is null then\n    return jsonb_build_object('ok', false, 'error', 'sql_missing', 'rows', '[]'::jsonb);\n  end if;\n  return jsonb_build_object(\n    'ok', true,\n    'rows', coalesce((\n      select jsonb_agg(to_jsonb(r) order by r.created_at desc)\n      from (\n        select\n          ar.id,\n          ar.request_id,\n          ar.kind,\n          nullif(btrim(coalesce(ar.name, '')), '') as name,\n          nullif(btrim(coalesce(ar.phone, '')), '') as phone,\n          nullif(btrim(coalesce(ar.branch_key, '')), '') as branch_key,\n          ar.created_at,\n          ar.status\n        from public.approval_requests ar\n        where coalesce(nullif(btrim(ar.status), ''), 'pending') = 'pending'\n          and (\n            btrim(coalesce(ar.kind, '')) in ('member_registration', 'member_phone_register')\n            or position('MEMBER_PHONE_REGISTER_V1' in coalesce(ar.message, '')) > 0\n          )\n        order by ar.created_at desc nulls last\n        limit 80\n      ) r\n    ), '[]'::jsonb)\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_request_reject_v1(p_phone text, p_request_id bigint)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_n int := 0;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_request_id is null or p_request_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  update public.approval_requests\n  set status = 'rejected'\n  where id = p_request_id\n    and coalesce(nullif(btrim(status), ''), 'pending') = 'pending';\n  get diagnostics v_n = row_count;\n  if v_n < 1 then\n    return jsonb_build_object('ok', false, 'error', 'not_found');\n  end if;\n  return jsonb_build_object('ok', true, 'id', p_request_id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_request_bind_v1(\n  p_phone text,\n  p_request_id bigint,\n  p_tree_child_id bigint\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_req public.approval_requests%rowtype;\n  v_set jsonb;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_request_id is null or p_request_id < 1 or p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  select * into v_req from public.approval_requests where id = p_request_id limit 1;\n  if not found or coalesce(nullif(btrim(v_req.status), ''), 'pending') is distinct from 'pending' then\n    return jsonb_build_object('ok', false, 'error', 'not_found');\n  end if;\n  if nullif(btrim(coalesce(v_req.phone, '')), '') is not null then\n    v_set := public.family_admin_set_phone_v1(p_phone, p_tree_child_id, v_req.phone);\n    if coalesce((v_set->>'ok')::boolean, false) is not true then\n      return v_set;\n    end if;\n  end if;\n  update public.approval_requests set status = 'approved' where id = v_req.id;\n  return jsonb_build_object('ok', true, 'id', v_req.id, 'tree_child_id', p_tree_child_id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_devices_list_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate || jsonb_build_object('items', '[]'::jsonb);\n  end if;\n  if to_regclass('public.member_trusted_devices') is null then\n    return jsonb_build_object('ok', false, 'error', 'sql_missing', 'items', '[]'::jsonb);\n  end if;\n  return jsonb_build_object(\n    'ok', true,\n    'items', coalesce((\n      select jsonb_agg(jsonb_build_object(\n        'id', d.id,\n        'phone_key', d.phone_key,\n        'label', d.label,\n        'status', d.status,\n        'bound_at', d.bound_at,\n        'last_seen_at', d.last_seen_at\n      ) order by coalesce(d.last_seen_at, d.bound_at) desc)\n      from public.member_trusted_devices d\n      where d.status = 'active'\n    ), '[]'::jsonb)\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_device_unbind_v1(p_phone text, p_target_phone text)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_key text;\n  v_n int := 0;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if to_regprocedure('public.member_device_phone_key_v1(text)') is not null then\n    v_key := public.member_device_phone_key_v1(p_target_phone);\n  else\n    v_key := nullif(right(regexp_replace(coalesce(p_target_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  end if;\n  if v_key is null then\n    return jsonb_build_object('ok', false, 'error', 'bad_phone');\n  end if;\n  if to_regclass('public.member_device_transfers') is not null then\n    delete from public.member_device_transfers t where t.phone_key = v_key;\n  end if;\n  delete from public.member_trusted_devices d where d.phone_key = v_key;\n  get diagnostics v_n = row_count;\n  return jsonb_build_object('ok', true, 'revoked', v_n);\nend;\n$fn$;\n\nrevoke all on function public.family_admin_session_v1(text) from public;\nrevoke all on function public.family_admin_require_v1(text) from public;\nrevoke all on function public.admin_family_admin_get_v1(text, bigint) from public;\nrevoke all on function public.admin_family_admin_set_v1(text, bigint, text) from public;\nrevoke all on function public.admin_family_admin_set_by_phone_v1(text, text, text) from public;\nrevoke all on function public.family_admin_search_people_v1(text, text, text) from public;\nrevoke all on function public.family_admin_update_person_v1(text, bigint, text, text, boolean) from public;\nrevoke all on function public.family_admin_set_phone_v1(text, bigint, text) from public;\nrevoke all on function public.family_admin_requests_list_v1(text) from public;\nrevoke all on function public.family_admin_request_reject_v1(text, bigint) from public;\nrevoke all on function public.family_admin_request_bind_v1(text, bigint, bigint) from public;\nrevoke all on function public.family_admin_devices_list_v1(text) from public;\nrevoke all on function public.family_admin_device_unbind_v1(text, text) from public;\n\ngrant execute on function public.family_admin_session_v1(text) to anon, authenticated;\ngrant execute on function public.admin_family_admin_get_v1(text, bigint) to anon, authenticated;\ngrant execute on function public.admin_family_admin_set_v1(text, bigint, text) to anon, authenticated;\ngrant execute on function public.admin_family_admin_set_by_phone_v1(text, text, text) to anon, authenticated;\ngrant execute on function public.family_admin_search_people_v1(text, text, text) to anon, authenticated;\ngrant execute on function public.family_admin_update_person_v1(text, bigint, text, text, boolean) to anon, authenticated;\ngrant execute on function public.family_admin_set_phone_v1(text, bigint, text) to anon, authenticated;\ngrant execute on function public.family_admin_requests_list_v1(text) to anon, authenticated;\ngrant execute on function public.family_admin_request_reject_v1(text, bigint) to anon, authenticated;\ngrant execute on function public.family_admin_request_bind_v1(text, bigint, bigint) to anon, authenticated;\ngrant execute on function public.family_admin_devices_list_v1(text) to anon, authenticated;\ngrant execute on function public.family_admin_device_unbind_v1(text, text) to anon, authenticated;\n\nnotify pgrst, 'reload schema';\nselect\n  to_regprocedure('public.family_admin_session_v1(text)') is not null as has_session,\n  to_regprocedure('public.admin_family_admin_set_by_phone_v1(text, text, text)') is not null as has_grant_by_phone,\n  to_regprocedure('public.family_admin_search_people_v1(text, text, text)') is not null as has_search;\n",
+    },
+    {
+      id: "maint.tree_self_siblings_v1",
+      title: "أخوات مسار الذات (حساب الدخول فقط)",
+      desc:
+        "يظهر أخوات الحساب داخل مسار الذات بعد الدخول. لا يغيّر الفروع ولا البحث العام. شغّله مرة ثم أعد فتح البطاقة.",
+      file: "../supabase/sql/COPY-ME-tree-self-siblings-v1.sql",
+      order: 56.096,
+    },
+    {
+      id: "maint.tree_admin_full_names_v1",
+      title: "أسماء الإناث في شجرة الإدارة",
+      desc:
+        "لوحة الإدارة ترى الذكور والإناث. الأمر السابق أخفى البنات حتى عن الإدارة بسبب RLS. شغّله مرة ثم حدّث صفحة الشجرة. الموقع العام والزائر والذكر المسجّل يبقون على الرجال فقط.",
+      file: "../supabase/sql/COPY-ME-tree-member-lineage-children-v1.sql",
+      order: 56.099,
+      sql: `-- COPY-ME: Preset id: maint.tree_admin_full_names_v1
+-- شجرة الإدارة (والمندوب): أسماء الإناث تظهر. SETOF كان يعيد RLS فيخفي البنات حتى عن الإدارة.
+-- أنثى مسجّلة: الشجرة كاملة. ذكر مسجّل: فروع رجال فقط. الزائر: رجال فقط. لا يغيّر سياسة الإخفاء العامة.
+
+drop function if exists public.tree_member_lineage_children_v1(text);
+
+create function public.tree_member_lineage_children_v1(p_phone text)
+returns table(
+  id bigint,
+  branch_key text,
+  parent_name text,
+  name text,
+  child_name text,
+  birth_order integer,
+  birth_date_g text,
+  birth_date_h text,
+  birth_year integer,
+  death_date_g text,
+  death_date_h text,
+  city text,
+  area text,
+  is_deceased boolean,
+  deceased boolean,
+  gender text,
+  photo_url text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_digits text;
+  v_id bigint;
+  v_gender text;
+begin
+  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');
+  if v_digits is null or char_length(v_digits) < 9 then
+    return;
+  end if;
+
+  select mp.tree_child_id
+    into v_id
+  from public.member_profiles mp
+  where coalesce(mp.status, 'active') = 'active'
+    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    and coalesce(mp.tree_child_id, 0) > 0
+  order by mp.updated_at desc nulls last, mp.id desc
+  limit 1;
+
+  if v_id is null then
+    return;
+  end if;
+
+  select c.gender
+    into v_gender
+  from public.tree_children c
+  where c.id = v_id
+  limit 1;
+
+  if not (
+    lower(btrim(coalesce(v_gender, ''))) in (
+      'daughter', 'female', 'f', 'أنثى', 'انثى', 'ابنة', 'بنت'
+    )
+  ) then
+    return;
+  end if;
+
+  return query
+    select
+      c.id,
+      c.branch_key,
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      coalesce(c.name, c.child_name),
+      c.child_name,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_h', '')), ''),
+      nullif(to_jsonb(c)->>'birth_year', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_h', '')), ''),
+      c.city,
+      c.area,
+      c.is_deceased,
+      nullif(to_jsonb(c)->>'deceased', '')::boolean,
+      c.gender,
+      nullif(btrim(coalesce(to_jsonb(c)->>'photo_url', '')), '')
+    from public.tree_children c
+    order by c.id
+    limit 20000;
+end;
+$fn$;
+
+grant execute on function public.tree_member_lineage_children_v1(text) to anon, authenticated;
+
+-- شجرة الإدارة: SETOF tree_children كان يعيد تطبيق RLS فيخفي البنات حتى عن الإدارة.
+drop function if exists public.admin_tree_children_list_v1(text, text);
+
+create function public.admin_tree_children_list_v1(p_token text, p_branch_key text)
+returns table(
+  id bigint,
+  person_id text,
+  parent_person_id text,
+  parent_name text,
+  parent text,
+  child_name text,
+  name text,
+  branch_key text,
+  gender text,
+  photo_url text,
+  birth_date_g text,
+  birth_date_h text,
+  birth_year integer,
+  birth_order integer,
+  death_date_g text,
+  death_date_h text,
+  city text,
+  area text,
+  is_deceased boolean,
+  deceased boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_branch text;
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+  v_branch := nullif(btrim(coalesce(p_branch_key, '')), '');
+  if v_branch is null then
+    return;
+  end if;
+  return query
+    select
+      c.id,
+      nullif(btrim(coalesce(to_jsonb(c)->>'person_id', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'parent_person_id', '')), ''),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      c.child_name,
+      coalesce(c.name, c.child_name),
+      c.branch_key,
+      c.gender,
+      nullif(btrim(coalesce(to_jsonb(c)->>'photo_url', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_h', '')), ''),
+      nullif(to_jsonb(c)->>'birth_year', '')::integer,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_h', '')), ''),
+      c.city,
+      c.area,
+      c.is_deceased,
+      nullif(to_jsonb(c)->>'deceased', '')::boolean
+    from public.tree_children c
+    where c.branch_key = v_branch
+    order by c.id
+    limit 5000;
+end;
+$fn$;
+
+grant execute on function public.admin_tree_children_list_v1(text, text) to anon, authenticated;
+
+drop function if exists public.tree_children_list_v1(text, text, text, text);
+
+create function public.tree_children_list_v1(
+  p_branch_key text,
+  p_phone text,
+  p_email text,
+  p_secret_hash text
+)
+returns table(
+  id bigint,
+  person_id text,
+  parent_person_id text,
+  parent_name text,
+  parent text,
+  child_name text,
+  name text,
+  branch_key text,
+  gender text,
+  photo_url text,
+  birth_date_g text,
+  birth_date_h text,
+  birth_year integer,
+  birth_order integer,
+  death_date_g text,
+  death_date_h text,
+  city text,
+  area text,
+  is_deceased boolean,
+  deceased boolean
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_branch text;
+begin
+  v_branch := nullif(btrim(coalesce(p_branch_key, '')), '');
+  if v_branch is null then
+    return;
+  end if;
+  if not public.tree_delegate_allowed_v1(v_branch, p_phone, p_email, p_secret_hash) then
+    raise exception 'not allowed';
+  end if;
+  return query
+    select
+      c.id,
+      nullif(btrim(coalesce(to_jsonb(c)->>'person_id', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'parent_person_id', '')), ''),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      c.child_name,
+      coalesce(c.name, c.child_name),
+      c.branch_key,
+      c.gender,
+      nullif(btrim(coalesce(to_jsonb(c)->>'photo_url', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_h', '')), ''),
+      nullif(to_jsonb(c)->>'birth_year', '')::integer,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_h', '')), ''),
+      c.city,
+      c.area,
+      c.is_deceased,
+      nullif(to_jsonb(c)->>'deceased', '')::boolean
+    from public.tree_children c
+    where c.branch_key = v_branch
+    order by c.id
+    limit 5000;
+end;
+$fn$;
+
+grant execute on function public.tree_children_list_v1(text, text, text, text) to anon, authenticated;
+notify pgrst, 'reload schema';
+
+select
+  (to_regprocedure('public.tree_member_lineage_children_v1(text)') is not null)
+    as has_member_lineage_children_rpc,
+  (to_regprocedure('public.admin_tree_children_list_v1(text,text)') is not null)
+    as has_admin_tree_children_list_rpc,
+  (to_regprocedure('public.tree_children_list_v1(text,text,text,text)') is not null)
+    as has_delegate_tree_children_list_rpc;
+`,
+    },
+    {
+      id: "maint.member_publish_occasion_v1",
+      title: "نشر مناسبة من العضو المسجّل بدون موافقة",
+      desc:
+        "العضو أو المندوب المسجّل بجواله ينشر مباشرة في المناسبات، ويعدّل/يحذف مصدره. الإدارة تبقى قادرة على تعديل أي صف أو حذفه من المصدر.",
+      file: "../supabase/sql/COPY-ME-member-publish-occasion-v1.sql",
+      order: 56.1,
+    },
   ];
 
   function loadDone() {
     try {
       const raw = localStorage.getItem(DONE_KEY);
       const obj = raw ? JSON.parse(raw) : {};
-      return obj && typeof obj === "object" ? obj : {};
+      return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : {};
     } catch (_) {
       return {};
     }
@@ -7819,6 +10147,15 @@ where e.id = r.occasion_id
     try {
       localStorage.setItem(DONE_KEY, JSON.stringify(map || {}));
     } catch (_) {}
+  }
+
+  /** Local or remote row: boolean, timestamp, or {ok|archived|at}. */
+  function isDoneRecord(row) {
+    if (row === true || row === 1) return true;
+    if (typeof row === "string" && row) return true;
+    if (!row || typeof row !== "object") return false;
+    if (row.ok === false) return false;
+    return !!(row.ok || row.archived || row.permanent || row.at);
   }
 
   function loadFail() {
@@ -7874,6 +10211,9 @@ where e.id = r.occasion_id
   }
 
   function clearDone(id) {
+    // Executed cards never return. Only the v2 install card may reappear
+    // when the executor is missing (workspace reconcile).
+    if (String(id || "") !== "maint.sql_workspace_run_v2") return;
     const map = loadDone();
     delete map[id];
     saveDone(map);
@@ -7886,8 +10226,7 @@ where e.id = r.occasion_id
   }
 
   function isDone(id) {
-    const row = loadDone()[id];
-    return !!(row && row.ok);
+    return isDoneRecord(loadDone()[id]);
   }
 
   function getFail(id) {
@@ -7907,7 +10246,7 @@ where e.id = r.occasion_id
     return (PRESETS || [])
       .slice()
       .sort((a, b) => (a.order || 0) - (b.order || 0))
-      .filter((p) => !!(done[p.id] && done[p.id].ok))
+      .filter((p) => isDoneRecord(done[p.id]))
       .map((p) => ({
         preset: p,
         meta: done[p.id],
@@ -8048,6 +10387,8 @@ where e.id = r.occasion_id
     splitSqlStatements,
     fetchPresetSql,
     loadDone,
+    saveDone,
+    isDoneRecord,
     loadFail,
     markDone,
     markFail,

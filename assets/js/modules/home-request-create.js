@@ -38,6 +38,8 @@
     event_death: 1,
     tree_card: 1,
     tree_edit: 1,
+    member_phone_register: 1,
+    member_registration: 1,
     memory_card: 1,
     memory: 1,
     add_person: 1,

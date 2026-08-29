@@ -58,12 +58,33 @@ using (
 revoke insert, update, delete on table public.tree_children from anon, authenticated;
 grant select on table public.tree_children to anon, authenticated;
 
-create or replace function public.admin_tree_children_list_v1(
-  p_token text,
-  p_branch_key text
+drop function if exists public.admin_tree_children_list_v1(text, text);
+
+create function public.admin_tree_children_list_v1(p_token text, p_branch_key text)
+returns table(
+  id bigint,
+  person_id text,
+  parent_person_id text,
+  parent_name text,
+  parent text,
+  child_name text,
+  name text,
+  branch_key text,
+  gender text,
+  photo_url text,
+  birth_date_g text,
+  birth_date_h text,
+  birth_year integer,
+  birth_order integer,
+  death_date_g text,
+  death_date_h text,
+  city text,
+  area text,
+  is_deceased boolean,
+  deceased boolean
 )
-returns setof public.tree_children
 language plpgsql
+stable
 security definer
 set search_path = public
 as $fn$
@@ -78,7 +99,27 @@ begin
     return;
   end if;
   return query
-    select c.*
+    select
+      c.id,
+      nullif(btrim(coalesce(to_jsonb(c)->>'person_id', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'parent_person_id', '')), ''),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      c.child_name,
+      coalesce(c.name, c.child_name),
+      c.branch_key,
+      c.gender,
+      nullif(btrim(coalesce(to_jsonb(c)->>'photo_url', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_h', '')), ''),
+      nullif(to_jsonb(c)->>'birth_year', '')::integer,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_h', '')), ''),
+      c.city,
+      c.area,
+      c.is_deceased,
+      nullif(to_jsonb(c)->>'deceased', '')::boolean
     from public.tree_children c
     where c.branch_key = v_branch
     order by c.id
@@ -88,14 +129,38 @@ $fn$;
 
 grant execute on function public.admin_tree_children_list_v1(text, text) to anon, authenticated;
 
-create or replace function public.tree_children_list_v1(
+drop function if exists public.tree_children_list_v1(text, text, text, text);
+
+create function public.tree_children_list_v1(
   p_branch_key text,
   p_phone text,
   p_email text,
   p_secret_hash text
 )
-returns setof public.tree_children
+returns table(
+  id bigint,
+  person_id text,
+  parent_person_id text,
+  parent_name text,
+  parent text,
+  child_name text,
+  name text,
+  branch_key text,
+  gender text,
+  photo_url text,
+  birth_date_g text,
+  birth_date_h text,
+  birth_year integer,
+  birth_order integer,
+  death_date_g text,
+  death_date_h text,
+  city text,
+  area text,
+  is_deceased boolean,
+  deceased boolean
+)
 language plpgsql
+stable
 security definer
 set search_path = public
 as $fn$
@@ -110,7 +175,27 @@ begin
     raise exception 'not allowed';
   end if;
   return query
-    select c.*
+    select
+      c.id,
+      nullif(btrim(coalesce(to_jsonb(c)->>'person_id', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'parent_person_id', '')), ''),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      coalesce(c.parent_name, to_jsonb(c)->>'parent'),
+      c.child_name,
+      coalesce(c.name, c.child_name),
+      c.branch_key,
+      c.gender,
+      nullif(btrim(coalesce(to_jsonb(c)->>'photo_url', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'birth_date_h', '')), ''),
+      nullif(to_jsonb(c)->>'birth_year', '')::integer,
+      nullif(to_jsonb(c)->>'birth_order', '')::integer,
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_g', '')), ''),
+      nullif(btrim(coalesce(to_jsonb(c)->>'death_date_h', '')), ''),
+      c.city,
+      c.area,
+      c.is_deceased,
+      nullif(to_jsonb(c)->>'deceased', '')::boolean
     from public.tree_children c
     where c.branch_key = v_branch
     order by c.id

@@ -437,16 +437,35 @@
           if (pp === parentPersonId) pushUnique(child);
         });
       });
-      // Legacy rows under the exact path key without parentPersonId.
       var exact = Array.isArray(map[key]) ? map[key] : [];
       exact.forEach(function (child) {
         var pp = norm(child.parentPersonId || child.parent_person_id || "");
-        if (!pp) pushUnique(child);
+        if (pp && pp !== parentPersonId) return;
+        if (!pp && key.indexOf("/") < 0) return;
+        pushUnique(child);
       });
     } else {
       var raw = Array.isArray(map[key]) ? map[key] : [];
       raw.forEach(pushUnique);
     }
+
+    // Direct children by full path only. Never prefix-match a leaf name
+    // (فريح/… would mix every father named فريح).
+    if (key.indexOf("/") >= 0) {
+      var prefix = key + "/";
+      Object.keys(map).forEach(function (mapKey) {
+        var arr = map[mapKey];
+        if (!Array.isArray(arr)) return;
+        arr.forEach(function (child) {
+          var nm = norm(child.name || "");
+          if (nm.indexOf(prefix) !== 0) return;
+          var rest = nm.slice(prefix.length);
+          if (!rest || rest.indexOf("/") >= 0) return;
+          pushUnique(child);
+        });
+      });
+    }
+
     return { key: key, list: list, sharedRef: false };
   }
 

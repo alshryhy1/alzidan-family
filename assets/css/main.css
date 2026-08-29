@@ -253,18 +253,20 @@ nav a.site-nav-access-link:hover {
   direction: rtl;
   unicode-bidi: isolate;
   color: #b91c1c;
+  -webkit-text-fill-color: #b91c1c;
   font-size: 12px;
   font-weight: 900;
   line-height: 1.2;
   display: inline-flex;
   align-items: center;
   height: 28px;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
-  background: rgba(185, 28, 28, 0.12);
-  border: 1px solid rgba(185, 28, 28, 0.22);
+  text-shadow: none;
+  background: #fecaca;
+  border: 1px solid #b91c1c;
   padding: 0 8px;
   border-radius: 999px;
   flex: 0 0 auto;
+  opacity: 1;
 }
 .news-ticker-text .news-rest {
   direction: rtl;
@@ -2104,6 +2106,12 @@ body.admin-review-enabled #review {
     transition: none;
   }
 }
+.event-type-general,
+.event-type-family_news {
+  background-color: #fecaca;
+  color: #b91c1c;
+  border-color: #b91c1c;
+}
 .event-type-birth {
   background-color: #ecfdf5;
   color: #065f46;
@@ -2339,6 +2347,12 @@ body.admin-review-enabled #review {
 .founder-field textarea {
   min-height: 84px;
   resize: vertical;
+}
+#event-submit-family option[value="news"],
+#event-submit-family option[value="occasion"] {
+  color: #b91c1c;
+  -webkit-text-fill-color: #b91c1c;
+  font-weight: 800;
 }
 .founder-alert {
   margin-top: 10px;
@@ -3400,8 +3414,10 @@ footer {
 }
 .member-profile-login-hint {
   margin: 0;
+  max-width: min(52vw, 360px);
   font-size: 12px;
   line-height: 1.45;
+  text-align: start;
 }
 .member-profile-btn {
   border: 1px solid #cfe8db;

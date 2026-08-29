@@ -539,12 +539,11 @@ values
   ('a_salih', 'occasion', array['aqiqa'], null, 'جعله الله من الصالحين', 'جعله الله من الصالحين', false, 20),
   ('msg_aqiqa', 'occasion', array['aqiqa'], null, 'رسالة خاصة', 'رسالة خاصة', true, 90),
 
-  -- Invitations / gatherings (actions)
-  ('inv_yes', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general'], null, 'بإذن الله حاضر', 'بإذن الله سأحضر', false, 10),
-  ('inv_no', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general'], null, 'أعتذر عن الحضور', 'أعتذر عن الحضور', false, 20),
-  ('inv_maybe', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general'], null, 'سأحاول الحضور', 'سأحاول الحضور إن شاء الله', false, 30),
-  ('inv_details', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general'], null, 'أحتاج تفاصيل', 'أحتاج تفاصيل إضافية', true, 40),
-  ('inv_contact', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general'], null, 'سأتواصل معك', 'سأتواصل معك', false, 50)
+  -- Invitations / gatherings (attendance only)
+  ('inv_yes', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general','wedding','contract','graduation','promotion','retirement','aqiqa','finjal_asr','finjal_isha','finjal_hawlna','hayya_allah'], null, 'بإذن الله حاضر', 'بإذن الله سأحضر', false, 10),
+  ('inv_no', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general','wedding','contract','graduation','promotion','retirement','aqiqa','finjal_asr','finjal_isha','finjal_hawlna','hayya_allah'], null, 'أعتذر', 'أعتذر عن الحضور', false, 20),
+  ('inv_maybe', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general','wedding','contract','graduation','promotion','retirement','aqiqa','finjal_asr','finjal_isha','finjal_hawlna','hayya_allah'], null, 'إن شاء الله أحاول', 'إن شاء الله أحاول الحضور', false, 30),
+  ('msg_custom', 'occasion', array['feast','gathering','family_meetup','dinner','lunch','general','finjal_asr','finjal_isha','finjal_hawlna','hayya_allah','graduation','promotion','retirement'], null, 'رسالة خاصة', 'رسالة خاصة', true, 90)
 on conflict (key) do update set
   family = excluded.family,
   applies_to_types = excluded.applies_to_types,

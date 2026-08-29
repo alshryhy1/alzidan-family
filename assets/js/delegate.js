@@ -273,7 +273,7 @@ function clearDelegateSession() {
   try { localStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {}
   try { sessionStorage.removeItem(DELEGATE_SESSION_KEY); } catch (e) {}
 }
-const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co"; const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c"; const FAMILY_TREE_CHILDREN_TABLE = "tree_children"; let sbClient = null; function getالخدمةClient() { if (sbClient) return sbClient; const url = String(SUPABASE_URL || "").trim(); const anonKey = String(SUPABASE_ANON_KEY || "").trim(); if (!url || !anonKey) return null; if (!window.supabase || typeof window.supabase.createClient !== "function") return null; sbClient = window.supabase.createClient(url, anonKey); return sbClient; } async function sha256Hex(text) { try { if (!window.crypto || !window.crypto.subtle) return null; const enc = new TextEncoder(); const buf = await window.crypto.subtle.digest("SHA-256", enc.encode(String(text || ""))); return Array.from(new Uint8Array(buf)) .map((b) =>b.toString(16).padStart(2, "0")) .join(""); } catch (e) { return null; } } function makeRequestId() { const part1 = Math.random().toString(36).slice(2, 6).toUpperCase(); const part2 = Math.random().toString(36).slice(2, 6).toUpperCase(); return "REQ-" + part1 + "-" + part2; } function duplicateFieldsText(fields) { const f = Array.isArray(fields) ? fields : []; const hasPhone = f.includes("phone"); const hasEmail = f.includes("email"); if (hasPhone && hasEmail) return "الجوال والإيميل مسجلين مسبقًا"; if (hasPhone) return "رقم الجوال مسجل مسبقًا"; if (hasEmail) return "الإيميل مسجل مسبقًا"; return "البيانات مسجلة مسبقًا"; } function phoneCandidates(phone) { if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.phoneCandidates === "function") { return window.AlzidanPhoneIntl.phoneCandidates(phone); } const raw = normalizePhone(phone); if (!raw) return []; const digits = raw.replace(/[^0-9]/g, ""); if (!digits) return []; const set = new Set([digits, raw]); const add966 = (nine) =>{ if (!nine || nine.length !== 9) return; set.add("0" + nine); set.add(nine); set.add("966" + nine); set.add("+966" + nine); }; if (digits.startsWith("0") && digits.length === 10 && digits[1] === "5") { add966(digits.slice(1)); } else if (digits.startsWith("966") && digits.length === 12 && digits[3] === "5") { add966(digits.slice(3)); } else if (digits.startsWith("5") && digits.length === 9) { add966(digits); } return Array.from(set).filter(Boolean); } function fallbackCopyText(text) { const el = document.createElement("textarea"); el.value = text; el.setAttribute("readonly", ""); el.style.position = "fixed"; el.style.opacity = "0"; el.style.left = "-9999px"; document.body.appendChild(el); el.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(el); } async function copyText(text) { try { if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") { await navigator.clipboard.writeText(text); return true; } } catch (e) {} fallbackCopyText(text); return true; } const NOTIFY_EMAIL_TO = "info@alzidan.org"; function maybeOpenEmailDraft(subject, body) {
+const SUPABASE_URL = "https://wbskjfdqpugnwvrykqcn.supabase.co"; const SUPABASE_ANON_KEY = "sb_publishable_JhgwBIXhs6z4yBZOoE2EqA_UlzjzW9c"; const FAMILY_TREE_CHILDREN_TABLE = "tree_children"; let sbClient = null; function getالخدمةClient() { const session = typeof loadDelegateSession === "function" ? loadDelegateSession() : null; const key = session ? String(session.secretHash || "") + "|" + String(session.rpcPhone || session.phone || "") : ""; if (sbClient && sbClient.__alzidanDelegateKey === key) return sbClient; const url = String(SUPABASE_URL || "").trim(); const anonKey = String(SUPABASE_ANON_KEY || "").trim(); if (!url || !anonKey) return null; if (!window.supabase || typeof window.supabase.createClient !== "function") return null; const headers = {}; if (session) { if (session.rpcPhone || session.phone) headers["X-Alzidan-Delegate-Phone"] = session.rpcPhone || session.phone; if (session.email) headers["X-Alzidan-Delegate-Email"] = session.email; if (session.secretHash) headers["X-Alzidan-Delegate-Secret-Hash"] = session.secretHash; if (session.branch) headers["X-Alzidan-Delegate-Branch"] = session.branch; } sbClient = window.supabase.createClient(url, anonKey, { global: { headers: headers } }); sbClient.__alzidanDelegateKey = key; return sbClient; } async function sha256Hex(text) { try { if (!window.crypto || !window.crypto.subtle) return null; const enc = new TextEncoder(); const buf = await window.crypto.subtle.digest("SHA-256", enc.encode(String(text || ""))); return Array.from(new Uint8Array(buf)) .map((b) =>b.toString(16).padStart(2, "0")) .join(""); } catch (e) { return null; } } function makeRequestId() { const part1 = Math.random().toString(36).slice(2, 6).toUpperCase(); const part2 = Math.random().toString(36).slice(2, 6).toUpperCase(); return "REQ-" + part1 + "-" + part2; } function duplicateFieldsText(fields) { const f = Array.isArray(fields) ? fields : []; const hasPhone = f.includes("phone"); const hasEmail = f.includes("email"); if (hasPhone && hasEmail) return "الجوال والإيميل مسجلين مسبقًا"; if (hasPhone) return "رقم الجوال مسجل مسبقًا"; if (hasEmail) return "الإيميل مسجل مسبقًا"; return "البيانات مسجلة مسبقًا"; } function phoneCandidates(phone) { if (window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.phoneCandidates === "function") { return window.AlzidanPhoneIntl.phoneCandidates(phone); } const raw = normalizePhone(phone); if (!raw) return []; const digits = raw.replace(/[^0-9]/g, ""); if (!digits) return []; const set = new Set([digits, raw]); const add966 = (nine) =>{ if (!nine || nine.length !== 9) return; set.add("0" + nine); set.add(nine); set.add("966" + nine); set.add("+966" + nine); }; if (digits.startsWith("0") && digits.length === 10 && digits[1] === "5") { add966(digits.slice(1)); } else if (digits.startsWith("966") && digits.length === 12 && digits[3] === "5") { add966(digits.slice(3)); } else if (digits.startsWith("5") && digits.length === 9) { add966(digits); } return Array.from(set).filter(Boolean); } function fallbackCopyText(text) { const el = document.createElement("textarea"); el.value = text; el.setAttribute("readonly", ""); el.style.position = "fixed"; el.style.opacity = "0"; el.style.left = "-9999px"; document.body.appendChild(el); el.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(el); } async function copyText(text) { try { if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") { await navigator.clipboard.writeText(text); return true; } } catch (e) {} fallbackCopyText(text); return true; } const NOTIFY_EMAIL_TO = "info@alzidan.org"; function maybeOpenEmailDraft(subject, body) {
   try {
     const text = [String(subject || "").trim(), String(body || "").trim()].filter(Boolean).join("\\n\\n");
     if (text) copyText(text).catch(() => {});
@@ -944,6 +944,8 @@ async function rpcDeleteTreeChildRow(sb, branchKey, parentId, childId, personId)
     kind === "event_death" ||
     kind === "tree_card" ||
     kind === "tree_edit" ||
+    kind === "member_phone_register" ||
+    kind === "member_registration" ||
     kind === "memory_card" ||
     kind === "add_person" ||
     kind === "memory" ||
@@ -1506,6 +1508,16 @@ function classifyDelegateBranchRequest(req) {
   const Corr = window.AlzidanTreeCorrectionContract;
   if (Corr && typeof Corr.routeRequest === "function") {
     const routed = Corr.routeRequest(req);
+    if (routed && routed.route === "member_phone_register") {
+      return {
+        intent: "correction",
+        intentLabel: "تسجيل جوال عضو",
+        canAct: true,
+        operation: "member_phone_register",
+        route: routed,
+        memberPhoneRegister: true,
+      };
+    }
     if (routed && routed.route === "reorder_children") {
       return {
         intent: "correction",
@@ -1559,6 +1571,16 @@ function classifyDelegateBranchRequest(req) {
     /أضف فرد|إضافة فرد|فردًا للعائلة/.test(msg)
   ) {
     return { intent: "tree", intentLabel: "إضافة فرد", canAct: true };
+  }
+
+  if (kind === "member_phone_register" || kind === "member_registration") {
+    return {
+      intent: "correction",
+      intentLabel: "تسجيل جوال عضو",
+      canAct: true,
+      operation: "member_phone_register",
+      memberPhoneRegister: true,
+    };
   }
 
   if (
@@ -1943,7 +1965,11 @@ function paintDelegateBranchRequestsList() {
       (req.request_id
         ? '<div class="hint">مرجع: ' + escapeHtml(String(req.request_id)) + "</div>"
         : "") +
-      "</div>" +
+      '</div>' +
+      (function () {
+        if (!classified.memberPhoneRegister || statusKey !== "pending") return "";
+        return '<div data-mpr-host style="margin-top:8px;"></div>';
+      })() +
       (function () {
         const EventsMedia = window.AlzidanEvents || {};
         // Hard gate only — never emit <video> unless resolveValidVideoUrl/isValidVideoUrl passes.
@@ -2001,6 +2027,8 @@ function paintDelegateBranchRequestsList() {
             ? "قبول (مع جدولة الظهور)"
             : classified.intent === "health" || classified.intent === "death"
               ? "قبول وحفظ"
+              : classified.memberPhoneRegister
+                ? "قبول (بعد تسجيل الجوال على الشخص)"
               : classified.operation === "reorder_children" ||
                   classified.safeReview ||
                   classified.personCorrection
@@ -2020,6 +2048,15 @@ function paintDelegateBranchRequestsList() {
       const rejBtn = item.querySelector(".btn-rej-req");
       const reorderBtn = item.querySelector(".btn-reorder-req");
       const safeBtn = item.querySelector(".btn-safe-review-req");
+      const mprHost = item.querySelector("[data-mpr-host]");
+      const Mpr = window.AlzidanMemberPhoneRegister;
+      if (
+        mprHost &&
+        Mpr &&
+        typeof Mpr.mountRegisterPanel === "function"
+      ) {
+        Mpr.mountRegisterPanel(mprHost, req, { sb: getالخدمةClient() });
+      }
       if (reorderBtn) {
         reorderBtn.addEventListener("click", async () => {
           const Reorder = window.AlzidanTreeCorrectionReorder;
@@ -2299,6 +2336,21 @@ function paintDelegateBranchRequestsList() {
             );
             lock(false);
             return;
+          } else if (classified.memberPhoneRegister) {
+            const Mpr = window.AlzidanMemberPhoneRegister;
+            const bound =
+              Mpr && typeof Mpr.isPhoneBound === "function"
+                ? await Mpr.isPhoneBound(sb, req.phone)
+                : false;
+            if (!bound) {
+              showAlert(
+                inlineAlert,
+                "error",
+                "سجّل الرقم على الشخص بالاسم الثلاثي ومعرّف الشخص أولاً، ثم اقبل الطلب."
+              );
+              lock(false);
+              return;
+            }
           }
 
           const statusResult = await rpcSetDelegateApprovalRequestStatus(

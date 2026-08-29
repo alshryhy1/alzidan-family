@@ -625,7 +625,8 @@ function showAlert(kind, msg) {
     const key = String(value || "").trim();
     if (key === "events_delegate") return "مندوب المناسبات";
     if (key === "tree_delegate") return "مندوب الشجرة";
-    if (key === "member_registration") return "تسجيل عضو";
+    if (key === "member_registration") return "تسجيل جوال عضو";
+    if (key === "member_phone_register") return "تسجيل جوال عضو";
     return key || "غير محدد";
   }
 
@@ -849,11 +850,20 @@ function showAlert(kind, msg) {
 
     if (kind === "event_card") {
       const parsed = parseEventPayloadFromRow(row);
+      const EventsApi = window.AlzidanEvents || {};
+      const family =
+        typeof EventsApi.eventFamilyFromType === "function"
+          ? EventsApi.eventFamilyFromType(parsed.type)
+          : "";
+      const notice =
+        typeof EventsApi.isNoticeEventType === "function"
+          ? EventsApi.isNoticeEventType(parsed.type)
+          : family !== "occasion";
       const missing = [];
       if (!hasBranch) missing.push("الفرع");
       if (!parsed.person) missing.push("الاسم");
-      if (!parsed.date) missing.push("التاريخ");
-      if (!parsed.text) missing.push("النص");
+      if (family === "occasion" && !parsed.date) missing.push("التاريخ");
+      if (!notice && !parsed.text) missing.push("النص");
 
       if (env.hasMarker && !env.valid) {
         return { key: "review", label: "يحتاج مراجعة", reason: "يوجد JSON لكنه غير صالح للقراءة." };
@@ -1016,13 +1026,16 @@ function showAlert(kind, msg) {
       ["رقم الطلب", String(row && row.request_id ? row.request_id : "")],
       ["نوع الطلب", kindLabel(kindKey)],
       ["الفرع", String(row && row.branch_key ? row.branch_key : "")],
-      ["الاسم", String(row && row.name ? row.name : "")],
+      [kindKey === "event_card" ? "مقدّم الطلب" : "الاسم", String(row && row.name ? row.name : "")],
       ["الجوال", String(row && row.phone ? row.phone : "")],
       [
         "البريد الإلكتروني",
         emailDisplay || (isDelegateReq ? "لم يُسجّل — لن تصله إشعارات طلبات الفرع" : ""),
       ],
-      ["التاريخ", row && row.created_at ? formatDateTimeArSaVerbose(row.created_at) : ""],
+      [
+        kindKey === "event_card" ? "وقت الطلب" : "التاريخ",
+        row && row.created_at ? formatDateTimeArSaVerbose(row.created_at) : "",
+      ],
     ];
     if (isDelegateReq) {
       const roles = parseDelegateRolesFromRow(row);
@@ -1043,13 +1056,47 @@ function showAlert(kind, msg) {
     }
     const eventData = parseEventPayloadFromRow(row);
     if (kindKey === "event_card") {
+      const EventsApi = window.AlzidanEvents || {};
+      const family =
+        typeof EventsApi.eventFamilyFromType === "function"
+          ? EventsApi.eventFamilyFromType(eventData.type)
+          : "";
+      const kindTitle =
+        typeof EventsApi.eventRequestKindLabel === "function"
+          ? EventsApi.eventRequestKindLabel(eventData.type)
+          : "بطاقة مناسبة";
+      const personLabel =
+        typeof EventsApi.personLabelForType === "function"
+          ? EventsApi.personLabelForType(eventData.type)
+          : "الاسم";
+      const dateFieldLabel =
+        typeof EventsApi.incidentDateFieldLabel === "function"
+          ? EventsApi.incidentDateFieldLabel(eventData.type)
+          : "تاريخ المناسبة";
+      const kindIdx = summaryData.findIndex((item) => item[0] === "نوع الطلب");
+      if (kindIdx >= 0) summaryData[kindIdx][1] = kindTitle;
       summaryData.push([
-        "نوع المناسبة",
+        "النوع",
         eventSubtypeArabicLabel(eventData.type) || eventData.type || "غير محدد",
       ]);
-      summaryData.push(["صاحب المناسبة", eventData.person || "غير محدد"]);
-      summaryData.push(["تاريخ المناسبة", eventData.date || "غير محدد"]);
-      summaryData.push(["نص المناسبة", eventData.text || "غير متوفر"]);
+      summaryData.push([personLabel, eventData.person || "غير محدد"]);
+      const datePlausible =
+        !!eventData.date &&
+        (family === "occasion" ||
+          family === "death" ||
+          (typeof EventsApi.newsIncidentDateIsPlausible === "function" &&
+            EventsApi.newsIncidentDateIsPlausible(eventData.date, row && row.created_at)));
+      if (family === "occasion" || family === "death") {
+        summaryData.push([dateFieldLabel, eventData.date || "غير محدد"]);
+      } else if (datePlausible) {
+        summaryData.push([dateFieldLabel, eventData.date]);
+      }
+      const textEcho =
+        typeof EventsApi.eventTextIsTypeEcho === "function" &&
+        EventsApi.eventTextIsTypeEcho(eventData.type, eventData.text);
+      if (eventData.text && !textEcho) {
+        summaryData.push([family === "news" ? "نص التهنئة" : "النص", eventData.text]);
+      }
       summaryData.push([
         "المرفقات",
         eventData.image || eventData.video
@@ -1202,6 +1249,15 @@ function showAlert(kind, msg) {
     tdKind.setAttribute("data-label", "النوع");
     const kindMain = document.createElement("div");
     kindMain.textContent = kindLabel(row.kind);
+    const MemberPhoneReg =
+      typeof window !== "undefined" ? window.AlzidanMemberPhoneRegister : null;
+    if (
+      MemberPhoneReg &&
+      typeof MemberPhoneReg.isMemberPhoneRegisterRequest === "function" &&
+      MemberPhoneReg.isMemberPhoneRegisterRequest(row)
+    ) {
+      kindMain.textContent = "تسجيل جوال عضو";
+    }
     tdKind.appendChild(kindMain);
     if (String(row.kind || "").trim() === "event_card") {
       const parsed = parseEventPayloadFromRow(row);
@@ -1334,6 +1390,8 @@ function showAlert(kind, msg) {
       editBranchBtn.textContent = "تصحيح الأب";
     } else if (CorrRoute && CorrRoute.route === "safe_review") {
       editBranchBtn.textContent = "مراجعة آمنة";
+    } else if (CorrRoute && CorrRoute.route === "member_phone_register") {
+      editBranchBtn.textContent = "تسجيل الجوال";
     } else {
       editBranchBtn.textContent =
         row.kind === "tree_card" ? "تعديل كامل" : "تعديل الفرع";
@@ -1412,8 +1470,20 @@ function showAlert(kind, msg) {
         actions.appendChild(publishEventBtn);
       }
       if (row.kind === "special_card") actions.appendChild(fillSpecialCardBtn);
-      actions.appendChild(editBranchBtn);
+      if (!(CorrRoute && CorrRoute.route === "member_phone_register")) {
+        actions.appendChild(editBranchBtn);
+      }
       actions.appendChild(deleteBtn);
+      if (
+        MemberPhoneReg &&
+        typeof MemberPhoneReg.mountRegisterPanel === "function" &&
+        MemberPhoneReg.isMemberPhoneRegisterRequest(row) &&
+        row.status === "pending"
+      ) {
+        const panelHost = document.createElement("div");
+        actions.insertBefore(panelHost, approveBtn);
+        MemberPhoneReg.mountRegisterPanel(panelHost, row, { sb: getClient() });
+      }
     }
     tdActions.appendChild(actions);
     tr.appendChild(tdActions);
@@ -1849,6 +1919,33 @@ function showAlert(kind, msg) {
           return;
         }
         console.info("ADMIN_RPC approve tree_card apply ok", row.request_id);
+      } else if (
+        row.kind === "member_phone_register" ||
+        row.kind === "member_registration" ||
+        (typeof window !== "undefined" &&
+          window.AlzidanMemberPhoneRegister &&
+          typeof window.AlzidanMemberPhoneRegister.isMemberPhoneRegisterRequest ===
+            "function" &&
+          window.AlzidanMemberPhoneRegister.isMemberPhoneRegisterRequest(row))
+      ) {
+        const Reg =
+          typeof window !== "undefined"
+            ? window.AlzidanMemberPhoneRegister
+            : null;
+        const bound =
+          Reg && typeof Reg.isPhoneBound === "function"
+            ? await Reg.isPhoneBound(getClient(), row.phone)
+            : false;
+        if (!bound) {
+          approveBtn.disabled = false;
+          const errMsg =
+            "سجّل الرقم على الشخص بالاسم الثلاثي ومعرّف الشخص أولاً، ثم اقبل الطلب.";
+          showAlert("error", errMsg);
+          try {
+            window.alert(errMsg);
+          } catch (_) {}
+          return;
+        }
       } else if (row.kind === "tree_edit") {
         const Corr =
           typeof window !== "undefined"

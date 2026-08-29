@@ -75,6 +75,19 @@
     const placeEl =
       form.querySelector("#event-submit-place") ||
       form.querySelector('[name="place"]');
+    const placeKindEl =
+      form.querySelector("#event-submit-place-kind") ||
+      form.querySelector('[name="placeKind"]');
+    const coordsEl =
+      form.querySelector("#event-submit-coords") ||
+      form.querySelector('[name="coords"]');
+    const venueWrap = form.querySelector("[data-event-venue-wrap]");
+    const venueFields = form.querySelectorAll("[data-event-venue-field]");
+    const familyEl =
+      form.querySelector("#event-submit-family") ||
+      form.querySelector("[data-event-family]");
+    const family = String((familyEl && familyEl.value) || "").trim();
+    const showVenue = family === "occasion";
     const needsDate =
       type &&
       typeof EventsApi.eventRequiresDate === "function" &&
@@ -83,6 +96,10 @@
       type &&
       typeof EventsApi.eventRequiresPlace === "function" &&
       EventsApi.eventRequiresPlace(type);
+    const needsPlaceKind =
+      type &&
+      typeof EventsApi.eventRequiresPlaceKind === "function" &&
+      EventsApi.eventRequiresPlaceKind(type);
     if (dateEl) {
       dateEl.required = !!needsDate;
       dateEl.placeholder = needsDate
@@ -93,19 +110,44 @@
       dateWrap.hidden = false;
       const label = dateWrap.querySelector("label");
       if (label) {
-        label.textContent = needsDate ? "التاريخ" : "التاريخ (اختياري)";
+        const fieldLabel =
+          typeof EventsApi.incidentDateFieldLabel === "function"
+            ? EventsApi.incidentDateFieldLabel(type)
+            : "التاريخ";
+        label.textContent = needsDate ? fieldLabel : fieldLabel + " (اختياري)";
       }
     }
     if (placeEl) {
-      placeEl.required = !!needsPlace;
+      placeEl.required = !!(needsPlace && !needsPlaceKind);
       const placeField = placeEl.closest(".founder-field");
       const placeLabel = placeField && placeField.querySelector("label");
       if (placeLabel) {
-        placeLabel.innerHTML = needsPlace
-          ? "المكان"
-          : 'المكان <span class="field-optional">(اختياري)</span>';
+        if (family === "health") {
+          placeLabel.innerHTML =
+            'المستشفى / المكان <span class="field-optional">(اختياري)</span>';
+          placeEl.placeholder = "المستشفى أو المنزل";
+        } else if (family === "death") {
+          placeLabel.innerHTML =
+            'مكان العزاء <span class="field-optional">(اختياري)</span>';
+          placeEl.placeholder = "موقع العزاء";
+        } else {
+          placeLabel.innerHTML =
+            needsPlace && !needsPlaceKind
+              ? "اسم الموقع"
+              : 'اسم الموقع <span class="field-optional">(اختياري)</span>';
+          placeEl.placeholder = "مثال: استراحة العم فلان";
+        }
       }
     }
+    if (placeKindEl) {
+      placeKindEl.required = false;
+    }
+    if (venueWrap) {
+      venueWrap.hidden = !showVenue;
+    }
+    Array.prototype.forEach.call(venueFields, function (el) {
+      el.hidden = !showVenue;
+    });
   }
 
   function syncOccasionTypeSelect(form) {
@@ -444,11 +486,30 @@
   function buildEventRequestMessage(payload, mode) {
     const isPatient = mode === "patient";
     const isDeath = mode === "death";
+    const EventsLbl = window.AlzidanEvents || {};
+    const family =
+      typeof EventsLbl.eventFamilyFromType === "function"
+        ? EventsLbl.eventFamilyFromType(payload.type)
+        : "";
+    const personLabel =
+      typeof EventsLbl.personLabelForType === "function"
+        ? EventsLbl.personLabelForType(payload.type)
+        : isPatient
+          ? "اسم المريض"
+          : isDeath
+            ? "اسم المتوفى"
+            : "اسم صاحب المناسبة";
+    const dateFieldLabel =
+      typeof EventsLbl.incidentDateFieldLabel === "function"
+        ? EventsLbl.incidentDateFieldLabel(payload.type)
+        : "التاريخ";
     const lines = [];
     if (isDeath) {
       lines.push("طلب نشر إعلان وفاة في تطبيق عائلة الزيدان");
     } else if (isPatient) {
       lines.push("طلب نشر حالة مرضية في تطبيق عائلة الزيدان");
+    } else if (family === "news") {
+      lines.push("طلب نشر تهنئة / خبر عائلي في تطبيق عائلة الزيدان");
     } else {
       lines.push("طلب نشر مناسبة في تطبيق عائلة الزيدان");
     }
@@ -460,16 +521,30 @@
       lines.push("اسم المتوفى: " + payload.person);
     } else {
       lines.push(
-        (isPatient ? "نوع الحالة: " : "نوع المناسبة: ") + payload.typeLabel
+        (isPatient ? "نوع الحالة: " : family === "news" ? "النوع: " : "نوع المناسبة: ") +
+          payload.typeLabel
       );
-      lines.push(
-        (isPatient ? "اسم المريض: " : "اسم صاحب المناسبة: ") + payload.person
-      );
+      lines.push(personLabel + ": " + payload.person);
     }
-    lines.push("التاريخ: " + (payload.dateLabel || ""));
-    lines.push(
-      (isPatient ? "المستشفى / المكان: " : "المكان: ") + (payload.place || "")
-    );
+    if (payload.dateLabel) lines.push(dateFieldLabel + ": " + payload.dateLabel);
+    if (isPatient) {
+      lines.push("المستشفى / المكان: " + (payload.place || ""));
+    } else if (!isDeath) {
+      var EventsMsg = window.AlzidanEvents || {};
+      var kindLabel =
+        typeof EventsMsg.placeKindArabicLabel === "function"
+          ? EventsMsg.placeKindArabicLabel(payload.placeKind)
+          : payload.placeKind || "";
+      var venueLine =
+        EventsMsg && typeof EventsMsg.formatVenueLine === "function"
+          ? EventsMsg.formatVenueLine({
+              placeKind: payload.placeKind,
+              extra: payload.place,
+            })
+          : [kindLabel, payload.place].filter(Boolean).join(" — ");
+      if (venueLine) lines.push("المكان: " + venueLine);
+      if (payload.coords) lines.push("الإحداثيات: " + payload.coords);
+    }
     if (!isPatient && !isDeath) {
       // Only emit media lines when a real URL exists — empty "رابط الفيديو:" was
       // previously mis-parsed as videoUrl="النص:" and rendered a black <video>.
@@ -498,6 +573,8 @@
             dateLabel: payload.dateLabel,
             text: payload.text,
             place: payload.place,
+            placeKind: payload.placeKind,
+            coords: payload.coords,
             hospitalName: isPatient ? payload.place : "",
             phone: payload.phone,
             imageUrl: payload.imageUrl,
@@ -655,6 +732,12 @@
         const place = normalizeEventText(
           form.querySelector('[name="place"]')?.value
         );
+        const placeKind = normalizeEventText(
+          form.querySelector('[name="placeKind"]')?.value
+        );
+        const coords = normalizeEventText(
+          form.querySelector('[name="coords"]')?.value
+        );
         const imageFile =
           form.querySelector('[name="imageFile"]')?.files?.[0] || null;
         const videoFile =
@@ -772,9 +855,33 @@
             EventsApi && typeof EventsApi.eventRequiresPlace === "function"
               ? EventsApi.eventRequiresPlace(type)
               : false;
-          if (needsPlace && !place) {
+          var needsPlaceKind =
+            EventsApi && typeof EventsApi.eventRequiresPlaceKind === "function"
+              ? EventsApi.eventRequiresPlaceKind(type)
+              : false;
+          if (needsPlaceKind && !placeKind) {
+            setAlert(
+              "error",
+              "اختر نوع الموقع: بالمنزل أو المزرعة أو البر أو الاستراحة."
+            );
+            return;
+          }
+          if (needsPlace && !needsPlaceKind && !place) {
             setAlert("error", "المكان مطلوب لهذا النوع من المناسبات.");
             return;
+          }
+          if (coords) {
+            var parsedCoords =
+              EventsApi && typeof EventsApi.parseCoordinates === "function"
+                ? EventsApi.parseCoordinates(coords)
+                : null;
+            if (!parsedCoords) {
+              setAlert(
+                "error",
+                "الإحداثيات غير صحيحة. اكتب مثل: 24.7136, 46.6753 أو الصق رابط خرائط."
+              );
+              return;
+            }
           }
           if (!isAllowedOccasionType(type)) {
             setAlert(
@@ -866,6 +973,8 @@
           personId: personId || "",
           dateLabel,
           place,
+          placeKind,
+          coords,
           imageUrl: uploadedImageUrl,
           videoUrl: uploadedVideoUrl,
           text,
@@ -918,6 +1027,8 @@
             branch_key: branch,
             text: text,
             place: place,
+            placeKind: placeKind,
+            coords: coords,
             hospital_name: isPatient ? place : "",
             hospitalName: isPatient ? place : "",
             phone: phone,

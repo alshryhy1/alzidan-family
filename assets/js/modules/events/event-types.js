@@ -26,6 +26,7 @@
    *   requiresDate?: boolean,
    *   requiresTime?: boolean,
    *   requiresPlace?: boolean,
+   *   requiresPlaceKind?: boolean,
    *   personLabel?: string,
    *   tickerKind?: 'congrats'|'health'|'death'|'upcoming'
    * }} EventTypeDef
@@ -69,6 +70,9 @@
     { key: "retirement", label: "حفل تقاعد", family: "occasion", requiresDate: true, requiresTime: false, requiresPlace: false, personLabel: "اسم المتقاعد", tickerKind: "upcoming" },
     { key: "dinner", label: "دعوة عشاء", family: "occasion", requiresDate: true, requiresTime: true, requiresPlace: false, personLabel: "اسم الداعي", tickerKind: "upcoming" },
     { key: "lunch", label: "دعوة غداء", family: "occasion", requiresDate: true, requiresTime: true, requiresPlace: false, personLabel: "اسم الداعي", tickerKind: "upcoming" },
+    { key: "finjal_asr", label: "فنجال بعد صلاة العصر", family: "occasion", requiresDate: true, requiresTime: false, requiresPlace: false, personLabel: "اسم الداعي", tickerKind: "upcoming" },
+    { key: "finjal_isha", label: "فنجال بعد صلاة العشاء", family: "occasion", requiresDate: true, requiresTime: false, requiresPlace: false, personLabel: "اسم الداعي", tickerKind: "upcoming" },
+    { key: "finjal_hawlna", label: "فنجال والم اللي حولنا", family: "occasion", requiresDate: true, requiresTime: true, requiresPlace: false, personLabel: "اسم الداعي", tickerKind: "upcoming" },
     { key: "general", label: "مناسبة عامة", family: "occasion", requiresDate: true, requiresTime: false, requiresPlace: false, personLabel: "اسم صاحب المناسبة", tickerKind: "upcoming" },
   ];
 
@@ -113,6 +117,9 @@
     feast: "feast",
     dinner: "dinner",
     lunch: "lunch",
+    finjal_asr: "finjal_asr",
+    finjal_isha: "finjal_isha",
+    finjal_hawlna: "finjal_hawlna",
     happy: "family_news",
     general: "general",
     other: "general",
@@ -163,6 +170,12 @@
     سفر: "family_news",
     عقيقة: "aqiqa",
     وليمة: "feast",
+    "فنجال بعد صلاة العصر": "finjal_asr",
+    "فنجال العصر": "finjal_asr",
+    "فنجال بعد صلاة العشاء": "finjal_isha",
+    "فنجال العشاء": "finjal_isha",
+    "فنجال والم اللي حولنا": "finjal_hawlna",
+    "فنجال والم الي حولنا": "finjal_hawlna",
     "مناسبة عامة": "general",
   };
 
@@ -263,6 +276,120 @@
     return !!(def && def.requiresPlace);
   }
 
+  function eventRequiresPlaceKind(type) {
+    var def = getEventTypeDef(type);
+    return !!(def && def.requiresPlaceKind);
+  }
+
+  var EVENT_PLACE_KINDS = [
+    { key: "home", label: "بالمنزل" },
+    { key: "farm", label: "بالمزرعة" },
+    { key: "desert", label: "بالبر" },
+    { key: "resthouse", label: "بالاستراحة" },
+  ];
+
+  var PLACE_KIND_BY_KEY = {};
+  EVENT_PLACE_KINDS.forEach(function (item) {
+    PLACE_KIND_BY_KEY[item.key] = item;
+  });
+
+  var PLACE_KIND_ALIASES = {
+    home: "home",
+    بالمنزل: "home",
+    المنزل: "home",
+    منزل: "home",
+    farm: "farm",
+    بالمزرعة: "farm",
+    المزرعة: "farm",
+    مزرعة: "farm",
+    desert: "desert",
+    بالبر: "desert",
+    البر: "desert",
+    بر: "desert",
+    resthouse: "resthouse",
+    بالاستراحة: "resthouse",
+    الاستراحة: "resthouse",
+    استراحة: "resthouse",
+  };
+
+  function normalizePlaceKind(raw) {
+    var key = normalizeText(raw);
+    if (!key) return "";
+    if (PLACE_KIND_BY_KEY[key]) return key;
+    if (PLACE_KIND_ALIASES[key]) return PLACE_KIND_ALIASES[key];
+    var lower = key.toLowerCase();
+    if (PLACE_KIND_BY_KEY[lower]) return lower;
+    if (PLACE_KIND_ALIASES[lower]) return PLACE_KIND_ALIASES[lower];
+    return "";
+  }
+
+  function placeKindArabicLabel(kind) {
+    var key = normalizePlaceKind(kind);
+    return (PLACE_KIND_BY_KEY[key] && PLACE_KIND_BY_KEY[key].label) || "";
+  }
+
+  function toFiniteCoord(v, min, max) {
+    var n = Number(v);
+    if (!Number.isFinite(n) || n < min || n > max) return null;
+    return Math.round(n * 1e6) / 1e6;
+  }
+
+  function coordsPair(lat, lng) {
+    var a = toFiniteCoord(lat, -90, 90);
+    var b = toFiniteCoord(lng, -180, 180);
+    if (a == null || b == null) return null;
+    return { lat: a, lng: b };
+  }
+
+  function parseCoordinates(raw) {
+    var s = normalizeText(raw)
+      .replace(/[٠-٩]/g, function (d) {
+        return String("٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      })
+      .replace(/[۰-۹]/g, function (d) {
+        return String("۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+      });
+    if (!s) return null;
+    var m =
+      s.match(/@(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/) ||
+      s.match(/[?&](?:q|query|ll)=(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i) ||
+      s.match(/geo:(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i) ||
+      s.match(/^(-?\d+(?:\.\d+)?)\s*[,،]\s*(-?\d+(?:\.\d+)?)$/);
+    if (!m) return null;
+    return coordsPair(m[1], m[2]);
+  }
+
+  function mapsUrlFromCoords(lat, lng) {
+    var pair = coordsPair(lat, lng);
+    if (!pair) return "";
+    return "https://maps.google.com/?q=" + pair.lat + "," + pair.lng;
+  }
+
+  function formatVenueLine(input) {
+    var src = input && typeof input === "object" ? input : {};
+    var kindLabel = placeKindArabicLabel(src.placeKind || src.place_kind);
+    var extra = normalizeText(src.extra || src.place || src.placeName || src.place_name);
+    var parts = [];
+    if (kindLabel) parts.push(kindLabel);
+    if (extra) parts.push(extra);
+    return parts.join(" — ");
+  }
+
+  function venueFromDetails(details) {
+    var src = details && typeof details === "object" ? details : {};
+    var kind = normalizePlaceKind(src.place_kind || src.placeKind);
+    var extra = normalizeText(src.extra || src.place || src.placeName || src.place_name);
+    var pair =
+      coordsPair(src.lat, src.lng) ||
+      parseCoordinates(src.coords || src.coordinates || src.maps_url || src.mapsUrl || "");
+    return {
+      placeKind: kind,
+      extra: extra,
+      lat: pair ? pair.lat : null,
+      lng: pair ? pair.lng : null,
+    };
+  }
+
   function isBlockedNewEventType(type) {
     var key = normalizeText(type);
     if (!key) return false;
@@ -318,6 +445,97 @@
     return (def && def.personLabel) || "الاسم";
   }
 
+  function eventRequestKindLabel(type) {
+    var family = eventFamilyFromType(type);
+    if (family === "news") return "تهنئة / خبر";
+    if (family === "health") return "خبر صحي";
+    if (family === "death") return "إعلان وفاة";
+    return "بطاقة مناسبة";
+  }
+
+  function incidentDateFieldLabel(type) {
+    var key = normalizeEventType(type);
+    if (key === "birth") return "تاريخ الولادة";
+    var family = eventFamilyFromType(type);
+    if (family === "news") return "تاريخ الخبر";
+    if (family === "health") return "تاريخ الحالة";
+    if (family === "death") return "تاريخ الوفاة";
+    return "تاريخ المناسبة";
+  }
+
+  function foldCatalogDigits(s) {
+    return String(s || "")
+      .replace(/[٠-٩]/g, function (d) {
+        return String("٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      })
+      .replace(/[۰-۹]/g, function (d) {
+        return String("۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+      });
+  }
+
+  function parseGregorianDayMs(value) {
+    var s = foldCatalogDigits(value)
+      .replace(/[.\s]+/g, "/")
+      .trim();
+    if (!s) return null;
+    var y = 0;
+    var m = 0;
+    var d = 0;
+    var mm = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (mm) {
+      y = parseInt(mm[1], 10);
+      m = parseInt(mm[2], 10);
+      d = parseInt(mm[3], 10);
+    } else {
+      mm = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+      if (!mm) return null;
+      d = parseInt(mm[1], 10);
+      m = parseInt(mm[2], 10);
+      y = parseInt(mm[3], 10);
+    }
+    if (!y || y < 1800 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+    var dt = new Date(y, m - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+    return dt.getTime();
+  }
+
+  /**
+   * News/health incident dates are optional facts, not party days.
+   * Hide dates years away from publish (e.g. 2022-06-25 on an Aug 2026 newborn notice).
+   */
+  function newsIncidentDateIsPlausible(dateValue, createdAt, maxDaysBefore) {
+    var day = parseGregorianDayMs(dateValue);
+    if (day == null) return false;
+    var createdMs = createdAt ? Date.parse(String(createdAt)) : Date.now();
+    if (!Number.isFinite(createdMs)) createdMs = Date.now();
+    var created = new Date(createdMs);
+    var createdDay = new Date(created.getFullYear(), created.getMonth(), created.getDate()).getTime();
+    var diffDays = Math.round((createdDay - day) / 86400000);
+    var maxBefore = maxDaysBefore == null ? 30 : Number(maxDaysBefore);
+    if (!Number.isFinite(maxBefore) || maxBefore < 1) maxBefore = 30;
+    return diffDays >= -1 && diffDays <= maxBefore;
+  }
+
+  function eventTextIsTypeEcho(type, text) {
+    var t = String(text || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!t) return true;
+    var key = normalizeEventType(type);
+    var label = eventTypeArabicLabel(key);
+    function compact(s) {
+      return String(s || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    if (compact(t) === compact(label) || compact(t) === compact(key) || compact(t) === compact(type)) {
+      return true;
+    }
+    var def = getEventTypeDef(key);
+    if (def && compact(t) === compact(def.label)) return true;
+    return false;
+  }
+
   root.AlzidanEvents = root.AlzidanEvents || {};
   Object.assign(root.AlzidanEvents, {
     EVENT_FAMILIES: EVENT_FAMILIES,
@@ -333,6 +551,14 @@
     eventRequiresDate: eventRequiresDate,
     eventRequiresTime: eventRequiresTime,
     eventRequiresPlace: eventRequiresPlace,
+    eventRequiresPlaceKind: eventRequiresPlaceKind,
+    EVENT_PLACE_KINDS: EVENT_PLACE_KINDS,
+    normalizePlaceKind: normalizePlaceKind,
+    placeKindArabicLabel: placeKindArabicLabel,
+    parseCoordinates: parseCoordinates,
+    mapsUrlFromCoords: mapsUrlFromCoords,
+    formatVenueLine: formatVenueLine,
+    venueFromDetails: venueFromDetails,
     isBlockedNewEventType: isBlockedNewEventType,
     isSelectableEventType: isSelectableEventType,
     getEventTypeDef: getEventTypeDef,
@@ -342,5 +568,9 @@
     listDeathTypes: listDeathTypes,
     tickerKindForType: tickerKindForType,
     personLabelForType: personLabelForType,
+    eventRequestKindLabel: eventRequestKindLabel,
+    incidentDateFieldLabel: incidentDateFieldLabel,
+    newsIncidentDateIsPlausible: newsIncidentDateIsPlausible,
+    eventTextIsTypeEcho: eventTextIsTypeEcho,
   });
 })(typeof window !== "undefined" ? window : globalThis);

@@ -24,6 +24,37 @@
     return "";
   }
 
+  function looksLikeClockTimestamp(value) {
+    const s = normalizeText(value);
+    if (!s) return false;
+    if (/مساء|صباح|م\.?\s*$/.test(s)) return true;
+    if (/\d{1,2}:\d{2}/.test(s)) return true;
+    return false;
+  }
+
+  function readSubmitterBlockLine(message, labels) {
+    const raw = String(message || "");
+    const idx = raw.search(/بيانات المرسل\s*:/);
+    if (idx < 0) return "";
+    return readMessageLine(raw.slice(idx), labels);
+  }
+
+  function firstNonClockDateLabel(message) {
+    const labels = ["تاريخ الولادة", "تاريخ الخبر", "تاريخ الحالة", "تاريخ الوفاة", "تاريخ المناسبة", "التاريخ"];
+    const lines = String(message || "").split(/\r?\n/);
+    for (const rawLine of lines) {
+      const line = String(rawLine || "").trim();
+      for (const label of labels) {
+        const prefix = label + ":";
+        if (!line.startsWith(prefix)) continue;
+        const val = line.slice(prefix.length).trim();
+        if (!val || looksLikeClockTimestamp(val)) continue;
+        return val;
+      }
+    }
+    return "";
+  }
+
   function parseJsonEnvelopeFromMessage(message) {
     const marker = "__JSON__:";
     const text = String(message || "");
@@ -116,29 +147,38 @@
     const detailsObj = parseDetailsValue(event.details);
 
     const type = normalizeText(
-      event.type || event.typeLabel || getLabel("نوع المناسبة") || getLabel("النوع") || j.type || "",
+      event.type ||
+        j.type ||
+        event.typeLabel ||
+        j.typeLabel ||
+        getLabel("نوع المناسبة") ||
+        getLabel("النوع") ||
+        "",
     );
     const person = normalizeText(
       event.person ||
+        j.person ||
         getLabel("اسم صاحب المناسبة") ||
         getLabel("صاحب المناسبة") ||
         getLabel("اسم المريض") ||
         getLabel("اسم المتوفى") ||
+        getLabel("اسم المولود أو الأب") ||
         getLabel("اسم المولود") ||
         getLabel("اسم العريس") ||
         getLabel("اسم الخريج") ||
-        j.person ||
         "",
     );
     const dateLabel = normalizeText(
       event.dateLabel ||
         event.date_label ||
-        getLabel("التاريخ") ||
-        getLabel("تاريخ المناسبة") ||
+        j.date_label ||
         j.dateLabel ||
+        firstNonClockDateLabel(raw) ||
         "",
     );
-    const eventDate = normalizeText(event.eventDate || event.event_date || j.eventDate || "");
+    const eventDate = normalizeText(
+      event.eventDate || event.event_date || j.event_date || j.eventDate || "",
+    );
 
     const pickImage = (...cands) => {
       for (let i = 0; i < cands.length; i++) {
@@ -195,7 +235,13 @@
     );
 
     const text = normalizeText(
-      detailsObj.text || detailsObj.extra || detailsObj.notes || getLabel("النص") || "",
+      detailsObj.text ||
+        detailsObj.extra ||
+        detailsObj.notes ||
+        j.text ||
+        getLabel("النص") ||
+        getLabel("نص التهنئة / الخبر") ||
+        "",
     );
     const detailsText = extractDisplayDetailsFromMessage(raw, event, j) || text;
 
@@ -209,13 +255,27 @@
       imageUrl,
       videoUrl,
       submitterName: normalizeText(
-        submitter.name || j.submitterName || getLabel("الاسم") || "",
+        submitter.name ||
+          j.submitter_name ||
+          j.submitterName ||
+          readSubmitterBlockLine(raw, "الاسم") ||
+          "",
       ),
       submitterPhone: normalizeText(
-        submitter.phone || j.submitterPhone || getLabel("الجوال") || "",
+        submitter.phone ||
+          j.submitter_phone ||
+          j.submitterPhone ||
+          readSubmitterBlockLine(raw, "الجوال") ||
+          getLabel("الجوال") ||
+          "",
       ),
       submitterEmail: normalizeText(
-        submitter.email || j.submitterEmail || getLabel("البريد") || "",
+        submitter.email ||
+          j.submitter_email ||
+          j.submitterEmail ||
+          readSubmitterBlockLine(raw, "البريد") ||
+          getLabel("البريد") ||
+          "",
       ),
       envelope: j,
       event,

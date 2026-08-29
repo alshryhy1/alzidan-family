@@ -256,15 +256,24 @@
         : selectedPersonId || "—";
       var titleEl = personCard.querySelector("[data-fm-person-title]");
       if (titleEl) titleEl.textContent = display || "—";
+      var personMeta = null;
+      if (selectedPersonId && typeof api.getPersonRowMeta === "function") {
+        personMeta = api.getPersonRowMeta(selectedPersonId);
+      }
       var metaEl = personCard.querySelector("[data-fm-person-meta]");
-      if (metaEl) metaEl.textContent = selectedPersonId ? "محور إدارة العائلة" : "اختر شخصاً من القائمة أو البحث";
+      if (metaEl) {
+        var idBits = [];
+        if (personMeta && personMeta.id) idBits.push("الرقم: " + String(personMeta.id));
+        if (personMeta && personMeta.person_id) idBits.push("الأيدي: " + String(personMeta.person_id));
+        metaEl.textContent = idBits.length
+          ? idBits.join(" · ")
+          : selectedPersonId
+            ? "محور إدارة العائلة"
+            : "اختر شخصاً من القائمة أو البحث";
+      }
       var photoEl = personCard.querySelector("[data-fm-person-photo]");
       var clearPhotoBtn = personCard.querySelector("[data-fm-clear-photo]");
-      var photoUrl = "";
-      if (selectedPersonId && typeof api.getPersonRowMeta === "function") {
-        var personMeta = api.getPersonRowMeta(selectedPersonId);
-        photoUrl = String((personMeta && (personMeta.photo_url || personMeta.photoUrl)) || "").trim();
-      }
+      var photoUrl = String((personMeta && (personMeta.photo_url || personMeta.photoUrl)) || "").trim();
       if (photoEl) {
         if (/^https?:\/\//i.test(photoUrl)) {
           photoEl.src = photoUrl;
@@ -276,7 +285,18 @@
       }
       if (clearPhotoBtn) clearPhotoBtn.hidden = !photoUrl;
       var idEl = personDataBody.querySelector("[data-fm-stat-id]");
-      if (idEl) idEl.textContent = selectedPersonId || "—";
+      if (idEl) {
+        if (personMeta && (personMeta.id || personMeta.person_id)) {
+          idEl.textContent = personMeta.id
+            ? String(personMeta.id)
+            : String(personMeta.person_id);
+          if (personMeta.id && personMeta.person_id) {
+            idEl.title = "الأيدي: " + String(personMeta.person_id);
+          }
+        } else {
+          idEl.textContent = selectedPersonId || "—";
+        }
+      }
       var wivesCount = spousesSection ? spousesSection.getWivesRows().length : 0;
       var wivesStat = personDataBody.querySelector("[data-fm-stat-wives]");
       if (wivesStat) wivesStat.textContent = String(wivesCount);

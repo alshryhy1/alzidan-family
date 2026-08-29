@@ -20,6 +20,7 @@
     "verify:uuid-link-diagnosis": "node scripts/test-uuid-link-diagnosis.js",
     "verify:dup-identity": "node scripts/test-dup-identity-guard.js",
     "verify:dup-create-paths": "node scripts/test-dup-identity-create-paths.js",
+    "verify:occasion-replies": "node scripts/test-occasion-replies-by-type.js",
     "verify:occasion-dup": "node scripts/test-occasion-dup-guard.js",
     "verify:occasion-track": "node scripts/test-occasion-dup-guard.js",
     "verify:patient-dup": "node scripts/test-patient-dup-guard.js",
