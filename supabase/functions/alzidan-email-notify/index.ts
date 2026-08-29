@@ -41,6 +41,8 @@ const KNOWN_KINDS: Record<string, { label: string; family: "content" | "privileg
   events_delegate: { label: "مندوب مناسبات", family: "privilege" },
   test_request: { label: "طلب اختبار", family: "content" },
   delegate_secret_reset: { label: "إعادة تعيين رقم سري", family: "privilege" },
+  member_phone_register: { label: "تسجيل جوال", family: "content" },
+  member_registration: { label: "تسجيل عضوية", family: "content" },
 };
 
 const STATUS_AR: Record<string, string> = {

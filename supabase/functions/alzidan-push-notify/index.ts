@@ -56,7 +56,9 @@ function requestLabel(kind: string) {
     memory: "ذكرى",
     special_card: "طلب بطاقة",
     tree_founder: "مؤسس في الشجرة",
-    org_role: "عضوية/دور",
+    org_role: "عضوية",
+    member_phone_register: "تسجيل جوال",
+    member_registration: "تسجيل عضوية",
     tree_delegate: "مندوب شجرة",
     events_delegate: "مندوب مناسبات",
     test_request: "طلب اختبار",
@@ -162,7 +164,17 @@ function safeRenderPush(input: {
   if (mode === "admin_new_request") {
     return {
       title: "طلب جديد بانتظار اعتمادك",
-      body: `وصل طلب «${kindLabel}»${branch ? ` لفرع ${branch}` : ""} بانتظار الاعتماد.`,
+      body: `وصل طلب «${kindLabel}»${branch ? ` لفرع ${branch}` : ""}.`,
+      kindLabel,
+    };
+  }
+
+  if (mode === "women_manager_new_request") {
+    return {
+      title: "طلب يحتاج مراجعتك",
+      body: branch
+        ? `وصل طلب «${kindLabel}» لفرع ${branch}.`
+        : `وصل طلب «${kindLabel}».`,
       kindLabel,
     };
   }
@@ -221,42 +233,68 @@ function formatFormalNotificationText(input: {
 }) {
   const type = normalizeType(input.type);
   const person = normalizeText(input.person);
-  const fallbackTitle = normalizeText(input.fallbackTitle) || "إشعار جديد";
-  const fallbackBody = normalizeText(input.fallbackBody) || "ورد إشعار جديد في تطبيق عائلة الزيدان.";
+  const fallbackBody = normalizeText(input.fallbackBody);
 
-  if (type === "birth") {
-    const subject = person ? `صدور إشعار مولود جديد يخص: ${person}` : "صدور إشعار مولود جديد";
-    const body = person
-      ? `تم اعتماد خبر مولود جديد في تطبيق عائلة الزيدان لصاحب الاسم: ${person}.`
-      : "تم اعتماد خبر مولود جديد في تطبيق عائلة الزيدان.";
-    return { typeLabel: "إشعار مولود جديد", subject, body, title: `إشعار مولود جديد — ${subject}` };
+  if (type === "birth" || type === "aqiqa") {
+    return {
+      typeLabel: "مولود جديد",
+      subject: person || "مولود جديد",
+      title: "مولود جديد",
+      body: person ? `وُلد ${person}.` : "خبر مولود جديد في العائلة.",
+    };
   }
 
-  if (type === "death") {
-    const subject = person ? `صدور إشعار وفاة يخص: ${person}` : "صدور إشعار وفاة";
-    const body = person
-      ? `تم تسجيل خبر وفاة في تطبيق عائلة الزيدان للاسم: ${person}.`
-      : "تم تسجيل خبر وفاة في تطبيق عائلة الزيدان.";
-    return { typeLabel: "إشعار وفاة", subject, body, title: `إشعار وفاة — ${subject}` };
+  if (type === "death" || type === "condolence") {
+    return {
+      typeLabel: "وفاة",
+      subject: person || "وفاة",
+      title: "إنا لله وإنا إليه راجعون",
+      body: person ? person : "خبر وفاة في العائلة.",
+    };
   }
 
-  if (type === "sick" || type === "operation" || type === "discharge") {
-    const subject = person ? `صدور إشعار حالة صحية يخص: ${person}` : "صدور إشعار حالة صحية";
-    const body = person
-      ? `تم تسجيل حالة صحية في تطبيق عائلة الزيدان للاسم: ${person}.`
-      : "تم تسجيل حالة صحية جديدة في تطبيق عائلة الزيدان.";
-    return { typeLabel: "إشعار حالة صحية", subject, body, title: `إشعار حالة صحية — ${subject}` };
+  if (type === "sick" || type === "operation" || type === "discharge" || type === "healing" || type === "health") {
+    return {
+      typeLabel: "حالة صحية",
+      subject: person || "حالة صحية",
+      title: "حالة صحية",
+      body: person ? person : "خبر حالة صحية في العائلة.",
+    };
   }
 
-  const defaultSubject = person ? `صدور إشعار مناسبة يخص: ${person}` : "صدور إشعار مناسبة";
-  const defaultBody = fallbackBody || "تم نشر مناسبة جديدة في تطبيق عائلة الزيدان.";
-  const defaultTitle = fallbackTitle === "إشعار جديد" ? `إشعار مناسبة — ${defaultSubject}` : fallbackTitle;
+  if (type === "marriage" || type === "wedding" || type === "contract") {
+    return {
+      typeLabel: "زواج",
+      subject: person || "زواج",
+      title: "زواج",
+      body: person ? person : "مناسبة زواج في العائلة.",
+    };
+  }
+
+  if (
+    type === "graduation" ||
+    type === "graduation_notice" ||
+    type === "promotion" ||
+    type === "promotion_notice" ||
+    type === "family_news" ||
+    type === "news" ||
+    type === "general" ||
+    type === "success" ||
+    type === "achievement"
+  ) {
+    return {
+      typeLabel: "خبر عائلي",
+      subject: person || "خبر عائلي",
+      title: "خبر عائلي",
+      body: person || fallbackBody || "خبر جديد في العائلة.",
+    };
+  }
 
   return {
-    typeLabel: "إشعار مناسبة",
-    subject: defaultSubject,
-    body: defaultBody,
-    title: defaultTitle,
+    typeLabel: "مناسبة",
+    subject: person || "مناسبة",
+    title: "مناسبة",
+    body: person || fallbackBody || "مناسبة جديدة في العائلة.",
   };
 }
 
@@ -392,6 +430,43 @@ async function fetchAdminNotifyPhones(): Promise<string[]> {
     }
   } catch (_) {}
 
+  return Array.from(phones);
+}
+
+async function fetchWomenManagerPhones(): Promise<string[]> {
+  if (!SERVICE_ROLE_KEY) return [];
+  const phones = new Set<string>();
+  const headers = {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    Accept: "application/json",
+  };
+  try {
+    const grantsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/member_role_grants?select=tree_child_id,person_id&role_key=eq.women_manager&status=eq.active`,
+      { headers },
+    );
+    if (!grantsRes.ok) return [];
+    const grants = await grantsRes.json();
+    const childIds = [
+      ...new Set(
+        (grants || [])
+          .map((row: { tree_child_id?: number }) => Number(row?.tree_child_id || 0))
+          .filter((id: number) => id > 0),
+      ),
+    ];
+    if (!childIds.length) return [];
+    const profilesRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/member_profiles?select=phone,tree_child_id&tree_child_id=in.(${childIds.join(",")})&phone=not.is.null`,
+      { headers },
+    );
+    if (!profilesRes.ok) return [];
+    const rows = await profilesRes.json();
+    for (const row of rows || []) {
+      const phone = normalizeSaudiPhone(row?.phone);
+      if (phone) phones.add(phone);
+    }
+  } catch (_) {}
   return Array.from(phones);
 }
 
@@ -648,6 +723,8 @@ async function notifyBranchDelegateNewRequest(payload: Record<string, unknown>, 
     "memory_card",
     "memory",
     "tree_founder",
+    "member_phone_register",
+    "member_registration",
   ]);
   if (kind && !branchNotifyKinds.has(kind)) {
     return json({
@@ -764,6 +841,10 @@ async function notifyAdminNewRequest(payload: Record<string, unknown>, dryRun: b
   const branchKey = normalizeBranchKey(record.branch_key || payload.branch_key);
   const eventKey = buildEventKey("admin_new_request", requestId, kind);
 
+  if (!kindLabel || !isKnownPushKind(kind)) {
+    return json({ ok: true, skipped: "unknown_kind_blocked", mode: "admin_new_request", kind });
+  }
+
   const adminPhones = await fetchAdminNotifyPhones();
   if (!adminPhones.length) {
     return json({
@@ -778,10 +859,18 @@ async function notifyAdminNewRequest(payload: Record<string, unknown>, dryRun: b
   const tokenRows = await fetchEnabledTokensWithPhone();
   const { tokens_with_phone, unique } = matchTokensForPhones(tokenRows, phoneSet);
 
-  const title = "طلب جديد بانتظار اعتمادك";
-  const body = branchKey
-    ? `وصل ${kindLabel} لفرع ${branchKey}، وهو بانتظار اعتمادك واتخاذ الإجراء المناسب.`
-    : `وصل ${kindLabel}، وهو بانتظار اعتمادك واتخاذ الإجراء المناسب.`;
+  const rendered = safeRenderPush({
+    mode: "admin_new_request",
+    kind,
+    branch_key: branchKey,
+    person: String(record.name || record.person || ""),
+  });
+  if (!rendered) {
+    return json({ ok: true, skipped: "safe_render_blocked", mode: "admin_new_request", kind });
+  }
+
+  const title = rendered.title;
+  const body = rendered.body;
   const portalUrl = buildAdminPortalUrl(requestId);
   const data = {
     mode: "admin_new_request",
@@ -830,6 +919,99 @@ async function notifyAdminNewRequest(payload: Record<string, unknown>, dryRun: b
     recipients_after_dedupe: messages.length,
     deduped,
     portal_url: portalUrl,
+    title,
+    body,
+  });
+}
+
+async function notifyWomenManagerNewRequest(payload: Record<string, unknown>, dryRun: boolean) {
+  const record = (payload.record && typeof payload.record === "object"
+    ? payload.record
+    : payload) as Record<string, unknown>;
+  const kind = normalizeText(record.kind || payload.kind);
+  const womenKinds = new Set(["member_phone_register", "member_registration"]);
+  if (!womenKinds.has(kind)) {
+    return json({ ok: true, skipped: "kind_not_for_women_manager", mode: "women_manager_new_request", kind });
+  }
+  const kindLabel = requestLabel(kind);
+  if (!kindLabel) {
+    return json({ ok: true, skipped: "unknown_kind_blocked", mode: "women_manager_new_request", kind });
+  }
+  const requestId = normalizeText(record.request_id);
+  const branchKey = normalizeBranchKey(record.branch_key || payload.branch_key);
+  const eventKey = buildEventKey("women_manager_new_request", requestId, kind);
+
+  const managerPhones = await fetchWomenManagerPhones();
+  if (!managerPhones.length) {
+    return json({
+      ok: true,
+      skipped: "no_women_manager_phones",
+      mode: "women_manager_new_request",
+      kind,
+    });
+  }
+
+  const phoneSet = new Set(managerPhones);
+  const tokenRows = await fetchEnabledTokensWithPhone();
+  const { tokens_with_phone, unique } = matchTokensForPhones(tokenRows, phoneSet);
+
+  const rendered = safeRenderPush({
+    mode: "women_manager_new_request",
+    kind,
+    branch_key: branchKey,
+    person: String(record.name || record.person || ""),
+  });
+  if (!rendered) {
+    return json({ ok: true, skipped: "safe_render_blocked", mode: "women_manager_new_request", kind });
+  }
+
+  const title = rendered.title;
+  const body = rendered.body;
+  const data = {
+    mode: "women_manager_new_request",
+    type: "women_manager_new_request",
+    notification_type: "women_manager_new_request",
+    branch_key: branchKey,
+    screen: "womenAdmin",
+    request_id: requestId,
+    kind,
+    kind_label: kindLabel,
+  };
+
+  let deduped = 0;
+  const messages: Record<string, unknown>[] = [];
+  for (const row of unique) {
+    const token = String(row?.token || "").trim();
+    if (!token) continue;
+    if (!dryRun) {
+      const claim = await claimEventTokenSend(eventKey, token);
+      if (!claim) {
+        deduped += 1;
+        continue;
+      }
+    }
+    const message: Record<string, unknown> = {
+      to: token,
+      sound: "default",
+      title,
+      body,
+      data,
+      priority: "high",
+    };
+    if (row.platform === "android") {
+      message.channelId = "family-events";
+    }
+    messages.push(message);
+  }
+
+  return await deliverMessages(messages, dryRun, {
+    mode: "women_manager_new_request",
+    kind,
+    manager_phones: managerPhones.length,
+    tokens_with_phone,
+    matched_tokens: unique.length,
+    recipients_after_dedupe: messages.length,
+    deduped,
     title,
     body,
   });
@@ -974,6 +1156,10 @@ Deno.serve(async (req) => {
 
     if (mode === "admin_new_request") {
       return await notifyAdminNewRequest(payload, dryRun);
+    }
+
+    if (mode === "women_manager_new_request") {
+      return await notifyWomenManagerNewRequest(payload, dryRun);
     }
 
     if (mode === "status_changed") {

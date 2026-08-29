@@ -27,6 +27,8 @@
     events_delegate: { label: "مندوب مناسبات", family: "privilege" },
     test_request: { label: "طلب اختبار", family: "content" },
     delegate_secret_reset: { label: "إعادة تعيين رقم سري", family: "privilege" },
+    member_phone_register: { label: "تسجيل جوال", family: "content" },
+    member_registration: { label: "تسجيل عضوية", family: "content" },
   };
 
   var STATUS_AR = {
@@ -248,6 +250,27 @@
         title: aSubject,
         body: aBody,
         text: aBody,
+        kindLabel: kindLabel,
+        statusLabel: STATUS_AR.pending,
+      };
+    }
+
+    // ---- women manager new request ----
+    if (mode === "women_manager_new_request") {
+      if (audience === "delegate") return null;
+      var wSubject = "طلب يحتاج مراجعتك";
+      var wBody = [
+        "وصل طلب «" + kindLabel + "»" + (branch ? " لفرع " + branch : "") + ".",
+        person ? "الاسم: " + person : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      return {
+        ok: true,
+        subject: wSubject,
+        title: wSubject,
+        body: wBody,
+        text: wBody,
         kindLabel: kindLabel,
         statusLabel: STATUS_AR.pending,
       };

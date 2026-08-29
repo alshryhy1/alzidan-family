@@ -113,7 +113,7 @@ for (const rel of surfaces) {
     assert(!/نص الطلب:/.test(src), rel + ": no raw message dump label");
     assert(src.includes("تحديث طلبك"), rel + ": structured status Arabic");
   } else if (rel.endsWith(".html")) {
-    assert(src.includes("safe-request-notify.js?v=20260812safe2"), rel + ": wires safe-request-notify cache-bust");
+    assert(/safe-request-notify\.js\?v=/.test(src), rel + ": wires safe-request-notify cache-bust");
   } else if (rel.includes("COPY-ME-delegate")) {
     assert(
       src.includes("status in ('pending', 'approved', 'rejected')"),

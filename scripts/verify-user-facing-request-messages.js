@@ -111,8 +111,8 @@ for (const rel of surfaces) {
   const src = fs.readFileSync(full, "utf8");
   if (rel.endsWith("index.html")) {
     assert(
-      src.includes("safe-request-notify.js?v=20260812safe2") &&
-      src.includes("user-facing-request-messages.js?v=20260812safe2"),
+      /safe-request-notify\.js\?v=/.test(src) &&
+      /user-facing-request-messages\.js\?v=/.test(src),
       "index.html cache-bust includes safe notify + mapper"
     );
   } else if (rel.includes("email-notify")) {

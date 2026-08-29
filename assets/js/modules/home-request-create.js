@@ -1698,12 +1698,83 @@
     try {
       adminRes = await notifyAdminOfRequest(client, row, { force: true });
     } catch (_) {}
+    var womenRes = null;
+    try {
+      womenRes = await notifyWomenManagersOfRequest(client, row);
+    } catch (_) {}
     return {
-      ok: !!(branchRes && branchRes.ok) || !!(adminRes && adminRes.ok),
+      ok: !!(branchRes && branchRes.ok) || !!(adminRes && adminRes.ok) || !!(womenRes && womenRes.ok),
       emailOk: !!(branchRes && branchRes.emailOk) || !!(adminRes && adminRes.emailOk),
-      pushOk: !!(branchRes && branchRes.pushOk) || !!(adminRes && adminRes.pushOk),
+      pushOk: !!(branchRes && branchRes.pushOk) || !!(adminRes && adminRes.pushOk) || !!(womenRes && womenRes.pushOk),
       branch: branchRes,
       admin: adminRes,
+      women: womenRes,
+    };
+  }
+
+  async function notifyWomenManagersOfRequest(client, row) {
+    var sb = client;
+    var Safe =
+      (typeof window !== "undefined" && window.AlzidanSafeRequestNotify) || null;
+    var src = row || {};
+    var rec =
+      Safe && typeof Safe.scrubRecordForNotify === "function"
+        ? Safe.scrubRecordForNotify(src)
+        : {
+            request_id: src.request_id || null,
+            kind: src.kind || "",
+            branch_key: src.branch_key || "",
+            status: src.status || "pending",
+            name: src.name || null,
+            person: src.name || null,
+          };
+    if (rec && Object.prototype.hasOwnProperty.call(rec, "message")) {
+      try {
+        delete rec.message;
+      } catch (_) {}
+    }
+    var kind = String(rec.kind || "").trim();
+    if (!sb) return { ok: false, skipped: "missing" };
+    if (kind !== "member_phone_register" && kind !== "member_registration") {
+      return { ok: false, skipped: "kind" };
+    }
+    if (Safe && typeof Safe.safeRenderOutbound === "function") {
+      var preview = Safe.safeRenderOutbound({
+        mode: "women_manager_new_request",
+        kind: kind,
+        branch_key: rec.branch_key,
+        person: rec.person || rec.name,
+        audience: "admin",
+      });
+      if (!preview) {
+        try {
+          console.warn("[women_manager_new_request] safe_render_blocked", kind);
+        } catch (_) {}
+        return { ok: false, skipped: "safe_render_blocked" };
+      }
+    }
+    var pushResult = null;
+    try {
+      pushResult = await sb.functions.invoke("alzidan-push-notify", {
+        body: { mode: "women_manager_new_request", record: rec }
+      });
+    } catch (e) {
+      pushResult = { error: e };
+    }
+    var pushData = parseNotifyPayload(pushResult);
+    var pushFail = summarizeNotifyFailure(pushResult, pushData);
+    var pushOk = !(pushResult && pushResult.error) && !(pushData && pushData.ok === false);
+    if (pushFail) {
+      try {
+        console.warn("[alzidan-push-notify] women", pushFail, pushData || pushResult);
+      } catch (_) {}
+    }
+    return {
+      ok: pushOk,
+      pushOk: pushOk,
+      pushError: pushFail || "",
+      push: pushResult,
+      pushData: pushData
     };
   }
 
@@ -1809,6 +1880,7 @@
     BRANCH_DELEGATE_INBOX_KINDS: BRANCH_DELEGATE_INBOX_KINDS,
     notifyBranchDelegatesOfRequest: notifyBranchDelegatesOfRequest,
     notifyAdminOfRequest: notifyAdminOfRequest,
+    notifyWomenManagersOfRequest: notifyWomenManagersOfRequest,
     notifyAfterHomeRequest: notifyAfterHomeRequest,
     create: create,
     evaluateOnly: evaluateOnly,
