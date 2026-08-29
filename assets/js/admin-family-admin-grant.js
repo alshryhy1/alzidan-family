@@ -22,8 +22,10 @@
     node.style.color = isError ? "#991b1b" : "";
   }
 
+  const DELEGATES_PRESET_ID = "maint.family_admin_delegates_v1";
+
   function rpcMissingMessage() {
-    return "شغّل بطاقة «إدارة العائلة في التطبيق» من أدوات الصيانة → مساحة عمل SQL، ثم حدّث هذه الصفحة.";
+    return "اضغط «تشغيل أمر قبول المناديب» في هذه البطاقة مرة واحدة، ثم حدّث الصفحة.";
   }
 
   function isRpcMissing(err) {
@@ -90,10 +92,49 @@
     }
   }
 
+  function openTools() {
+    try {
+      const shell = window.AlzidanAdminShell;
+      if (shell && typeof shell.navigate === "function") shell.navigate("tools");
+    } catch (_) {}
+  }
+
+  async function runDelegatesCommand() {
+    if (!token()) {
+      setStatus("سجّل دخول الإدارة أولاً.", true);
+      return;
+    }
+    const ws = window.AlzidanSqlWorkspace;
+    const presets = window.AlzidanSqlPresets;
+    const hasPreset =
+      presets &&
+      Array.isArray(presets.PRESETS) &&
+      presets.PRESETS.some(function (p) {
+        return p && p.id === DELEGATES_PRESET_ID;
+      });
+    if (!hasPreset || !ws || typeof ws.runPreset !== "function") {
+      setStatus("حدّث هذه الصفحة تحديثًا كاملًا ثم أعد المحاولة.", true);
+      return;
+    }
+    openTools();
+    setStatus("أكّد التشغيل في النافذة. بعد النجاح ارجع إلى الأعضاء وامنح الرقم.");
+    try {
+      await ws.runPreset(DELEGATES_PRESET_ID);
+    } catch (err) {
+      setStatus(err && err.message ? err.message : "تعذر تشغيل الأمر.", true);
+    }
+  }
+
   function bind() {
     const assignBtn = el("admin-family-admin-grant-assign");
     const suspendBtn = el("admin-family-admin-grant-suspend");
-    if (!assignBtn && !suspendBtn) return;
+    const runBtn = el("admin-family-admin-run-delegates");
+    if (!assignBtn && !suspendBtn && !runBtn) return;
+    if (runBtn) {
+      runBtn.addEventListener("click", function () {
+        runDelegatesCommand().catch(function () {});
+      });
+    }
     if (assignBtn) {
       assignBtn.addEventListener("click", function () {
         runAction("assign").catch(function () {});
