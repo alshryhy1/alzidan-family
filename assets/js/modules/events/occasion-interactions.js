@@ -373,6 +373,20 @@
       return { ok: false, error: res.error.message || "submit_failed" };
     }
     var data = res.data || {};
+    if (data.ok !== false) {
+      try {
+        var oid = Number(opts && opts.occasionId);
+        if (oid) {
+          sb.functions.invoke("alzidan-push-notify", {
+            body: {
+              mode: "inbox_share",
+              occasion_id: oid,
+              sender_phone: phone,
+            },
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    }
     return data.ok === false ? { ok: false, error: data.error || "submit_failed" } : { ok: true, data: data };
   }
 

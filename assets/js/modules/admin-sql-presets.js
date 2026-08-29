@@ -9866,6 +9866,590 @@ select to_regprocedure('public.women_manager_add_member_v1(text, text, text)') i
       sql: "-- COPY-ME: Preset id: maint.family_admin_app_v1\n-- App family admin: role_key family_admin on existing member_role_grants.\n-- No admin_token in the app. Writes require trusted device + grant.\n-- Daily: person name/gender/deceased, phones, phone/membership requests, device unbind.\n-- Wives, mothers, SQL workspace, import stay on the web. Safe to re-run.\n\ncreate or replace function public.family_admin_session_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_mp public.member_profiles%rowtype;\n  v_grant public.member_role_grants%rowtype;\nbegin\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null or char_length(v_digits) < 9 then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'bad_phone');\n  end if;\n  if to_regclass('public.member_profiles') is null or to_regclass('public.member_role_grants') is null then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'no_grants');\n  end if;\n\n  select mp.*\n    into v_mp\n  from public.member_profiles mp\n  where coalesce(nullif(btrim(coalesce(mp.status, '')), ''), 'active') = 'active'\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n  if not found then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'not_member');\n  end if;\n\n  select g.*\n    into v_grant\n  from public.member_role_grants g\n  where g.role_key = 'family_admin'\n    and g.status = 'active'\n    and (\n      (coalesce(v_mp.tree_child_id, 0) > 0 and g.tree_child_id = v_mp.tree_child_id)\n      or (v_mp.person_id is not null and g.person_id is not distinct from v_mp.person_id)\n    )\n  order by g.updated_at desc nulls last, g.id desc\n  limit 1;\n  if not found then\n    return jsonb_build_object('ok', true, 'enabled', false, 'reason', 'no_grant');\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'enabled', true,\n    'role_key', 'family_admin',\n    'tree_child_id', v_grant.tree_child_id,\n    'person_id', v_grant.person_id\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_require_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_session jsonb;\nbegin\n  v_session := public.family_admin_session_v1(p_phone);\n  if coalesce((v_session->>'enabled')::boolean, false) is not true then\n    return jsonb_build_object('ok', false, 'error', 'not_allowed');\n  end if;\n  if to_regprocedure('public.member_device_allows_phone_v1(text)') is not null\n     and public.member_device_allows_phone_v1(p_phone) is not true then\n    return jsonb_build_object('ok', false, 'error', 'device_required');\n  end if;\n  return v_session;\nend;\n$fn$;\n\ncreate or replace function public.admin_family_admin_get_v1(p_token text, p_tree_child_id bigint)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_grant public.member_role_grants%rowtype;\n  v_status text := 'inactive';\n  v_child public.tree_children%rowtype;\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select * into v_child from public.tree_children c where c.id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select g.* into v_grant\n  from public.member_role_grants g\n  where g.tree_child_id = p_tree_child_id and g.role_key = 'family_admin'\n  limit 1;\n  if found then\n    v_status := v_grant.status;\n  end if;\n  return jsonb_build_object(\n    'ok', true,\n    'role_key', 'family_admin',\n    'status', v_status,\n    'tree_child_id', p_tree_child_id,\n    'person_id', coalesce(v_grant.person_id, v_child.person_id),\n    'assigned_at', v_grant.assigned_at,\n    'assigned_by', v_grant.assigned_by\n  );\nend;\n$fn$;\n\ncreate or replace function public.admin_family_admin_set_v1(\n  p_token text,\n  p_tree_child_id bigint,\n  p_action text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_action text := lower(btrim(coalesce(p_action, '')));\n  v_prev text := 'inactive';\n  v_child public.tree_children%rowtype;\n  v_now timestamptz := now();\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  if v_action not in ('assign', 'suspend') then\n    return jsonb_build_object('ok', false, 'error', 'bad_action');\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select * into v_child from public.tree_children c where c.id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n  select g.status into v_prev\n  from public.member_role_grants g\n  where g.tree_child_id = p_tree_child_id and g.role_key = 'family_admin'\n  limit 1;\n  v_prev := coalesce(v_prev, 'inactive');\n\n  if v_action = 'assign' then\n    insert into public.member_role_grants (\n      role_key, tree_child_id, person_id, status, assigned_at, assigned_by, updated_at\n    ) values (\n      'family_admin', p_tree_child_id, v_child.person_id, 'active', v_now, 'admin', v_now\n    )\n    on conflict (tree_child_id, role_key) do update\n    set\n      status = 'active',\n      person_id = coalesce(excluded.person_id, public.member_role_grants.person_id),\n      assigned_at = v_now,\n      assigned_by = 'admin',\n      updated_at = v_now;\n  else\n    if v_prev = 'inactive' then\n      return jsonb_build_object('ok', true, 'status', 'inactive', 'action', 'noop');\n    end if;\n    update public.member_role_grants\n    set status = 'suspended', assigned_by = 'admin', updated_at = v_now\n    where tree_child_id = p_tree_child_id and role_key = 'family_admin';\n  end if;\n\n  return public.admin_family_admin_get_v1(p_token, p_tree_child_id)\n    || jsonb_build_object('ok', true, 'action', v_action);\nend;\n$fn$;\n\ncreate or replace function public.admin_family_admin_set_by_phone_v1(\n  p_token text,\n  p_phone text,\n  p_action text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_digits text;\n  v_id bigint;\nbegin\n  if not public.admin_token_ok_v1(p_token) then\n    raise exception 'not allowed';\n  end if;\n  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  if v_digits is null then\n    return jsonb_build_object('ok', false, 'error', 'bad_phone');\n  end if;\n  select mp.tree_child_id into v_id\n  from public.member_profiles mp\n  where coalesce(mp.tree_child_id, 0) > 0\n    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n  order by mp.updated_at desc nulls last, mp.id desc\n  limit 1;\n  if v_id is null then\n    return jsonb_build_object('ok', false, 'error', 'no_tree_person');\n  end if;\n  return public.admin_family_admin_set_v1(p_token, v_id, p_action);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_search_people_v1(\n  p_phone text,\n  p_query text,\n  p_branch_key text\n)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_q text;\n  v_branch text;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate || jsonb_build_object('rows', '[]'::jsonb);\n  end if;\n  v_q := nullif(btrim(coalesce(p_query, '')), '');\n  v_branch := nullif(btrim(coalesce(p_branch_key, '')), '');\n  if v_q is not null then\n    v_q := replace(replace(v_q, '%', ''), '_', '');\n  end if;\n  if v_q is null or char_length(v_q) < 2 then\n    return jsonb_build_object('ok', true, 'need_query', true, 'rows', '[]'::jsonb);\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'rows', coalesce((\n      select jsonb_agg(to_jsonb(r) order by r.display_name)\n      from (\n        select\n          c.id,\n          c.person_id,\n          c.branch_key,\n          nullif(btrim(regexp_replace(coalesce(c.child_name, to_jsonb(c)->>'name', ''), '^.*/', '')), '') as display_name,\n          nullif(btrim(coalesce(c.child_name, to_jsonb(c)->>'name', '')), '') as path,\n          c.gender,\n          coalesce(c.is_deceased, false) as is_deceased,\n          mp.phone,\n          mp.status\n        from public.tree_children c\n        left join lateral (\n          select p.phone, p.status\n          from public.member_profiles p\n          where p.tree_child_id = c.id\n             or (c.person_id is not null and p.person_id is not distinct from c.person_id)\n          order by p.updated_at desc nulls last, p.id desc\n          limit 1\n        ) mp on true\n        where (v_branch is null or c.branch_key = v_branch)\n          and (\n            position(v_q in coalesce(c.child_name, to_jsonb(c)->>'name', '')) > 0\n            or coalesce(c.child_name, to_jsonb(c)->>'name', '') ilike '%' || v_q || '%'\n          )\n        order by c.id desc\n        limit 40\n      ) r\n    ), '[]'::jsonb)\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_update_person_v1(\n  p_phone text,\n  p_tree_child_id bigint,\n  p_display_name text,\n  p_gender text,\n  p_is_deceased boolean\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_child public.tree_children%rowtype;\n  v_leaf text;\n  v_path text;\n  v_new_path text;\n  v_gender text;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  select * into v_child from public.tree_children where id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n\n  v_path := coalesce(v_child.child_name, to_jsonb(v_child)->>'name', '');\n  v_leaf := nullif(btrim(coalesce(p_display_name, '')), '');\n  if v_leaf is not null then\n    v_leaf := regexp_replace(v_leaf, '[/\\\\]', ' ', 'g');\n    if v_path like '%/%' then\n      v_new_path := regexp_replace(v_path, '[^/]+$', v_leaf);\n    else\n      v_new_path := v_leaf;\n    end if;\n  else\n    v_new_path := v_path;\n  end if;\n\n  if to_regprocedure('public.tree_child_normalize_gender(text)') is not null then\n    v_gender := public.tree_child_normalize_gender(p_gender);\n  else\n    v_gender := case\n      when lower(btrim(coalesce(p_gender, ''))) in ('daughter', 'female', 'f', '\u0623\u0646\u062b\u0649', '\u0627\u0646\u062b\u0649', '\u0627\u0628\u0646\u0629', '\u0628\u0646\u062a') then 'daughter'\n      when lower(btrim(coalesce(p_gender, ''))) in ('son', 'male', 'm', '\u0630\u0643\u0631', '\u0627\u0628\u0646', '\u0648\u0644\u062f') then 'son'\n      else null\n    end;\n  end if;\n\n  update public.tree_children c\n  set\n    child_name = coalesce(nullif(btrim(v_new_path), ''), c.child_name),\n    name = coalesce(nullif(btrim(v_new_path), ''), c.name),\n    gender = coalesce(v_gender, c.gender),\n    is_deceased = coalesce(p_is_deceased, c.is_deceased, false)\n  where c.id = p_tree_child_id;\n\n  return jsonb_build_object('ok', true, 'id', p_tree_child_id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_set_phone_v1(\n  p_phone text,\n  p_tree_child_id bigint,\n  p_member_phone text\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_child public.tree_children%rowtype;\n  v_bind jsonb;\n  v_member_phone text;\n  v_digits text;\n  v_keep_id bigint;\n  v_leaf text;\n  v_other_pid text;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  v_member_phone := nullif(btrim(coalesce(p_member_phone, '')), '');\n  if v_member_phone is null then\n    return jsonb_build_object('ok', false, 'error', 'bad_phone');\n  end if;\n  select * into v_child from public.tree_children where id = p_tree_child_id limit 1;\n  if not found then\n    return jsonb_build_object('ok', false, 'error', 'person_not_found');\n  end if;\n\n  if to_regprocedure('public.bind_sender_phone_to_person_v1(text, text, bigint)') is not null then\n    v_bind := public.bind_sender_phone_to_person_v1(\n      v_member_phone,\n      coalesce(v_child.person_id::text, ''),\n      v_child.id\n    );\n    if coalesce((v_bind->>'ok')::boolean, false) is not true then\n      return jsonb_build_object('ok', false, 'error', coalesce(v_bind->>'error', 'bind_failed'), 'detail', v_bind);\n    end if;\n  else\n    v_digits := right(regexp_replace(v_member_phone, '[^0-9]', '', 'g'), 9);\n    if char_length(coalesce(v_digits, '')) < 9 then\n      return jsonb_build_object('ok', false, 'error', 'bad_phone');\n    end if;\n    v_leaf := nullif(btrim(regexp_replace(coalesce(v_child.child_name, to_jsonb(v_child)->>'name', ''), '^.*/', '')), '');\n    select nullif(btrim(coalesce(mp.person_id::text, '')), '')\n      into v_other_pid\n    from public.member_profiles mp\n    where char_length(v_digits) = 9\n      and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n    order by mp.id\n    limit 1;\n    if v_other_pid is not null\n       and v_child.person_id is not null\n       and v_other_pid is distinct from v_child.person_id::text then\n      return jsonb_build_object('ok', false, 'error', 'phone_conflict');\n    end if;\n    select mp.id into v_keep_id\n    from public.member_profiles mp\n    where mp.tree_child_id = v_child.id\n       or (v_child.person_id is not null and mp.person_id is not distinct from v_child.person_id)\n       or (\n         char_length(v_digits) = 9\n         and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits\n       )\n    order by (mp.tree_child_id is not distinct from v_child.id) desc, mp.id desc\n    limit 1;\n    if v_keep_id is not null then\n      update public.member_profiles\n      set\n        phone = v_member_phone,\n        branch_key = coalesce(nullif(btrim(coalesce(v_child.branch_key, '')), ''), branch_key),\n        tree_child_id = v_child.id,\n        person_id = v_child.person_id,\n        display_name = coalesce(nullif(btrim(coalesce(display_name, '')), ''), v_leaf),\n        status = 'active',\n        updated_at = now()\n      where id = v_keep_id;\n    else\n      insert into public.member_profiles (\n        phone, branch_key, tree_child_id, person_id, display_name, status, created_at, updated_at\n      ) values (\n        v_member_phone, v_child.branch_key, v_child.id, v_child.person_id, v_leaf, 'active', now(), now()\n      );\n    end if;\n  end if;\n\n  update public.member_profiles\n  set status = 'active', updated_at = now()\n  where tree_child_id = v_child.id\n     or (v_child.person_id is not null and person_id is not distinct from v_child.person_id);\n\n  return jsonb_build_object('ok', true, 'tree_child_id', v_child.id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_requests_list_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate || jsonb_build_object('rows', '[]'::jsonb);\n  end if;\n  if to_regclass('public.approval_requests') is null then\n    return jsonb_build_object('ok', false, 'error', 'sql_missing', 'rows', '[]'::jsonb);\n  end if;\n  return jsonb_build_object(\n    'ok', true,\n    'rows', coalesce((\n      select jsonb_agg(to_jsonb(r) order by r.created_at desc)\n      from (\n        select\n          ar.id,\n          ar.request_id,\n          ar.kind,\n          nullif(btrim(coalesce(ar.name, '')), '') as name,\n          nullif(btrim(coalesce(ar.phone, '')), '') as phone,\n          nullif(btrim(coalesce(ar.branch_key, '')), '') as branch_key,\n          ar.created_at,\n          ar.status\n        from public.approval_requests ar\n        where coalesce(nullif(btrim(ar.status), ''), 'pending') = 'pending'\n          and (\n            btrim(coalesce(ar.kind, '')) in ('member_registration', 'member_phone_register')\n            or position('MEMBER_PHONE_REGISTER_V1' in coalesce(ar.message, '')) > 0\n          )\n        order by ar.created_at desc nulls last\n        limit 80\n      ) r\n    ), '[]'::jsonb)\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_request_reject_v1(p_phone text, p_request_id bigint)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_n int := 0;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_request_id is null or p_request_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  update public.approval_requests\n  set status = 'rejected'\n  where id = p_request_id\n    and coalesce(nullif(btrim(status), ''), 'pending') = 'pending';\n  get diagnostics v_n = row_count;\n  if v_n < 1 then\n    return jsonb_build_object('ok', false, 'error', 'not_found');\n  end if;\n  return jsonb_build_object('ok', true, 'id', p_request_id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_request_bind_v1(\n  p_phone text,\n  p_request_id bigint,\n  p_tree_child_id bigint\n)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_req public.approval_requests%rowtype;\n  v_set jsonb;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if p_request_id is null or p_request_id < 1 or p_tree_child_id is null or p_tree_child_id < 1 then\n    return jsonb_build_object('ok', false, 'error', 'bad_input');\n  end if;\n  select * into v_req from public.approval_requests where id = p_request_id limit 1;\n  if not found or coalesce(nullif(btrim(v_req.status), ''), 'pending') is distinct from 'pending' then\n    return jsonb_build_object('ok', false, 'error', 'not_found');\n  end if;\n  if nullif(btrim(coalesce(v_req.phone, '')), '') is not null then\n    v_set := public.family_admin_set_phone_v1(p_phone, p_tree_child_id, v_req.phone);\n    if coalesce((v_set->>'ok')::boolean, false) is not true then\n      return v_set;\n    end if;\n  end if;\n  update public.approval_requests set status = 'approved' where id = v_req.id;\n  return jsonb_build_object('ok', true, 'id', v_req.id, 'tree_child_id', p_tree_child_id);\nend;\n$fn$;\n\ncreate or replace function public.family_admin_devices_list_v1(p_phone text)\nreturns jsonb\nlanguage plpgsql\nstable\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate || jsonb_build_object('items', '[]'::jsonb);\n  end if;\n  if to_regclass('public.member_trusted_devices') is null then\n    return jsonb_build_object('ok', false, 'error', 'sql_missing', 'items', '[]'::jsonb);\n  end if;\n  return jsonb_build_object(\n    'ok', true,\n    'items', coalesce((\n      select jsonb_agg(jsonb_build_object(\n        'id', d.id,\n        'phone_key', d.phone_key,\n        'label', d.label,\n        'status', d.status,\n        'bound_at', d.bound_at,\n        'last_seen_at', d.last_seen_at\n      ) order by coalesce(d.last_seen_at, d.bound_at) desc)\n      from public.member_trusted_devices d\n      where d.status = 'active'\n    ), '[]'::jsonb)\n  );\nend;\n$fn$;\n\ncreate or replace function public.family_admin_device_unbind_v1(p_phone text, p_target_phone text)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $fn$\ndeclare\n  v_gate jsonb;\n  v_key text;\n  v_n int := 0;\nbegin\n  v_gate := public.family_admin_require_v1(p_phone);\n  if coalesce((v_gate->>'ok')::boolean, false) is not true then\n    return v_gate;\n  end if;\n  if to_regprocedure('public.member_device_phone_key_v1(text)') is not null then\n    v_key := public.member_device_phone_key_v1(p_target_phone);\n  else\n    v_key := nullif(right(regexp_replace(coalesce(p_target_phone, ''), '[^0-9]', '', 'g'), 9), '');\n  end if;\n  if v_key is null then\n    return jsonb_build_object('ok', false, 'error', 'bad_phone');\n  end if;\n  if to_regclass('public.member_device_transfers') is not null then\n    delete from public.member_device_transfers t where t.phone_key = v_key;\n  end if;\n  delete from public.member_trusted_devices d where d.phone_key = v_key;\n  get diagnostics v_n = row_count;\n  return jsonb_build_object('ok', true, 'revoked', v_n);\nend;\n$fn$;\n\nrevoke all on function public.family_admin_session_v1(text) from public;\nrevoke all on function public.family_admin_require_v1(text) from public;\nrevoke all on function public.admin_family_admin_get_v1(text, bigint) from public;\nrevoke all on function public.admin_family_admin_set_v1(text, bigint, text) from public;\nrevoke all on function public.admin_family_admin_set_by_phone_v1(text, text, text) from public;\nrevoke all on function public.family_admin_search_people_v1(text, text, text) from public;\nrevoke all on function public.family_admin_update_person_v1(text, bigint, text, text, boolean) from public;\nrevoke all on function public.family_admin_set_phone_v1(text, bigint, text) from public;\nrevoke all on function public.family_admin_requests_list_v1(text) from public;\nrevoke all on function public.family_admin_request_reject_v1(text, bigint) from public;\nrevoke all on function public.family_admin_request_bind_v1(text, bigint, bigint) from public;\nrevoke all on function public.family_admin_devices_list_v1(text) from public;\nrevoke all on function public.family_admin_device_unbind_v1(text, text) from public;\n\ngrant execute on function public.family_admin_session_v1(text) to anon, authenticated;\ngrant execute on function public.admin_family_admin_get_v1(text, bigint) to anon, authenticated;\ngrant execute on function public.admin_family_admin_set_v1(text, bigint, text) to anon, authenticated;\ngrant execute on function public.admin_family_admin_set_by_phone_v1(text, text, text) to anon, authenticated;\ngrant execute on function public.family_admin_search_people_v1(text, text, text) to anon, authenticated;\ngrant execute on function public.family_admin_update_person_v1(text, bigint, text, text, boolean) to anon, authenticated;\ngrant execute on function public.family_admin_set_phone_v1(text, bigint, text) to anon, authenticated;\ngrant execute on function public.family_admin_requests_list_v1(text) to anon, authenticated;\ngrant execute on function public.family_admin_request_reject_v1(text, bigint) to anon, authenticated;\ngrant execute on function public.family_admin_request_bind_v1(text, bigint, bigint) to anon, authenticated;\ngrant execute on function public.family_admin_devices_list_v1(text) to anon, authenticated;\ngrant execute on function public.family_admin_device_unbind_v1(text, text) to anon, authenticated;\n\nnotify pgrst, 'reload schema';\nselect\n  to_regprocedure('public.family_admin_session_v1(text)') is not null as has_session,\n  to_regprocedure('public.admin_family_admin_set_by_phone_v1(text, text, text)') is not null as has_grant_by_phone,\n  to_regprocedure('public.family_admin_search_people_v1(text, text, text)') is not null as has_search;\n",
     },
     {
+      id: "maint.family_admin_delegates_v1",
+      title: "إدارة العائلة: قبول المناديب وصلاحياتهم",
+      desc:
+        "بعد بطاقة إدارة العائلة في التطبيق: قبول/رفض طلبات المندوب وإعادة الرقم السري، وتغيير الدور وتفعيل/تعطيل مثل لوحة الويب. بلا رمز إدارة. شغّله مرة ثم حدّث التطبيق.",
+      file: "../supabase/sql/COPY-ME-family-admin-delegates-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.099945,
+      sql: `-- COPY-ME: Preset id: maint.family_admin_delegates_v1
+-- Family admin in the app: accept/reject delegate requests + change delegate
+-- roles / enable like the web panel. No admin_token. Trusted device + family_admin.
+-- Member phone bind stays as-is. Tree cards, events, wives, SQL stay on the web.
+-- Safe to re-run.
+
+create or replace function public.family_admin_request_is_daily_v1(
+  p_kind text,
+  p_message text,
+  p_request_type text
+)
+returns boolean
+language sql
+immutable
+as $fn$
+  select
+    btrim(coalesce(p_kind, '')) in (
+      'member_registration',
+      'member_phone_register',
+      'tree_delegate',
+      'events_delegate',
+      'delegate_secret_reset'
+    )
+    or position('MEMBER_PHONE_REGISTER_V1' in coalesce(p_message, '')) > 0
+    or btrim(coalesce(p_request_type, '')) = 'delegate_secret_reset';
+$fn$;
+
+create or replace function public.family_admin_request_is_member_v1(
+  p_kind text,
+  p_message text
+)
+returns boolean
+language sql
+immutable
+as $fn$
+  select
+    btrim(coalesce(p_kind, '')) in ('member_registration', 'member_phone_register')
+    or position('MEMBER_PHONE_REGISTER_V1' in coalesce(p_message, '')) > 0;
+$fn$;
+
+create or replace function public.family_admin_requests_list_v1(p_phone text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate || jsonb_build_object('rows', '[]'::jsonb);
+  end if;
+  if to_regclass('public.approval_requests') is null then
+    return jsonb_build_object('ok', false, 'error', 'sql_missing', 'rows', '[]'::jsonb);
+  end if;
+  return jsonb_build_object(
+    'ok', true,
+    'rows', coalesce((
+      select jsonb_agg(to_jsonb(r) order by r.created_at desc)
+      from (
+        select
+          ar.id,
+          ar.request_id,
+          ar.kind,
+          nullif(btrim(coalesce(to_jsonb(ar)->>'request_type', '')), '') as request_type,
+          nullif(btrim(coalesce(ar.name, '')), '') as name,
+          nullif(btrim(coalesce(ar.phone, '')), '') as phone,
+          nullif(btrim(coalesce(ar.branch_key, '')), '') as branch_key,
+          ar.created_at,
+          ar.status
+        from public.approval_requests ar
+        where coalesce(nullif(btrim(ar.status), ''), 'pending') = 'pending'
+          and public.family_admin_request_is_daily_v1(
+            ar.kind,
+            ar.message,
+            to_jsonb(ar)->>'request_type'
+          )
+        order by ar.created_at desc nulls last
+        limit 120
+      ) r
+    ), '[]'::jsonb)
+  );
+end;
+$fn$;
+
+create or replace function public.family_admin_request_reject_v1(p_phone text, p_request_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+  v_req public.approval_requests%rowtype;
+  v_n int := 0;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate;
+  end if;
+  if p_request_id is null or p_request_id < 1 then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end if;
+  select * into v_req from public.approval_requests where id = p_request_id for update;
+  if not found or coalesce(nullif(btrim(v_req.status), ''), 'pending') is distinct from 'pending' then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if not public.family_admin_request_is_daily_v1(
+    v_req.kind,
+    v_req.message,
+    to_jsonb(v_req)->>'request_type'
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'wrong_kind');
+  end if;
+
+  if btrim(coalesce(v_req.kind, '')) = 'delegate_secret_reset'
+     or coalesce(to_jsonb(v_req)->>'request_type', '') = 'delegate_secret_reset' then
+    update public.approval_requests
+    set
+      status = 'rejected',
+      request_type = 'delegate_secret_reset',
+      wf_state = 'rejected',
+      wf_updated_at = now()
+    where id = v_req.id;
+  else
+    update public.approval_requests
+    set status = 'rejected'
+    where id = v_req.id
+      and coalesce(nullif(btrim(status), ''), 'pending') = 'pending';
+  end if;
+  get diagnostics v_n = row_count;
+  if v_n < 1 then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  return jsonb_build_object('ok', true, 'id', p_request_id, 'kind', v_req.kind);
+end;
+$fn$;
+
+create or replace function public.family_admin_request_bind_v1(
+  p_phone text,
+  p_request_id bigint,
+  p_tree_child_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+  v_req public.approval_requests%rowtype;
+  v_set jsonb;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate;
+  end if;
+  if p_request_id is null or p_request_id < 1 or p_tree_child_id is null or p_tree_child_id < 1 then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end if;
+  select * into v_req from public.approval_requests where id = p_request_id limit 1;
+  if not found or coalesce(nullif(btrim(v_req.status), ''), 'pending') is distinct from 'pending' then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if not public.family_admin_request_is_member_v1(v_req.kind, v_req.message) then
+    return jsonb_build_object('ok', false, 'error', 'wrong_kind');
+  end if;
+  if nullif(btrim(coalesce(v_req.phone, '')), '') is not null then
+    v_set := public.family_admin_set_phone_v1(p_phone, p_tree_child_id, v_req.phone);
+    if coalesce((v_set->>'ok')::boolean, false) is not true then
+      return v_set;
+    end if;
+  end if;
+  update public.approval_requests set status = 'approved' where id = v_req.id;
+  return jsonb_build_object('ok', true, 'id', v_req.id, 'tree_child_id', p_tree_child_id);
+end;
+$fn$;
+
+create or replace function public.family_admin_request_approve_v1(p_phone text, p_request_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+  v_req public.approval_requests%rowtype;
+  v_kind text;
+  v_sibling text;
+  v_wants_dual boolean := false;
+  v_base text;
+  v_branch text;
+  v_phone_n text;
+  v_hash text;
+  v_email text;
+  v_legacy_n int := 0;
+  v_v2_n int := 0;
+  v_delegate_id uuid;
+  v_act jsonb;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate;
+  end if;
+  if p_request_id is null or p_request_id < 1 then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end if;
+  select * into v_req from public.approval_requests where id = p_request_id for update;
+  if not found or coalesce(nullif(btrim(v_req.status), ''), 'pending') is distinct from 'pending' then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if not public.family_admin_request_is_daily_v1(
+    v_req.kind,
+    v_req.message,
+    to_jsonb(v_req)->>'request_type'
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'wrong_kind');
+  end if;
+  if public.family_admin_request_is_member_v1(v_req.kind, v_req.message) then
+    return jsonb_build_object('ok', false, 'error', 'bind_required');
+  end if;
+
+  v_kind := btrim(coalesce(v_req.kind, ''));
+
+  if v_kind = 'delegate_secret_reset'
+     or coalesce(to_jsonb(v_req)->>'request_type', '') = 'delegate_secret_reset' then
+    v_hash := nullif(btrim(coalesce(v_req.secret_hash, '')), '');
+    if v_hash is null then
+      return jsonb_build_object('ok', false, 'error', 'missing_secret_hash');
+    end if;
+    if to_regprocedure('public.delegate_secret_reset_norm_branch(text)') is not null then
+      v_branch := public.delegate_secret_reset_norm_branch(v_req.branch_key);
+      v_phone_n := public.delegate_secret_reset_norm_phone(v_req.phone);
+      v_email := public.delegate_secret_reset_norm_email(v_req.email);
+    else
+      v_branch := regexp_replace(btrim(coalesce(v_req.branch_key, '')), '\\s+', ' ', 'g');
+      v_phone_n := regexp_replace(btrim(coalesce(v_req.phone, '')), '\\s+', '', 'g');
+      v_email := lower(regexp_replace(btrim(coalesce(v_req.email, '')), '\\s+', '', 'g'));
+    end if;
+
+    update public.approval_requests r
+    set secret_hash = v_hash
+    where r.kind in ('tree_delegate', 'events_delegate')
+      and r.status = 'approved'
+      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\\s+', ' ', 'g') = v_branch
+      and regexp_replace(btrim(coalesce(r.phone, '')), '\\s+', '', 'g') = v_phone_n
+      and (
+        v_email = ''
+        or lower(regexp_replace(btrim(coalesce(r.email, '')), '\\s+', '', 'g')) = ''
+        or lower(regexp_replace(btrim(coalesce(r.email, '')), '\\s+', '', 'g')) = v_email
+      );
+    get diagnostics v_legacy_n = row_count;
+
+    if to_regclass('public.delegates_v2') is not null then
+      update public.delegates_v2 d
+      set secret_hash = v_hash, updated_at = now()
+      where regexp_replace(btrim(coalesce(d.branch_key, '')), '\\s+', ' ', 'g') = v_branch
+        and regexp_replace(btrim(coalesce(d.phone, '')), '\\s+', '', 'g') = v_phone_n
+        and (
+          v_email = ''
+          or lower(regexp_replace(btrim(coalesce(d.email, '')), '\\s+', '', 'g')) = ''
+          or lower(regexp_replace(btrim(coalesce(d.email, '')), '\\s+', '', 'g')) = v_email
+        );
+      get diagnostics v_v2_n = row_count;
+    end if;
+
+    if v_legacy_n = 0 and v_v2_n = 0 then
+      return jsonb_build_object('ok', false, 'error', 'no_delegate_target');
+    end if;
+
+    update public.approval_requests
+    set
+      status = 'approved',
+      secret_hash = v_hash,
+      request_type = 'delegate_secret_reset',
+      wf_state = 'done',
+      wf_updated_at = now()
+    where id = v_req.id;
+
+    return jsonb_build_object('ok', true, 'id', v_req.id, 'kind', v_kind, 'secret_reset', true);
+  end if;
+
+  if v_kind not in ('tree_delegate', 'events_delegate') then
+    return jsonb_build_object('ok', false, 'error', 'wrong_kind');
+  end if;
+
+  v_sibling := case when v_kind = 'tree_delegate' then 'events_delegate' else 'tree_delegate' end;
+  v_wants_dual :=
+    (
+      position('"tree_delegate"' in coalesce(v_req.message, '')) > 0
+      and position('"events_delegate"' in coalesce(v_req.message, '')) > 0
+    )
+    or coalesce(v_req.request_id, '') ~* '-(TREE|EVENTS)$';
+  v_base := regexp_replace(coalesce(v_req.request_id, ''), '-(TREE|EVENTS)$', '', 'i');
+  v_branch := regexp_replace(btrim(coalesce(v_req.branch_key, '')), '\\s+', ' ', 'g');
+  v_phone_n := regexp_replace(btrim(coalesce(v_req.phone, '')), '\\s+', '', 'g');
+
+  update public.approval_requests set status = 'approved' where id = v_req.id;
+
+  if v_wants_dual and v_base <> '' and v_branch <> '' and v_phone_n <> '' then
+    update public.approval_requests r
+    set status = 'approved'
+    where r.id is distinct from v_req.id
+      and r.kind = v_sibling
+      and coalesce(nullif(btrim(r.status), ''), 'pending') = 'pending'
+      and regexp_replace(btrim(coalesce(r.branch_key, '')), '\\s+', ' ', 'g') = v_branch
+      and regexp_replace(btrim(coalesce(r.phone, '')), '\\s+', '', 'g') = v_phone_n
+      and (
+        regexp_replace(coalesce(r.request_id, ''), '-(TREE|EVENTS)$', '', 'i') = v_base
+        or r.request_id = v_base || case when v_sibling = 'tree_delegate' then '-TREE' else '-EVENTS' end
+      );
+  end if;
+
+  if to_regprocedure('public.delegates_v2_activate_from_request_pk_v1(bigint)') is not null then
+    v_act := public.delegates_v2_activate_from_request_pk_v1(v_req.id);
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'id', v_req.id,
+    'kind', v_kind,
+    'role_key', coalesce(v_act->>'role_key', ''),
+    'activate', coalesce(v_act, '{}'::jsonb)
+  );
+end;
+$fn$;
+
+create or replace function public.family_admin_delegates_list_v1(p_phone text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate || jsonb_build_object('rows', '[]'::jsonb, 'roles', '[]'::jsonb);
+  end if;
+  if to_regclass('public.delegates_v2') is null then
+    return jsonb_build_object('ok', false, 'error', 'sql_missing', 'rows', '[]'::jsonb, 'roles', '[]'::jsonb);
+  end if;
+  return jsonb_build_object(
+    'ok', true,
+    'rows', coalesce((
+      select jsonb_agg(to_jsonb(x) order by x.is_enabled desc, x.branch_key, x.name)
+      from (
+        select
+          d.id,
+          d.branch_key,
+          d.name,
+          d.phone,
+          d.email,
+          d.role_key,
+          coalesce(r.title_ar, d.role_key) as role_title_ar,
+          coalesce(d.is_enabled, false) as is_enabled
+        from public.delegates_v2 d
+        left join public.delegate_roles r on r.role_key = d.role_key
+        order by d.is_enabled desc, d.branch_key asc nulls last, d.name asc nulls last
+        limit 500
+      ) x
+    ), '[]'::jsonb),
+    'roles', coalesce((
+      select jsonb_agg(jsonb_build_object('role_key', r.role_key, 'title_ar', r.title_ar) order by r.sort_order, r.role_key)
+      from public.delegate_roles r
+    ), jsonb_build_array(
+      jsonb_build_object('role_key', 'viewer', 'title_ar', 'عرض فقط'),
+      jsonb_build_object('role_key', 'branch_editor', 'title_ar', 'محرر فرع'),
+      jsonb_build_object('role_key', 'events_editor', 'title_ar', 'محرر مناسبات'),
+      jsonb_build_object('role_key', 'full_delegate', 'title_ar', 'مندوب كامل'),
+      jsonb_build_object('role_key', 'approver_l1', 'title_ar', 'معتمد مرحلة 1')
+    ))
+  );
+end;
+$fn$;
+
+create or replace function public.family_admin_delegates_set_role_v1(
+  p_phone text,
+  p_id text,
+  p_role_key text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+  v_id uuid;
+  v_role text;
+  v_branch text;
+  v_prev text;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate;
+  end if;
+  begin
+    v_id := nullif(btrim(coalesce(p_id, '')), '')::uuid;
+  exception when others then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end;
+  v_role := nullif(btrim(coalesce(p_role_key, '')), '');
+  if v_id is null or v_role is null then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end if;
+  if to_regclass('public.delegates_v2') is null then
+    return jsonb_build_object('ok', false, 'error', 'sql_missing');
+  end if;
+  if to_regclass('public.delegate_roles') is not null
+     and not exists (select 1 from public.delegate_roles where role_key = v_role) then
+    return jsonb_build_object('ok', false, 'error', 'unknown_role');
+  end if;
+
+  select role_key, branch_key into v_prev, v_branch
+  from public.delegates_v2
+  where id = v_id
+  for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+
+  update public.delegates_v2
+  set role_key = v_role, updated_at = now()
+  where id = v_id;
+
+  begin
+    perform public.admin_audit_write_v1(
+      'family_admin', null, 'delegate.role_set', 'delegates_v2', v_id::text, v_branch,
+      jsonb_build_object('role_key', v_role, 'previous_role_key', v_prev, 'at', now())
+    );
+  exception when others then null;
+  end;
+
+  return jsonb_build_object(
+    'ok', true,
+    'id', v_id,
+    'role_key', v_role,
+    'previous_role_key', v_prev
+  );
+end;
+$fn$;
+
+create or replace function public.family_admin_delegates_set_enabled_v1(
+  p_phone text,
+  p_id text,
+  p_enabled boolean
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+  v_id uuid;
+  v_row public.delegates_v2%rowtype;
+  v_status text;
+  v_branch text;
+  v_phone_n text;
+  v_email text;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate;
+  end if;
+  begin
+    v_id := nullif(btrim(coalesce(p_id, '')), '')::uuid;
+  exception when others then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end;
+  if v_id is null then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end if;
+  if to_regclass('public.delegates_v2') is null then
+    return jsonb_build_object('ok', false, 'error', 'sql_missing');
+  end if;
+
+  select * into v_row from public.delegates_v2 where id = v_id for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+
+  v_status := case when coalesce(p_enabled, false) then 'approved' else 'rejected' end;
+  v_branch := regexp_replace(btrim(coalesce(v_row.branch_key, '')), '\\s+', ' ', 'g');
+  v_phone_n := regexp_replace(btrim(coalesce(v_row.phone, '')), '\\s+', '', 'g');
+  v_email := lower(regexp_replace(btrim(coalesce(v_row.email, '')), '\\s+', '', 'g'));
+
+  if to_regclass('public.approval_requests') is not null then
+    if nullif(btrim(coalesce(v_row.tree_request_id, '')), '') is not null then
+      update public.approval_requests
+      set status = v_status
+      where request_id = v_row.tree_request_id
+        and kind = 'tree_delegate';
+    end if;
+    if nullif(btrim(coalesce(v_row.events_request_id, '')), '') is not null then
+      update public.approval_requests
+      set status = v_status
+      where request_id = v_row.events_request_id
+        and kind = 'events_delegate';
+    end if;
+    if nullif(v_branch, '') is not null and nullif(v_phone_n, '') is not null then
+      update public.approval_requests r
+      set status = v_status
+      where r.kind in ('tree_delegate', 'events_delegate')
+        and regexp_replace(btrim(coalesce(r.branch_key, '')), '\\s+', ' ', 'g') = v_branch
+        and regexp_replace(btrim(coalesce(r.phone, '')), '\\s+', '', 'g') = v_phone_n
+        and (
+          v_email = ''
+          or lower(regexp_replace(btrim(coalesce(r.email, '')), '\\s+', '', 'g')) = ''
+          or lower(regexp_replace(btrim(coalesce(r.email, '')), '\\s+', '', 'g')) = v_email
+        );
+    end if;
+  end if;
+
+  update public.delegates_v2
+  set is_enabled = coalesce(p_enabled, false),
+      updated_at = now()
+  where id = v_id;
+
+  begin
+    perform public.admin_audit_write_v1(
+      'family_admin', null,
+      case when coalesce(p_enabled, false) then 'delegate.enable' else 'delegate.disable' end,
+      'delegates_v2', v_id::text, v_row.branch_key,
+      jsonb_build_object(
+        'enabled', coalesce(p_enabled, false),
+        'role_key', v_row.role_key,
+        'phone', v_row.phone,
+        'email', v_row.email,
+        'at', now()
+      )
+    );
+  exception when others then null;
+  end;
+
+  return jsonb_build_object(
+    'ok', true,
+    'id', v_id,
+    'is_enabled', coalesce(p_enabled, false)
+  );
+end;
+$fn$;
+
+revoke all on function public.family_admin_request_is_daily_v1(text, text, text) from public;
+revoke all on function public.family_admin_request_is_member_v1(text, text) from public;
+revoke all on function public.family_admin_requests_list_v1(text) from public;
+revoke all on function public.family_admin_request_reject_v1(text, bigint) from public;
+revoke all on function public.family_admin_request_bind_v1(text, bigint, bigint) from public;
+revoke all on function public.family_admin_request_approve_v1(text, bigint) from public;
+revoke all on function public.family_admin_delegates_list_v1(text) from public;
+revoke all on function public.family_admin_delegates_set_role_v1(text, text, text) from public;
+revoke all on function public.family_admin_delegates_set_enabled_v1(text, text, boolean) from public;
+
+grant execute on function public.family_admin_request_is_daily_v1(text, text, text) to anon, authenticated;
+grant execute on function public.family_admin_request_is_member_v1(text, text) to anon, authenticated;
+grant execute on function public.family_admin_requests_list_v1(text) to anon, authenticated;
+grant execute on function public.family_admin_request_reject_v1(text, bigint) to anon, authenticated;
+grant execute on function public.family_admin_request_bind_v1(text, bigint, bigint) to anon, authenticated;
+grant execute on function public.family_admin_request_approve_v1(text, bigint) to anon, authenticated;
+grant execute on function public.family_admin_delegates_list_v1(text) to anon, authenticated;
+grant execute on function public.family_admin_delegates_set_role_v1(text, text, text) to anon, authenticated;
+grant execute on function public.family_admin_delegates_set_enabled_v1(text, text, boolean) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+select
+  to_regprocedure('public.family_admin_request_approve_v1(text, bigint)') is not null as has_approve,
+  to_regprocedure('public.family_admin_delegates_list_v1(text)') is not null as has_delegates_list,
+  to_regprocedure('public.family_admin_delegates_set_role_v1(text, text, text)') is not null as has_set_role;
+`,
+    },
+    {
       id: "maint.delegate_app_inbox_v1",
       title: "طلبات المندوب في التطبيق",
       desc:

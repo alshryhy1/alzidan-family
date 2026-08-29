@@ -430,6 +430,10 @@ async function fetchAdminNotifyPhones(): Promise<string[]> {
     }
   } catch (_) {}
 
+  for (const phone of await fetchFamilyAdminGrantPhones()) {
+    phones.add(phone);
+  }
+
   return Array.from(phones);
 }
 
@@ -465,6 +469,104 @@ async function fetchWomenManagerPhones(): Promise<string[]> {
     for (const row of rows || []) {
       const phone = normalizeSaudiPhone(row?.phone);
       if (phone) phones.add(phone);
+    }
+  } catch (_) {}
+  return Array.from(phones);
+}
+
+async function fetchFamilyAdminGrantPhones(): Promise<string[]> {
+  if (!SERVICE_ROLE_KEY) return [];
+  const phones = new Set<string>();
+  const headers = {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    Accept: "application/json",
+  };
+  try {
+    const grantsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/member_role_grants?select=tree_child_id,person_id&role_key=eq.family_admin&status=eq.active`,
+      { headers },
+    );
+    if (!grantsRes.ok) return [];
+    const grants = await grantsRes.json();
+    const childIds = [
+      ...new Set(
+        (grants || [])
+          .map((row: { tree_child_id?: number }) => Number(row?.tree_child_id || 0))
+          .filter((id: number) => id > 0),
+      ),
+    ];
+    if (!childIds.length) return [];
+    const profilesRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/member_profiles?select=phone,tree_child_id&tree_child_id=in.(${childIds.join(",")})&phone=not.is.null`,
+      { headers },
+    );
+    if (!profilesRes.ok) return [];
+    const rows = await profilesRes.json();
+    for (const row of rows || []) {
+      const phone = normalizeSaudiPhone(row?.phone);
+      if (phone) phones.add(phone);
+    }
+  } catch (_) {}
+  return Array.from(phones);
+}
+
+function phonesToMatchSet(list: string[]) {
+  const wanted = new Set<string>();
+  for (const raw of list) {
+    const n = normalizeSaudiPhone(raw);
+    if (!n) continue;
+    wanted.add(n);
+    if (n.length >= 9) wanted.add(n.slice(-9));
+  }
+  return wanted;
+}
+
+function tokenPhoneInSet(
+  row: { phone?: string },
+  wanted: Set<string>,
+) {
+  const phone = normalizeSaudiPhone(row?.phone);
+  if (!phone) return false;
+  if (wanted.has(phone)) return true;
+  if (phone.length >= 9 && wanted.has(phone.slice(-9))) return true;
+  return false;
+}
+
+async function fetchHouseholdPhones(): Promise<string[]> {
+  if (!SERVICE_ROLE_KEY) return [];
+  const phones = new Set<string>();
+  const headers = {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    Accept: "application/json",
+  };
+  try {
+    const membersRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/member_profiles?select=phone,status&phone=not.is.null`,
+      { headers },
+    );
+    if (membersRes.ok) {
+      const rows = await membersRes.json();
+      for (const row of rows || []) {
+        const status = String(row?.status || "active").trim().toLowerCase();
+        if (status && status !== "active" && status !== "approved") continue;
+        const phone = normalizeSaudiPhone(row?.phone);
+        if (phone) phones.add(phone);
+      }
+    }
+  } catch (_) {}
+  try {
+    const delRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/delegates_v2?select=phone&is_enabled=eq.true&phone=not.is.null`,
+      { headers },
+    );
+    if (delRes.ok) {
+      const rows = await delRes.json();
+      for (const row of rows || []) {
+        const phone = normalizeSaudiPhone(row?.phone);
+        if (phone) phones.add(phone);
+      }
     }
   } catch (_) {}
   return Array.from(phones);
@@ -748,7 +850,10 @@ async function notifyBranchDelegateNewRequest(payload: Record<string, unknown>, 
 
   const phoneSet = new Set(delegatePhones);
   const tokenRows = await fetchEnabledTokensWithPhone();
-  const { tokens_with_phone, unique } = matchTokensForPhones(tokenRows, phoneSet);
+  const matched = matchTokensForPhones(tokenRows, phoneSet);
+  const adminSkip = phonesToMatchSet(await fetchAdminNotifyPhones());
+  const unique = matched.unique.filter((row) => !tokenPhoneInSet(row, adminSkip));
+  const tokens_with_phone = matched.tokens_with_phone;
 
   const kindLabel = requestLabel(kind);
   if (!kindLabel || !isKnownPushKind(kind)) {
@@ -953,7 +1058,14 @@ async function notifyWomenManagerNewRequest(payload: Record<string, unknown>, dr
 
   const phoneSet = new Set(managerPhones);
   const tokenRows = await fetchEnabledTokensWithPhone();
-  const { tokens_with_phone, unique } = matchTokensForPhones(tokenRows, phoneSet);
+  const matched = matchTokensForPhones(tokenRows, phoneSet);
+  const adminSkip = phonesToMatchSet(await fetchAdminNotifyPhones());
+  const delegateSkip = phonesToMatchSet(
+    branchKey ? await fetchBranchDelegatePhones(branchKey) : [],
+  );
+  const skip = new Set([...adminSkip, ...delegateSkip]);
+  const unique = matched.unique.filter((row) => !tokenPhoneInSet(row, skip));
+  const tokens_with_phone = matched.tokens_with_phone;
 
   const rendered = safeRenderPush({
     mode: "women_manager_new_request",
@@ -1118,6 +1230,121 @@ async function notifyRequesterStatusChanged(payload: Record<string, unknown>, dr
   });
 }
 
+async function fetchOccasionRecipientPhones(occasionId: number): Promise<string[]> {
+  if (!SERVICE_ROLE_KEY || occasionId < 1) return [];
+  const phones = new Set<string>();
+  const headers = {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    Accept: "application/json",
+  };
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/occasion_recipients?select=recipient_phone,recipient_role,is_active&occasion_id=eq.${occasionId}&is_active=eq.true&recipient_phone=not.is.null`,
+      { headers },
+    );
+    if (!res.ok) return [];
+    const rows = await res.json();
+    for (const row of rows || []) {
+      const role = String(row?.recipient_role || "").trim().toLowerCase();
+      if (role === "deceased") continue;
+      const phone = normalizeSaudiPhone(row?.recipient_phone);
+      if (phone) phones.add(phone);
+    }
+  } catch (_) {}
+  return Array.from(phones);
+}
+
+/** Quiet inbox ping — no names (female names stay off lock screen). One per occasion+token. */
+async function notifyInboxShare(payload: Record<string, unknown>, dryRun: boolean) {
+  const occasionId = Number(payload.occasion_id || payload.occasionId || 0);
+  if (!Number.isFinite(occasionId) || occasionId < 1) {
+    return json({ ok: true, skipped: "missing_occasion_id", mode: "inbox_share" });
+  }
+
+  const explicit = normalizeSaudiPhone(payload.recipient_phone || payload.phone);
+  const sender = normalizeSaudiPhone(payload.sender_phone || payload.senderPhone);
+  let phones = explicit
+    ? [explicit]
+    : await fetchOccasionRecipientPhones(occasionId);
+  if (sender) {
+    phones = phones.filter((p) => {
+      if (p === sender) return false;
+      if (p.length >= 9 && sender.length >= 9 && p.slice(-9) === sender.slice(-9)) {
+        return false;
+      }
+      return true;
+    });
+  }
+  if (!phones.length) {
+    return json({
+      ok: true,
+      skipped: "no_recipient_phones",
+      mode: "inbox_share",
+      occasion_id: occasionId,
+    });
+  }
+
+  const tokenRows = await fetchEnabledTokensWithPhone();
+  const { unique } = matchTokensForPhones(tokenRows, new Set(phones));
+  if (!unique.length) {
+    return json({
+      ok: true,
+      skipped: "no_recipient_push_tokens",
+      mode: "inbox_share",
+      occasion_id: occasionId,
+    });
+  }
+
+  const title = "وصلك من العائلة";
+  const body = "شاركك أحد مناسبة تخصك.";
+  const eventKey = buildEventKey("inbox_share", String(occasionId), "inbox");
+  const data = {
+    mode: "inbox_share",
+    type: "inbox_share",
+    notification_type: "inbox_share",
+    screen: "profile",
+    occasion_id: occasionId,
+  };
+
+  let deduped = 0;
+  const messages: Record<string, unknown>[] = [];
+  for (const row of unique) {
+    const token = String(row?.token || "").trim();
+    if (!token) continue;
+    if (!dryRun) {
+      const claim = await claimEventTokenSend(eventKey, token);
+      if (!claim) {
+        deduped += 1;
+        continue;
+      }
+    }
+    const message: Record<string, unknown> = {
+      to: token,
+      sound: "default",
+      title,
+      body,
+      data,
+      priority: "high",
+    };
+    if (row.platform === "android") {
+      message.channelId = "family-events";
+    }
+    messages.push(message);
+  }
+
+  return await deliverMessages(messages, dryRun, {
+    mode: "inbox_share",
+    occasion_id: occasionId,
+    recipient_phones: phones.length,
+    matched_tokens: unique.length,
+    recipients_after_dedupe: messages.length,
+    deduped,
+    title,
+    body,
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
@@ -1166,7 +1393,11 @@ Deno.serve(async (req) => {
       return await notifyRequesterStatusChanged(payload, dryRun);
     }
 
-    // ---- Public family-event broadcast (unchanged) ----
+    if (mode === "inbox_share") {
+      return await notifyInboxShare(payload, dryRun);
+    }
+
+    // ---- Family-event broadcast: bound household phones only (not visitors). ----
     const type = normalizeText(payload.type);
     const person = normalizeText(payload.person);
     const branchKey = normalizeText(payload.branch_key);
@@ -1188,9 +1419,23 @@ Deno.serve(async (req) => {
       fallbackBody: details ? details.slice(0, 180) : undefined,
     });
 
-    const tokens = await fetchEnabledTokens();
+    const householdPhones = await fetchHouseholdPhones();
+    if (!householdPhones.length) {
+      return json({ ok: true, skipped: "no_household_phones", recipients: 0, formatted });
+    }
+    const tokenRows = await fetchEnabledTokensWithPhone();
+    const { unique: tokens } = matchTokensForPhones(
+      tokenRows,
+      new Set(householdPhones),
+    );
     if (!tokens.length) {
-      return json({ ok: true, skipped: "no_push_tokens", recipients: 0, formatted });
+      return json({
+        ok: true,
+        skipped: "no_member_push_tokens",
+        recipients: 0,
+        formatted,
+        household_phones: householdPhones.length,
+      });
     }
 
     const data = {
