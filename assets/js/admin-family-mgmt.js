@@ -627,6 +627,59 @@
     return { ok: true };
   }
 
+  async function revokeTrustedDeviceForPhone(phone) {
+    const cleaned = String(phone || "").trim();
+    if (!cleaned) return;
+    const token = getAdminToken();
+    const sb = getSupabaseClient();
+    if (!token || !sb || typeof sb.rpc !== "function") return;
+    try {
+      await sb.rpc("admin_device_revoke_phone_v1", { p_token: token, p_phone: cleaned });
+    } catch (e) {}
+  }
+
+  async function clearAdminMemberProfile(sb, branchKey, childPath, personId) {
+    if (!sb) return { ok: false, error: { message: "no_client" } };
+    const branch = String(branchKey || "").trim();
+    const path = normalizePersonName(childPath || "");
+    let rowId = findRowIdForPath(path);
+    let resolvedPersonId = normalizePersonName(personId || "");
+    if ((!rowId || !resolvedPersonId) && branch && (path || resolvedPersonId)) {
+      let q = sb.from("tree_children").select("id,person_id,child_name").eq("branch_key", branch).limit(1);
+      q = resolvedPersonId ? q.eq("person_id", resolvedPersonId) : q.eq("child_name", path);
+      const foundRow = await q.maybeSingle();
+      if (foundRow.data && foundRow.data.id) {
+        rowId = Number(foundRow.data.id);
+        resolvedPersonId = normalizePersonName(foundRow.data.person_id || resolvedPersonId);
+      }
+    }
+    if (!rowId && !resolvedPersonId) return { ok: true, skipped: true };
+    const filters = [];
+    if (rowId) filters.push({ tree_child_id: rowId });
+    if (resolvedPersonId) filters.push({ person_id: resolvedPersonId });
+    const oldPhones = new Set();
+    const ids = new Set();
+    for (const filter of filters) {
+      const found = await sb.from("member_profiles").select("id,phone").match(filter).limit(8);
+      if (found.error) return { ok: false, error: found.error };
+      (found.data || []).forEach((row) => {
+        if (row && row.id) ids.add(Number(row.id));
+        const phone = String((row && row.phone) || "").trim();
+        if (phone) oldPhones.add(phone);
+      });
+    }
+    if (!ids.size) return { ok: true, skipped: true };
+    const { error } = await sb
+      .from("member_profiles")
+      .update({ phone: null, updated_at: new Date().toISOString() })
+      .in("id", Array.from(ids));
+    if (error) return { ok: false, error };
+    for (const phone of oldPhones) {
+      await revokeTrustedDeviceForPhone(phone);
+    }
+    return { ok: true };
+  }
+
   async function loadAdminMemberPhone(sb, branchKey, childPath, personId) {
     const phoneQuery = async (filter) => {
       const r = await sb.from("member_profiles").select("phone").match(filter).limit(1).maybeSingle();
@@ -1863,6 +1916,16 @@
       );
       if (!memberProfileEditRes.ok) {
         return { ok: false, message: "تم حفظ التعديل لكن تعذر حفظ رقم الجوال. أعد إدخاله." };
+      }
+    } else {
+      const clearRes = await clearAdminMemberProfile(
+        sb,
+        state.branch,
+        finalChildId,
+        personId || findStablePersonId(finalChildId),
+      );
+      if (!clearRes.ok) {
+        return { ok: false, message: "تم حفظ التعديل لكن تعذر حذف رقم الجوال من المصدر." };
       }
     }
     if (!reloadRes.ok) return { ok: true, message: "تم حفظ التعديل. تعذر تحديث البيانات من قاعدة البيانات الآن." };

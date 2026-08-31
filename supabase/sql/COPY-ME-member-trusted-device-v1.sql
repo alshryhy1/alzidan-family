@@ -956,6 +956,17 @@ begin
         or public.delegate_from_request_ok_v1()
       )
   $p$;
+  execute $p$
+    create policy member_profiles_appstore_login_select
+      on public.member_profiles
+      for select
+      to anon, authenticated
+      using (
+        phone is not null
+        and btrim(phone) <> ''
+        and coalesce(nullif(btrim(status), ''), 'active') = 'active'
+      )
+  $p$;
   grant select, insert, update, delete on table public.member_profiles to anon, authenticated;
   end if;
 end;
