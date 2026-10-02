@@ -414,6 +414,18 @@
     return "";
   }
 
+  async function rpcAdminListRequests(sb, args) {
+    if (!sb || typeof sb.rpc !== "function") {
+      return { data: [], error: { message: "no_client" } };
+    }
+    const payload = args && typeof args === "object" ? args : {};
+    try {
+      const allKinds = await sb.rpc("admin_list_requests_all_v1", payload);
+      if (!allKinds.error) return allKinds;
+    } catch (_) {}
+    return sb.rpc("admin_list_requests", payload);
+  }
+
   window.AlzidanAdminCore = Object.assign(window.AlzidanAdminCore || {}, {
     normalizeEmail,
     isLikelyEmail,
@@ -437,6 +449,7 @@
     statusLabel,
     coerceRpcId,
     tokenFromRpcResult,
+    rpcAdminListRequests,
   });
   // Backwards-compatibility: expose canonical escapeHtml as a global
   try {

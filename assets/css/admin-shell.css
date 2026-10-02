@@ -262,6 +262,10 @@ body.admin-shell-ready.admin-authenticated #admin-module-delegates:not(.admin-mo
   display: none;
 }
 
+.admin-shell-scrim {
+  display: none;
+}
+
 @media (max-width: 900px) {
   body.admin-shell-ready.admin-authenticated .page {
     grid-template-columns: 1fr;
@@ -281,8 +285,22 @@ body.admin-shell-ready.admin-authenticated #admin-module-delegates:not(.admin-mo
   body.admin-shell-ready.admin-authenticated.admin-shell-nav-open #admin-shell-sidebar {
     transform: translateX(0);
   }
-  .admin-shell-mobile-toggle {
+  body.admin-shell-ready.admin-authenticated .admin-shell-mobile-toggle {
     display: inline-flex;
+  }
+  body.admin-shell-ready.admin-authenticated.admin-shell-nav-open {
+    overflow: hidden;
+  }
+  body.admin-shell-ready.admin-authenticated.admin-shell-nav-open .admin-shell-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    background: rgba(15, 36, 28, 0.46);
+    cursor: pointer;
   }
   body.admin-shell-ready.admin-authenticated #admin-protected-sections,
   body.admin-shell-ready.admin-authenticated #bulk-name-audit-section,

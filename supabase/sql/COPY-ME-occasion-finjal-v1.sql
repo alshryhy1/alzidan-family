@@ -65,7 +65,9 @@ begin
     when 'سلامة' then 'safety'
     when 'وفاة' then 'death'
     when 'إعلان وفاة' then 'death'
+    when 'وفاة وتعزية' then 'death'
     when 'تعزية' then 'condolence'
+    when 'عزاء' then 'condolence'
     else v
   end;
   return v;

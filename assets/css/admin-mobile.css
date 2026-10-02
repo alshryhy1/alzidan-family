@@ -23,9 +23,11 @@
   }
 
   .page > header {
-    flex-direction: column !important;
-    align-items: stretch !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
     gap: 8px !important;
+    flex-wrap: nowrap !important;
   }
 
   body.admin-shell-ready.admin-authenticated .page > header {
@@ -38,13 +40,31 @@
 
   .page > header nav {
     display: flex !important;
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
     gap: 6px !important;
+    margin-inline-start: auto;
   }
 
   .page > header nav a {
     font-size: 12px !important;
     padding: 8px 10px !important;
+    white-space: nowrap !important;
+  }
+
+  /* Sidebar covers these; they wrap and leak a red badge on iPhone */
+  .admin-inpage-nav {
+    display: none !important;
+  }
+
+  body:not(.admin-authenticated) .admin-shell-mobile-toggle {
+    display: none !important;
+  }
+
+  .admin-nav-badge[hidden],
+  .mod-badge[hidden] {
+    display: none !important;
   }
 
   .brand-text-sub {
@@ -105,6 +125,12 @@
     max-width: 100% !important;
     width: 100% !important;
     box-sizing: border-box !important;
+  }
+
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: 16px !important;
   }
 
   .btn,
@@ -177,6 +203,7 @@
     overflow: visible !important;
     text-overflow: unset !important;
     word-break: break-word !important;
+    text-align: right !important;
   }
 
   #admin-requests-section th:nth-child(n),
@@ -201,7 +228,12 @@
   #admin-requests-section tbody td > * {
     flex: 1 1 auto;
     min-width: 0;
-    text-align: left;
+    text-align: right !important;
+  }
+
+  #admin-requests-section tbody td[data-label="الجوال"],
+  #admin-requests-section tbody td[data-label="رقم الطلب"] {
+    font-variant-numeric: tabular-nums;
   }
 
   #admin-requests-section tbody td[data-label="إجراء"] {
@@ -343,6 +375,26 @@
   .page > header nav a {
     font-size: 11px !important;
     padding: 7px 8px !important;
+  }
+
+  body.admin-authenticated #admin-login-section .section-header {
+    display: none !important;
+  }
+
+  body.admin-authenticated #admin-login-section > .card {
+    margin: 0 0 10px !important;
+    padding: 10px !important;
+  }
+
+  body.admin-authenticated #admin-action-buttons {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  body.admin-authenticated #admin-action-buttons .btn {
+    flex: 1 1 calc(50% - 8px);
+    min-height: 44px !important;
   }
 }
 

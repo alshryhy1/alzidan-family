@@ -10450,6 +10450,325 @@ select
 `,
     },
     {
+      id: "maint.admin_list_requests_all_kinds_v1",
+      title: "طلبات الإدارة: كل الأنواع بما فيها تسجيل الجوال",
+      desc:
+        "يظهر طلب الجوال من التطبيق في لوحة الطلبات والإحصاء. لا يستبدل قائمة الإدارة القديمة. شغّله مرة ثم حدّث صفحة الطلبات بقوة.",
+      file: "../supabase/sql/COPY-ME-admin-list-requests-all-kinds-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.099946,
+      sql: `-- Preset id: maint.admin_list_requests_all_kinds_v1
+-- لوحة الإدارة تعرض كل صفوف approval_requests (بما فيها تسجيل الجوال).
+-- لا يستبدل admin_list_requests حتى لا ينكسر فحص الجلسة.
+-- Safe to re-run.
+
+create or replace function public.admin_list_requests_all_v1(
+  p_token text,
+  p_status text default null,
+  p_kind text default null,
+  p_limit integer default 50
+)
+returns setof public.approval_requests
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+declare
+  v_status text := lower(nullif(btrim(coalesce(p_status, '')), ''));
+  v_kind text := nullif(btrim(coalesce(p_kind, '')), '');
+  v_limit int := greatest(1, least(coalesce(p_limit, 50), 1000));
+begin
+  if not public.admin_token_ok_v1(p_token) then
+    raise exception 'not allowed';
+  end if;
+
+  return query
+  select r.*
+  from public.approval_requests r
+  where (
+      v_status is null
+      or lower(btrim(coalesce(r.status, ''))) = v_status
+    )
+    and (
+      v_kind is null
+      or btrim(coalesce(r.kind, '')) = v_kind
+      or (
+        v_kind in ('member_registration', 'member_phone_register')
+        and btrim(coalesce(r.kind, '')) in ('member_registration', 'member_phone_register')
+      )
+    )
+  order by r.created_at desc nulls last
+  limit v_limit;
+end;
+$fn$;
+
+revoke all on function public.admin_list_requests_all_v1(text, text, text, integer) from public;
+grant execute on function public.admin_list_requests_all_v1(text, text, text, integer) to anon, authenticated;
+
+select
+    to_regprocedure('public.admin_list_requests_all_v1(text, text, text, integer)') is not null
+    as has_admin_list_requests_all_v1;
+`,
+    },
+    {
+      id: "maint.family_admin_bind_accept_v1",
+      title: "قبول طلب الجوال في التطبيق: ربط ثم إنهاء الطلب",
+      desc:
+        "زر قبول في التطبيق يربط الجوال بالشخص في الشجرة ويُنهي الطلب فورًا. شغّله مرة ثم اضغط قبول من المحاكي.",
+      file: "../supabase/sql/COPY-ME-family-admin-bind-accept-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.0999465,
+      sql: `-- Preset id: maint.family_admin_bind_accept_v1
+-- قبول طلب الجوال في التطبيق: ربط الرقم بالشخص ثم إنهاء الطلب.
+-- Safe to re-run.
+
+create or replace function public.family_admin_set_phone_v1(
+  p_phone text,
+  p_tree_child_id bigint,
+  p_member_phone text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+  v_child public.tree_children%rowtype;
+  v_bind jsonb;
+  v_member_phone text;
+  v_digits text;
+  v_keep_id bigint;
+  v_leaf text;
+  v_other_pid text;
+  v_other_child bigint;
+  v_bound boolean := false;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate;
+  end if;
+  if p_tree_child_id is null or p_tree_child_id < 1 then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end if;
+  v_member_phone := nullif(btrim(coalesce(p_member_phone, '')), '');
+  if v_member_phone is null then
+    return jsonb_build_object('ok', false, 'error', 'bad_phone');
+  end if;
+  if to_regprocedure('public.member_phone_stored_v1(text)') is not null then
+    v_member_phone := coalesce(public.member_phone_stored_v1(v_member_phone), v_member_phone);
+  end if;
+  select * into v_child from public.tree_children where id = p_tree_child_id limit 1;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'person_not_found');
+  end if;
+
+  v_digits := right(regexp_replace(v_member_phone, '[^0-9]', '', 'g'), 9);
+  if char_length(coalesce(v_digits, '')) < 9 then
+    return jsonb_build_object('ok', false, 'error', 'bad_phone');
+  end if;
+  v_leaf := nullif(btrim(regexp_replace(coalesce(v_child.child_name, to_jsonb(v_child)->>'name', ''), '^.*/', '')), '');
+
+  select mp.tree_child_id
+    into v_other_child
+  from public.member_profiles mp
+  where char_length(v_digits) = 9
+    and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    and coalesce(mp.tree_child_id, 0) > 0
+  order by mp.id
+  limit 1;
+  if v_other_child is not null and v_other_child = v_child.id then
+    update public.member_profiles
+    set status = 'active', updated_at = now()
+    where tree_child_id = v_child.id
+       or (v_child.person_id is not null and person_id is not distinct from v_child.person_id);
+    return jsonb_build_object('ok', true, 'tree_child_id', v_child.id, 'action', 'already_bound');
+  end if;
+
+  begin
+    if to_regprocedure('public.bind_sender_phone_to_person_v1(text, text, bigint)') is not null then
+      v_bind := public.bind_sender_phone_to_person_v1(
+        v_member_phone,
+        coalesce(v_child.person_id::text, ''),
+        v_child.id
+      );
+      if coalesce((v_bind->>'ok')::boolean, false) then
+        v_bound := true;
+      elsif coalesce(v_bind->>'error', '') = 'phone_conflict' then
+        return jsonb_build_object('ok', false, 'error', 'phone_conflict', 'detail', v_bind);
+      end if;
+    end if;
+  exception when others then
+    v_bind := jsonb_build_object('error', SQLERRM);
+  end;
+
+  if not v_bound then
+    begin
+      select nullif(btrim(coalesce(mp.person_id::text, '')), '')
+        into v_other_pid
+      from public.member_profiles mp
+      where char_length(v_digits) = 9
+        and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+      order by mp.id
+      limit 1;
+      if v_other_pid is not null
+         and v_child.person_id is not null
+         and v_other_pid is distinct from v_child.person_id::text then
+        return jsonb_build_object('ok', false, 'error', 'phone_conflict');
+      end if;
+      select mp.id into v_keep_id
+      from public.member_profiles mp
+      where mp.tree_child_id = v_child.id
+         or (v_child.person_id is not null and mp.person_id is not distinct from v_child.person_id)
+         or (
+           char_length(v_digits) = 9
+           and right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+         )
+      order by (mp.tree_child_id is not distinct from v_child.id) desc, mp.id desc
+      limit 1;
+      begin
+        if v_keep_id is not null then
+          update public.member_profiles
+          set
+            phone = v_member_phone,
+            branch_key = coalesce(nullif(btrim(coalesce(v_child.branch_key, '')), ''), branch_key),
+            tree_child_id = v_child.id,
+            person_id = v_child.person_id,
+            display_name = coalesce(nullif(btrim(coalesce(display_name, '')), ''), v_leaf),
+            status = 'active',
+            updated_at = now()
+          where id = v_keep_id;
+        else
+          insert into public.member_profiles (
+            phone, branch_key, tree_child_id, person_id, display_name, status, created_at, updated_at
+          ) values (
+            v_member_phone, v_child.branch_key, v_child.id, v_child.person_id, v_leaf, 'active', now(), now()
+          );
+        end if;
+      exception when unique_violation then
+        update public.member_profiles
+        set
+          branch_key = coalesce(nullif(btrim(coalesce(v_child.branch_key, '')), ''), branch_key),
+          tree_child_id = v_child.id,
+          person_id = v_child.person_id,
+          display_name = coalesce(nullif(btrim(coalesce(display_name, '')), ''), v_leaf),
+          status = 'active',
+          updated_at = now()
+        where char_length(v_digits) = 9
+          and right(regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g'), 9) = v_digits;
+      end;
+      v_bound := true;
+    exception when others then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'bind_failed',
+        'detail', SQLERRM
+      );
+    end;
+  end if;
+
+  update public.member_profiles
+  set status = 'active', updated_at = now()
+  where tree_child_id = v_child.id
+     or (v_child.person_id is not null and person_id is not distinct from v_child.person_id);
+
+  return jsonb_build_object('ok', true, 'tree_child_id', v_child.id);
+end;
+$fn$;
+
+create or replace function public.family_admin_request_bind_v1(
+  p_phone text,
+  p_request_id bigint,
+  p_tree_child_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gate jsonb;
+  v_req public.approval_requests%rowtype;
+  v_set jsonb;
+begin
+  v_gate := public.family_admin_require_v1(p_phone);
+  if coalesce((v_gate->>'ok')::boolean, false) is not true then
+    return v_gate;
+  end if;
+  if p_request_id is null or p_request_id < 1 or p_tree_child_id is null or p_tree_child_id < 1 then
+    return jsonb_build_object('ok', false, 'error', 'bad_input');
+  end if;
+  select * into v_req from public.approval_requests where id = p_request_id limit 1;
+  if not found or coalesce(nullif(btrim(v_req.status), ''), 'pending') is distinct from 'pending' then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if to_regprocedure('public.family_admin_request_is_member_v1(text, text)') is not null
+     and not public.family_admin_request_is_member_v1(v_req.kind, v_req.message) then
+    return jsonb_build_object('ok', false, 'error', 'wrong_kind');
+  end if;
+  if nullif(btrim(coalesce(v_req.phone, '')), '') is not null then
+    begin
+      v_set := public.family_admin_set_phone_v1(p_phone, p_tree_child_id, v_req.phone);
+    exception when others then
+      return jsonb_build_object('ok', false, 'error', 'bind_failed', 'detail', SQLERRM);
+    end;
+    if coalesce((v_set->>'ok')::boolean, false) is not true then
+      return v_set;
+    end if;
+  end if;
+  update public.approval_requests set status = 'approved' where id = v_req.id;
+  return jsonb_build_object('ok', true, 'id', v_req.id, 'tree_child_id', p_tree_child_id);
+end;
+$fn$;
+
+notify pgrst, 'reload schema';
+select
+  to_regprocedure('public.family_admin_set_phone_v1(text, bigint, text)') is not null as has_set_phone,
+  to_regprocedure('public.family_admin_request_bind_v1(text, bigint, bigint)') is not null as has_bind;
+`,
+    },
+    {
+      id: "maint.family_admin_notify_phone_v1",
+      title: "إشعار إدارة العائلة على 0551840058",
+      desc:
+        "طلبات الإدارة تصل إشعار تطبيق لمندوب الإدارة على 0551840058. شغّله مرة ثم أرسل طلبًا جديدًا.",
+      file: "../supabase/sql/COPY-ME-family-admin-notify-phone-v1.sql",
+      sequential: true,
+      liveDetect: false,
+      order: 56.0999466,
+      sql: `-- Preset id: maint.family_admin_notify_phone_v1
+-- إشعار تطبيق طلبات الإدارة يصل لمندوب الإدارة 0551840058.
+-- Safe to re-run.
+
+create table if not exists public.email_settings (
+  key text primary key,
+  value text
+);
+
+do $$
+begin
+  if exists (
+    select 1 from public.email_settings where btrim(coalesce(key, '')) = 'admin_notify_phone'
+  ) then
+    update public.email_settings
+    set value = '0551840058'
+    where btrim(coalesce(key, '')) = 'admin_notify_phone';
+  else
+    insert into public.email_settings (key, value)
+    values ('admin_notify_phone', '0551840058');
+  end if;
+end
+$$;
+
+select key, value
+from public.email_settings
+where btrim(coalesce(key, '')) = 'admin_notify_phone';
+`,
+    },
+    {
       id: "maint.delegate_app_inbox_v1",
       title: "طلبات المندوب في التطبيق",
       desc:
@@ -10734,6 +11053,22 @@ select
         "العضو أو المندوب المسجّل بجواله ينشر مباشرة في المناسبات، ويعدّل/يحذف مصدره. الإدارة تبقى قادرة على تعديل أي صف أو حذفه من المصدر.",
       file: "../supabase/sql/COPY-ME-member-publish-occasion-v1.sql",
       order: 56.1,
+    },
+    {
+      id: "maint.member_add_person_v1",
+      title: "إضافة ابن أو مولود من العضو الموثّق في شجرته فقط",
+      desc:
+        "الجوال الموثّق يضيف ابناً أو مولوداً تحت اسمه أو أبنائه في الشجرة. ممنوع الإضافة تحت أي شخص خارج شجرته.",
+      file: "../supabase/sql/COPY-ME-member-add-person-v1.sql",
+      order: 56.2,
+    },
+    {
+      id: "maint.member_update_person_v1",
+      title: "تعديل الاسم أو تاريخ الميلاد للموثّق وأبنائه",
+      desc:
+        "الجوال الموثّق يعدّل اسمه أو تاريخ ميلاده، واسم أبنائه المباشرين أو تاريخ ميلادهم، في جدول الشجرة نفسه.",
+      file: "../supabase/sql/COPY-ME-member-update-person-v1.sql",
+      order: 56.3,
     },
   ];
 

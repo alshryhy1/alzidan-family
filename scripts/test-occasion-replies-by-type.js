@@ -21,8 +21,8 @@ function filterCatalogForType(items, typeKey) {
   var list = (items || []).filter(function (item) {
     if (!item || DROP[item.key]) return false;
     var types = item.applies_to_types;
-    if (Array.isArray(types) && types.length) return types.indexOf(typeKey) >= 0;
-    return true;
+    if (!Array.isArray(types) || !types.length) return false;
+    return types.indexOf(typeKey) >= 0;
   });
   if (RSVP_TYPES[typeKey]) {
     list = list.filter(function (item) {

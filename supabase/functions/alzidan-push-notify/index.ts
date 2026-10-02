@@ -9,6 +9,7 @@ const DELEGATE_PORTAL_URL =
 const ADMIN_PORTAL_URL =
   Deno.env.get("ADMIN_PORTAL_URL") || "https://alzidan.org/pages/admin.html";
 const FALLBACK_ADMIN_NOTIFY_PHONE = String(Deno.env.get("ADMIN_NOTIFY_PHONE") || "").trim();
+const FAMILY_ADMIN_APP_PHONE = "0551840058";
 
 // Browser admin (localhost:8080 / alzidan.org) calls via supabase.functions.invoke.
 // Preflight OPTIONS must return ACAO; gateway JWT reject paths often omit CORS — deploy with --no-verify-jwt.
@@ -64,8 +65,8 @@ function requestLabel(kind: string) {
     test_request: "طلب اختبار",
     delegate_secret_reset: "إعادة تعيين رقم سري",
   };
-  // Empty string = unknown → callers must block send (no soft fallback).
-  return map[k] || "";
+  // Empty kind stays unknown. Any other non-audit kind is still a request.
+  return map[k] || (k ? "طلب" : "");
 }
 
 function isInternalAuditKind(kind: unknown) {
@@ -398,6 +399,8 @@ async function fetchBranchDelegatePhones(branchKey: string): Promise<string[]> {
 /** Admin/central phones from email_settings (+ optional env fallback). */
 async function fetchAdminNotifyPhones(): Promise<string[]> {
   const phones = new Set<string>();
+  const familyAdminPhone = normalizeSaudiPhone(FAMILY_ADMIN_APP_PHONE);
+  if (familyAdminPhone) phones.add(familyAdminPhone);
   const envPhone = normalizeSaudiPhone(FALLBACK_ADMIN_NOTIFY_PHONE);
   if (envPhone) phones.add(envPhone);
 
@@ -809,26 +812,15 @@ async function notifyBranchDelegateNewRequest(payload: Record<string, unknown>, 
     return json({ ok: true, skipped: "missing_branch_key", mode: "branch_delegate_new_request" });
   }
 
-  // البطاقة / special_card → central admin only (do not push branch delegates).
   const kind = normalizeText(record.kind || payload.kind);
-  const branchNotifyKinds = new Set([
-    "event_card",
-    "family_event",
-    "event_request",
-    "occasion",
-    "patient",
-    "health",
-    "event_death",
-    "tree_card",
-    "add_person",
-    "tree_edit",
-    "memory_card",
-    "memory",
-    "tree_founder",
-    "member_phone_register",
-    "member_registration",
+  const adminOnlyKinds = new Set([
+    "special_card",
+    "tree_delegate",
+    "events_delegate",
+    "org_role",
+    "delegate_secret_reset",
   ]);
-  if (kind && !branchNotifyKinds.has(kind)) {
+  if ((kind && adminOnlyKinds.has(kind)) || /_audit$|^eva-|^aud-/i.test(kind)) {
     return json({
       ok: true,
       skipped: "kind_admin_only",
@@ -982,7 +974,7 @@ async function notifyAdminNewRequest(payload: Record<string, unknown>, dryRun: b
     type: "admin_new_request",
     notification_type: "admin_new_request",
     branch_key: branchKey,
-    screen: "admin",
+    screen: "familyAdmin",
     url: portalUrl,
     request_id: requestId,
     kind,
@@ -1371,7 +1363,14 @@ Deno.serve(async (req) => {
           normalizeText(recordObj?.status) === "rejected")
       ) {
         mode = "status_changed";
-      } else if (hookType === "INSERT" || hookType === "DELETE") {
+      } else if (hookType === "INSERT") {
+        const rec =
+          payload.record && typeof payload.record === "object" ? payload.record : payload;
+        return await notifyBranchDelegateNewRequest(
+          { mode: "branch_delegate_new_request", record: rec },
+          dryRun,
+        );
+      } else if (hookType === "DELETE") {
         return json({ ok: true, skipped: "webhook_no_auto_push", type: hookType });
       }
     }

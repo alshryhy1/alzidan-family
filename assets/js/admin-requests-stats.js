@@ -45,7 +45,17 @@
         "</div>"
       );
     }
-    const kindOrder = ["tree_card", "tree_audit", "event_card", "events_audit"];
+    const kindOrder = [
+      "member_phone_register",
+      "member_registration",
+      "tree_card",
+      "tree_edit",
+      "tree_audit",
+      "event_card",
+      "family_event",
+      "event_request",
+      "events_audit",
+    ];
     let html = '<div class="requests-stats-cards">';
     html += card("إجمالي الطلبات", total, "stat-total");
     html += card("انتظار", byStatus.get("pending") || 0, "stat-pending");
@@ -59,6 +69,8 @@
     const customLabels = {
       tree_audit: "تعديل الشجرة",
       events_audit: "تعديل المناسبات",
+      member_phone_register: "تسجيل جوال",
+      member_registration: "تسجيل عضو",
     };
     kindOrder.forEach((kind) => {
       if (hiddenKinds.has(kind)) return;
@@ -95,12 +107,25 @@
       }
       const limit = STATS_ROW_LIMIT;
       renderRequestsStatsLoading();
-      const { data, error } = await sb.rpc("admin_list_requests", {
-        p_token: token,
-        p_status: null,
-        p_kind: null,
-        p_limit: limit,
-      });
+      const listRpc =
+        window.AlzidanAdminCore &&
+        typeof window.AlzidanAdminCore.rpcAdminListRequests === "function"
+          ? window.AlzidanAdminCore.rpcAdminListRequests
+          : null;
+      const listed = listRpc
+        ? await listRpc(sb, {
+            p_token: token,
+            p_status: null,
+            p_kind: null,
+            p_limit: limit,
+          })
+        : await sb.rpc("admin_list_requests", {
+            p_token: token,
+            p_status: null,
+            p_kind: null,
+            p_limit: limit,
+          });
+      const { data, error } = listed || {};
       if (error) {
         renderRequestsStatsError(
           "تعذر تحميل الإحصاء، حاول لاحقاً أو تواصل مع الإدارة.",

@@ -431,22 +431,18 @@ async function fetchBranchDelegateEmails(branchKey: string): Promise<BranchEmail
 
 function isBranchNotifyKind(kind: string) {
   const k = normalizeKind(kind);
-  // special_card (البطاقة) stays central-admin only — never route to branch delegates.
-  return (
-    k === "event_card" ||
-    k === "family_event" ||
-    k === "event_request" ||
-    k === "occasion" ||
-    k === "patient" ||
-    k === "health" ||
-    k === "event_death" ||
-    k === "tree_card" ||
-    k === "add_person" ||
-    k === "tree_edit" ||
-    k === "memory_card" ||
-    k === "memory" ||
-    k === "tree_founder"
-  );
+  if (!k) return false;
+  if (
+    k === "special_card" ||
+    k === "tree_delegate" ||
+    k === "events_delegate" ||
+    k === "org_role" ||
+    k === "delegate_secret_reset"
+  ) {
+    return false;
+  }
+  if (k.endsWith("_audit") || k.startsWith("eva-") || k.startsWith("aud-")) return false;
+  return true;
 }
 
 async function notifyBranchDelegates(record: any, settings: any, dryRun: boolean) {

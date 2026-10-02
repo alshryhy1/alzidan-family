@@ -348,6 +348,10 @@ body.admin-authenticated #admin-requests-section #sb-status { display: none !imp
   font-weight: 800;
   line-height: 1.2;
 }
+.admin-nav-badge[hidden],
+.admin-name-errors-total-badge[hidden] {
+  display: none !important;
+}
 .admin-name-errors-total-badge {
   background: #fef3c7;
   color: #92400e;

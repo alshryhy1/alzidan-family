@@ -261,13 +261,16 @@
 
   function filterCatalogForType(items, type) {
     var typeKey = canonicalEventType(type);
+    var family = eventFamilyFromType(typeKey);
     var list = Array.isArray(items) ? items.slice() : [];
     list = list.filter(function (item) {
       if (!item || DROP_REPLY_KEYS[item.key]) return false;
       var types = item.applies_to_types;
-      if (Array.isArray(types) && types.length) {
-        return types.indexOf(typeKey) >= 0;
-      }
+      if (!Array.isArray(types) || !types.length) return false;
+      if (types.indexOf(typeKey) < 0) return false;
+      if (family === "death" && item.family && item.family !== "death") return false;
+      if (family === "health" && item.family && item.family !== "health") return false;
+      if ((family === "news" || family === "occasion") && item.family === "death") return false;
       return true;
     });
     if (isRsvpType(typeKey)) {
@@ -278,6 +281,16 @@
           item.key === "inv_maybe" ||
           item.allows_message
         );
+      });
+    }
+    if (typeKey === "healing") {
+      list = list.filter(function (item) {
+        return item.key !== "heal_ask" && item.key !== "heal_tahoor";
+      });
+    }
+    if (typeKey === "safety") {
+      list = list.filter(function (item) {
+        return item.key !== "heal_ask" && item.key !== "heal_tahoor" && item.key !== "heal_shifa";
       });
     }
     return list;

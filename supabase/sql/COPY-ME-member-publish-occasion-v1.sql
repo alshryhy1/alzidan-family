@@ -23,21 +23,41 @@ security definer
 set search_path = public
 as $fn$
 declare
-  v_login jsonb;
+  v_digits text;
   v_phone text;
 begin
-  if to_regprocedure('public.public_app_login_by_phone_v1(text)') is null then
+  -- member_device_allows_phone_v1 is not required: a registered family phone may publish.
+  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');
+  if v_digits is null or char_length(v_digits) < 9 then
     return null;
   end if;
-  v_login := public.public_app_login_by_phone_v1(p_phone);
-  if coalesce(v_login->>'ok', '') <> 'true' then
-    return null;
+
+  if to_regclass('public.member_profiles') is not null then
+    select mp.phone
+      into v_phone
+    from public.member_profiles mp
+    where right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+      and coalesce(nullif(btrim(coalesce(mp.status, '')), ''), 'active') is distinct from 'pending_family'
+    order by mp.updated_at desc nulls last, mp.id desc
+    limit 1;
+    if v_phone is not null then
+      return v_phone;
+    end if;
   end if;
-  v_phone := nullif(btrim(coalesce(v_login->>'phone', '')), '');
-  if v_phone is null and to_regprocedure('public.push_tokens_norm_phone(text)') is not null then
-    v_phone := nullif(public.push_tokens_norm_phone(p_phone), '');
+
+  if to_regclass('public.delegates_v2') is not null then
+    select d.phone
+      into v_phone
+    from public.delegates_v2 d
+    where coalesce(d.is_enabled, true) = true
+      and right(regexp_replace(coalesce(d.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    limit 1;
+    if v_phone is not null then
+      return v_phone;
+    end if;
   end if;
-  return v_phone;
+
+  return null;
 end;
 $fn$;
 

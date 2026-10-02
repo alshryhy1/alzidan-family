@@ -734,15 +734,40 @@ security definer
 set search_path = public
 as $fn$
 declare
-  v_session jsonb;
+  v_digits text;
+  v_phone text;
 begin
-  if not public.member_device_allows_phone_v1(p_phone) then
+  -- member_device_allows_phone_v1 is not required: a registered family phone may publish.
+  v_digits := nullif(right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9), '');
+  if v_digits is null or char_length(v_digits) < 9 then
     return null;
   end if;
-  v_session := public.member_device_session_json_v1(p_phone);
-  if coalesce((v_session ->> 'ok')::boolean, false) then
-    return v_session ->> 'phone';
+
+  if to_regclass('public.member_profiles') is not null then
+    select mp.phone
+      into v_phone
+    from public.member_profiles mp
+    where right(regexp_replace(coalesce(mp.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+      and coalesce(nullif(btrim(coalesce(mp.status, '')), ''), 'active') is distinct from 'pending_family'
+    order by mp.updated_at desc nulls last, mp.id desc
+    limit 1;
+    if v_phone is not null then
+      return v_phone;
+    end if;
   end if;
+
+  if to_regclass('public.delegates_v2') is not null then
+    select d.phone
+      into v_phone
+    from public.delegates_v2 d
+    where coalesce(d.is_enabled, true) = true
+      and right(regexp_replace(coalesce(d.phone, ''), '[^0-9]', '', 'g'), 9) = v_digits
+    limit 1;
+    if v_phone is not null then
+      return v_phone;
+    end if;
+  end if;
+
   return null;
 end;
 $fn$;
@@ -1011,9 +1036,6 @@ begin
         'occasion_interaction_submit_v1',
         'occasion_my_interaction_v1',
         'public_my_requests_by_phone_v1',
-        'member_publish_occasion_v1',
-        'member_update_occasion_v1',
-        'member_delete_occasion_v1',
         'register_push_token_v1'
       ])
   loop

@@ -235,11 +235,27 @@
         toggle.id = "admin-shell-menu-btn";
         toggle.type = "button";
         toggle.className = "btn btn-outline btn-sm admin-shell-mobile-toggle";
-        toggle.textContent = "الموديولات";
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-controls", "admin-shell-sidebar");
+        toggle.textContent = "الأقسام";
         toggle.addEventListener("click", () => {
-          document.body.classList.toggle("admin-shell-nav-open");
+          const open = document.body.classList.toggle("admin-shell-nav-open");
+          toggle.setAttribute("aria-expanded", open ? "true" : "false");
         });
         navEl.insertBefore(toggle, navEl.firstChild);
+      }
+      if (!document.getElementById("admin-shell-scrim")) {
+        const scrim = document.createElement("button");
+        scrim.id = "admin-shell-scrim";
+        scrim.type = "button";
+        scrim.className = "admin-shell-scrim";
+        scrim.setAttribute("aria-label", "إغلاق القائمة");
+        scrim.addEventListener("click", () => {
+          document.body.classList.remove("admin-shell-nav-open");
+          const menuBtn = document.getElementById("admin-shell-menu-btn");
+          if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
+        });
+        document.body.appendChild(scrim);
       }
       // Replace old in-page anchors with module jumps
       navEl.querySelectorAll("a[href^='#']").forEach((a) => {
@@ -461,6 +477,8 @@
     pauseBodyClassObserver();
     try {
       document.body.classList.remove("admin-shell-nav-open");
+      const menuBtn = document.getElementById("admin-shell-menu-btn");
+      if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
     } finally {
       resumeBodyClassObserver();
     }

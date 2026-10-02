@@ -2605,12 +2605,24 @@ function showAlert(kind, msg) {
     }
     const statusValue = String(filterStatus?.value || "pending");
     const kindValue = String(filterKind?.value || "all");
-    const { data, error } = await sb.rpc("admin_list_requests", {
-      p_token: token,
-      p_status: statusValue === "all" ? null : statusValue,
-      p_kind: kindValue === "all" ? null : kindValue,
-      p_limit: 50,
-    });
+    const listRpc =
+      window.AlzidanAdminCore &&
+      typeof window.AlzidanAdminCore.rpcAdminListRequests === "function"
+        ? window.AlzidanAdminCore.rpcAdminListRequests
+        : null;
+    const { data, error } = await (listRpc
+      ? listRpc(sb, {
+          p_token: token,
+          p_status: statusValue === "all" ? null : statusValue,
+          p_kind: kindValue === "all" ? null : kindValue,
+          p_limit: 50,
+        })
+      : sb.rpc("admin_list_requests", {
+          p_token: token,
+          p_status: statusValue === "all" ? null : statusValue,
+          p_kind: kindValue === "all" ? null : kindValue,
+          p_limit: 50,
+        }));
     if (error) {
       renderEmpty("تعذر جلب الطلبات حالياً، حاول لاحقاً أو تواصل مع الإدارة.");
       return;
