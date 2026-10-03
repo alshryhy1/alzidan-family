@@ -59,11 +59,7 @@
       "لا يظهر في البحث",
       "يعطل مسار الطلبات",
     ],
-    missing_father: [
-      "لا يظهر ضمن أبناء الأب",
-      "يعطل مسار الطلبات",
-      "يسمح بطلبات مكررة",
-    ],
+    missing_father: ["نسخة دفعة بلا أب مسجّل"],
     path_mismatch: [
       "لا يظهر ضمن أبناء الأب",
       "لا يظهر في البحث",
@@ -128,8 +124,7 @@
       "أُنشئ بلا أب، أو حقل الأب فارغ بينما اسم الأب موجود — غالبًا من استيراد أو مندوب أو صيانة قديمة.",
     parent_empty:
       "سجل بلا أب مذكور — غالبًا استيراد ناقص أو أداة صيانة تجاوزت التحقق.",
-    missing_father:
-      "لا يوجد parent_person_id صالح، ونص الأب لا يطابق أحدًا في الشجرة: إملاء مختلف، أو الأب لم يُضف بعد، أو اعتماد طلب بلا أب صالح.",
+    missing_father: "الدفعة كتبت الابن ومسار أب ما له سجل.",
     path_mismatch:
       "عُدّل المسار دون تحديث حقل الأب، أو نص الأب لا يطابق الأب المرتبط بـ UUID، أو الاسم مكتوب بطريقة مختلفة عن صف الأب. اختلاف ى/ي وحده بعد التوحيد لا يُعدّ مشكلة هيكلية.",
     possible_spelling_duplicates:
@@ -149,8 +144,7 @@
       "كيفية الإصلاح: اربط السجل بأب موجود في الشجرة (مندوب · إدارة الشجرة · استيراد · صيانة) بعد الموافقة.",
     parent_empty:
       "كيفية الإصلاح: امنع الكتابة بلا أب للمستجد؛ السجلات القديمة تُصلح خطوة بخطوة بعد موافقة.",
-    missing_father:
-      "كيفية الإصلاح: أنشئ الأب أولًا في الشجرة، أو صحّح اسم الأب ليطابق سجلًا موجودًا — ارفض الاعتماد بلا أب.",
+    missing_father: "لا يُنشأ أب من هذا المسار.",
     path_mismatch:
       "كيفية الإصلاح: وحّد حقل الأب مع المسار عبر إصلاح صف واحد بعد موافقة (مندوب/إدارة/استيراد).",
     possible_spelling_duplicates:
@@ -422,6 +416,67 @@
       byBranchLeafNorm: byBranchLeafNorm,
       personIdMap: personIdMap,
     };
+  }
+
+  function pathSegmentsLocal(path) {
+    return norm(path)
+      .split("/")
+      .map(norm)
+      .filter(Boolean);
+  }
+
+  function segmentDistanceLocal(aSegs, bSegs) {
+    var n = aSegs.length;
+    var m = bSegs.length;
+    if (!n && !m) return 0;
+    if (Math.abs(n - m) > 8) return 99;
+    var prev = [];
+    var i;
+    var j;
+    for (j = 0; j <= m; j++) prev[j] = j;
+    for (i = 1; i <= n; i++) {
+      var cur = [i];
+      for (j = 1; j <= m; j++) {
+        var cost = pathsEqual(aSegs[i - 1], bSegs[j - 1]) ? 0 : 1;
+        var del = prev[j] + 1;
+        var ins = cur[j - 1] + 1;
+        var sub = prev[j - 1] + cost;
+        cur[j] = del < ins ? (del < sub ? del : sub) : ins < sub ? ins : sub;
+      }
+      prev = cur;
+    }
+    return prev[m];
+  }
+
+  /**
+   * List a missing father only when a living person can receive this son:
+   * the path already names him, or one stored-father path is a single segment off.
+   * A batch son whose father text matches nobody is not a critical repair row.
+   */
+  function missingFatherIsRepairable(index, branch, stored, extracted, selfId) {
+    var b = norm(branch);
+    if (extracted && !isBranchRootParent(extracted, b) && fatherExists(index, b, extracted)) {
+      return true;
+    }
+    var target = norm(stored);
+    var targetLeaf =
+      target.indexOf("/") >= 0 ? target.slice(target.lastIndexOf("/") + 1) : target;
+    if (!b || !targetLeaf) return false;
+    var hits =
+      index.byBranchLeafNorm.get(b + "||" + normalizeArabicForCompare(targetLeaf)) || [];
+    var targetSegs = pathSegmentsLocal(target);
+    var best = 99;
+    var bestCount = 0;
+    hits.forEach(function (c) {
+      if (!c) return;
+      if (selfId != null && String(c.id) === String(selfId)) return;
+      var d = segmentDistanceLocal(pathSegmentsLocal(childPath(c)), targetSegs);
+      if (d < best) {
+        best = d;
+        bestCount = 1;
+      } else if (d === best) bestCount += 1;
+    });
+    return best <= 1 && bestCount === 1;
   }
 
   function fatherExists(index, branch, parentPath) {
@@ -834,6 +889,7 @@
       "عبدالاله",
       "عبدالوهاب",
       "فهد",
+      "فهيد",
       "فهاد",
       "خالد",
       "سلطان",
@@ -864,9 +920,13 @@
       "مقرن",
       "بندر",
       "حمد",
+      "حماد",
       "حمود",
       "صالح",
+      "سلمان",
       "سليمان",
+      "عايد",
+      "عيد",
       "ناصر",
       "نصر",
       "مطلق",
@@ -1161,8 +1221,14 @@
         );
       }
 
-      // Missing father: only when UUID is absent/broken AND text parent has no living row
-      if (stored && !isRoot && !livingFatherOk) {
+      // Missing father: only when a living person can take this son.
+      // Batch rows whose father text matches nobody stay out of the critical list.
+      if (
+        stored &&
+        !isRoot &&
+        !livingFatherOk &&
+        missingFatherIsRepairable(index, branch, stored, extracted, c.id)
+      ) {
         missingFather.push(
           issueRow(c, CAT.MISSING_FATHER, {
             reason_ar:
@@ -1203,14 +1269,21 @@
               : colNull && !uuidFatherOk
                 ? CAT.PARENT_NULL
                 : CAT.PATH_MISMATCH;
-        var brokenExtra = {
-          reason_ar: CAT_AR[primary] || primary,
-        };
-        if (uuidFatherOk) {
-          brokenExtra.relation_via_uuid_ar = relationViaUuidAr(c, uuidFather);
-          brokenExtra.uuid_father_path = childPath(uuidFather);
+        if (
+          primary === CAT.MISSING_FATHER &&
+          !missingFatherIsRepairable(index, branch, stored, extracted, c.id)
+        ) {
+          // Same batch leftovers — not a second critical card.
+        } else {
+          var brokenExtra = {
+            reason_ar: CAT_AR[primary] || primary,
+          };
+          if (uuidFatherOk) {
+            brokenExtra.relation_via_uuid_ar = relationViaUuidAr(c, uuidFather);
+            brokenExtra.uuid_father_path = childPath(uuidFather);
+          }
+          markBroken(issueRow(c, primary, brokenExtra));
         }
-        markBroken(issueRow(c, primary, brokenExtra));
       }
     });
 

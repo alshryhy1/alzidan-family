@@ -319,8 +319,8 @@ assert(
   "missing father: no UUID propose",
 );
 assert(
-  (missAnalysis.decision_logic_ar || []).some((l) => /غير موجود/.test(l)),
-  "missing father decision mentions غير موجود",
+  (missAnalysis.decision_logic_ar || []).some((l) => /لا يطابق أي شخص/.test(l)),
+  "missing father decision says the written id matches nobody",
 );
 
 if (process.exitCode) {

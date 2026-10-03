@@ -851,6 +851,22 @@
     return parts.length ? parts.join(",") : "";
   }
 
+  /** Paths whose leaf is the query, so a later محمد is not dropped by an unordered limit. */
+  function buildPersonLeafIlikeOrFilter(term) {
+    var variants = arabicSearchQueryVariants(term);
+    if (!variants.length) return "";
+    var parts = [];
+    variants.forEach(function (v) {
+      var safe = String(v).replace(/[,()]/g, " ");
+      if (!safe) return;
+      parts.push("child_name.eq." + safe);
+      parts.push("name.eq." + safe);
+      parts.push("child_name.ilike.%/" + safe);
+      parts.push("name.ilike.%/" + safe);
+    });
+    return parts.length ? parts.join(",") : "";
+  }
+
   /**
    * Build capped person typeahead options from tree_children-like rows.
    * Prefer leaf-name matches (never auto-pick first; never rely on parent_name alone).
@@ -861,8 +877,9 @@
     var q = normalizeText(term || "");
     var limit =
       typeof o.limit === "number" && o.limit > 0
-        ? Math.min(Math.floor(o.limit), 50)
+        ? Math.min(Math.floor(o.limit), 1000)
         : PERSON_SEARCH_LIMIT;
+    var preferParent = normalizeText(o.preferParentPath || "");
     var SpousesCore = root.AlzidanSpousesCore || {};
     var matchFn =
       typeof o.matchesOrderedSubstring === "function"
@@ -898,6 +915,7 @@
         person_id: personId,
         leaf: leaf,
         label: leaf || path,
+        parentPath: normalizeText(r.parent_name || r.parent || ""),
       });
     });
 
@@ -920,6 +938,11 @@
         });
 
     pool.sort(function (a, b) {
+      if (preferParent) {
+        var aUnder = normalizeText(a.parentPath || "") === preferParent ? 0 : 1;
+        var bUnder = normalizeText(b.parentPath || "") === preferParent ? 0 : 1;
+        if (aUnder !== bUnder) return aUnder - bUnder;
+      }
       var aLeaf = normalizeText(a.leaf || "");
       var bLeaf = normalizeText(b.leaf || "");
       var aExact = qVariants.indexOf(aLeaf) >= 0 ? 0 : aLeaf.indexOf(q) === 0 ? 1 : 2;
@@ -1163,6 +1186,7 @@
     personLeafName: personLeafName,
     arabicSearchQueryVariants: arabicSearchQueryVariants,
     buildPersonNameIlikeOrFilter: buildPersonNameIlikeOrFilter,
+    buildPersonLeafIlikeOrFilter: buildPersonLeafIlikeOrFilter,
     buildPersonSearchOptionsFromRows: buildPersonSearchOptionsFromRows,
     childrenForSelectedParent: childrenForSelectedParent,
     unionChildrenMapByParentPersonId: unionChildrenMapByParentPersonId,

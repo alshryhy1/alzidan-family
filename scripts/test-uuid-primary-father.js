@@ -163,8 +163,8 @@ const orphan = {
 };
 const missReport = Struct.auditTreeStructure([fatherOk, orphan], []);
 assert(
-  (missReport.lists.missing_father || []).some((r) => Number(r.id) === 99),
-  "broken UUID + missing text father → still missing_father",
+  !(missReport.lists.missing_father || []).some((r) => Number(r.id) === 99),
+  "broken UUID + no living father to attach → not a critical missing_father row",
 );
 
 if (process.exitCode) {

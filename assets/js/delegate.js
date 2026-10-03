@@ -3718,25 +3718,51 @@ async function searchPersonsInBranch(term) {
 
   let rows = [];
   try {
+    const leafFilter =
+      typeof FM.buildPersonLeafIlikeOrFilter === "function"
+        ? FM.buildPersonLeafIlikeOrFilter(q)
+        : "";
     const orFilter =
       typeof FM.buildPersonNameIlikeOrFilter === "function"
         ? FM.buildPersonNameIlikeOrFilter(q)
         : "child_name.ilike.%" + q + "%,name.ilike.%" + q + "%";
-    if (!orFilter) return [];
-    let fb = sb
-      .from("tree_children")
-      .select("person_id,branch_key,child_name,name,parent_name,parent")
-      .or(orFilter)
-      .limit(limit);
-    fb = fb.eq("branch_key", branch);
-    const res = await fb;
-    if (!res.error && Array.isArray(res.data)) rows = res.data;
+    if (!leafFilter && !orFilter) return [];
+    const selectCols = "person_id,branch_key,child_name,name,parent_name,parent";
+    if (leafFilter) {
+      const leafRes = await sb
+        .from("tree_children")
+        .select(selectCols)
+        .or(leafFilter)
+        .eq("branch_key", branch)
+        .order("child_name", { ascending: true })
+        .limit(1000);
+      if (!leafRes.error && Array.isArray(leafRes.data)) rows = leafRes.data;
+    }
+    if (rows.length < limit && orFilter) {
+      const res = await sb
+        .from("tree_children")
+        .select(selectCols)
+        .or(orFilter)
+        .eq("branch_key", branch)
+        .limit(limit);
+      if (!res.error && Array.isArray(res.data)) {
+        const seen = new Set(
+          rows.map((r) => String(r.person_id || r.child_name || r.name || "")),
+        );
+        res.data.forEach((r) => {
+          const id = String(r.person_id || r.child_name || r.name || "");
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          rows.push(r);
+        });
+      }
+    }
   } catch (_) {
     rows = [];
   }
 
   if (typeof FM.buildPersonSearchOptionsFromRows === "function") {
-    return FM.buildPersonSearchOptionsFromRows(rows, q, { limit: limit });
+    return FM.buildPersonSearchOptionsFromRows(rows, q, { limit: 1000 });
   }
   return rows
     .map((r) => {

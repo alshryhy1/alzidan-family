@@ -21,7 +21,7 @@ export const REASON_AR = {
   root_parent: "أصل الفرع (Root Parent)",
   in_tree_parents: "موجود في tree_parents",
   missing_uuid: "يحتاج ربط UUID",
-  broken_parent_uuid: "أب UUID مكسور",
+  broken_parent_uuid: "ابن دفعة بلا أب مسجّل",
   missing_father: "الأب غير موجود",
   ambiguous_father: "أب غامض — عدة مرشّحين",
 };
@@ -346,11 +346,11 @@ export function classifyChild(row, index) {
   if (pid && !uuidOk) {
     return {
       ...enriched,
-      severity: "error",
-      code: "TREE-003",
-      issue: "broken_parent_person_id",
-      reason: REASON.BROKEN_PARENT_UUID,
-      reason_ar: REASON_AR.broken_parent_uuid,
+      severity: "review",
+      code: "TREE-003-review",
+      issue: "missing_father",
+      reason: REASON.MISSING_FATHER,
+      reason_ar: REASON_AR.missing_father,
     };
   }
 

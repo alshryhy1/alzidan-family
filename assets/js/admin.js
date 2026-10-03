@@ -3887,7 +3887,18 @@ where c.id = matches.id; commit;
       btn.addEventListener("click", () => renderHealthStructureDetail(cat.id));
       healthStructureCards.appendChild(btn);
     });
-    const prefer = ["parent_null", "missing_father", "path_mismatch", "broken_relation"];
+    const prefer = [
+      "parent_null",
+      "missing_father",
+      "path_mismatch",
+      "broken_relation",
+      "wrong_name_similarity",
+      "possible_spelling_duplicates",
+      "suspicious_name_typo",
+      "duplicate_person_id",
+      "spouses_without_husband",
+      "parent_empty",
+    ];
     let start = prefer.find(
       (id) =>
         audit.lists &&
@@ -3901,7 +3912,7 @@ where c.id = matches.id; commit;
 
   function tree003Impact(row) {
     if (row && row.severity === "error") {
-      return "يعطل مسار الطلبات · يحتاج ربط المعرف · لا يظهر ضمن أبناء الأب";
+      return "ابن دفعة بلا أب مسجّل · لا يُربط المعرف · لا يُنشأ الأب من المسار";
     }
     return "يحتاج ربط المعرف · يعطل مسار الطلبات · يسمح بطلبات مكررة";
   }
@@ -4056,9 +4067,9 @@ where c.id = matches.id; commit;
       "🟡 يحتاج ربط المعرف فقط: " +
         String(warnCount) +
         " · أثر: يحتاج ربط المعرف · يعطل مسار الطلبات",
-      "🔴 أخطاء الربط الحقيقية (معرف أب مكسور): " +
+      "🔴 أبناء دفعة وأبوهم غير مسجّل: " +
         String(errCount) +
-        " · أثر: يعطل مسار الطلبات · لا يظهر ضمن أبناء الأب",
+        " · لا ربط ولا إنشاء أب من المسار",
       "مجموع الأخطاء الحقيقية فقط: " + String(errCount),
       "عناقيد اسم ورقة غامض: " +
         String(counts.ambiguous_leaf_clusters ?? "—"),

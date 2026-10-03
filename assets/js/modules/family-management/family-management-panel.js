@@ -570,7 +570,9 @@
       var items = [];
       if (typeof api.searchPersons === "function") {
         try {
-          items = await api.searchPersons(q);
+          items = await api.searchPersons(q, {
+            preferParentPath: selectedPersonId || "",
+          });
         } catch (_) {
           items = [];
         }

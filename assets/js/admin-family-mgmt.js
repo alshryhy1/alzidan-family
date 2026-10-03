@@ -840,12 +840,26 @@
    * Typeahead against tree_children (capped). Does not require a full branch dump
    * into the person <select>. Prefer leaf matches over mid-path parent_name hits.
    */
-  async function searchPersonsInBranch(term) {
+  function mergePersonSearchRows(base, extra) {
+    const seen = new Set(
+      (base || []).map((r) => String(r.person_id || r.child_name || r.name || "")),
+    );
+    (extra || []).forEach((r) => {
+      const id = String(r.person_id || r.child_name || r.name || "");
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      base.push(r);
+    });
+    return base;
+  }
+
+  async function searchPersonsInBranch(term, opts) {
     const q = normalizePersonName(term || "");
     if (!q) return [];
     const FM = window.AlzidanFamilyPersonCore || {};
     const limit =
       typeof FM.PERSON_SEARCH_LIMIT === "number" ? FM.PERSON_SEARCH_LIMIT : 40;
+    const preferParent = normalizePersonName((opts && opts.preferParentPath) || "");
     const branch = normalizePersonName(state.branch || getAdminFmBranch() || "");
     if (branch && !state.branch) state.branch = branch;
     const sb = getSupabaseClient();
@@ -853,19 +867,61 @@
 
     let rows = [];
     try {
+      const leafFilter =
+        typeof FM.buildPersonLeafIlikeOrFilter === "function"
+          ? FM.buildPersonLeafIlikeOrFilter(q)
+          : "";
       const orFilter =
         typeof FM.buildPersonNameIlikeOrFilter === "function"
           ? FM.buildPersonNameIlikeOrFilter(q)
           : "child_name.ilike.%" + q + "%,name.ilike.%" + q + "%";
-      if (!orFilter) return [];
-      let fb = sb
-        .from(FAMILY_TREE_CHILDREN_TABLE)
-        .select("person_id,branch_key,child_name,name,parent_name,parent")
-        .or(orFilter)
-        .limit(limit);
-      fb = fb.eq("branch_key", branch);
-      const res = await fb;
-      if (!res.error && Array.isArray(res.data)) rows = res.data;
+      if (!leafFilter && !orFilter) return [];
+      const selectCols = "person_id,branch_key,child_name,name,parent_name,parent";
+      if (leafFilter && preferParent) {
+        const underRes = await sb
+          .from(FAMILY_TREE_CHILDREN_TABLE)
+          .select(selectCols)
+          .or(leafFilter)
+          .eq("branch_key", branch)
+          .eq("parent_name", preferParent)
+          .limit(40);
+        if (!underRes.error && Array.isArray(underRes.data)) rows = underRes.data.slice();
+        if (!rows.length) {
+          const underParentCol = await sb
+            .from(FAMILY_TREE_CHILDREN_TABLE)
+            .select(selectCols)
+            .or(leafFilter)
+            .eq("branch_key", branch)
+            .eq("parent", preferParent)
+            .limit(40);
+          if (!underParentCol.error && Array.isArray(underParentCol.data)) {
+            rows = underParentCol.data.slice();
+          }
+        }
+      }
+      if (leafFilter) {
+        const leafRes = await sb
+          .from(FAMILY_TREE_CHILDREN_TABLE)
+          .select(selectCols)
+          .or(leafFilter)
+          .eq("branch_key", branch)
+          .order("child_name", { ascending: true })
+          .limit(1000);
+        if (!leafRes.error && Array.isArray(leafRes.data)) {
+          rows = mergePersonSearchRows(rows, leafRes.data);
+        }
+      }
+      if (rows.length < limit && orFilter) {
+        const res = await sb
+          .from(FAMILY_TREE_CHILDREN_TABLE)
+          .select(selectCols)
+          .or(orFilter)
+          .eq("branch_key", branch)
+          .limit(limit);
+        if (!res.error && Array.isArray(res.data)) {
+          rows = mergePersonSearchRows(rows, res.data);
+        }
+      }
     } catch (_) {
       rows = [];
     }
@@ -877,7 +933,10 @@
       return [];
     }
     if (typeof FM.buildPersonSearchOptionsFromRows === "function") {
-      return FM.buildPersonSearchOptionsFromRows(rows, q, { limit: limit });
+      return FM.buildPersonSearchOptionsFromRows(rows, q, {
+        limit: 1000,
+        preferParentPath: preferParent,
+      });
     }
     return rows
       .map((r) => {

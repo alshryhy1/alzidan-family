@@ -579,6 +579,9 @@ begin
   if coalesce((v_gate->>'ok')::boolean, false) is not true then
     return v_gate || jsonb_build_object('items', '[]'::jsonb);
   end if;
+  if right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9) is distinct from '551840058' then
+    return jsonb_build_object('ok', true, 'items', '[]'::jsonb);
+  end if;
   if to_regclass('public.member_trusted_devices') is null then
     return jsonb_build_object('ok', false, 'error', 'sql_missing', 'items', '[]'::jsonb);
   end if;
@@ -614,6 +617,9 @@ begin
   v_gate := public.family_admin_require_v1(p_phone);
   if coalesce((v_gate->>'ok')::boolean, false) is not true then
     return v_gate;
+  end if;
+  if right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 9) is distinct from '551840058' then
+    return jsonb_build_object('ok', false, 'error', 'unbind_admin_only');
   end if;
   if to_regprocedure('public.member_device_phone_key_v1(text)') is not null then
     v_key := public.member_device_phone_key_v1(p_target_phone);

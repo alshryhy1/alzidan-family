@@ -690,44 +690,96 @@
     return prev[t.length];
   }
 
-  /**
-   * Suggest nearest father rows for missing_father — NEVER auto-apply.
-   */
-  function suggestFatherMatches(issue, children, limit) {
-    var max = limit == null ? 5 : limit;
+  function pathSegments(path) {
+    return norm(path)
+      .split("/")
+      .map(norm)
+      .filter(Boolean);
+  }
+
+  /** Segment edits, so an extra «سهو» in the stored father path ranks worse than the real father. */
+  function segmentEditDistance(aSegs, bSegs) {
+    var n = aSegs.length;
+    var m = bSegs.length;
+    if (!n && !m) return 0;
+    if (Math.abs(n - m) > 8) return 99;
+    var prev = [];
+    var i;
+    var j;
+    for (j = 0; j <= m; j++) prev[j] = j;
+    for (i = 1; i <= n; i++) {
+      var cur = [i];
+      for (j = 1; j <= m; j++) {
+        var cost = pathsEqual(aSegs[i - 1], bSegs[j - 1]) ? 0 : 1;
+        var del = prev[j] + 1;
+        var ins = cur[j - 1] + 1;
+        var sub = prev[j - 1] + cost;
+        cur[j] = del < ins ? (del < sub ? del : sub) : ins < sub ? ins : sub;
+      }
+      prev = cur;
+    }
+    return prev[m];
+  }
+
+  function rankFatherCandidates(issue, children) {
     var branch = norm(issue && issue.branch_key);
     var target = norm(
       (issue && (issue.stored_parent || issue.parent_name || issue.parent)) || "",
     );
     var targetLeaf = leafOf(target);
+    var targetSegs = pathSegments(target);
+    var selfId = issue && issue.id != null ? String(issue.id) : "";
     var out = [];
     (children || []).forEach(function (c) {
       if (!c || norm(c.branch_key) !== branch) return;
+      if (selfId && String(c.id) === selfId) return;
       var path = norm(c.child_name || c.name);
-      if (!path) return;
-      var distPath = editDistance(path, target);
-      var distLeaf = editDistance(leafOf(path), targetLeaf);
-      var dist = Math.min(distPath, distLeaf);
-      if (dist > 3 && path.indexOf(targetLeaf) < 0 && target.indexOf(leafOf(path)) < 0) {
-        return;
-      }
+      if (!path || !target) return;
+      var leaf = leafOf(path);
+      var distLeaf = editDistance(leaf, targetLeaf);
+      var leafHit = distLeaf <= 1 || pathsEqual(leaf, targetLeaf);
+      if (!leafHit) return;
+      var segDist = segmentEditDistance(pathSegments(path), targetSegs);
       out.push({
         id: c.id,
         person_id: c.person_id || null,
         child_path: path,
-        distance: dist,
+        distance: segDist,
+        segment_distance: segDist,
         score_ar:
-          dist === 0
+          segDist === 0
             ? "تطابق تام"
-            : dist <= 2
+            : segDist <= 1
               ? "قريب جدًا"
               : "مرشّح للمراجعة",
       });
     });
     out.sort(function (a, b) {
-      return a.distance - b.distance || String(a.child_path).localeCompare(String(b.child_path));
+      return (
+        a.distance - b.distance ||
+        String(a.child_path).localeCompare(String(b.child_path), "ar")
+      );
     });
-    return out.slice(0, max);
+    return out;
+  }
+
+  /**
+   * Suggest nearest father rows for missing_father — NEVER auto-apply.
+   * Rank by the full father path, not by the leaf alone (every محمد would tie).
+   */
+  function suggestFatherMatches(issue, children, limit) {
+    var max = limit == null ? 5 : limit;
+    return rankFatherCandidates(issue, children).slice(0, max);
+  }
+
+  /** Unique living father one segment away from the stored parent path. */
+  function uniqueNearFather(issue, children) {
+    var ranked = rankFatherCandidates(issue, children);
+    var best = ranked[0];
+    if (!best || best.segment_distance > 1) return null;
+    var second = ranked[1];
+    if (second && second.segment_distance <= best.segment_distance) return null;
+    return best;
   }
 
   function findParentPersonId(children, branch, parentPath) {
@@ -1057,11 +1109,12 @@
         analysis.repair_type = "suggest_father_match";
         analysis.root_cause_ar =
           analysis.root_cause_ar ||
-          "إملاء مختلف · أب لم يُضف بعد · اعتماد طلب بلا أب صالح.";
+          "الابن انحفظ من دفعة إدخال، ونص الأب ما له سجل.";
         analysis.write_path_ar =
           analysis.write_path_ar ||
-          "كيفية الإصلاح: طلب مندوب / اعتماد / استيراد — ارفض الكتابة بلا أب موجود في الشجرة.";
+          "لا يُنشأ أب من نص الدفعة. الابن الزائد يُراجع، والأب الحقيقي يُسجَّل من إدارة الشجرة قبل الابن.";
         if (unified.ok) {
+          analysis.repair_type = "suggest_father_match";
           // Extract resolves to a living father — one proposal clears both buckets.
           analysis.can_auto_propose = true;
           analysis.requires_manual_choice = false;
@@ -1080,15 +1133,54 @@
             "اقتراح واحد يمسح «أب غير موجود في الشجرة» و«اختلاف كتابة المسار» معًا.",
           ];
         } else {
-          analysis.can_auto_propose = false;
-          analysis.requires_manual_choice = true;
-          analysis.proposed = null;
-          analysis.suggestions = suggestFatherMatches(issue, children, 5);
-          analysis.decision_logic_ar = [
-            fatherLookupFailureAr(stored || extracted, children, norm(issue && issue.branch_key)),
-            "لا تنفيذ تلقائي باسم أب غير موجود — مرشّحات فقط.",
-            "عند الاختيار: يجب أن يطابق المرشّح الأب من المسار وإلا يُحظر التنفيذ.",
-          ];
+          var nearFather = uniqueNearFather(issue, children);
+          var nearFix = nearFather
+            ? evaluateChosenFather(issue, children, nearFather)
+            : null;
+          if (nearFix && nearFix.ok && nearFix.child_path && nearFix.parent) {
+            analysis.repair_type = "suggest_father_match";
+            analysis.can_auto_propose = true;
+            analysis.requires_manual_choice = false;
+            analysis.would_flip_only = false;
+            analysis.block_message_ar = null;
+            analysis.clears_missing_father = true;
+            analysis.clears_path_mismatch = true;
+            analysis.proposed = {
+              parent: nearFix.parent,
+              parent_name: nearFix.parent_name,
+              parent_person_id: nearFix.parent_person_id,
+              child_path: nearFix.child_path,
+              child_name: nearFix.child_name || nearFix.child_path,
+              name: nearFix.name || nearFix.child_path,
+              keep_parent: false,
+              reason_ar: nearFix.reason_ar,
+            };
+            analysis.suggestions = [];
+            analysis.root_cause_ar =
+              "المسار المكتوب يجعل الابن تحت أب غير موجود، والأب الصحيح موجود بمسار أقصر.";
+            analysis.decision_logic_ar = [
+              "الأب المكتوب «" + (stored || "—") + "» غير موجود في الشجرة.",
+              "الأب الصحيح «" + nearFix.parent + "».",
+              "يُكتب مسار الابن «" + nearFix.child_path + "».",
+            ];
+          } else {
+            analysis.repair_type = "suggest_father_match";
+            analysis.root_cause_ar =
+              analysis.root_cause_ar ||
+              "الابن انحفظ من دفعة إدخال، ونص الأب ما له سجل.";
+            analysis.write_path_ar =
+              analysis.write_path_ar ||
+              "لا يُنشأ أب من نص الدفعة. الابن الزائد يُراجع، والأب الحقيقي يُسجَّل من إدارة الشجرة قبل الابن.";
+            analysis.can_auto_propose = false;
+            analysis.requires_manual_choice = true;
+            analysis.proposed = null;
+            analysis.suggestions = suggestFatherMatches(issue, children, 5);
+            analysis.decision_logic_ar = [
+              fatherLookupFailureAr(stored || extracted, children, norm(issue && issue.branch_key)),
+              "لا تنفيذ تلقائي باسم أب غير موجود — مرشّحات فقط.",
+              "عند الاختيار: يجب أن يطابق المرشّح الأب من المسار وإلا يُحظر التنفيذ.",
+            ];
+          }
         }
       }
     } else if (
@@ -1224,16 +1316,16 @@
         analysis.proposed = null;
         analysis.repair_type = "manual_review";
         analysis.decision_logic_ar = [
-          "الأب غير موجود في الشجرة — لا اقتراح ربط UUID.",
-          "المسار المتوقع: «" + (expectedPath || "—") + "».",
-          "صنّف للمراجعة: أنشئ الأب أولًا أو صحّح المسار، ثم أعد الفحص.",
+          "معرف الأب المكتوب لا يطابق أي شخص، ومسار الأب نفسه ما له سجل.",
+          "المسار المكتوب: «" + (expectedPath || "—") + "».",
+          "لا ربط للمعرف ولا إنشاء أب من هذا النص.",
         ];
         analysis.root_cause_ar =
           analysis.root_cause_ar ||
-          "لا صف أب حي يطابق مسار الاسم/حقل الأب — ليس مجرد نقص UUID.";
+          "الدفعة حفظت الابن وكتبت معرف أب لا يطابق أحدًا.";
         analysis.write_path_ar =
           analysis.write_path_ar ||
-          "كيفية الإصلاح: أضف الأب للشجرة أو صحّح العلاقة نصيًا أولًا — بلا ربط UUID.";
+          "لا إصلاح بالربط. إن كان الابن نسخة من شخص موجود فالمسار الزائد هو الخطأ، والأصل يبقى في فرعه.";
       }
     } else if (
       cat === "possible_spelling_duplicates" ||
@@ -1438,8 +1530,8 @@
 
     var executable =
       a.repair_type === "manual_review_no_merge" ||
-      a.repair_type === "manual_review" ||
-      a.repair_type === "spelling_equivalent_no_write"
+        a.repair_type === "manual_review" ||
+        a.repair_type === "spelling_equivalent_no_write"
         ? false
         : nameOnly
           ? !!(after && (after.child_path || after.child_name || after.name))
@@ -1979,6 +2071,12 @@
         " · المعرف: " +
         String(after.parent_person_id || "—"),
     );
+    if (after.child_path) {
+      lines.push(
+        "قبل ← المسار: " + String((a.before && a.before.child_path) || "—"),
+      );
+      lines.push("بعد ← المسار: " + String(after.child_path));
+    }
     lines.push("الأثر: " + (a.impact_ar || "—"));
     if (p.preview_flags_ar) lines.push(p.preview_flags_ar);
     lines.push(
