@@ -237,8 +237,17 @@
         toggle.className = "btn btn-outline btn-sm admin-shell-mobile-toggle";
         toggle.setAttribute("aria-expanded", "false");
         toggle.setAttribute("aria-controls", "admin-shell-sidebar");
+        toggle.setAttribute("aria-label", "الأقسام — العودة للوحة التحكم أو فتح القائمة");
         toggle.textContent = "الأقسام";
         toggle.addEventListener("click", () => {
+          const narrow = window.matchMedia("(max-width: 900px)").matches;
+          const drawerOpen = document.body.classList.contains("admin-shell-nav-open");
+          // On phones: first tap from a module returns to hub (sections).
+          // Drawer alone was clipped by overflow:hidden on .page — users got stuck.
+          if (narrow && currentModule !== "hub" && !drawerOpen) {
+            navigate("hub");
+            return;
+          }
           const open = document.body.classList.toggle("admin-shell-nav-open");
           toggle.setAttribute("aria-expanded", open ? "true" : "false");
         });
@@ -281,7 +290,37 @@
 
     ensureHubPanel();
     ensureDelegatesHost();
+    placeShellChrome();
     shellBuilt = true;
+  }
+
+  /**
+   * On ≤900px the sections drawer is position:fixed inside .page, but admin-mobile
+   * sets overflow-x:hidden on .page — WebKit clips the drawer so «الأقسام» appears dead.
+   * Host the drawer on document.body while narrow; restore into the page grid on desktop.
+   */
+  function placeShellChrome() {
+    const aside = document.getElementById("admin-shell-sidebar");
+    const page = document.querySelector(".page");
+    if (!aside || !page) return;
+    const narrow = window.matchMedia("(max-width: 900px)").matches;
+    if (narrow) {
+      if (aside.parentElement !== document.body) {
+        document.body.appendChild(aside);
+      }
+      return;
+    }
+    if (aside.parentElement === page) return;
+    const login = document.getElementById("admin-login-section");
+    const header = page.querySelector("header");
+    const anchor = login || header;
+    if (anchor && anchor.nextSibling) {
+      page.insertBefore(aside, anchor.nextSibling);
+    } else if (anchor) {
+      anchor.insertAdjacentElement("afterend", aside);
+    } else {
+      page.insertBefore(aside, page.firstChild);
+    }
   }
 
   function ensureHubPanel() {
@@ -460,17 +499,27 @@
   function navigate(moduleId, opts) {
     const id = String(moduleId || "hub").trim();
     if (!MODULES.some((m) => m.id === id)) return;
+    const prevModule = currentModule;
     currentModule = id;
     storeModule(id);
     if (!(opts && opts.skipHash)) {
       try {
         const url = new URL(window.location.href);
         const params = new URLSearchParams(String(url.hash || "").replace(/^#/, ""));
+        const prevHashModule = String(params.get("module") || "").trim();
         params.set("module", id);
         if (opts && opts.request) params.set("request", String(opts.request));
         else if (id !== "requests") params.delete("request");
         url.hash = params.toString();
-        history.replaceState(null, "", url.pathname + url.search + url.hash);
+        const next = url.pathname + url.search + url.hash;
+        // pushState so mobile browser «رجوع» can leave a module back to الأقسام/hub
+        if (opts && opts.replace) {
+          history.replaceState(null, "", next);
+        } else if (prevHashModule !== id || prevModule !== id) {
+          history.pushState(null, "", next);
+        } else {
+          history.replaceState(null, "", next);
+        }
       } catch (_) {}
     }
     applyVisibility();
@@ -529,6 +578,7 @@
     buildSidebar();
     currentModule = moduleFromHash() || readStoredModule() || "hub";
     syncFromAuth();
+    placeShellChrome();
 
     lastSeenBodyClass = String(document.body.className || "");
     bodyClassObserver = new MutationObserver(() => {
@@ -550,6 +600,13 @@
       const id = moduleFromHash();
       if (id) navigate(id, { skipHash: true });
     });
+    window.addEventListener("popstate", () => {
+      const id = moduleFromHash() || "hub";
+      navigate(id, { skipHash: true });
+    });
+    window.addEventListener("resize", () => {
+      placeShellChrome();
+    });
 
     // Quality center is injected late — retag when it appears
     const protectedHost = document.getElementById("admin-protected-sections");
@@ -567,6 +624,7 @@
       navigate,
       getCurrent: () => currentModule,
       refresh: applyVisibility,
+      placeShellChrome,
     };
   }
 

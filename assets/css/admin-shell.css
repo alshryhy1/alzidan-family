@@ -272,11 +272,22 @@ body.admin-shell-ready.admin-authenticated #admin-module-delegates:not(.admin-mo
   }
   body.admin-shell-ready.admin-authenticated #admin-shell-sidebar {
     position: fixed;
-    z-index: 40;
+    z-index: 120;
     inset: 0 auto 0 0;
     width: min(86vw, 280px);
     transform: translateX(-105%);
     transition: transform 0.2s ease;
+    /* Survives when hosted on body (mobile) or inside .page */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px 14px 24px;
+    height: 100vh;
+    height: 100dvh;
+    overflow: auto;
+    background: linear-gradient(165deg, var(--admin-shell-bg), var(--admin-shell-bg-2));
+    color: #f5faf7;
+    -webkit-overflow-scrolling: touch;
   }
   html[dir="rtl"] body.admin-shell-ready.admin-authenticated #admin-shell-sidebar {
     inset: 0 0 0 auto;
@@ -295,7 +306,7 @@ body.admin-shell-ready.admin-authenticated #admin-module-delegates:not(.admin-mo
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 35;
+    z-index: 110;
     border: 0;
     margin: 0;
     padding: 0;
@@ -391,7 +402,7 @@ body.admin-shell-ready.admin-authenticated .page > footer {
     padding: 0;
     width: 100%;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: visible;
   }
 
   body.admin-shell-ready.admin-authenticated .page > header {
