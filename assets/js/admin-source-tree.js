@@ -286,6 +286,7 @@
     const branch = getSourceTreeBranch();
     setSourceTreeStatus("جاري تحميل الشجرة...");
     const fields = [
+      "id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,death_date_g,death_date_h,city,area,work_status,is_deceased,deceased,created_at",
       "id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,death_date_g,death_date_h,city,area,is_deceased,deceased,created_at",
       "id,person_id,parent_person_id,branch_key,parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at",
       "id,branch_key,parent_name,parent,child_name,name,birth_date_g,birth_date_h,birth_year,birth_order,city,area,is_deceased,deceased,created_at",
@@ -467,6 +468,12 @@
       '<div class="field"><label>الحي/القرية</label><input data-extra-child-area type="text" value="' +
       escapeHtml(data.area || "") +
       '"></div>' +
+      '<div class="field"><label>الحالة الوظيفية</label><select data-extra-child-work-status>' +
+      '<option value=""' + (!data.work_status && !data.workStatus ? " selected" : "") + '>غير محدد</option>' +
+      '<option value="employed"' + ((data.work_status || data.workStatus) === "employed" ? " selected" : "") + '>موظف</option>' +
+      '<option value="retired"' + ((data.work_status || data.workStatus) === "retired" ? " selected" : "") + '>متقاعد</option>' +
+      '<option value="unemployed"' + ((data.work_status || data.workStatus) === "unemployed" ? " selected" : "") + '>عاطل</option>' +
+      "</select></div>" +
       '<label style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:4px 0;"><input data-extra-child-deceased type="checkbox"' +
       ((data.is_deceased || data.deceased) ? " checked" : "") +
       '> <span>متوفى / رحمه الله</span></label>' +
@@ -823,6 +830,7 @@
       death_date_h: val("[data-extra-child-death-h]"),
       city: val("[data-extra-child-city]"),
       area: val("[data-extra-child-area]"),
+      work_status: val("[data-extra-child-work-status]"),
       is_deceased: checked("[data-extra-child-deceased]"),
       deceased: checked("[data-extra-child-deceased]"),
       _age: val("[data-extra-child-age]"),
@@ -979,6 +987,18 @@
       p_row: payload,
     });
     if (error) return setSourceTreeStatus("تعذر حفظ البطاقة: " + formatRpcError(error));
+    const savedId = data && typeof data === "object" && !Array.isArray(data) ? Number(data.id || 0) : 0;
+    const idForWs = Number.isFinite(savedId) && savedId > 0 ? savedId : Number(payload.id || cardRow && cardRow.dataset.id || 0);
+    if (Number.isFinite(idForWs) && idForWs > 0 && Object.prototype.hasOwnProperty.call(payload, "work_status")) {
+      const ws = await sb.rpc("admin_tree_child_set_work_status_by_id_v1", {
+        p_token: token,
+        p_id: idForWs,
+        p_work_status: String(payload.work_status || "").trim(),
+      });
+      if (ws.error && !/could not find|does not exist|42883/i.test(String(ws.error.message || ""))) {
+        return setSourceTreeStatus("تم حفظ البطاقة، لكن تعذر حفظ الحالة الوظيفية: " + formatRpcError(ws.error));
+      }
+    }
     const memberRes = await upsertMemberProfileFromTreeCard(cardRow, payload, data && data.id ? data.id : payload.id);
     if (!memberRes.ok) {
       setSourceTreeStatus(
