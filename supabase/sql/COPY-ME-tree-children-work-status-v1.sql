@@ -5,6 +5,7 @@
 -- عمود tree_children.work_status + تطبيع + ختم من الإدارة بالـ id.
 -- إحصاء الأحياء حسب الحالة (فرع أو كل العائلة).
 -- Safe to re-run.
+-- ملاحظة: نستخدم وسوم مسماة مثل ws و fn فقط حتى لا ينكسر التقسيم في مساحة SQL.
 
 alter table public.tree_children
   add column if not exists work_status text;
@@ -13,7 +14,7 @@ create or replace function public.tree_child_normalize_work_status(p_status text
 returns text
 language sql
 immutable
-as $$
+as $ws$
   select case
     when g in (
       'employed', 'employee', 'working', 'job',
@@ -31,8 +32,8 @@ as $$
   end
   from (
     select lower(btrim(coalesce(p_status, ''))) as g
-  ) s;
-$$;
+  ) s
+$ws$;
 
 grant execute on function public.tree_child_normalize_work_status(text) to anon, authenticated;
 
@@ -56,7 +57,6 @@ begin
   end if;
 
   v_status := public.tree_child_normalize_work_status(p_work_status);
-  -- نص فارغ أو غير معروف → مسح الحالة (اختياري)
   if nullif(btrim(coalesce(p_work_status, '')), '') is not null and v_status is null then
     raise exception 'work_status_invalid';
   end if;
@@ -72,7 +72,6 @@ $fn$;
 revoke all on function public.admin_tree_child_set_work_status_by_id_v1(text, bigint, text) from public;
 grant execute on function public.admin_tree_child_set_work_status_by_id_v1(text, bigint, text) to anon, authenticated;
 
--- إحصاء الأحياء الذكور الظاهرين للعامة: موظف / متقاعد / عاطل / غير محدد
 create or replace function public.tree_work_status_stats_v1(p_branch_key text default null)
 returns table(
   branch_key text,
@@ -83,7 +82,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $$
+as $ws$
   with living as (
     select
       coalesce(nullif(btrim(c.branch_key), ''), '—') as branch_key,
@@ -108,8 +107,8 @@ as $$
     count(*)::bigint as living_count
   from living l
   group by l.branch_key, l.work_status
-  order by l.branch_key, l.work_status;
-$$;
+  order by l.branch_key, l.work_status
+$ws$;
 
 grant execute on function public.tree_work_status_stats_v1(text) to anon, authenticated;
 
