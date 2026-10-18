@@ -468,6 +468,7 @@
       '<div class="field"><label>الحي/القرية</label><input data-extra-child-area type="text" value="' +
       escapeHtml(data.area || "") +
       '"></div>' +
+      '<div class="hint" style="grid-column:1/-1;margin:8px 0 0;font-weight:600;">الوظيفة والتعليم</div>' +
       '<div class="field"><label>الحالة الوظيفية</label><select data-extra-child-work-status>' +
       '<option value=""' + (!data.work_status && !data.workStatus ? " selected" : "") + '>غير محدد</option>' +
       '<option value="employed"' + ((data.work_status || data.workStatus) === "employed" ? " selected" : "") + '>موظف</option>' +
