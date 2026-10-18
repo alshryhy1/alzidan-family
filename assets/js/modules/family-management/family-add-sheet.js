@@ -65,6 +65,16 @@
       '<option value="retired">متقاعد</option>' +
       '<option value="unemployed">عاطل</option>' +
       "</select></div>" +
+      '<div class="field"><label>وين موظف</label><input type="text" data-fm-child-workplace placeholder="جهة العمل / المكان" /></div>' +
+      '<div class="field"><label>الدرجة العلمية</label><select data-fm-child-education-degree>' +
+      '<option value="">غير محدد</option>' +
+      '<option value="intermediate">متوسط</option>' +
+      '<option value="secondary">ثانوي</option>' +
+      '<option value="diploma">دبلوم</option>' +
+      '<option value="bachelor">بكالوريوس</option>' +
+      '<option value="master">ماجستير</option>' +
+      '<option value="doctorate">دكتوراه</option>' +
+      "</select></div>" +
       '<div class="field"><label>الوفاة</label><label style="display:flex;align-items:center;gap:8px;min-height:38px;"><input type="checkbox" data-fm-child-deceased /> متوفى</label></div>' +
       "</div>" +
       '<div class="fm-toolbar" style="margin-top:12px;">' +
@@ -120,7 +130,18 @@
     var childCity = sheet.querySelector("[data-fm-child-city]");
     var childArea = sheet.querySelector("[data-fm-child-area]");
     var childWorkStatus = sheet.querySelector("[data-fm-child-work-status]");
-    bindDeceasedToggle(childDeceased, [childAge, childHijri, childGreg, childCity, childArea, childWorkStatus]);
+    var childWorkplace = sheet.querySelector("[data-fm-child-workplace]");
+    var childEducationDegree = sheet.querySelector("[data-fm-child-education-degree]");
+    bindDeceasedToggle(childDeceased, [
+      childAge,
+      childHijri,
+      childGreg,
+      childCity,
+      childArea,
+      childWorkStatus,
+      childWorkplace,
+      childEducationDegree,
+    ]);
     bindBirthDateSync(childHijri, childGreg, api);
     bindAgeToBirthDates(childAge, childHijri, childGreg, api);
     if (window.AlzidanPhoneIntl) {
@@ -352,6 +373,8 @@
         city: childCity ? childCity.value : "",
         area: childArea ? childArea.value : "",
         workStatus: childWorkStatus ? childWorkStatus.value : "",
+        workplace: childWorkplace ? childWorkplace.value : "",
+        educationDegree: childEducationDegree ? childEducationDegree.value : "",
         deceased: !!(childDeceased && childDeceased.checked),
       });
       if (childRes && childRes.needsConfirm) {
@@ -375,6 +398,8 @@
           city: childCity ? childCity.value : "",
           area: childArea ? childArea.value : "",
           workStatus: childWorkStatus ? childWorkStatus.value : "",
+          workplace: childWorkplace ? childWorkplace.value : "",
+          educationDegree: childEducationDegree ? childEducationDegree.value : "",
           deceased: !!(childDeceased && childDeceased.checked),
           confirmSimilarName: true,
         });
