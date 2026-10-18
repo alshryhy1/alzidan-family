@@ -59,7 +59,23 @@
       '<div class="field"><label>ترتيب الميلاد</label><input type="number" data-fm-child-order min="1" step="1" inputmode="numeric" placeholder="مثال: 1" /></div>' +
       '<div class="field"><label>المدينة</label><input type="text" data-fm-child-city /></div>' +
       '<div class="field"><label>الحي / القرية</label><input type="text" data-fm-child-area /></div>' +
-      '<div class="field"><label>الحالة</label><label style="display:flex;align-items:center;gap:8px;min-height:38px;"><input type="checkbox" data-fm-child-deceased /> متوفى</label></div>' +
+      '<div class="field"><label>الحالة الوظيفية</label><select data-fm-child-work-status>' +
+      '<option value="">غير محدد</option>' +
+      '<option value="employed">موظف</option>' +
+      '<option value="retired">متقاعد</option>' +
+      '<option value="unemployed">عاطل</option>' +
+      "</select></div>" +
+      '<div class="field"><label>وين موظف</label><input type="text" data-fm-child-workplace placeholder="جهة العمل / المكان" /></div>' +
+      '<div class="field"><label>الدرجة العلمية</label><select data-fm-child-education-degree>' +
+      '<option value="">غير محدد</option>' +
+      '<option value="intermediate">متوسط</option>' +
+      '<option value="secondary">ثانوي</option>' +
+      '<option value="diploma">دبلوم</option>' +
+      '<option value="bachelor">بكالوريوس</option>' +
+      '<option value="master">ماجستير</option>' +
+      '<option value="doctorate">دكتوراه</option>' +
+      "</select></div>" +
+      '<div class="field"><label>الوفاة</label><label style="display:flex;align-items:center;gap:8px;min-height:38px;"><input type="checkbox" data-fm-child-deceased /> متوفى</label></div>' +
       "</div>" +
       '<div class="fm-toolbar" style="margin-top:12px;">' +
       '<button type="button" class="btn btn-primary" data-fm-save-sheet>حفظ</button>' +
@@ -113,7 +129,19 @@
     var childGreg = sheet.querySelector("[data-fm-child-greg]");
     var childCity = sheet.querySelector("[data-fm-child-city]");
     var childArea = sheet.querySelector("[data-fm-child-area]");
-    bindDeceasedToggle(childDeceased, [childAge, childHijri, childGreg, childCity, childArea]);
+    var childWorkStatus = sheet.querySelector("[data-fm-child-work-status]");
+    var childWorkplace = sheet.querySelector("[data-fm-child-workplace]");
+    var childEducationDegree = sheet.querySelector("[data-fm-child-education-degree]");
+    bindDeceasedToggle(childDeceased, [
+      childAge,
+      childHijri,
+      childGreg,
+      childCity,
+      childArea,
+      childWorkStatus,
+      childWorkplace,
+      childEducationDegree,
+    ]);
     bindBirthDateSync(childHijri, childGreg, api);
     bindAgeToBirthDates(childAge, childHijri, childGreg, api);
     if (window.AlzidanPhoneIntl) {
@@ -344,6 +372,9 @@
         order: sheet.querySelector("[data-fm-child-order]").value,
         city: childCity ? childCity.value : "",
         area: childArea ? childArea.value : "",
+        workStatus: childWorkStatus ? childWorkStatus.value : "",
+        workplace: childWorkplace ? childWorkplace.value : "",
+        educationDegree: childEducationDegree ? childEducationDegree.value : "",
         deceased: !!(childDeceased && childDeceased.checked),
       });
       if (childRes && childRes.needsConfirm) {
@@ -366,6 +397,9 @@
           order: sheet.querySelector("[data-fm-child-order]").value,
           city: childCity ? childCity.value : "",
           area: childArea ? childArea.value : "",
+          workStatus: childWorkStatus ? childWorkStatus.value : "",
+          workplace: childWorkplace ? childWorkplace.value : "",
+          educationDegree: childEducationDegree ? childEducationDegree.value : "",
           deceased: !!(childDeceased && childDeceased.checked),
           confirmSimilarName: true,
         });

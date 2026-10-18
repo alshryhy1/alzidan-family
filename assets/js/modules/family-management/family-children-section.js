@@ -134,6 +134,19 @@
         : String(child && child.area ? child.area : "");
       if (city) parts.push("المدينة: " + city);
       if (area) parts.push("الحي: " + area);
+      var workStatus = child && child.workStatus ? String(child.workStatus) : "";
+      if (workStatus === "employed") parts.push("الحالة الوظيفية: موظف");
+      else if (workStatus === "retired") parts.push("الحالة الوظيفية: متقاعد");
+      else if (workStatus === "unemployed") parts.push("الحالة الوظيفية: عاطل");
+      var workplace = child && child.workplace ? String(child.workplace).trim() : "";
+      if (workplace) parts.push("وين موظف: " + workplace);
+      var educationDegree = child && child.educationDegree ? String(child.educationDegree) : "";
+      if (educationDegree === "intermediate") parts.push("الدرجة العلمية: متوسط");
+      else if (educationDegree === "secondary") parts.push("الدرجة العلمية: ثانوي");
+      else if (educationDegree === "diploma") parts.push("الدرجة العلمية: دبلوم");
+      else if (educationDegree === "bachelor") parts.push("الدرجة العلمية: بكالوريوس");
+      else if (educationDegree === "master") parts.push("الدرجة العلمية: ماجستير");
+      else if (educationDegree === "doctorate") parts.push("الدرجة العلمية: دكتوراه");
       return { parts: parts, childId: childId, parentKey: parentKey };
     }
 
@@ -433,7 +446,23 @@
         '<div class="field"><label>ترتيب الميلاد</label><input type="number" data-fm-edit-order min="1" step="1" inputmode="numeric" /></div>' +
         '<div class="field"><label>المدينة</label><input type="text" data-fm-edit-city /></div>' +
         '<div class="field"><label>الحي / القرية</label><input type="text" data-fm-edit-area /></div>' +
-        '<div class="field"><label>الحالة</label><label style="display:flex;align-items:center;gap:8px;min-height:38px;"><input type="checkbox" data-fm-edit-deceased /> متوفى</label></div>' +
+        '<div class="field"><label>الحالة الوظيفية</label><select data-fm-edit-work-status>' +
+        '<option value="">غير محدد</option>' +
+        '<option value="employed">موظف</option>' +
+        '<option value="retired">متقاعد</option>' +
+        '<option value="unemployed">عاطل</option>' +
+        "</select></div>" +
+        '<div class="field"><label>وين موظف</label><input type="text" data-fm-edit-workplace placeholder="جهة العمل / المكان" /></div>' +
+        '<div class="field"><label>الدرجة العلمية</label><select data-fm-edit-education-degree>' +
+        '<option value="">غير محدد</option>' +
+        '<option value="intermediate">متوسط</option>' +
+        '<option value="secondary">ثانوي</option>' +
+        '<option value="diploma">دبلوم</option>' +
+        '<option value="bachelor">بكالوريوس</option>' +
+        '<option value="master">ماجستير</option>' +
+        '<option value="doctorate">دكتوراه</option>' +
+        "</select></div>" +
+        '<div class="field"><label>الوفاة</label><label style="display:flex;align-items:center;gap:8px;min-height:38px;"><input type="checkbox" data-fm-edit-deceased /> متوفى</label></div>' +
         '<div class="field" data-fm-death-field><label>تاريخ الوفاة (هجري)</label><input type="text" data-fm-edit-death-hijri dir="ltr" lang="en" inputmode="numeric" placeholder="1445-09-01" /></div>' +
         '<div class="field" data-fm-death-field><label>تاريخ الوفاة (ميلادي)</label><input type="date" data-fm-edit-death-greg dir="ltr" lang="en" /></div>' +
         '<div class="fm-edit-preview" data-fm-edit-preview style="grid-column:1/-1;"></div>' +
@@ -525,6 +554,27 @@
       if (cityEl) cityEl.value = String(child && child.city ? child.city : "");
       var areaEl = wrap.querySelector("[data-fm-edit-area]");
       if (areaEl) areaEl.value = String(child && child.area ? child.area : "");
+      var workStatusEl = wrap.querySelector("[data-fm-edit-work-status]");
+      if (workStatusEl) {
+        var ws = String(child && child.workStatus ? child.workStatus : "").trim();
+        workStatusEl.value =
+          ws === "employed" || ws === "retired" || ws === "unemployed" ? ws : "";
+      }
+      var workplaceEl = wrap.querySelector("[data-fm-edit-workplace]");
+      if (workplaceEl) workplaceEl.value = String(child && child.workplace ? child.workplace : "");
+      var educationDegreeEl = wrap.querySelector("[data-fm-edit-education-degree]");
+      if (educationDegreeEl) {
+        var ed = String(child && child.educationDegree ? child.educationDegree : "").trim();
+        educationDegreeEl.value =
+          ed === "intermediate" ||
+          ed === "secondary" ||
+          ed === "diploma" ||
+          ed === "bachelor" ||
+          ed === "master" ||
+          ed === "doctorate"
+            ? ed
+            : "";
+      }
       if (deceasedEl) {
         deceasedEl.checked = !!(child && child.deceased);
         deceasedEl.addEventListener("change", syncDeathDateFields);
@@ -623,6 +673,28 @@
       var originalOrder = child && child.order ? String(child.order) : "";
       var originalCity = String(child && child.city ? child.city : "");
       var originalArea = String(child && child.area ? child.area : "");
+      var originalWorkStatus = String(child && child.workStatus ? child.workStatus : "").trim();
+      if (
+        originalWorkStatus !== "employed" &&
+        originalWorkStatus !== "retired" &&
+        originalWorkStatus !== "unemployed"
+      ) {
+        originalWorkStatus = "";
+      }
+      var originalWorkplace = String(child && child.workplace ? child.workplace : "").trim();
+      var originalEducationDegree = String(
+        child && child.educationDegree ? child.educationDegree : "",
+      ).trim();
+      if (
+        originalEducationDegree !== "intermediate" &&
+        originalEducationDegree !== "secondary" &&
+        originalEducationDegree !== "diploma" &&
+        originalEducationDegree !== "bachelor" &&
+        originalEducationDegree !== "master" &&
+        originalEducationDegree !== "doctorate"
+      ) {
+        originalEducationDegree = "";
+      }
       var originalDeceased = !!(child && child.deceased);
       var originalDeathHijri = String(child && child.dhdate ? child.dhdate : "");
       var originalDeathGreg = toDateInputValue(child && child.ddate ? child.ddate : "");
@@ -679,9 +751,48 @@
         if (nextArea !== originalArea) {
           lines.push("الحي/القرية: «" + (originalArea || "—") + "» → «" + (nextArea || "—") + "»");
         }
+        var nextWorkStatus = workStatusEl ? String(workStatusEl.value || "").trim() : "";
+        if (nextWorkStatus !== originalWorkStatus) {
+          function workLabel(v) {
+            if (v === "employed") return "موظف";
+            if (v === "retired") return "متقاعد";
+            if (v === "unemployed") return "عاطل";
+            return "غير محدد";
+          }
+          lines.push(
+            "الحالة الوظيفية: «" + workLabel(originalWorkStatus) + "» → «" + workLabel(nextWorkStatus) + "»"
+          );
+        }
+        var nextWorkplace = workplaceEl ? String(workplaceEl.value || "").trim() : "";
+        if (nextWorkplace !== originalWorkplace) {
+          lines.push(
+            "وين موظف: «" + (originalWorkplace || "—") + "» → «" + (nextWorkplace || "—") + "»"
+          );
+        }
+        var nextEducationDegree = educationDegreeEl
+          ? String(educationDegreeEl.value || "").trim()
+          : "";
+        if (nextEducationDegree !== originalEducationDegree) {
+          function educationLabel(v) {
+            if (v === "intermediate") return "متوسط";
+            if (v === "secondary") return "ثانوي";
+            if (v === "diploma") return "دبلوم";
+            if (v === "bachelor") return "بكالوريوس";
+            if (v === "master") return "ماجستير";
+            if (v === "doctorate") return "دكتوراه";
+            return "غير محدد";
+          }
+          lines.push(
+            "الدرجة العلمية: «" +
+              educationLabel(originalEducationDegree) +
+              "» → «" +
+              educationLabel(nextEducationDegree) +
+              "»"
+          );
+        }
         var nextDeceased = !!(deceasedEl && deceasedEl.checked);
         if (nextDeceased !== originalDeceased) {
-          lines.push("الحالة: «" + (originalDeceased ? "متوفى" : "حي") + "» → «" + (nextDeceased ? "متوفى" : "حي") + "»");
+          lines.push("الوفاة: «" + (originalDeceased ? "متوفى" : "حي") + "» → «" + (nextDeceased ? "متوفى" : "حي") + "»");
         }
         var nextDeathHijri = deathHijriEl ? String(deathHijriEl.value || "").trim() : "";
         var nextDeathGreg = deathGregEl ? String(deathGregEl.value || "").trim() : "";
@@ -763,6 +874,9 @@
           order: orderEl ? orderEl.value : "",
           city: cityEl ? cityEl.value : "",
           area: areaEl ? areaEl.value : "",
+          workStatus: workStatusEl ? workStatusEl.value : "",
+          workplace: workplaceEl ? workplaceEl.value : "",
+          educationDegree: educationDegreeEl ? educationDegreeEl.value : "",
           deceased: !!(deceasedEl && deceasedEl.checked),
           deathHijri: deathHijriEl ? deathHijriEl.value : "",
           deathGreg: deathGregEl ? deathGregEl.value : "",
@@ -790,6 +904,9 @@
             order: orderEl ? orderEl.value : "",
             city: cityEl ? cityEl.value : "",
             area: areaEl ? areaEl.value : "",
+            workStatus: workStatusEl ? workStatusEl.value : "",
+            workplace: workplaceEl ? workplaceEl.value : "",
+            educationDegree: educationDegreeEl ? educationDegreeEl.value : "",
             deceased: !!(deceasedEl && deceasedEl.checked),
             deathHijri: deathHijriEl ? deathHijriEl.value : "",
             deathGreg: deathGregEl ? deathGregEl.value : "",
