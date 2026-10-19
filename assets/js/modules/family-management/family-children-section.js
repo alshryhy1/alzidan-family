@@ -446,6 +446,7 @@
         '<div class="field"><label>ترتيب الميلاد</label><input type="number" data-fm-edit-order min="1" step="1" inputmode="numeric" /></div>' +
         '<div class="field"><label>المدينة</label><input type="text" data-fm-edit-city /></div>' +
         '<div class="field"><label>الحي / القرية</label><input type="text" data-fm-edit-area /></div>' +
+        '<div class="hint" style="grid-column:1/-1;margin:8px 0 0;font-weight:600;">الوظيفة والتعليم</div>' +
         '<div class="field"><label>الحالة الوظيفية</label><select data-fm-edit-work-status>' +
         '<option value="">غير محدد</option>' +
         '<option value="employed">موظف</option>' +
