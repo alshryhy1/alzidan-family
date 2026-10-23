@@ -3815,6 +3815,9 @@ function parseWifeFamilyValue(raw) {
 function parseWifeMarriageStatus(raw) {
   const v = String(raw || "active").trim().toLowerCase();
   if (v === "divorced" || v === "مطلقة") return "divorced";
+  if (v === "deceased" || v === "dead" || v === "متوفاة" || v === "متوفيه" || v === "متوفية") {
+    return "deceased";
+  }
   return "active";
 }
 
@@ -3842,7 +3845,7 @@ async function formatDuplicateWifeMessage(sb, dup) {
       }
     } catch (e) {}
   }
-  return "هذه الزوجة مسجلة نشطة مع زوج آخر" + suffix + ". افتح ذلك الزوج → تعديل الزوجة → غيّر الحالة إلى «مطلقة»، ثم أعد الإضافة هنا.";
+  return "هذه الزوجة مسجلة نشطة مع زوج آخر" + suffix + ". افتح ذلك الزوج → تعديل الزوجة → غيّر الحالة إلى «مطلقة» أو «متوفاة»، ثم أعد الإضافة هنا.";
 }
 
 function wifeDuplicateKey(value) {
@@ -4035,22 +4038,31 @@ async function familyApiSaveWife(payload) {
     const res = await insertOrUpdateSpouseRow(sb, row, editingId);
     if (res.error) return { ok: false, message: "تعذر تعديل الزوجة: " + (res.error.message || "خطأ غير معروف") };
     const wantedStatus = parseWifeMarriageStatus(payload.status);
-    if (wantedStatus === "divorced") {
+    if (wantedStatus === "divorced" || wantedStatus === "deceased") {
       const check = await sb.from("tree_spouses").select("status").eq("id", editingId).maybeSingle();
       const SpousesCore = window.AlzidanSpousesCore || {};
       const stillActive = SpousesCore && typeof SpousesCore.isActiveSpouse === "function"
         ? SpousesCore.isActiveSpouse(check.data && check.data.status)
         : String((check.data && check.data.status) || "active").toLowerCase() === "active";
-      if (stillActive) {
+      const savedStatus = String((check.data && check.data.status) || "").trim().toLowerCase();
+      if (stillActive || (wantedStatus === "deceased" && savedStatus !== "deceased")) {
         return {
           ok: false,
-          message: "لم تُحفظ حالة «مطلقة» في قاعدة البيانات. تواصل مع الإدارة لتطبيق SQL الزوجات.",
+          message:
+            wantedStatus === "deceased"
+              ? "لم تُحفظ حالة «متوفاة» في قاعدة البيانات. تواصل مع الإدارة لتطبيق SQL حالة المتوفاة."
+              : "لم تُحفظ حالة «مطلقة» في قاعدة البيانات. تواصل مع الإدارة لتطبيق SQL الزوجات.",
         };
       }
     }
     return {
       ok: true,
-      message: wantedStatus === "divorced" ? "تم تسجيل الزوجة كمطلقة." : "تم تعديل بيانات الزوجة.",
+      message:
+        wantedStatus === "divorced"
+          ? "تم تسجيل الزوجة كمطلقة."
+          : wantedStatus === "deceased"
+            ? "تم تسجيل الزوجة كمتوفاة."
+            : "تم تعديل بيانات الزوجة.",
     };
   }
   let endedPrior = 0;

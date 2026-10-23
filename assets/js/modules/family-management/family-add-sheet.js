@@ -46,7 +46,7 @@
       '<div class="field" data-fm-wife-family-name-field><label>اسم العائلة الخارجية</label><input type="text" data-fm-wife-family-name placeholder="مثال: الشمري" /></div>' +
       '<div class="field" data-fm-wife-branch-field><label>فرع الزوجة</label><select data-fm-wife-branch><option value="">غير محدد</option><option value="زايد">زايد</option><option value="زيدان">زيدان</option><option value="لاحم">لاحم</option><option value="مزيد">مزيد</option><option value="ملحم">ملحم</option></select></div>' +
       '<div class="field"><label>ترتيب الزوجة</label><input type="number" data-fm-wife-order min="1" max="4" step="1" inputmode="numeric" placeholder="1 إلى 4" /></div>' +
-      '<div class="field" data-fm-wife-status-field><label>حالة الزوجية</label><select data-fm-wife-status><option value="active">نشطة</option><option value="divorced">مطلقة</option></select><div class="hint" data-fm-wife-status-hint></div></div>' +
+      '<div class="field" data-fm-wife-status-field><label>حالة الزوجية</label><select data-fm-wife-status><option value="active">نشطة</option><option value="divorced">مطلقة</option><option value="deceased">متوفاة</option></select><div class="hint" data-fm-wife-status-hint></div></div>' +
       '<div class="hint" data-fm-wife-remarry-hint style="grid-column:1/-1;display:none;"></div>' +
       '<div class="field" style="grid-column:1/-1;"><label>سلسلة نسب الزوجة</label><input type="text" data-fm-wife-lineage placeholder="مثال: عقيلة بنت خزيم بن ملقاط..." /></div>' +
       "</div>" +
@@ -117,8 +117,8 @@
       if (wifeStatusField) wifeStatusField.style.display = currentType === "wife" ? "" : "none";
       if (wifeStatusHint) {
         wifeStatusHint.textContent = editing
-          ? "غيّر إلى «مطلقة» لإنهاء زواج سابق مسجّل مع هذا الزوج."
-          : "زواج جديد يُسجَّل «نشطة». لتسجيل طلاق سابق: افتح الزوج القديم → تعديل الزوجة → «مطلقة».";
+          ? "«مطلقة» لإنهاء زواج سابق · «متوفاة» إذا توفيت الزوجة (تُستبعد من قائمة الأرامل للمساعدات)."
+          : "زواج جديد يُسجَّل «نشطة». لطلاق أو وفاة سابقة: افتح السجل عند الزوج → عدّل الحالة.";
       }
       if (wifeRemarryHint) {
         wifeRemarryHint.style.display = editing || currentType !== "wife" ? "none" : "";
@@ -235,7 +235,17 @@
         if (orderEl) orderEl.value = row.marriage_order || "";
         var statusEl = sheet.querySelector("[data-fm-wife-status]");
         if (statusEl) {
-          statusEl.value = String(row.status || "active").trim().toLowerCase() === "divorced" ? "divorced" : "active";
+          var st = String(row.status || "active").trim().toLowerCase();
+          if (st === "divorced" || st === "مطلقة") statusEl.value = "divorced";
+          else if (
+            st === "deceased" ||
+            st === "dead" ||
+            st === "متوفاة" ||
+            st === "متوفيه" ||
+            st === "متوفية"
+          ) {
+            statusEl.value = "deceased";
+          } else statusEl.value = "active";
         }
         var lineageEl = sheet.querySelector("[data-fm-wife-lineage]");
         if (lineageEl) lineageEl.value = row.wife_lineage || "";
@@ -339,11 +349,11 @@
         if (typeof api.saveWife !== "function") return;
         var wifeStatusEl = sheet.querySelector("[data-fm-wife-status]");
         var wifeStatusValue = wifeStatusEl ? String(wifeStatusEl.value || "active").trim() : "active";
-        if (!editingWifeId && wifeStatusValue === "divorced") {
+        if (!editingWifeId && (wifeStatusValue === "divorced" || wifeStatusValue === "deceased")) {
           setAlert(
             alertEl,
             "error",
-            "لا يمكن إضافة زوجة جديدة بحالة «مطلقة». اتركها «نشطة» هنا، وعدّل السجل القديم عند الزوج السابق إلى «مطلقة».",
+            "لا يمكن إضافة زوجة جديدة بحالة «مطلقة» أو «متوفاة». اتركها «نشطة» هنا، أو عدّل السجل القديم عند الزوج.",
           );
           return;
         }

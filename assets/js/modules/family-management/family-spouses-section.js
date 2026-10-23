@@ -174,7 +174,17 @@
         var wifeText = typeof api.normalizePersonName === "function"
           ? api.normalizePersonName(row.wife_name || "")
           : normalizeText(row.wife_name || "");
-        var statusLabel = String(row.status || "active").trim().toLowerCase() === "divorced" ? " — مطلقة" : "";
+        var statusRaw = String(row.status || "active").trim().toLowerCase();
+        var statusLabel =
+          statusRaw === "divorced" || statusRaw === "مطلقة"
+            ? " — مطلقة"
+            : statusRaw === "deceased" ||
+                statusRaw === "dead" ||
+                statusRaw === "متوفاة" ||
+                statusRaw === "متوفيه" ||
+                statusRaw === "متوفية"
+              ? " — متوفاة"
+              : "";
         var item = document.createElement("div");
         item.className = "fm-row";
         item.innerHTML =

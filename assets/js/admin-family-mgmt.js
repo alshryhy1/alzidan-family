@@ -1035,6 +1035,9 @@
   function parseWifeMarriageStatus(raw) {
     const v = String(raw || "active").trim().toLowerCase();
     if (v === "divorced" || v === "مطلقة") return "divorced";
+    if (v === "deceased" || v === "dead" || v === "متوفاة" || v === "متوفيه" || v === "متوفية") {
+      return "deceased";
+    }
     return "active";
   }
 
@@ -1068,7 +1071,7 @@
         }
       } catch (e) {}
     }
-    return "هذه الزوجة مسجلة نشطة مع زوج آخر" + suffix + ". افتح ذلك الزوج → تعديل الزوجة → غيّر الحالة إلى «مطلقة»، ثم أعد الإضافة هنا.";
+    return "هذه الزوجة مسجلة نشطة مع زوج آخر" + suffix + ". افتح ذلك الزوج → تعديل الزوجة → غيّر الحالة إلى «مطلقة» أو «متوفاة»، ثم أعد الإضافة هنا.";
   }
   
 
@@ -1246,16 +1249,20 @@
       const res = await insertOrUpdateSpouseRow(sb, row, editingId);
       if (res.error) return { ok: false, message: "تعذر تعديل الزوجة: " + (res.error.message || "خطأ غير معروف") };
       const wantedStatus = parseWifeMarriageStatus(payload.status);
-      if (wantedStatus === "divorced") {
+      if (wantedStatus === "divorced" || wantedStatus === "deceased") {
         const check = await sb.from("tree_spouses").select("status").eq("id", editingId).maybeSingle();
         const SpousesCore = window.AlzidanSpousesCore || {};
         const stillActive = SpousesCore && typeof SpousesCore.isActiveSpouse === "function"
           ? SpousesCore.isActiveSpouse(check.data && check.data.status)
           : String((check.data && check.data.status) || "active").toLowerCase() === "active";
-        if (stillActive) {
+        const savedStatus = String((check.data && check.data.status) || "").trim().toLowerCase();
+        if (stillActive || (wantedStatus === "deceased" && savedStatus !== "deceased")) {
           return {
             ok: false,
-            message: "لم تُحفظ حالة «مطلقة» في قاعدة البيانات. نفّذ SQL: supabase/sql/COPY-ME-tree-spouses-divorced-remarriage-v1.sql في Supabase ثم أعد المحاولة.",
+            message:
+              wantedStatus === "deceased"
+                ? "لم تُحفظ حالة «متوفاة» في قاعدة البيانات. نفّذ SQL: supabase/sql/COPY-ME-tree-spouses-wife-deceased-status-v1.sql في Supabase ثم أعد المحاولة."
+                : "لم تُحفظ حالة «مطلقة» في قاعدة البيانات. نفّذ SQL: supabase/sql/COPY-ME-tree-spouses-divorced-remarriage-v1.sql في Supabase ثم أعد المحاولة.",
           };
         }
       }
@@ -1282,7 +1289,11 @@
       return {
         ok: true,
         message:
-          (wantedStatus === "divorced" ? "تم تسجيل الزوجة كمطلقة." : "تم تعديل بيانات الزوجة.") +
+          (wantedStatus === "divorced"
+            ? "تم تسجيل الزوجة كمطلقة."
+            : wantedStatus === "deceased"
+              ? "تم تسجيل الزوجة كمتوفاة."
+              : "تم تعديل بيانات الزوجة.") +
           linkNote,
       };
     }
