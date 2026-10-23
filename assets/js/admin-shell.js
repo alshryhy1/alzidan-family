@@ -100,9 +100,9 @@
     {
       id: "giving",
       title: "صدقة ودعم",
-      desc: "صدقة جارية · دعم الموقع · قائمة الأرامل للمساعدات",
+      desc: "صدقة جارية · دعم الموقع · أرامل · طلبات مساعدة سرية",
       icon: "♡",
-      sections: ["admin-giving-section", "admin-widows-section"],
+      sections: ["admin-giving-section", "admin-widows-section", "admin-aid-requests-section"],
       group: "content",
     },
     {
