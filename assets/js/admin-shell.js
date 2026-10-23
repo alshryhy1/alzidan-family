@@ -100,9 +100,9 @@
     {
       id: "giving",
       title: "صدقة ودعم",
-      desc: "صدقة جارية (إحسان) ودعم الموقع عبر Paymob",
+      desc: "صدقة جارية · دعم الموقع · قائمة الأرامل للمساعدات",
       icon: "♡",
-      sections: ["admin-giving-section"],
+      sections: ["admin-giving-section", "admin-widows-section"],
       group: "content",
     },
     {
