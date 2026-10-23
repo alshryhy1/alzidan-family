@@ -143,12 +143,21 @@
     const hid = Number(husbandId || 0);
     if (!hid) return { data: [], error: null };
 
-    const base = await client
+    let base = await client
       .from("tree_spouses")
-      .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence")
+      .select("id,husband_id,wife_name,wife_phone,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence")
       .eq("husband_id", hid)
       .order("marriage_order", { ascending: true })
       .order("id", { ascending: true });
+
+    if (base.error && /wife_phone/i.test(String(base.error.message || ""))) {
+      base = await client
+        .from("tree_spouses")
+        .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence")
+        .eq("husband_id", hid)
+        .order("marriage_order", { ascending: true })
+        .order("id", { ascending: true });
+    }
 
     if (base.error) return { data: [], error: base.error };
 

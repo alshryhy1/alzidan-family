@@ -3625,16 +3625,22 @@ async function insertOrUpdateSpouseRow(sb, row, editingId) {
   const withPerson = Object.assign({}, row);
   const withoutPerson = Object.assign({}, row);
   delete withoutPerson.husband_person_id;
-  if (editingId) {
-    let res = await sb.from("tree_spouses").update(withPerson).eq("id", editingId);
-    if (res.error && /husband_person_id/i.test(String(res.error.message || ""))) {
-      res = await sb.from("tree_spouses").update(withoutPerson).eq("id", editingId);
+  const withoutPhone = Object.assign({}, withPerson);
+  delete withoutPhone.wife_phone;
+  const withoutBoth = Object.assign({}, withoutPerson);
+  delete withoutBoth.wife_phone;
+  async function writeSpouse(payload) {
+    if (editingId) {
+      return sb.from("tree_spouses").update(payload).eq("id", editingId);
     }
-    return res;
+    return sb.from("tree_spouses").insert(payload).select("id").single();
   }
-  let res = await sb.from("tree_spouses").insert(withPerson).select("id").single();
+  let res = await writeSpouse(withPerson);
+  if (res.error && /wife_phone/i.test(String(res.error.message || ""))) {
+    res = await writeSpouse(withoutPhone);
+  }
   if (res.error && /husband_person_id/i.test(String(res.error.message || ""))) {
-    res = await sb.from("tree_spouses").insert(withoutPerson).select("id").single();
+    res = await writeSpouse(withoutBoth);
   }
   return res;
 }
@@ -4004,10 +4010,16 @@ async function familyApiSaveWife(payload) {
     return { ok: false, message: "ترتيب الزوجة يجب أن يكون من 1 إلى 4." };
   }
   const familyVal = parseWifeFamilyValue(payload.family);
+  const rawWifePhone = String(payload.phone || "").trim();
+  const wifePhone = rawWifePhone ? normalizeMemberPhoneForDelegate(rawWifePhone) : "";
+  if (rawWifePhone && !wifePhone) {
+    return { ok: false, message: "رقم الجوال غير صحيح." };
+  }
   const row = {
     husband_id: husbandId,
     husband_person_id: husbandPersonId || null,
     wife_name: name,
+    wife_phone: wifePhone || null,
     wife_is_family_member: familyVal,
     wife_branch_key: familyVal === false ? null : (payload.branch ? String(payload.branch).trim() : null),
     wife_family_name: familyVal === false && payload.familyName ? normalizePersonName(payload.familyName) : null,

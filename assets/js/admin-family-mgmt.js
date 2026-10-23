@@ -1133,12 +1133,20 @@
     if (SpousesCore && typeof SpousesCore.loadSpousesByHusband === "function") {
       return SpousesCore.loadSpousesByHusband(sb, husbandId);
     }
-    const r = await sb
+    let r = await sb
       .from("tree_spouse_summary")
-      .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence,linked_children_count")
+      .select("id,husband_id,wife_name,wife_phone,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence,linked_children_count")
       .eq("husband_id", husbandId)
       .order("marriage_order", { ascending: true })
       .order("id", { ascending: true });
+    if (r.error && /wife_phone/i.test(String(r.error.message || ""))) {
+      r = await sb
+        .from("tree_spouse_summary")
+        .select("id,husband_id,wife_name,wife_is_family_member,wife_branch_key,wife_family_name,wife_lineage,marriage_order,status,confidence,linked_children_count")
+        .eq("husband_id", husbandId)
+        .order("marriage_order", { ascending: true })
+        .order("id", { ascending: true });
+    }
     if (r.error) return { data: [], error: r.error };
     return { data: Array.isArray(r.data) ? r.data : [], error: null };
   }
@@ -1156,7 +1164,7 @@
           return { data: { id: rpc.data.id }, error: null };
         }
         const rpcMsg = String((rpc.error && rpc.error.message) || "");
-        if (rpc.error && !/admin_tree_spouse_upsert_v1|could not find the function|schema cache/i.test(rpcMsg)) {
+        if (rpc.error && !/admin_tree_spouse_upsert_v1|could not find the function|schema cache|wife_phone/i.test(rpcMsg)) {
           return { data: null, error: rpc.error };
         }
       } catch (e) {
@@ -1166,16 +1174,22 @@
     const withPerson = Object.assign({}, row);
     const withoutPerson = Object.assign({}, row);
     delete withoutPerson.husband_person_id;
-    if (editingId) {
-      let res = await sb.from("tree_spouses").update(withPerson).eq("id", editingId);
-      if (res.error && /husband_person_id/i.test(String(res.error.message || ""))) {
-        res = await sb.from("tree_spouses").update(withoutPerson).eq("id", editingId);
+    const withoutPhone = Object.assign({}, withPerson);
+    delete withoutPhone.wife_phone;
+    const withoutBoth = Object.assign({}, withoutPerson);
+    delete withoutBoth.wife_phone;
+    async function writeSpouse(payload) {
+      if (editingId) {
+        return sb.from("tree_spouses").update(payload).eq("id", editingId);
       }
-      return res;
+      return sb.from("tree_spouses").insert(payload).select("id").single();
     }
-    let res = await sb.from("tree_spouses").insert(withPerson).select("id").single();
+    let res = await writeSpouse(withPerson);
+    if (res.error && /wife_phone/i.test(String(res.error.message || ""))) {
+      res = await writeSpouse(withoutPhone);
+    }
     if (res.error && /husband_person_id/i.test(String(res.error.message || ""))) {
-      res = await sb.from("tree_spouses").insert(withoutPerson).select("id").single();
+      res = await writeSpouse(withoutBoth);
     }
     return res;
   }
@@ -1207,10 +1221,16 @@
       return { ok: false, message: "ترتيب الزوجة يجب أن يكون من 1 إلى 4." };
     }
     const familyVal = parseWifeFamilyValue(payload.family);
+    const rawWifePhone = String(payload.phone || "").trim();
+    const wifePhone = rawWifePhone ? normalizeMemberPhone(rawWifePhone) : "";
+    if (rawWifePhone && !wifePhone) {
+      return { ok: false, message: "رقم الجوال غير صحيح." };
+    }
     const row = {
       husband_id: husbandId,
       husband_person_id: husbandPersonId || null,
       wife_name: name,
+      wife_phone: wifePhone || null,
       wife_is_family_member: familyVal,
       wife_branch_key: familyVal === false ? null : (payload.branch ? String(payload.branch).trim() : null),
       wife_family_name: familyVal === false && payload.familyName ? normalizePersonName(payload.familyName) : null,

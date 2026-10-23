@@ -33,6 +33,15 @@
       '<div class="alert fm-section-alert" data-fm-sheet-alert style="display:none;"></div>' +
       '<div data-fm-form-wife class="grid">' +
       '<div class="field"><label>اسم الزوجة</label><input type="text" data-fm-wife-name placeholder="مثال: عقيلة بنت خزيم..." /></div>' +
+      '<div class="field"><label>رقم الجوال</label>' +
+      (window.AlzidanPhoneIntl
+        ? window.AlzidanPhoneIntl.fieldHtml({
+            key: "fm-add-wife",
+            nationalAttr: "data-fm-wife-phone",
+            hint: "اختياري — اختر الدولة ثم اكتب الرقم المحلي فقط.",
+          })
+        : '<input type="tel" data-fm-wife-phone inputmode="numeric" placeholder="5XXXXXXXX" />') +
+      "</div>" +
       '<div class="field"><label>هل الزوجة من العائلة؟</label><select data-fm-wife-family><option value="">غير معروف</option><option value="true">نعم</option><option value="false">لا</option></select></div>' +
       '<div class="field" data-fm-wife-family-name-field><label>اسم العائلة الخارجية</label><input type="text" data-fm-wife-family-name placeholder="مثال: الشمري" /></div>' +
       '<div class="field" data-fm-wife-branch-field><label>فرع الزوجة</label><select data-fm-wife-branch><option value="">غير محدد</option><option value="زايد">زايد</option><option value="زيدان">زيدان</option><option value="لاحم">لاحم</option><option value="مزيد">مزيد</option><option value="ملحم">ملحم</option></select></div>' +
@@ -230,6 +239,13 @@
         }
         var lineageEl = sheet.querySelector("[data-fm-wife-lineage]");
         if (lineageEl) lineageEl.value = row.wife_lineage || "";
+        var wifePhoneWrap = sheet.querySelector('[data-phone-intl="fm-add-wife"]');
+        if (wifePhoneWrap && window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.setPhoneIntl === "function") {
+          window.AlzidanPhoneIntl.setPhoneIntl(wifePhoneWrap, row.wife_phone || "");
+        } else {
+          var phoneEl = sheet.querySelector("[data-fm-wife-phone]");
+          if (phoneEl) phoneEl.value = row.wife_phone || "";
+        }
         updateWifeFieldsVisibility();
         setAlert(alertEl, "success", "عدّل بيانات الزوجة ثم اضغط حفظ.");
       } else {
@@ -240,6 +256,10 @@
           else if (el.tagName === "SELECT") el.selectedIndex = 0;
           else el.value = "";
         });
+        var clearWifePhoneWrap = sheet.querySelector('[data-phone-intl="fm-add-wife"]');
+        if (clearWifePhoneWrap && window.AlzidanPhoneIntl && typeof window.AlzidanPhoneIntl.setPhoneIntl === "function") {
+          window.AlzidanPhoneIntl.setPhoneIntl(clearWifePhoneWrap, "");
+        }
         updateWifeFieldsVisibility();
       }
       populateWifeOptions(payload && payload.wives ? payload.wives : []);
@@ -327,10 +347,24 @@
           );
           return;
         }
+        var wifePhoneWrap = sheet.querySelector('[data-phone-intl="fm-add-wife"]');
+        var wifePhoneValue = "";
+        if (wifePhoneWrap && window.AlzidanPhoneIntl) {
+          var wifePhoneRead = window.AlzidanPhoneIntl.readE164(wifePhoneWrap, false);
+          if (!wifePhoneRead.empty && !wifePhoneRead.ok) {
+            setAlert(alertEl, "error", "رقم الجوال غير صحيح. اختر الدولة واكتب الرقم المحلي فقط.");
+            return;
+          }
+          wifePhoneValue = wifePhoneRead.e164 || "";
+        } else {
+          var wifePhoneEl = sheet.querySelector("[data-fm-wife-phone]");
+          wifePhoneValue = wifePhoneEl ? String(wifePhoneEl.value || "").trim() : "";
+        }
         var res = await api.saveWife({
           personId: personId,
           editingSpouseId: editingWifeId,
           name: sheet.querySelector("[data-fm-wife-name]").value,
+          phone: wifePhoneValue,
           family: wifeFamilySelect ? wifeFamilySelect.value : "",
           branch: sheet.querySelector("[data-fm-wife-branch]").value,
           familyName: sheet.querySelector("[data-fm-wife-family-name]").value,
