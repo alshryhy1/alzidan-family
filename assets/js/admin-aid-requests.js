@@ -324,7 +324,7 @@
           } else if (pushRes.data && pushRes.data.skipped) {
             pushNote = " (نُشر — لا أجهزة مسجّلة للإشعار حالياً)";
           } else {
-            pushNote = " وأُرسل إشعار: فرصة مساعدة.";
+            pushNote = " وأُرسل إشعار عام: حالة إنسانية.";
           }
         } catch (pushErr) {
           pushNote = " (النشر تم — تعذر استدعاء إشعار التطبيق)";

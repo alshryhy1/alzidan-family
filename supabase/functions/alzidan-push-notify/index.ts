@@ -1342,22 +1342,35 @@ async function notifyAidOpportunity(
   payload: Record<string, unknown>,
   dryRun: boolean,
 ) {
-  const title = "فرصة مساعدة";
-  const body = "هناك فرصة مساعدة عبر صندوق العائلة.";
+  // إشعار عامة العائلة — بلا اسم ولا جوال المستفيدة
+  const title = "حالة إنسانية";
+  const body = "توجد حالة إنسانية في العائلة — للمساهمة من التبرع.";
   const requestId = Number(payload.request_id || payload.id || 0) || 0;
   const exclude = normalizeSaudiPhone(payload.exclude_phone);
 
+  const notExcluded = (p: string) => {
+    if (!exclude) return true;
+    if (p === exclude) return false;
+    if (p.length >= 9 && exclude.length >= 9 && p.slice(-9) === exclude.slice(-9)) {
+      return false;
+    }
+    return true;
+  };
+
   const householdPhones = await fetchHouseholdPhones();
-  const phoneSet = new Set(
-    householdPhones.filter((p) => {
-      if (!exclude) return true;
-      if (p === exclude) return false;
-      if (p.length >= 9 && exclude.length >= 9 && p.slice(-9) === exclude.slice(-9)) {
-        return false;
-      }
-      return true;
-    }),
-  );
+  let phoneSet = new Set(householdPhones.filter(notExcluded));
+
+  const tokenRows = await fetchEnabledTokensWithPhone();
+  // إن لم تُطابق أجهزة العائلة: أرسل لكل جهاز مسجّل بجوال (ما عدا صاحبة الطلب)
+  let { unique } = matchTokensForPhones(tokenRows, phoneSet);
+  if (!unique.length) {
+    phoneSet = new Set(
+      (tokenRows || [])
+        .map((row: { phone?: string }) => normalizeSaudiPhone(row?.phone))
+        .filter((p: string) => Boolean(p) && notExcluded(p)),
+    );
+    ({ unique } = matchTokensForPhones(tokenRows, phoneSet));
+  }
   if (!phoneSet.size) {
     return json({
       ok: true,
@@ -1366,9 +1379,6 @@ async function notifyAidOpportunity(
       recipients: 0,
     });
   }
-
-  const tokenRows = await fetchEnabledTokensWithPhone();
-  const { unique } = matchTokensForPhones(tokenRows, phoneSet);
   if (!unique.length) {
     return json({
       ok: true,
@@ -1388,7 +1398,7 @@ async function notifyAidOpportunity(
     mode: "aid_opportunity",
     type: "aid_opportunity",
     notification_type: "aid_opportunity",
-    screen: "aidRequest",
+    screen: "giving",
     request_id: requestId || undefined,
   };
 
