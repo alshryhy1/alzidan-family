@@ -1389,10 +1389,14 @@ async function notifyAidOpportunity(
     });
   }
 
+  // nonce حتى إعادة النشر لا تُحجب بـ dedupe خلال ١٥ دقيقة
+  const publishNonce = normalizeText(
+    payload.publish_nonce || payload.nonce || payload.published_at || "",
+  ) || String(Date.now());
   const eventKey = buildEventKey(
     "aid_opportunity",
     requestId ? String(requestId) : "aid",
-    "published",
+    `published:${publishNonce}`,
   );
   const data = {
     mode: "aid_opportunity",

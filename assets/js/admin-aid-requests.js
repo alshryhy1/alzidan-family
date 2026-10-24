@@ -312,22 +312,44 @@
             body: {
               mode: "aid_opportunity",
               request_id: Number(id),
+              publish_nonce: String(Date.now()),
               exclude_phone: String(row.member_phone || row.contact_phone || ""),
             },
           });
+          const pdata = pushRes && pushRes.data ? pushRes.data : null;
+          console.log("AID_PUSH_NOTIFY_RESULT", pushRes && pushRes.error, pdata);
           if (pushRes.error) {
-            pushNote = " (النشر تم — تعذر إرسال إشعار التطبيق)";
-            console.error("AID_PUSH_NOTIFY_ERROR", pushRes.error, pushRes.data);
-          } else if (pushRes.data && pushRes.data.ok === false) {
-            pushNote = " (النشر تم — الإشعار لم يكتمل)";
-            console.warn("AID_PUSH_NOTIFY", pushRes.data);
-          } else if (pushRes.data && pushRes.data.skipped) {
-            pushNote = " (نُشر — لا أجهزة مسجّلة للإشعار حالياً)";
+            pushNote =
+              " (النشر تم — تعذر إرسال إشعار التطبيق: " +
+              String(pushRes.error.message || pushRes.error || "خطأ") +
+              ")";
+          } else if (pdata && pdata.ok === false) {
+            pushNote =
+              " (النشر تم — الإشعار لم يكتمل: " +
+              String(pdata.error || pdata.skipped || "فشل") +
+              ")";
+          } else if (pdata && pdata.skipped) {
+            pushNote =
+              " (نُشر — الإشعار تخطّى: " +
+              String(pdata.skipped) +
+              " / أجهزة=" +
+              String(pdata.recipients || pdata.matched_tokens || 0) +
+              ")";
           } else {
-            pushNote = " وأُرسل إشعار عام: حالة إنسانية.";
+            const n = Number(
+              (pdata && (pdata.sent || pdata.recipients_after_dedupe || pdata.matched_tokens)) ||
+                0,
+            );
+            pushNote =
+              n > 0
+                ? " وأُرسل إشعار عام: حالة إنسانية («" + n + "» جهاز)."
+                : " وأُرسل إشعار عام: حالة إنسانية.";
           }
         } catch (pushErr) {
-          pushNote = " (النشر تم — تعذر استدعاء إشعار التطبيق)";
+          pushNote =
+            " (النشر تم — تعذر استدعاء إشعار التطبيق: " +
+            String((pushErr && pushErr.message) || pushErr || "خطأ") +
+            ")";
           console.error("AID_PUSH_NOTIFY_INVOKE", pushErr);
         }
       }
