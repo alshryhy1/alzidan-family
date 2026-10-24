@@ -46,6 +46,16 @@
     return status || "—";
   }
 
+  function payChannelLabel(channel) {
+    const c = String(channel || "").toLowerCase();
+    if (c === "othaim_card") return "بطاقة العثيم";
+    if (c === "sawaa_electric") return "فاتورة كهرباء";
+    if (c === "sawaa_rent") return "عقد إيجار";
+    if (c === "sawaa_water") return "فاتورة ماء";
+    if (c === "family_fund") return "صندوق العائلة";
+    return "—";
+  }
+
   function whatsAppUrl(phone) {
     let d = String(phone || "").replace(/\D/g, "");
     if (!d) return "";
@@ -91,6 +101,11 @@
                 '" target="_blank" rel="noopener">واتساب</a>'
               : "")
           : "—";
+        const payCell =
+          esc(payChannelLabel(row.pay_channel || row.pay_channel_label)) +
+          (row.pay_ref
+            ? '<div class="hint" dir="ltr">' + esc(row.pay_ref) + "</div>"
+            : '<div class="hint" style="color:#991b1b">بلا رقم مساهمة</div>');
         const actions =
           '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
           (row.status !== "published"
@@ -132,7 +147,7 @@
           esc(row.public_title || "—") +
           "</td>" +
           "<td>" +
-          esc(row.publish_contact_note || "صندوق العائلة / تواصل الإدارة") +
+          payCell +
           "</td>" +
           "<td>" +
           actions +
@@ -167,13 +182,15 @@
       }
       rowsCache = Array.isArray(data.rows) ? data.rows : [];
       renderTable(rowsCache);
-      setStatus("النشر للعامة بلا اسم. المساعدة عبر صندوق العائلة — لا تنشر حساباً باسم المستفيدة.");
+      setStatus(
+        "النشر بلا اسم: اختر قناة المساهمة (عثيم / كهرباء / إيجار / ماء) مع الرقم — لا تنشر حساباً باسم المستفيدة.",
+      );
     } catch (error) {
       console.error(error);
       const msg = error && error.message ? String(error.message) : "خطأ";
       if (/could not find the function|schema cache|PGRST202/i.test(msg)) {
         setStatus(
-          "نفّذ SQL: supabase/sql/COPY-ME-family-aid-requests-v1.sql ثم حدّث الصفحة.",
+          "نفّذ SQL: supabase/sql/COPY-ME-family-aid-need-kinds-v1.sql ثم حدّث الصفحة.",
           true,
         );
       } else {
@@ -184,6 +201,50 @@
     } finally {
       loading = false;
     }
+  }
+
+  function pickPayChannel(row) {
+    const current = String(row.pay_channel || "").toLowerCase();
+    const def =
+      current === "sawaa_electric"
+        ? "2"
+        : current === "sawaa_rent"
+          ? "3"
+          : current === "sawaa_water"
+            ? "4"
+            : current === "family_fund"
+              ? "5"
+              : current === "othaim_card"
+                ? "1"
+                : "2";
+    const channelRaw = window.prompt(
+      "قناة المساهمة: 1=عثيم  2=كهرباء  3=إيجار  4=ماء  5=صندوق العائلة",
+      def,
+    );
+    if (channelRaw === null) return null;
+    const ch = String(channelRaw || "").trim();
+    if (ch === "1" || /othaim|عثيم/i.test(ch)) return "othaim_card";
+    if (ch === "2" || /كهرب/i.test(ch)) return "sawaa_electric";
+    if (ch === "3" || /ايجار|إيجار|rent/i.test(ch)) return "sawaa_rent";
+    if (ch === "4" || /ماء|مياه|water/i.test(ch)) return "sawaa_water";
+    if (ch === "5" || /صندوق|fund/i.test(ch)) return "family_fund";
+    return current || "sawaa_electric";
+  }
+
+  function pickPayRef(payChannel, row) {
+    const refPrompt =
+      payChannel === "othaim_card"
+        ? "رقم بطاقة العثيم للمساهمة:"
+        : payChannel === "sawaa_electric"
+          ? "رقم فاتورة الكهرباء:"
+          : payChannel === "sawaa_rent"
+            ? "رقم عقد الإيجار:"
+            : payChannel === "sawaa_water"
+              ? "رقم فاتورة الماء:"
+              : "مرجع صندوق العائلة (اختياري):";
+    const refRaw = window.prompt(refPrompt, String(row.pay_ref || ""));
+    if (refRaw === null) return null;
+    return String(refRaw || "").trim();
   }
 
   async function setStatusAction(id, status) {
@@ -201,18 +262,31 @@
     const note =
       status === "published"
         ? window.prompt(
-            "ملاحظة التواصل للعامة (صندوق العائلة / واتساب الإدارة):",
+            "ملاحظة للعامة (اختياري):",
             String(
               row.publish_contact_note ||
-                "للتقديم: تواصل مع إدارة العائلة. التحويل عبر صندوق العائلة — وليس باسم المستفيدة.",
+                "ساهم عبر خانة الرقم أدناه — بلا تحويل باسم المستفيدة.",
             ),
           )
         : null;
     if (status === "published" && note === null) return;
 
+    let payChannel = null;
+    let payRef = null;
+    if (status === "published") {
+      payChannel = pickPayChannel(row);
+      if (payChannel === null) return;
+      payRef = pickPayRef(payChannel, row);
+      if (payRef === null) return;
+      if (payChannel !== "family_fund" && (!payRef || payRef.length < 4)) {
+        setStatus("يلزم رقم مساهمة (فاتورة / عقد / بطاقة) قبل النشر.", true);
+        return;
+      }
+    }
+
     setStatus("جاري الحفظ…");
     try {
-      const res = await sb.rpc("admin_aid_request_set_status_v1", {
+      const payload = {
         p_token: getAdminToken(),
         p_id: Number(id),
         p_status: status,
@@ -220,7 +294,12 @@
         p_public_title: defaultTitle,
         p_public_body: status === "published" ? String(row.need_text || "") : null,
         p_publish_contact_note: status === "published" ? String(note || "").trim() : null,
-      });
+      };
+      if (status === "published") {
+        payload.p_pay_channel = payChannel;
+        payload.p_pay_ref = payRef;
+      }
+      const res = await sb.rpc("admin_aid_request_set_status_v1", payload);
       if (res.error) throw res.error;
       if (res.data && res.data.ok === false) {
         throw new Error(res.data.error || "فشل الحفظ");
@@ -233,7 +312,6 @@
             body: {
               mode: "aid_opportunity",
               request_id: Number(id),
-              // لا يُرسل إشعار «فرصة» لجوال مقدمة الطلب
               exclude_phone: String(row.member_phone || row.contact_phone || ""),
             },
           });
@@ -257,12 +335,24 @@
       await loadRows();
       setStatus(
         status === "published"
-          ? "نُشر للعامة بلا اسم. المساعدة عبر الملاحظة المعروضة." + pushNote
+          ? "نُشر بلا اسم. المساهمة عبر " +
+              payChannelLabel(payChannel) +
+              (payRef ? " · " + payRef : "") +
+              "." +
+              pushNote
           : "تم تحديث الحالة.",
       );
     } catch (error) {
       console.error(error);
-      setStatus("تعذر التحديث: " + (error && error.message ? error.message : "خطأ"), true);
+      const msg = error && error.message ? String(error.message) : "خطأ";
+      if (/could not find the function|PGRST202|pay_channel/i.test(msg)) {
+        setStatus(
+          "حدّث SQL: supabase/sql/COPY-ME-family-aid-pay-channels-v1.sql ثم need-kinds ثم أعد النشر.",
+          true,
+        );
+      } else {
+        setStatus("تعذر التحديث: " + msg, true);
+      }
     }
   }
 
