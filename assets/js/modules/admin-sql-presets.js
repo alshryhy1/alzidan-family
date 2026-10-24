@@ -11264,12 +11264,20 @@ select
       order: 56.2,
     },
     {
-      id: "maint.member_update_person_v1",
+      id: "maint.member_update_person_v1_app",
       title: "تعديل الاسم أو تاريخ الميلاد للموثّق وأبنائه",
       desc:
-        "الجوال الموثّق يعدّل اسمه أو تاريخ ميلاده، واسم أبنائه المباشرين أو تاريخ ميلادهم، في جدول الشجرة نفسه.",
+        "الجوال الموثّق يعدّل اسمه أو تاريخ ميلاده، واسم أبنائه المباشرين أو تاريخ ميلادهم، في جدول الشجرة نفسه. شغّله مرة قبل نسخة المتجر.",
       file: "../supabase/sql/COPY-ME-member-update-person-v1.sql",
       order: 56.3,
+    },
+    {
+      id: "maint.occasion_health_replies_by_type_v1",
+      title: "ردود السلامة غير ردود المرض",
+      desc:
+        "خبر السلامة ما يطلع عليه «أسأل الله أن يشفيه» ولا «لا بأس طهور». المرض يبقى على دعاء الشفاء.",
+      file: "../supabase/sql/COPY-ME-occasion-health-replies-by-type-v1.sql",
+      order: 56.4,
     },
   ];
 
