@@ -225,10 +225,39 @@
       if (res.data && res.data.ok === false) {
         throw new Error(res.data.error || "فشل الحفظ");
       }
+
+      let pushNote = "";
+      if (status === "published") {
+        try {
+          const pushRes = await sb.functions.invoke("alzidan-push-notify", {
+            body: {
+              mode: "aid_opportunity",
+              request_id: Number(id),
+              // لا يُرسل إشعار «فرصة» لجوال مقدمة الطلب
+              exclude_phone: String(row.member_phone || row.contact_phone || ""),
+            },
+          });
+          if (pushRes.error) {
+            pushNote = " (النشر تم — تعذر إرسال إشعار التطبيق)";
+            console.error("AID_PUSH_NOTIFY_ERROR", pushRes.error, pushRes.data);
+          } else if (pushRes.data && pushRes.data.ok === false) {
+            pushNote = " (النشر تم — الإشعار لم يكتمل)";
+            console.warn("AID_PUSH_NOTIFY", pushRes.data);
+          } else if (pushRes.data && pushRes.data.skipped) {
+            pushNote = " (نُشر — لا أجهزة مسجّلة للإشعار حالياً)";
+          } else {
+            pushNote = " وأُرسل إشعار: فرصة مساعدة.";
+          }
+        } catch (pushErr) {
+          pushNote = " (النشر تم — تعذر استدعاء إشعار التطبيق)";
+          console.error("AID_PUSH_NOTIFY_INVOKE", pushErr);
+        }
+      }
+
       await loadRows();
       setStatus(
         status === "published"
-          ? "نُشر للعامة بلا اسم. المساعدة عبر الملاحظة المعروضة."
+          ? "نُشر للعامة بلا اسم. المساعدة عبر الملاحظة المعروضة." + pushNote
           : "تم تحديث الحالة.",
       );
     } catch (error) {

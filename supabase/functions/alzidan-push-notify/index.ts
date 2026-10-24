@@ -1337,6 +1337,99 @@ async function notifyInboxShare(payload: Record<string, unknown>, dryRun: boolea
   });
 }
 
+/** Anonymous family-aid opportunity — never include beneficiary name/phone/situation. */
+async function notifyAidOpportunity(
+  payload: Record<string, unknown>,
+  dryRun: boolean,
+) {
+  const title = "فرصة مساعدة";
+  const body = "هناك فرصة مساعدة عبر صندوق العائلة.";
+  const requestId = Number(payload.request_id || payload.id || 0) || 0;
+  const exclude = normalizeSaudiPhone(payload.exclude_phone);
+
+  const householdPhones = await fetchHouseholdPhones();
+  const phoneSet = new Set(
+    householdPhones.filter((p) => {
+      if (!exclude) return true;
+      if (p === exclude) return false;
+      if (p.length >= 9 && exclude.length >= 9 && p.slice(-9) === exclude.slice(-9)) {
+        return false;
+      }
+      return true;
+    }),
+  );
+  if (!phoneSet.size) {
+    return json({
+      ok: true,
+      skipped: "no_household_phones",
+      mode: "aid_opportunity",
+      recipients: 0,
+    });
+  }
+
+  const tokenRows = await fetchEnabledTokensWithPhone();
+  const { unique } = matchTokensForPhones(tokenRows, phoneSet);
+  if (!unique.length) {
+    return json({
+      ok: true,
+      skipped: "no_member_push_tokens",
+      mode: "aid_opportunity",
+      recipients: 0,
+      household_phones: phoneSet.size,
+    });
+  }
+
+  const eventKey = buildEventKey(
+    "aid_opportunity",
+    requestId ? String(requestId) : "aid",
+    "published",
+  );
+  const data = {
+    mode: "aid_opportunity",
+    type: "aid_opportunity",
+    notification_type: "aid_opportunity",
+    screen: "aidRequest",
+    request_id: requestId || undefined,
+  };
+
+  let deduped = 0;
+  const messages: Record<string, unknown>[] = [];
+  for (const row of unique) {
+    const token = String(row?.token || "").trim();
+    if (!token) continue;
+    if (!dryRun) {
+      const claim = await claimEventTokenSend(eventKey, token);
+      if (!claim) {
+        deduped += 1;
+        continue;
+      }
+    }
+    const message: Record<string, unknown> = {
+      to: token,
+      sound: "default",
+      title,
+      body,
+      data,
+      priority: "high",
+    };
+    if (row.platform === "android") {
+      message.channelId = "family-events";
+    }
+    messages.push(message);
+  }
+
+  return await deliverMessages(messages, dryRun, {
+    mode: "aid_opportunity",
+    request_id: requestId || null,
+    household_phones: phoneSet.size,
+    matched_tokens: unique.length,
+    recipients_after_dedupe: messages.length,
+    deduped,
+    title,
+    body,
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
@@ -1394,6 +1487,10 @@ Deno.serve(async (req) => {
 
     if (mode === "inbox_share") {
       return await notifyInboxShare(payload, dryRun);
+    }
+
+    if (mode === "aid_opportunity") {
+      return await notifyAidOpportunity(payload, dryRun);
     }
 
     // ---- Family-event broadcast: bound household phones only (not visitors). ----
