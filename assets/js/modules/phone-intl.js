@@ -171,6 +171,194 @@
     if (!selectEl.value) selectEl.value = DEFAULT_COUNTRY_ID;
   }
 
+  function contactsApiSupported() {
+    try {
+      return !!(navigator.contacts && typeof navigator.contacts.select === "function");
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function extractTelsFromVcf(text) {
+    var raw = String(text || "");
+    var tels = [];
+    var re = /^TEL(?:;[^:]*)?:(.+)$/gim;
+    var m;
+    while ((m = re.exec(raw))) {
+      var n = String(m[1] || "")
+        .replace(/\\,/g, ",")
+        .replace(/\s+/g, "")
+        .trim();
+      if (n) tels.push(n);
+    }
+    var re2 = /^item\d+\.TEL(?:;[^:]*)?:(.+)$/gim;
+    while ((m = re2.exec(raw))) {
+      var n2 = String(m[1] || "")
+        .replace(/\s+/g, "")
+        .trim();
+      if (n2) tels.push(n2);
+    }
+    return tels;
+  }
+
+  function extractTelsFromCsv(text) {
+    var lines = String(text || "").split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) return [];
+    var header = lines[0].split(/,|;|\t/).map(function (h) {
+      return String(h || "")
+        .replace(/^"|"$/g, "")
+        .trim()
+        .toLowerCase();
+    });
+    var phoneIdx = [];
+    for (var i = 0; i < header.length; i++) {
+      if (/phone|mobile|tel|جوال|هاتف|موبايل/.test(header[i])) phoneIdx.push(i);
+    }
+    if (!phoneIdx.length) return [];
+    var out = [];
+    for (var r = 1; r < Math.min(lines.length, 200); r++) {
+      var cols = lines[r].match(/("([^"]|"")*"|[^,;\t]+)/g) || lines[r].split(/,|;|\t/);
+      for (var p = 0; p < phoneIdx.length; p++) {
+        var cell = String(cols[phoneIdx[p]] || "")
+          .replace(/^"|"$/g, "")
+          .replace(/""/g, '"')
+          .trim();
+        if (cell && /\d{7,}/.test(cell)) out.push(cell);
+      }
+    }
+    return out;
+  }
+
+  function uniquePhones(list) {
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var e164 = canonicalizePhone(list[i]);
+      var key = e164 || digitsOnly(list[i]);
+      if (!key || seen[key]) continue;
+      seen[key] = 1;
+      out.push(list[i]);
+    }
+    return out;
+  }
+
+  function applyPhoneToWrap(wrap, raw) {
+    if (!raw) return;
+    setPhoneIntl(wrap, raw);
+    try {
+      var inputEl = wrap.querySelector("[data-phone-national]");
+      if (inputEl) {
+        inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+        inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    } catch (e) {}
+  }
+
+  function pickFromList(phones, onPick) {
+    var list = uniquePhones(phones || []);
+    if (!list.length) {
+      window.alert("لم يُعثر على رقم جوال في الملف أو جهة الاتصال.");
+      return;
+    }
+    if (list.length === 1) {
+      onPick(list[0]);
+      return;
+    }
+    var msg = "اختر رقمًا (اكتب الرقم من 1 إلى " + list.length + "):\n\n";
+    for (var i = 0; i < Math.min(list.length, 12); i++) {
+      msg += i + 1 + ") " + list[i] + "\n";
+    }
+    var choice = window.prompt(msg, "1");
+    if (choice === null) return;
+    var idx = parseInt(String(choice).trim(), 10) - 1;
+    if (!(idx >= 0 && idx < list.length)) {
+      window.alert("اختيار غير صالح.");
+      return;
+    }
+    onPick(list[idx]);
+  }
+
+  async function pickFromDeviceContacts(wrap) {
+    if (!contactsApiSupported()) {
+      window.alert(
+        "متصفحك لا يدعم اختيار الأسماء مباشرة (الماك/آيفون غالبًا).\nاستخدم زر «ملف جهات اتصال» بعد تصدير الأسماء من Contacts كـ vCard.",
+      );
+      return;
+    }
+    try {
+      var selected = await navigator.contacts.select(["name", "tel"], { multiple: false });
+      var contact = selected && selected[0] ? selected[0] : null;
+      var tels = contact && Array.isArray(contact.tel) ? contact.tel : [];
+      pickFromList(tels, function (raw) {
+        applyPhoneToWrap(wrap, raw);
+      });
+    } catch (err) {
+      if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) return;
+      window.alert("تعذر فتح الأسماء: " + String((err && err.message) || err || "خطأ"));
+    }
+  }
+
+  function pickFromContactFile(wrap) {
+    var input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".vcf,.vcard,text/vcard,text/x-vcard,.csv,text/csv";
+    input.style.display = "none";
+    document.body.appendChild(input);
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      input.remove();
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var text = String(reader.result || "");
+        var name = String(file.name || "").toLowerCase();
+        var phones =
+          /\.csv$/i.test(name) || /text\/csv/i.test(file.type)
+            ? extractTelsFromCsv(text)
+            : extractTelsFromVcf(text);
+        if (!phones.length && /BEGIN:VCARD/i.test(text)) phones = extractTelsFromVcf(text);
+        pickFromList(phones, function (raw) {
+          applyPhoneToWrap(wrap, raw);
+        });
+      };
+      reader.onerror = function () {
+        window.alert("تعذر قراءة الملف.");
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  }
+
+  function ensureContactTools(wrap) {
+    if (!wrap || wrap.querySelector("[data-phone-contact-tools]")) return;
+    var tools = document.createElement("div");
+    tools.className = "phone-intl-tools";
+    tools.setAttribute("data-phone-contact-tools", "1");
+    var btnNames = document.createElement("button");
+    btnNames.type = "button";
+    btnNames.className = "btn btn-outline btn-sm phone-intl-tool-btn";
+    btnNames.textContent = contactsApiSupported() ? "من الأسماء" : "من الأسماء (أندرويد)";
+    btnNames.title = contactsApiSupported()
+      ? "اختيار جهة اتصال من الجهاز"
+      : "متاح على أندرويد كروم — على الماك استخدم ملف جهات اتصال";
+    btnNames.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      pickFromDeviceContacts(wrap);
+    });
+    var btnFile = document.createElement("button");
+    btnFile.type = "button";
+    btnFile.className = "btn btn-outline btn-sm phone-intl-tool-btn";
+    btnFile.textContent = "ملف جهات اتصال";
+    btnFile.title = "استيراد رقم من ملف vCard أو CSV (تصدير من Contacts على الماك)";
+    btnFile.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      pickFromContactFile(wrap);
+    });
+    tools.appendChild(btnNames);
+    tools.appendChild(btnFile);
+    wrap.appendChild(tools);
+  }
+
   function bindPhoneIntl(wrap) {
     if (!wrap) return;
     var selectEl = wrap.querySelector("[data-phone-country]");
@@ -185,6 +373,7 @@
     // Always ensure options exist (fixes empty select if init raced).
     fillCountrySelect(selectEl, selectEl.value || DEFAULT_COUNTRY_ID);
     syncPlaceholder();
+    ensureContactTools(wrap);
 
     if (wrap.dataset.phoneIntlBound === "1") return;
     wrap.dataset.phoneIntlBound = "1";
@@ -272,7 +461,8 @@
       opts.hint === false
         ? ""
         : '<div class="phone-intl-hint hint">' +
-          (opts.hint || "اختر الدولة ثم اكتب الرقم المحلي فقط (بدون رمز الدولة).") +
+          (opts.hint ||
+            "اختر الدولة ثم الرقم، أو «من الأسماء» / «ملف جهات اتصال» (vCard من الماك).") +
           "</div>";
     return (
       '<div class="phone-intl" data-phone-intl="' +
